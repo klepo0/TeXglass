@@ -570,7 +570,7 @@
       'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'boxSizing', 'wordBreak', 'overflowWrap']) {
       m.style[p] = cs[p];
     }
-    Object.assign(m.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre-wrap', top: '0', left: '-10000px', width: textarea.clientWidth + 'px', borderStyle: 'solid' });
+    Object.assign(m.style, { position: 'fixed', visibility: 'hidden', whiteSpace: 'pre-wrap', top: '0', left: '-10000px', width: textarea.clientWidth + 'px', borderStyle: 'solid' });
     m.textContent = textarea.value.slice(0, pos);
     const mark = document.createElement('span');
     mark.textContent = '\u200b';

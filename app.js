@@ -23,6 +23,9 @@
   let statusTimer = null;
   let warningsText = '';
   let lastLabels = {};
+  let lastToc = [];
+  let imageUrls = []; // object URLs for the figures of an imported arXiv paper
+  let resolveImage = null;
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -41,8 +44,9 @@
 
   function renderHtml() {
     try {
-      const result = TeXdown.render(doc, { sourceMap: true });
+      const result = TeXdown.render(doc, { sourceMap: true, resolveImage: resolveImage || undefined });
       lastLabels = result.labels;
+      lastToc = result.toc;
       document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
       const n = result.warnings.length;
       warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
@@ -60,7 +64,119 @@
     if (editing) renderAroundEditor(html);
     else preview.innerHTML = html;
     applyFolds();
+    updateToc();
   }
+
+  // --- table of contents sidebar ------------------------------------------------
+
+  const tocPane = $('toc-pane');
+  const tocList = $('toc-list');
+  const tocToggle = $('toc-toggle');
+  const narrow = window.matchMedia('(max-width: 760px)');
+  let tocWanted = store.get('texdown:toc') !== 'off';
+  let tocKey = '';
+  let tocLinks = [];
+
+  function updateToc() {
+    // The bibliography gets an entry too, after the sections.
+    const items = lastToc.slice();
+    const bib = preview.querySelector('.bibliography > h2');
+    if (bib && items.length) {
+      bib.id = bib.id || 'references';
+      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: TeXdown.escapeHtml(bib.textContent), id: bib.id });
+    }
+    lastToc = items;
+    const key = JSON.stringify(items);
+    if (key !== tocKey) {
+      tocKey = key;
+      const top = Math.min(...items.map((t) => t.level));
+      tocList.innerHTML = items
+        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXdown.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
+        .join('');
+      tocLinks = Array.from(tocList.querySelectorAll('a'));
+    }
+    showToc();
+    spyToc();
+  }
+
+  /** The sidebar shows in Preview and Edit when the document has headings and it is switched on. */
+  function showToc() {
+    const has = lastToc.length > 0;
+    const on = tocWanted && has && mode !== 'split';
+    tocPane.hidden = !on;
+    document.body.classList.toggle('toc-open', on);
+    tocToggle.hidden = !has || mode === 'split';
+    tocToggle.setAttribute('aria-pressed', String(tocWanted));
+  }
+
+  /** Highlight the section at the top of the preview. */
+  let tocJump = 0; // while a jump from the sidebar scrolls, keep its entry highlighted
+
+  function markToc(current) {
+    if (current === tocList.querySelector('a.active')) return;
+    tocLinks.forEach((a) => a.classList.toggle('active', a === current));
+    if (current) {
+      const r = current.getBoundingClientRect();
+      const pr = tocPane.getBoundingClientRect();
+      if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) tocPane.scrollTop += r.top - pr.top - pr.height / 3;
+    }
+  }
+
+  function spyToc() {
+    if (tocPane.hidden || !tocLinks.length || Date.now() < tocJump) return;
+    const limit = previewPane.getBoundingClientRect().top + 48;
+    let current = null;
+    for (const a of tocLinks) {
+      const h = document.getElementById(a.dataset.id);
+      if (!h || !h.offsetParent) continue;
+      if (h.getBoundingClientRect().top <= limit) current = a;
+      else break;
+    }
+    // At the very bottom, the last heading on screen is the current one.
+    if (previewPane.scrollTop + previewPane.clientHeight >= previewPane.scrollHeight - 2) {
+      for (const a of tocLinks) {
+        const h = document.getElementById(a.dataset.id);
+        if (h && h.offsetParent && h.getBoundingClientRect().top < previewPane.getBoundingClientRect().bottom) current = a;
+      }
+    }
+    markToc(current);
+  }
+
+  let spyFrame = 0;
+  previewPane.addEventListener('scroll', () => {
+    if (!spyFrame) spyFrame = requestAnimationFrame(() => { spyFrame = 0; spyToc(); });
+  }, { passive: true });
+  previewPane.addEventListener('scrollend', () => { tocJump = 0; spyToc(); });
+
+  tocList.addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(a.dataset.id);
+    if (!target) return;
+    reveal(target);
+    const y = target.getBoundingClientRect().top - previewPane.getBoundingClientRect().top + previewPane.scrollTop - 16;
+    previewPane.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    markToc(a);
+    tocJump = Date.now() + 1000;
+    if (narrow.matches) { tocWanted = false; showToc(); }
+  });
+
+  tocToggle.addEventListener('click', () => {
+    tocWanted = !tocWanted;
+    if (!narrow.matches) store.set('texdown:toc', tocWanted ? 'on' : 'off');
+    showToc();
+    spyToc();
+  });
+  // On a phone the contents open as a drawer over the page: start closed, and
+  // close it again on a tap outside it or Escape.
+  document.addEventListener('pointerdown', (e) => {
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target)) { tocWanted = false; showToc(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && narrow.matches && tocWanted) { tocWanted = false; showToc(); }
+  });
+  if (narrow.matches) tocWanted = false;
 
   function showStatus(text, warn) {
     status.textContent = text;
@@ -86,8 +202,16 @@
     saveTimer = setTimeout(() => store.set('texdown:last', doc), 400);
   }
 
-  function load(text, name) {
+  function load(text, name, images) {
     closeEditor(false);
+    imageUrls.forEach((u) => URL.revokeObjectURL(u));
+    imageUrls = [];
+    resolveImage = null;
+    if (images && Object.keys(images).length && window.TeXdownArxiv) {
+      const urls = {};
+      for (const [path, blob] of Object.entries(images)) imageUrls.push((urls[path] = URL.createObjectURL(blob)));
+      resolveImage = TeXdownArxiv.imageResolver(urls, text);
+    }
     doc = text.replace(/\r\n?/g, '\n');
     setSource(doc);
     fileName.textContent = name || 'untitled.tex';
@@ -231,6 +355,8 @@
     store.set('texdown:mode', m);
     if (m !== 'edit') closeEditor(true);
     sourcePane.hidden = m !== 'split';
+    $('splitter').hidden = m !== 'split';
+    showToc();
     if (m === 'split' && !wasSplit) {
       setSource(doc);
       anchors = null;
@@ -471,7 +597,7 @@
     }
     const cs = getComputedStyle(source);
     Object.assign(mirror.style, {
-      position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
+      position: 'fixed', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
       boxSizing: 'border-box', width: source.clientWidth + 'px', padding: cs.padding, font: cs.font,
       lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
       whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak,
@@ -748,7 +874,178 @@
     target.classList.add('flash');
   });
 
+  // --- resizable split ------------------------------------------------------------
+
+  const panes = $('panes');
+  const splitter = $('splitter');
+
+  function setSplit(pct, remember) {
+    if (pct == null) {
+      panes.style.removeProperty('--split');
+      splitter.setAttribute('aria-valuenow', '50');
+    } else {
+      pct = Math.max(15, Math.min(85, pct));
+      panes.style.setProperty('--split', pct.toFixed(1) + '%');
+      splitter.setAttribute('aria-valuenow', String(Math.round(pct)));
+    }
+    anchors = null;
+    if (remember) store.set('texdown:split', pct == null ? '' : String(pct));
+  }
+
+  const isStacked = () => getComputedStyle(panes).flexDirection === 'column';
+
+  splitter.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    splitter.setPointerCapture(e.pointerId);
+    splitter.classList.add('dragging');
+    document.body.classList.add('resizing');
+    document.body.classList.toggle('stacked', isStacked());
+    const top = source.scrollTop;
+    const move = (ev) => {
+      const r = panes.getBoundingClientRect();
+      const pct = isStacked() ? ((ev.clientY - r.top) / r.height) * 100 : ((ev.clientX - r.left) / r.width) * 100;
+      setSplit(pct, false);
+      source.scrollTop = top;
+      syncFrom('src');
+    };
+    const up = () => {
+      splitter.releasePointerCapture(e.pointerId);
+      splitter.classList.remove('dragging');
+      document.body.classList.remove('resizing', 'stacked');
+      splitter.removeEventListener('pointermove', move);
+      splitter.removeEventListener('pointerup', up);
+      splitter.removeEventListener('pointercancel', up);
+      const v = parseFloat(panes.style.getPropertyValue('--split'));
+      setSplit(isNaN(v) ? null : v, true);
+    };
+    splitter.addEventListener('pointermove', move);
+    splitter.addEventListener('pointerup', up);
+    splitter.addEventListener('pointercancel', up);
+  });
+  splitter.addEventListener('dblclick', () => setSplit(null, true));
+  splitter.addEventListener('keydown', (e) => {
+    const cur = parseFloat(splitter.getAttribute('aria-valuenow')) || 50;
+    const step = e.shiftKey ? 10 : 2;
+    const keys = { ArrowLeft: -step, ArrowUp: -step, ArrowRight: step, ArrowDown: step };
+    if (e.key in keys) setSplit(cur + keys[e.key], true);
+    else if (e.key === 'Home') setSplit(15, true);
+    else if (e.key === 'End') setSplit(85, true);
+    else if (e.key === 'Enter') setSplit(null, true);
+    else return;
+    e.preventDefault();
+  });
+  {
+    const saved = parseFloat(store.get('texdown:split'));
+    if (!isNaN(saved)) setSplit(saved, false);
+  }
+
+  // --- light and dark theme ------------------------------------------------------
+
+  const rootEl = document.documentElement;
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  const themeButton = $('theme-toggle');
+  const isDark = () => (rootEl.dataset.theme ? rootEl.dataset.theme === 'dark' : !!(darkQuery && darkQuery.matches));
+
+  function updateThemeButton() {
+    const dark = isDark();
+    document.body.classList.toggle('theme-dark', dark);
+    themeButton.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    themeButton.title = dark ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+
+  themeButton.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    rootEl.dataset.theme = next;
+    store.set('texdown:theme', next);
+    updateThemeButton();
+  });
+  {
+    const saved = store.get('texdown:theme');
+    if (saved === 'light' || saved === 'dark') rootEl.dataset.theme = saved;
+    if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener('change', updateThemeButton);
+    // The page's host may also change the theme attribute.
+    new MutationObserver(updateThemeButton).observe(rootEl, { attributes: true, attributeFilter: ['data-theme'] });
+    updateThemeButton();
+  }
+
   // --- start -----------------------------------------------------------------
+
+  // --- import from arXiv ------------------------------------------------------------
+
+  const arxivDialog = $('arxiv-dialog');
+  const arxivInput = $('arxiv-input');
+  const arxivMessage = $('arxiv-message');
+  const arxivGo = $('arxiv-go');
+  let arxivBusy = false;
+
+  function arxivSay(text, warn) {
+    arxivMessage.textContent = text;
+    arxivMessage.classList.toggle('warn', !!warn);
+  }
+
+  async function importArxiv(input) {
+    if (arxivBusy) return false;
+    const id = TeXdownArxiv.parseId(input);
+    if (!id) {
+      arxivSay('That does not look like an arXiv link or id, e.g. 2301.00001 or arxiv.org/abs/2301.00001.', true);
+      return false;
+    }
+    arxivBusy = true;
+    arxivGo.disabled = true;
+    arxivSay(`Downloading ${id} from arXiv…`);
+    showStatus(`Importing ${id}…`);
+    try {
+      const paper = await TeXdownArxiv.importPaper(id);
+      fileHandle = null;
+      load(paper.source, paper.name, paper.images);
+      if (arxivDialog.open) arxivDialog.close();
+      flashStatus(`Imported ${id} from arXiv`);
+      return true;
+    } catch (e) {
+      const blocked = e instanceof TypeError || /Failed to fetch|NetworkError|Load failed|Could not reach/.test(e.message);
+      arxivSay(blocked
+        ? `Could not download ${id}. This page may not be allowed to reach arxiv.org here. Download arxiv.org/src/${id}, unpack it and open the .tex file instead.`
+        : e.message, true);
+      showStatus(warningsText);
+      if (!arxivDialog.open) openArxivDialog(input);
+      return false;
+    } finally {
+      arxivBusy = false;
+      arxivGo.disabled = false;
+    }
+  }
+
+  function openArxivDialog(value) {
+    if (value != null) arxivInput.value = value;
+    if (!arxivDialog.open) {
+      if (arxivDialog.showModal) arxivDialog.showModal();
+      else arxivDialog.setAttribute('open', '');
+    }
+    arxivInput.focus();
+    arxivInput.select();
+  }
+
+  $('arxiv').addEventListener('click', () => {
+    arxivSay('The source is downloaded from arxiv.org; figures in PNG or JPEG are shown too.');
+    openArxivDialog();
+  });
+  $('arxiv-cancel').addEventListener('click', () => arxivDialog.close());
+  $('arxiv-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    importArxiv(arxivInput.value);
+  });
+
+  // Pasting an arXiv link anywhere outside a text field imports it.
+  document.addEventListener('paste', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
+    const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (/arxiv/i.test(text) && TeXdownArxiv.parseId(text)) {
+      e.preventDefault();
+      importArxiv(text);
+    }
+  });
 
   async function loadSample() {
     fileHandle = null;
@@ -770,6 +1067,13 @@
   function start() {
     const saved = store.get('texdown:mode');
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
+    // ?arxiv=2301.00001 opens that paper.
+    const param = new URLSearchParams(location.search).get('arxiv');
+    if (param && window.TeXdownArxiv) {
+      const last = store.get('texdown:last');
+      if (last) load(last, store.get('texdown:last-name'));
+      return importArxiv(param);
+    }
     const last = store.get('texdown:last');
     if (last) return load(last, store.get('texdown:last-name'));
     return loadSample();

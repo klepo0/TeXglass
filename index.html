@@ -10,6 +10,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="src/texdown.js"></script>
   <script defer src="src/editor.js"></script>
+  <script defer src="src/arxiv.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -21,23 +22,47 @@
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
     <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
+    <button id="arxiv" type="button" title="Import a paper's LaTeX source from arXiv">arXiv</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
     <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
+    <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the table of contents">Contents</button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <button id="load-sample" type="button" title="Load the example document">Sample</button>
     <span id="file-name" class="file-name"></span>
     <span id="status" class="status" role="status"></span>
+    <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch between light and dark">
+      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
   </header>
 
   <main class="panes" id="panes">
+    <nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden>
+      <div class="toc-pane-title">Contents</div>
+      <ol id="toc-list" class="toc-list"></ol>
+    </nav>
     <section class="pane source-pane" id="source-pane" hidden>
       <textarea id="source" spellcheck="false" aria-label="LaTeX source"></textarea>
     </section>
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize the source and preview panes" aria-valuemin="15" aria-valuemax="85" aria-valuenow="50" tabindex="0" title="Drag to resize · double-click to reset" hidden></div>
     <section class="pane preview-pane" id="preview-pane">
       <article id="preview" class="document"></article>
       <div class="add-block-row"><button id="add-block" type="button" class="add-block">+ Add text at the end</button></div>
     </section>
   </main>
+
+  <dialog id="arxiv-dialog" class="arxiv-dialog" aria-labelledby="arxiv-title">
+    <form id="arxiv-form" method="dialog">
+      <h2 id="arxiv-title">Import from arXiv</h2>
+      <label for="arxiv-input">Paste an arXiv link or id</label>
+      <input id="arxiv-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://arxiv.org/abs/2301.00001 or 2301.00001">
+      <p id="arxiv-message" class="arxiv-message" role="status"></p>
+      <div class="arxiv-actions">
+        <button type="button" id="arxiv-cancel">Cancel</button>
+        <button type="submit" id="arxiv-go" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file to view it</div></div>
   <div id="ref-popover" class="ref-popover document" role="tooltip" hidden></div>

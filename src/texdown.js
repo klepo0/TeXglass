@@ -794,8 +794,12 @@
           const o = readOpt(src, s.end);
           const a = readArg(src, o ? o.end : s.end);
           const resolved = this.options.resolveImage ? this.options.resolveImage(a.content.trim()) : null;
+          // width=0.5\textwidth (or \linewidth, \columnwidth) becomes a percentage.
+          const w = o && /(?:^|,)\s*width\s*=\s*([\d.]*)\s*\\(?:textwidth|linewidth|columnwidth|hsize)/.exec(o.content);
+          const pct = w ? Math.min(100, Math.round(parseFloat(w[1] || '1') * 100)) : null;
+          const style = pct ? ` style="width:${pct}%"` : '';
           const html = resolved
-            ? `<img class="graphic" src="${escapeHtml(resolved)}" alt="${escapeHtml(a.content)}">`
+            ? `<img class="graphic" src="${escapeHtml(resolved)}" alt="${escapeHtml(a.content)}"${style}>`
             : `<span class="graphic-placeholder">[image: ${escapeHtml(a.content.trim())}]</span>`;
           return res(html, a.end);
         }

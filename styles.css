@@ -86,7 +86,8 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; margin: 0; }
+/* Only the panes scroll; the page itself never does. */
+html, body { height: 100%; margin: 0; overflow: hidden; }
 
 body {
   background: var(--bg);
@@ -130,6 +131,47 @@ body {
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
+/* Import from arXiv */
+.arxiv-dialog {
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.arxiv-dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
+.arxiv-dialog h2 { margin: 0 0 12px; font-size: 17px; }
+.arxiv-dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.arxiv-dialog input {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.arxiv-dialog input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.arxiv-message { min-height: 1.4em; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.arxiv-message.warn { color: var(--warn); }
+.arxiv-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.arxiv-actions button {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.arxiv-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.arxiv-actions button:disabled { opacity: 0.6; cursor: default; }
+img.graphic { max-width: 100%; height: auto; }
+
 .mode-switch { display: inline-flex; }
 .mode-switch button { border-radius: 0; }
 .mode-switch button:first-child { border-radius: 6px 0 0 6px; }
@@ -144,9 +186,92 @@ body {
 /* --- panes --------------------------------------------------------------- */
 
 .panes { flex: 1; display: flex; min-height: 0; }
-.pane { flex: 1; min-width: 0; overflow: auto; }
-.source-pane { border-right: 1px solid var(--rule); display: flex; }
+.pane { flex: 1; min-width: 0; overflow: auto; position: relative; }
+
+/* Table of contents sidebar (Preview and Edit) */
+.toc-pane {
+  flex: 0 0 260px;
+  position: relative;
+  overflow: auto;
+  padding: 20px 10px 32px 16px;
+  border-right: 1px solid var(--rule);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.35;
+  overscroll-behavior: contain;
+}
+.toc-pane[hidden] { display: none; }
+.toc-pane-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 8px; }
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-list a {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  color: var(--ink);
+  text-decoration: none;
+}
+.toc-list a:hover { background: var(--accent-soft); }
+.toc-list a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.toc-list .toc-num { min-width: 0; flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.toc-list a.active .toc-num { color: inherit; }
+.toc-list .toc-title { min-width: 0; overflow-wrap: anywhere; }
+.toc-list .toc-title .katex { font-size: 1em; }
+.toc-list .toc-d1 a { padding-left: 20px; }
+.toc-list .toc-d2 a { padding-left: 32px; font-size: 13px; }
+.toc-list .toc-d3 a { padding-left: 44px; font-size: 13px; }
+.toc-list .toc-d0 { margin-top: 4px; }
+.toc-list .toc-d0 > a { font-weight: 500; }
+@media (max-width: 760px) {
+  .toc-pane {
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 85vw);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+  }
+}
+.source-pane { display: flex; flex: 0 0 var(--split, 50%); }
 .source-pane[hidden] { display: none; }
+
+/* The draggable divider between source and preview */
+.splitter {
+  position: relative;
+  flex: 0 0 auto;
+  width: 7px;
+  margin: 0 -3px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.splitter[hidden] { display: none; }
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 1px;
+  height: 100%;
+  background: var(--rule);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.splitter:hover::after, .splitter:focus-visible::after, .splitter.dragging::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.splitter:focus-visible { outline: none; }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; }
+
+.icon-button { display: inline-flex; align-items: center; justify-content: center; padding: 5px 7px !important; }
+.icon-button svg { width: 18px; height: 18px; }
+.icon-button .icon-sun { display: none; }
+.theme-dark .icon-button .icon-sun { display: block; }
+.theme-dark .icon-button .icon-moon { display: none; }
 
 #source {
   flex: 1;
@@ -162,7 +287,9 @@ body {
 
 @media (max-width: 760px) {
   body.editing .panes { flex-direction: column; }
-  body.editing .source-pane { border-right: 0; border-bottom: 1px solid var(--rule); flex: 0 0 40%; }
+  body.editing .source-pane { flex: 0 0 var(--split, 40%); }
+  .splitter { width: auto; height: 7px; margin: -3px 0; cursor: row-resize; }
+  .splitter::after { width: 100%; height: 1px; top: 3px; left: 0; }
 }
 
 /* --- syntax colouring and completion -------------------------------------- */
@@ -487,5 +614,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .fold-hidden, .proof.folded > * { display: revert !important; }
   .proof.folded > p:first-child { white-space: normal; color: inherit; }
   .pane { overflow: visible; }
+  html, body { overflow: visible; height: auto; }
+  .toc-pane, #toc-toggle { display: none !important; }
   body { display: block; background: #fff; }
 }
