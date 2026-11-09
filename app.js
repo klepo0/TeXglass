@@ -231,6 +231,7 @@
     store.set('texdown:mode', m);
     if (m !== 'edit') closeEditor(true);
     sourcePane.hidden = m !== 'split';
+    $('splitter').hidden = m !== 'split';
     if (m === 'split' && !wasSplit) {
       setSource(doc);
       anchors = null;
@@ -747,6 +748,101 @@
     void target.offsetWidth;
     target.classList.add('flash');
   });
+
+  // --- resizable split ------------------------------------------------------------
+
+  const panes = $('panes');
+  const splitter = $('splitter');
+
+  function setSplit(pct, remember) {
+    if (pct == null) {
+      panes.style.removeProperty('--split');
+      splitter.setAttribute('aria-valuenow', '50');
+    } else {
+      pct = Math.max(15, Math.min(85, pct));
+      panes.style.setProperty('--split', pct.toFixed(1) + '%');
+      splitter.setAttribute('aria-valuenow', String(Math.round(pct)));
+    }
+    anchors = null;
+    if (remember) store.set('texdown:split', pct == null ? '' : String(pct));
+  }
+
+  const isStacked = () => getComputedStyle(panes).flexDirection === 'column';
+
+  splitter.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    splitter.setPointerCapture(e.pointerId);
+    splitter.classList.add('dragging');
+    document.body.classList.add('resizing');
+    document.body.classList.toggle('stacked', isStacked());
+    const top = source.scrollTop;
+    const move = (ev) => {
+      const r = panes.getBoundingClientRect();
+      const pct = isStacked() ? ((ev.clientY - r.top) / r.height) * 100 : ((ev.clientX - r.left) / r.width) * 100;
+      setSplit(pct, false);
+      source.scrollTop = top;
+      syncFrom('src');
+    };
+    const up = () => {
+      splitter.releasePointerCapture(e.pointerId);
+      splitter.classList.remove('dragging');
+      document.body.classList.remove('resizing', 'stacked');
+      splitter.removeEventListener('pointermove', move);
+      splitter.removeEventListener('pointerup', up);
+      splitter.removeEventListener('pointercancel', up);
+      const v = parseFloat(panes.style.getPropertyValue('--split'));
+      setSplit(isNaN(v) ? null : v, true);
+    };
+    splitter.addEventListener('pointermove', move);
+    splitter.addEventListener('pointerup', up);
+    splitter.addEventListener('pointercancel', up);
+  });
+  splitter.addEventListener('dblclick', () => setSplit(null, true));
+  splitter.addEventListener('keydown', (e) => {
+    const cur = parseFloat(splitter.getAttribute('aria-valuenow')) || 50;
+    const step = e.shiftKey ? 10 : 2;
+    const keys = { ArrowLeft: -step, ArrowUp: -step, ArrowRight: step, ArrowDown: step };
+    if (e.key in keys) setSplit(cur + keys[e.key], true);
+    else if (e.key === 'Home') setSplit(15, true);
+    else if (e.key === 'End') setSplit(85, true);
+    else if (e.key === 'Enter') setSplit(null, true);
+    else return;
+    e.preventDefault();
+  });
+  {
+    const saved = parseFloat(store.get('texdown:split'));
+    if (!isNaN(saved)) setSplit(saved, false);
+  }
+
+  // --- light and dark theme ------------------------------------------------------
+
+  const rootEl = document.documentElement;
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  const themeButton = $('theme-toggle');
+  const isDark = () => (rootEl.dataset.theme ? rootEl.dataset.theme === 'dark' : !!(darkQuery && darkQuery.matches));
+
+  function updateThemeButton() {
+    const dark = isDark();
+    document.body.classList.toggle('theme-dark', dark);
+    themeButton.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    themeButton.title = dark ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+
+  themeButton.addEventListener('click', () => {
+    const next = isDark() ? 'light' : 'dark';
+    rootEl.dataset.theme = next;
+    store.set('texdown:theme', next);
+    updateThemeButton();
+  });
+  {
+    const saved = store.get('texdown:theme');
+    if (saved === 'light' || saved === 'dark') rootEl.dataset.theme = saved;
+    if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener('change', updateThemeButton);
+    // The page's host may also change the theme attribute.
+    new MutationObserver(updateThemeButton).observe(rootEl, { attributes: true, attributeFilter: ['data-theme'] });
+    updateThemeButton();
+  }
 
   // --- start -----------------------------------------------------------------
 

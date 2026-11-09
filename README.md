@@ -49,6 +49,10 @@ be hosted on GitHub Pages as is. Then:
   They scroll together: scroll either one and the other follows to the same
   place. Typing re-renders live, and clicking a block in the preview puts the
   cursor at its source.
+- In Split mode, **drag the divider** to resize the panes (arrow keys work
+  when it is focused, double-click resets it). The size is remembered.
+- The **sun/moon button** switches between light and dark; the choice is
+  remembered, and until you pick one the page follows your system setting.
 - Hover a reference to preview the theorem or equation it points to; click
   it to jump there.
 - The status in the toolbar counts undefined references and duplicate labels.
