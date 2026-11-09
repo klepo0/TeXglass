@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TeXdown</title>
+  <meta name="description" content="A LaTeX viewer that renders .tex files like a Markdown preview: math, sections and numbered theorems with working references.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="src/texdown.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">T<sub>e</sub>Xdown</div>
+    <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open .tex</button>
+    <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
+    <button id="toggle-source" type="button" aria-pressed="false" title="Show the source next to the preview (Ctrl+E)">Edit source</button>
+    <button id="load-sample" type="button" title="Load the example document">Sample</button>
+    <span id="file-name" class="file-name"></span>
+    <span id="status" class="status" role="status"></span>
+  </header>
+
+  <main class="panes" id="panes">
+    <section class="pane source-pane" id="source-pane" hidden>
+      <textarea id="source" spellcheck="false" aria-label="LaTeX source"></textarea>
+    </section>
+    <section class="pane preview-pane" id="preview-pane">
+      <article id="preview" class="document"></article>
+    </section>
+  </main>
+
+  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file to view it</div></div>
+  <div id="ref-popover" class="ref-popover document" role="tooltip" hidden></div>
+</body>
+</html>
