@@ -9,14 +9,21 @@
   <link rel="stylesheet" href="styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="src/texdown.js"></script>
+  <script defer src="src/editor.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
   <header class="toolbar">
     <div class="brand">T<sub>e</sub>Xdown</div>
-    <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open .tex</button>
+    <div class="mode-switch" role="group" aria-label="Mode">
+      <button id="mode-preview" type="button" aria-pressed="true" title="Read the rendered document (Ctrl+E)">Preview</button>
+      <button id="mode-edit" type="button" aria-pressed="false" title="Click any part of the document to edit it (Ctrl+E)">Edit</button>
+      <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
+    </div>
+    <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
-    <button id="toggle-source" type="button" aria-pressed="false" title="Show the source next to the preview (Ctrl+E)">Edit source</button>
+    <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
+    <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <button id="load-sample" type="button" title="Load the example document">Sample</button>
     <span id="file-name" class="file-name"></span>
     <span id="status" class="status" role="status"></span>
@@ -28,6 +35,7 @@
     </section>
     <section class="pane preview-pane" id="preview-pane">
       <article id="preview" class="document"></article>
+      <div class="add-block-row"><button id="add-block" type="button" class="add-block">+ Add text at the end</button></div>
     </section>
   </main>
 

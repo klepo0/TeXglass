@@ -15,6 +15,14 @@
   --code-bg: #f2f1ed;
   --toolbar: #ffffffee;
   --flash: #fff3b0;
+  --hl-cmd: #1f5fbf;
+  --hl-env: #9a3b8c;
+  --hl-math: #2e7d4f;
+  --hl-math-bg: rgba(46, 125, 79, 0.07);
+  --hl-label: #b5541b;
+  --hl-comment: #8a8a8f;
+  --hl-punct: #8a8a8f;
+  --hl-align: #c0392b;
   color-scheme: light;
 }
 
@@ -36,6 +44,14 @@
     --code-bg: #2a2b30;
     --toolbar: #1e1f23ee;
     --flash: #4a4320;
+    --hl-cmd: #8fb2f0;
+    --hl-env: #e0a3d8;
+    --hl-math: #8fd6a8;
+    --hl-math-bg: rgba(143, 214, 168, 0.08);
+    --hl-label: #f0a46c;
+    --hl-comment: #7d7d85;
+    --hl-punct: #8a8a92;
+    --hl-align: #ff8a80;
     color-scheme: dark;
   }
 }
@@ -57,6 +73,14 @@
   --code-bg: #2a2b30;
   --toolbar: #1e1f23ee;
   --flash: #4a4320;
+  --hl-cmd: #8fb2f0;
+  --hl-env: #e0a3d8;
+  --hl-math: #8fd6a8;
+  --hl-math-bg: rgba(143, 214, 168, 0.08);
+  --hl-label: #f0a46c;
+  --hl-comment: #7d7d85;
+  --hl-punct: #8a8a92;
+  --hl-align: #ff8a80;
   color-scheme: dark;
 }
 
@@ -106,6 +130,13 @@ body {
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
+.mode-switch { display: inline-flex; }
+.mode-switch button { border-radius: 0; }
+.mode-switch button:first-child { border-radius: 6px 0 0 6px; }
+.mode-switch button:last-child { border-radius: 0 6px 6px 0; }
+.mode-switch button + button { margin-left: -1px; }
+.mode-switch button[aria-pressed="true"] { position: relative; }
+.file-name.dirty::after { content: " •"; color: var(--accent); }
 .file-name { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .status { margin-left: auto; font-size: 13px; color: var(--muted); cursor: default; }
 .status.warn { color: var(--warn); }
@@ -134,6 +165,61 @@ body {
   body.editing .source-pane { border-right: 0; border-bottom: 1px solid var(--rule); flex: 0 0 40%; }
 }
 
+/* --- syntax colouring and completion -------------------------------------- */
+
+.hl-wrap { position: relative; }
+.source-pane .hl-wrap { flex: 1; display: flex; min-width: 0; background: var(--paper); }
+.hl-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: transparent;
+  color: var(--ink);
+  background: transparent;
+}
+.hl-input { position: relative; z-index: 1; background: transparent !important; color: transparent !important; caret-color: var(--ink); }
+.hl-input::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: transparent; }
+.tok-cmd { color: var(--hl-cmd); }
+.tok-section { color: var(--hl-cmd); font-weight: 700; }
+.tok-kw { color: var(--hl-cmd); }
+.tok-env { color: var(--hl-env); font-weight: 600; }
+.tok-math { color: var(--hl-math); background: var(--hl-math-bg); border-radius: 2px; }
+.tok-math .tok-cmd { color: var(--hl-math); font-weight: 600; }
+.tok-delim { font-weight: 700; }
+.tok-label { color: var(--hl-label); }
+.tok-comment { color: var(--hl-comment); font-style: italic; }
+.tok-brace { color: var(--hl-punct); }
+.tok-align { color: var(--hl-align); }
+
+.completion {
+  position: fixed;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 240px;
+  max-width: min(440px, calc(100vw - 16px));
+  max-height: 264px;
+  overflow: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.completion[hidden] { display: none; }
+.completion li { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+.completion li.active { background: var(--accent-soft); }
+.c-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-detail { flex: 0 0 auto; color: var(--muted); font: 12px/1.4 system-ui, sans-serif; white-space: nowrap; }
+
 /* --- the document -------------------------------------------------------- */
 
 .document {
@@ -147,7 +233,7 @@ body {
 #preview {
   max-width: 760px;
   margin: 0 auto;
-  padding: 40px 16px 120px;
+  padding: 40px 16px 24px;
 }
 
 .document p { margin: 0 0 0.9em; }
@@ -282,6 +368,104 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .fn { line-height: 0; }
 .fn-back { margin-left: 0.3em; }
 
+/* Folding sections and proofs */
+.fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0 0.25em 0 -1.35em;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  vertical-align: -0.05em;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.fold-toggle svg { width: 0.75em; height: 0.75em; transition: transform 0.15s; }
+.fold-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.fold-toggle:hover, .fold-toggle:focus-visible, .fold-toggle[aria-expanded="false"] { opacity: 1; color: var(--accent); }
+.fold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.src-block > h1, .src-block > h2, .src-block > h3, .src-block > h4 { cursor: pointer; }
+.mode-edit .src-block > h1, .mode-edit .src-block > h2, .mode-edit .src-block > h3, .mode-edit .src-block > h4 { cursor: text; }
+.folded::after { content: " ⋯"; color: var(--muted); font-weight: 400; }
+.fold-hidden { display: none; }
+
+.proof .fold-toggle { font-size: 0.95em; margin-left: 0; }
+.proof.folded > :not(:first-child) { display: none; }
+.proof.folded > p:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  cursor: pointer;
+}
+.proof.folded > p:first-child .qed { display: none; }
+.proof.folded::after { content: none; }
+.mode-edit .proof.folded > p:first-child { cursor: text; }
+
+@media (max-width: 760px) {
+  .fold-toggle { margin-left: 0; }
+}
+
+/* Edit mode: click a block to edit its source in place */
+.add-block-row { max-width: 760px; margin: 0 auto; padding: 0 16px 120px; display: none; }
+.mode-edit .add-block-row { display: block; }
+.add-block {
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.add-block:hover, .add-block:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+.mode-edit .src-block { border-radius: 4px; cursor: text; transition: box-shadow 0.12s; }
+.mode-edit .src-block:hover { box-shadow: 0 0 0 6px var(--accent-soft); background: var(--accent-soft); }
+.mode-edit .document a { cursor: text; }
+
+.inline-editor {
+  margin: 0.6em -10px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+.inline-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 2.6em;
+  border: 0;
+  resize: none;
+  overflow: hidden;
+  padding: 4px 2px;
+  background: transparent;
+  color: var(--ink);
+  font: 14px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  outline: none;
+  tab-size: 2;
+}
+.inline-hint {
+  font: 12px/1.4 system-ui, sans-serif;
+  color: var(--muted);
+  padding: 4px 2px 0;
+  border-top: 1px solid var(--rule);
+  margin-top: 6px;
+}
+.inline-preview:not(:empty) { margin-top: 8px; padding-top: 4px; }
+.inline-preview .src-block { cursor: default; }
+.inline-preview .src-block:hover { box-shadow: none; background: transparent; }
+.empty-doc { color: var(--muted); text-align: center; }
+
 /* Drag and drop */
 .drop-overlay {
   position: fixed;
@@ -299,7 +483,9 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .drop-overlay[hidden] { display: none; }
 
 @media print {
-  .toolbar, .source-pane, .ref-popover { display: none !important; }
+  .toolbar, .source-pane, .ref-popover, .add-block-row, .fold-toggle { display: none !important; }
+  .fold-hidden, .proof.folded > * { display: revert !important; }
+  .proof.folded > p:first-child { white-space: normal; color: inherit; }
   .pane { overflow: visible; }
   body { display: block; background: #fff; }
 }

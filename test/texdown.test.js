@@ -185,3 +185,16 @@ test('the sample document renders with KaTeX without warnings', () => {
   assert.match(text(r.html), /Theorem 2\.1 \(Hölder\)/);
   assert.match(text(r.html), /\(2\.1\)/);
 });
+
+test('sourceMap marks each top-level block with its range in the original source', () => {
+  const src = '\\begin{document}\n\\section{Intro}\nSome text % a comment\nmore text.\n\n\\begin{theorem}\\label{t}$x$\\end{theorem}\n\n$$y$$\n\\end{document}\n';
+  const r = TeXdown.render(src, { sourceMap: true, renderMath: () => 'M' });
+  const spans = Array.from(r.html.matchAll(/data-s="(\d+)" data-e="(\d+)"/g)).map((m) => src.slice(+m[1], +m[2]));
+  assert.deepEqual(spans, [
+    '\\section{Intro}',
+    'Some text % a comment\nmore text.',
+    '\\begin{theorem}\\label{t}$x$\\end{theorem}',
+    '$$y$$',
+  ]);
+  assert.ok(!plain(src).html.includes('data-s'), 'off by default');
+});
