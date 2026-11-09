@@ -72,39 +72,50 @@
     return upper ? s.toUpperCase() : s;
   }
 
-  /** Remove % comments, keeping \% and verbatim-like environments intact. */
-  function stripComments(src) {
+  /**
+   * Remove % comments, keeping \% and verbatim-like environments intact.
+   * Returns the stripped text and, for each of its characters, the index of
+   * that character in the original source (plus one final entry for the end).
+   */
+  function stripCommentsMap(src) {
     const verb = /\\begin\{(verbatim\*?|lstlisting|minted|comment)\}[\s\S]*?\\end\{\1\}/g;
-    let out = '';
+    const out = [];
+    const map = [];
+    const copy = (from, to) => {
+      for (let k = from; k < to; k++) { out.push(src[k]); map.push(k); }
+    };
+    const plain = (from, to) => {
+      let i = from;
+      while (i < to) {
+        const c = src[i];
+        if (c === '\\' && i + 1 < to) { copy(i, i + 2); i += 2; continue; }
+        if (c === '%') {
+          // A comment also swallows the newline and the next line's indentation.
+          let j = src.indexOf('\n', i);
+          if (j < 0 || j >= to) { i = to; continue; }
+          j++;
+          while (j < to && (src[j] === ' ' || src[j] === '\t')) j++;
+          i = j;
+          continue;
+        }
+        copy(i, i + 1);
+        i++;
+      }
+    };
     let last = 0;
     let m;
     while ((m = verb.exec(src))) {
-      out += stripCommentsPlain(src.slice(last, m.index));
-      out += m[1] === 'comment' ? '' : m[0];
+      plain(last, m.index);
+      if (m[1] !== 'comment') copy(m.index, m.index + m[0].length);
       last = m.index + m[0].length;
     }
-    return out + stripCommentsPlain(src.slice(last));
+    plain(last, src.length);
+    map.push(src.length);
+    return { text: out.join(''), map };
   }
 
-  function stripCommentsPlain(src) {
-    const lines = src.split('\n');
-    let out = '';
-    for (let k = 0; k < lines.length; k++) {
-      const line = lines[k];
-      let cut = -1;
-      for (let i = 0; i < line.length; i++) {
-        if (line[i] === '\\') { i++; continue; }
-        if (line[i] === '%') { cut = i; break; }
-      }
-      if (cut >= 0) {
-        // A comment also swallows the newline and the next line's indentation.
-        out += line.slice(0, cut);
-        if (k + 1 < lines.length) lines[k + 1] = lines[k + 1].replace(/^[ \t]+/, '');
-      } else {
-        out += line + (k + 1 < lines.length ? '\n' : '');
-      }
-    }
-    return out;
+  function stripComments(src) {
+    return stripCommentsMap(src).text;
   }
 
   /** Read a balanced {...} group starting at src[i] === '{'. */
@@ -346,6 +357,8 @@
       this.listDepth = 0;
       this.floatKind = null;
       this.meta = { title: null, author: null, date: null };
+      this.srcMap = null; // original-source offsets, set when options.sourceMap is on
+      this.trackDepth = -1;
     }
 
     // --- counters ----------------------------------------------------------
@@ -452,10 +465,12 @@
     run(src) {
       let pre = '';
       let body = src;
+      let bodyStart = 0;
       const b = src.search(/\\begin\s*\{document\}/);
       if (b >= 0) {
         pre = src.slice(0, b);
-        body = src.slice(src.indexOf('}', b) + 1);
+        bodyStart = src.indexOf('}', b) + 1;
+        body = src.slice(bodyStart);
         const e = body.search(/\\end\s*\{document\}/);
         if (e >= 0) body = body.slice(0, e);
       }
@@ -464,7 +479,11 @@
         this.counters.section.parent = 'chapter';
       }
       this.flow(pre, false); // preamble: definitions only, output discarded
+      this.trackDepth = this.depth + 1;
+      this.trackBase = bodyStart;
+      this.trackText = src;
       let html = this.flow(body, false);
+      this.trackDepth = -1;
       if (this.footnotes.length) {
         html +=
           '\n<section class="footnotes"><ol>' +
@@ -488,21 +507,30 @@
       }
       const out = [];
       let para = '';
-      const flush = () => {
+      // With a source map, remember which part of the source made each
+      // top-level block, so the viewer can edit it in place.
+      const track = !inline && this.srcMap && this.depth === this.trackDepth;
+      const spans = [];
+      let paraStart = -1;
+      const flush = (pos) => {
         const t = para.trim();
-        if (t) out.push(inline ? para : `<p>${t}</p>`);
-        else if (inline && para) out.push(para);
+        if (t) {
+          out.push(inline ? para : `<p>${t}</p>`);
+          if (track) spans[out.length - 1] = [paraStart, pos];
+        } else if (inline && para) out.push(para);
         para = '';
+        paraStart = -1;
       };
-      const emit = (r) => {
+      const emit = (r, pos) => {
         if (r.parbreak) {
           if (inline) para += ' ';
-          else flush();
+          else flush(pos);
         }
         if (!r.html) return;
         if (r.block && !inline) {
-          flush();
+          flush(pos);
           out.push(r.html);
+          if (track) spans[out.length - 1] = [pos, r.end];
         } else para += r.html;
       };
       const space = () => {
@@ -514,13 +542,14 @@
       while (i < n) {
         const c = src[i];
         const d = src[i + 1];
+        if (track && paraStart < 0 && c !== ' ' && c !== '\n' && c !== '\t' && c !== '\r') paraStart = i;
         switch (c) {
           case '\n': {
             let j = i + 1;
             while (j < n && (src[j] === ' ' || src[j] === '\t' || src[j] === '\r')) j++;
             if (src[j] === '\n') {
               while (j < n && /\s/.test(src[j])) j++;
-              emit({ parbreak: true });
+              emit({ parbreak: true }, i);
             } else space();
             i = j;
             continue;
@@ -554,22 +583,24 @@
             i++;
             continue;
           case '$': {
+            const at = i;
             const display = d === '$';
             const start = i + (display ? 2 : 1);
             const end = findUnescaped(src, display ? '$$' : '$', start);
             const tex = src.slice(start, end);
             i = end + (display ? 2 : 1);
-            if (display) emit({ block: true, html: this.displayMath('displaymath', tex) });
+            if (display) emit({ block: true, html: this.displayMath('displaymath', tex), end: i }, at);
             else para += this.inlineMath(tex);
             continue;
           }
           case '\\': {
             if (d === '(' || d === '[') {
+              const at = i;
               const close = d === '(' ? '\\)' : '\\]';
               const end = findUnescaped(src, close, i + 2);
               const tex = src.slice(i + 2, end);
               i = end + 2;
-              if (d === '[') emit({ block: true, html: this.displayMath('displaymath', tex) });
+              if (d === '[') emit({ block: true, html: this.displayMath('displaymath', tex), end: i }, at);
               else para += this.inlineMath(tex);
               continue;
             }
@@ -578,7 +609,7 @@
               while (isLetter(src[j])) j++;
               const name = src.slice(i + 1, j);
               const r = this.command(name, src, skipAfterWord(src, j), inline);
-              emit(r);
+              emit(r, i);
               i = r.end;
               continue;
             }
@@ -592,9 +623,23 @@
             i++;
         }
       }
-      flush();
+      flush(n);
       this.depth--;
+      if (track) {
+        return out.map((html, k) => (spans[k] ? this.wrapSpan(html, spans[k]) : html)).join('\n');
+      }
       return out.join(inline ? '' : '\n');
+    }
+
+    /** Wrap a top-level block with the range of the original source it came from. */
+    wrapSpan(html, [s, e]) {
+      const text = this.trackText;
+      const base = this.trackBase;
+      while (e > s && /\s/.test(text[base + e - 1])) e--;
+      if (e <= s) return html;
+      const from = this.srcMap[base + s];
+      const to = this.srcMap[base + e - 1] + 1;
+      return `<div class="src-block" data-s="${from}" data-e="${to}">${html}</div>`;
     }
 
     inlineMath(tex) {
@@ -1412,16 +1457,20 @@
    * options.renderMath(tex, displayMode, macros) -> html   (defaults to global katex)
    * options.resolveImage(path) -> url | null
    * options.today  string used for \today
+   * options.sourceMap  wrap each top-level block in <div class="src-block"
+   *   data-s data-e> giving its range in the (newline-normalised) source
    *
    * Returns { html, title, labels, toc, warnings }.
    */
   function render(source, options) {
     options = options || {};
-    const src = stripComments(String(source).replace(/\r\n?/g, '\n'));
+    const stripped = stripCommentsMap(String(source).replace(/\r\n?/g, '\n'));
+    const src = stripped.text;
     const first = new Renderer(options, null);
     first.run(src);
     const known = { labels: first.labels, toc: first.toc, cites: first.cites };
     const second = new Renderer(options, known);
+    if (options.sourceMap) second.srcMap = stripped.map;
     const html = second.run(src);
     const warnings = Array.from(new Set(first.warnings.filter((w) => !/^Unknown command/.test(w)).concat(second.warnings)));
     return {
