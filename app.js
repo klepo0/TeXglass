@@ -22,6 +22,15 @@
   let saveTimer = null;
   let statusTimer = null;
   let warningsText = '';
+  let lastLabels = {};
+
+  // Syntax colouring and completion for both source editors.
+  const editorOptions = { labels: () => lastLabels, source: () => doc };
+  const sourceAids = window.TeXdownEditor ? TeXdownEditor.attach(source, editorOptions) : { refresh() {}, close() {} };
+  const setSource = (text) => {
+    source.value = text;
+    sourceAids.refresh();
+  };
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -33,6 +42,7 @@
   function renderHtml() {
     try {
       const result = TeXdown.render(doc, { sourceMap: true });
+      lastLabels = result.labels;
       document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
       const n = result.warnings.length;
       warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
@@ -79,7 +89,7 @@
   function load(text, name) {
     closeEditor(false);
     doc = text.replace(/\r\n?/g, '\n');
-    source.value = doc;
+    setSource(doc);
     fileName.textContent = name || 'untitled.tex';
     setDirty(false);
     render();
@@ -222,7 +232,7 @@
     if (m !== 'edit') closeEditor(true);
     sourcePane.hidden = m !== 'split';
     if (m === 'split' && !wasSplit) {
-      source.value = doc;
+      setSource(doc);
       anchors = null;
       // Line the source up with what was on screen in the preview.
       requestAnimationFrame(() => syncFrom('pre'));
@@ -238,13 +248,14 @@
     textarea.setAttribute('aria-label', 'LaTeX source of this block');
     const hint = document.createElement('div');
     hint.className = 'inline-hint';
-    hint.textContent = 'Esc or click outside to finish · ↑/↓ at the edges move between blocks';
+    hint.textContent = 'Type \\ for commands and snippets (Tab jumps between fields) · Esc or click outside to finish · ↑/↓ at the edges move between blocks';
     const previewEl = document.createElement('div');
     previewEl.className = 'inline-preview';
     el.append(textarea, hint, previewEl);
+    const aids = window.TeXdownEditor ? TeXdownEditor.attach(textarea, editorOptions) : { refresh() {}, close() {} };
     textarea.addEventListener('input', onBlockInput);
     textarea.addEventListener('keydown', onBlockKey);
-    return { el, textarea, previewEl };
+    return { el, textarea, previewEl, aids };
   }
 
   /** Open the source range [s, e) for editing, with the caret at `caret`. */
@@ -253,6 +264,7 @@
     const ed = makeEditor();
     editing = Object.assign(ed, { s, len: e - s });
     ed.textarea.value = doc.slice(s, e);
+    ed.aids.refresh();
     // Put the editor where the block was, so the page does not jump.
     const old = preview.querySelector(`.src-block[data-s="${s}"]`);
     if (old) old.replaceWith(ed.el);
@@ -311,7 +323,7 @@
     const value = editing.textarea.value;
     doc = doc.slice(0, editing.s) + value + doc.slice(editing.s + editing.len);
     editing.len = value.length;
-    if (document.activeElement !== source) source.value = doc;
+    if (document.activeElement !== source) setSource(doc);
     setDirty(true);
     autosize();
     rememberSoon();
@@ -409,7 +421,7 @@
     const before = doc.slice(0, pos).replace(/\s*$/, '');
     const sep = before ? '\n\n' : '';
     doc = before + sep + '\n\n' + doc.slice(pos);
-    source.value = doc;
+    setSource(doc);
     openEditor(before.length + sep.length, before.length + sep.length, 0);
     editing.el.scrollIntoView({ block: 'center' });
   }
@@ -633,7 +645,7 @@
         lastModified = file.lastModified;
         closeEditor(false);
         doc = (await file.text()).replace(/\r\n?/g, '\n');
-        source.value = doc;
+        setSource(doc);
         render();
         store.set('texdown:last', doc);
       }
