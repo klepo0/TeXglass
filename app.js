@@ -49,6 +49,7 @@
     const html = renderHtml();
     if (editing) renderAroundEditor(html);
     else preview.innerHTML = html;
+    applyFolds();
   }
 
   function showStatus(text, warn) {
@@ -86,6 +87,127 @@
     store.set('texdown:last', doc);
     store.set('texdown:last-name', name || '');
   }
+
+  // --- folding sections and proofs -------------------------------------------
+
+  // Folded items are remembered by their text, so they stay folded across
+  // re-renders and edits elsewhere in the document.
+  const folded = new Set();
+  try { JSON.parse(store.get('texdown:folds') || '[]').forEach((k) => folded.add(k)); } catch (e) { /* ignore */ }
+  const saveFolds = () => store.set('texdown:folds', JSON.stringify(Array.from(folded).slice(-500)));
+
+  const HEADING = ':scope > h1.part, :scope > h1.chapter, :scope > h2.section, :scope > h3.subsection, :scope > h4.subsubsection';
+
+  /** The heading level of a top-level block, or 0 if it is not a heading. */
+  function levelOf(block) {
+    if (block.classList.contains('footnotes')) return 1;
+    if (!block.classList.contains('src-block')) return 0;
+    const h = block.querySelector(HEADING);
+    if (h) return Number(h.tagName[1]) + (h.classList.contains('chapter') ? 0.5 : 0);
+    return block.querySelector(':scope > .bibliography') ? 2 : 0;
+  }
+
+  function toggleButton(key, label) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fold-toggle';
+    b.dataset.key = key;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    return b;
+  }
+
+  function applyFolds() {
+    // Section headings: a toggle on each, and hide what follows a folded one.
+    let hideAt = 0;
+    for (const block of Array.from(preview.children)) {
+      const lvl = levelOf(block);
+      if (hideAt && lvl && lvl <= hideAt) hideAt = 0;
+      const isEditor = editing && block === editing.el;
+      block.classList.toggle('fold-hidden', !!hideAt && !isEditor);
+      const h = lvl && block.querySelector(HEADING);
+      if (!h) continue;
+      let btn = h.querySelector(':scope > .fold-toggle');
+      if (!btn) {
+        btn = toggleButton('h:' + h.textContent.trim(), 'Fold or unfold this section');
+        h.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      h.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+      if (isFolded && !hideAt) hideAt = lvl;
+    }
+    // Proofs: fold down to their first line.
+    for (const proof of preview.querySelectorAll('.proof')) {
+      let btn = proof.querySelector(':scope > p:first-child > .fold-toggle');
+      if (!btn) {
+        const first = proof.firstElementChild;
+        if (!first) continue;
+        btn = toggleButton('p:' + proof.textContent.trim().slice(0, 80), 'Fold or unfold this proof');
+        first.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      proof.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+    }
+    const proofs = preview.querySelectorAll('.proof').length;
+    const allFolded = proofs > 0 && preview.querySelectorAll('.proof.folded').length === proofs;
+    const fp = $('fold-proofs');
+    fp.textContent = allFolded ? 'Show proofs' : 'Hide proofs';
+    fp.setAttribute('aria-pressed', String(allFolded));
+    fp.disabled = proofs === 0;
+  }
+
+  function setFold(key, on) {
+    if (on) folded.add(key);
+    else folded.delete(key);
+    saveFolds();
+  }
+
+  /** Unfold whatever hides `el`, so a reference to it can be followed. */
+  function reveal(el) {
+    let changed = false;
+    const proof = el.closest('.proof.folded');
+    if (proof) {
+      setFold(proof.querySelector('.fold-toggle').dataset.key, false);
+      changed = true;
+    }
+    let block = el.closest('#preview > *');
+    if (block && block.classList.contains('fold-hidden')) {
+      // Unfold every folded heading above it that still covers it.
+      let need = Infinity;
+      for (let b = block.previousElementSibling; b; b = b.previousElementSibling) {
+        const lvl = levelOf(b);
+        if (lvl && lvl < need) {
+          const btn = b.querySelector('.fold-toggle');
+          if (btn) setFold(btn.dataset.key, false);
+          need = lvl;
+        }
+      }
+      changed = true;
+    }
+    if (changed) applyFolds();
+  }
+
+  // Registered before the Edit-mode click handler, so toggles never open the editor.
+  preview.addEventListener('click', (e) => {
+    const btn = e.target.closest('.fold-toggle');
+    const foldedProof = !btn && mode === 'preview' && e.target.closest('.proof.folded');
+    const heading = !btn && mode === 'preview' && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
+    if (!target) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    setFold(target.dataset.key, !folded.has(target.dataset.key));
+    applyFolds();
+  });
+
+  $('fold-proofs').addEventListener('click', () => {
+    const toggles = Array.from(preview.querySelectorAll('.proof > p:first-child > .fold-toggle'));
+    const fold = !toggles.every((t) => folded.has(t.dataset.key));
+    toggles.forEach((t) => setFold(t.dataset.key, fold));
+    applyFolds();
+  });
 
   // --- in-place editing ------------------------------------------------------
 
@@ -143,6 +265,7 @@
       return;
     }
     preview.innerHTML = renderHtml();
+    applyFolds();
     // Keep the block that was being edited where it was on screen.
     const block = preview.querySelector(`.src-block[data-s="${s}"]`);
     if (block) previewPane.scrollTop += block.getBoundingClientRect().top - top;
@@ -172,6 +295,7 @@
     el.before(...before);
     el.after(...after);
     previewEl.replaceChildren(...inside);
+    applyFolds();
   }
 
   function onBlockInput() {
@@ -504,6 +628,7 @@
     if (!target) return;
     e.preventDefault();
     popover.hidden = true;
+    reveal(target);
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     target.classList.remove('flash');
     void target.offsetWidth;

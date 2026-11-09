@@ -288,6 +288,50 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .fn { line-height: 0; }
 .fn-back { margin-left: 0.3em; }
 
+/* Folding sections and proofs */
+.fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0 0.25em 0 -1.35em;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  vertical-align: -0.05em;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.fold-toggle svg { width: 0.75em; height: 0.75em; transition: transform 0.15s; }
+.fold-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.fold-toggle:hover, .fold-toggle:focus-visible, .fold-toggle[aria-expanded="false"] { opacity: 1; color: var(--accent); }
+.fold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.src-block > h1, .src-block > h2, .src-block > h3, .src-block > h4 { cursor: pointer; }
+.mode-edit .src-block > h1, .mode-edit .src-block > h2, .mode-edit .src-block > h3, .mode-edit .src-block > h4 { cursor: text; }
+.folded::after { content: " ⋯"; color: var(--muted); font-weight: 400; }
+.fold-hidden { display: none; }
+
+.proof .fold-toggle { font-size: 0.95em; margin-left: 0; }
+.proof.folded > :not(:first-child) { display: none; }
+.proof.folded > p:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  cursor: pointer;
+}
+.proof.folded > p:first-child .qed { display: none; }
+.proof.folded::after { content: none; }
+.mode-edit .proof.folded > p:first-child { cursor: text; }
+
+@media (max-width: 760px) {
+  .fold-toggle { margin-left: 0; }
+}
+
 /* Edit mode: click a block to edit its source in place */
 .add-block-row { max-width: 760px; margin: 0 auto; padding: 0 16px 120px; display: none; }
 .mode-edit .add-block-row { display: block; }
@@ -359,7 +403,9 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .drop-overlay[hidden] { display: none; }
 
 @media print {
-  .toolbar, .source-pane, .ref-popover, .add-block-row { display: none !important; }
+  .toolbar, .source-pane, .ref-popover, .add-block-row, .fold-toggle { display: none !important; }
+  .fold-hidden, .proof.folded > * { display: revert !important; }
+  .proof.folded > p:first-child { white-space: normal; color: inherit; }
   .pane { overflow: visible; }
   body { display: block; background: #fff; }
 }
