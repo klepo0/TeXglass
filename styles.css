@@ -86,7 +86,8 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; margin: 0; }
+/* Only the panes scroll; the page itself never does. */
+html, body { height: 100%; margin: 0; overflow: hidden; }
 
 body {
   background: var(--bg);
@@ -144,7 +145,54 @@ body {
 /* --- panes --------------------------------------------------------------- */
 
 .panes { flex: 1; display: flex; min-height: 0; }
-.pane { flex: 1; min-width: 0; overflow: auto; }
+.pane { flex: 1; min-width: 0; overflow: auto; position: relative; }
+
+/* Table of contents sidebar (Preview and Edit) */
+.toc-pane {
+  flex: 0 0 260px;
+  position: relative;
+  overflow: auto;
+  padding: 20px 10px 32px 16px;
+  border-right: 1px solid var(--rule);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.35;
+  overscroll-behavior: contain;
+}
+.toc-pane[hidden] { display: none; }
+.toc-pane-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 8px; }
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-list a {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  color: var(--ink);
+  text-decoration: none;
+}
+.toc-list a:hover { background: var(--accent-soft); }
+.toc-list a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.toc-list .toc-num { min-width: 0; flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.toc-list a.active .toc-num { color: inherit; }
+.toc-list .toc-title { min-width: 0; overflow-wrap: anywhere; }
+.toc-list .toc-title .katex { font-size: 1em; }
+.toc-list .toc-d1 a { padding-left: 20px; }
+.toc-list .toc-d2 a { padding-left: 32px; font-size: 13px; }
+.toc-list .toc-d3 a { padding-left: 44px; font-size: 13px; }
+.toc-list .toc-d0 { margin-top: 4px; }
+.toc-list .toc-d0 > a { font-weight: 500; }
+@media (max-width: 760px) {
+  .toc-pane {
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 85vw);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+  }
+}
 .source-pane { display: flex; flex: 0 0 var(--split, 50%); }
 .source-pane[hidden] { display: none; }
 
@@ -525,5 +573,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .fold-hidden, .proof.folded > * { display: revert !important; }
   .proof.folded > p:first-child { white-space: normal; color: inherit; }
   .pane { overflow: visible; }
+  html, body { overflow: visible; height: auto; }
+  .toc-pane, #toc-toggle { display: none !important; }
   body { display: block; background: #fff; }
 }

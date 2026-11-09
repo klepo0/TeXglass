@@ -23,6 +23,7 @@
   let statusTimer = null;
   let warningsText = '';
   let lastLabels = {};
+  let lastToc = [];
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -43,6 +44,7 @@
     try {
       const result = TeXdown.render(doc, { sourceMap: true });
       lastLabels = result.labels;
+      lastToc = result.toc;
       document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
       const n = result.warnings.length;
       warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
@@ -60,7 +62,119 @@
     if (editing) renderAroundEditor(html);
     else preview.innerHTML = html;
     applyFolds();
+    updateToc();
   }
+
+  // --- table of contents sidebar ------------------------------------------------
+
+  const tocPane = $('toc-pane');
+  const tocList = $('toc-list');
+  const tocToggle = $('toc-toggle');
+  const narrow = window.matchMedia('(max-width: 760px)');
+  let tocWanted = store.get('texdown:toc') !== 'off';
+  let tocKey = '';
+  let tocLinks = [];
+
+  function updateToc() {
+    // The bibliography gets an entry too, after the sections.
+    const items = lastToc.slice();
+    const bib = preview.querySelector('.bibliography > h2');
+    if (bib && items.length) {
+      bib.id = bib.id || 'references';
+      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: TeXdown.escapeHtml(bib.textContent), id: bib.id });
+    }
+    lastToc = items;
+    const key = JSON.stringify(items);
+    if (key !== tocKey) {
+      tocKey = key;
+      const top = Math.min(...items.map((t) => t.level));
+      tocList.innerHTML = items
+        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXdown.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
+        .join('');
+      tocLinks = Array.from(tocList.querySelectorAll('a'));
+    }
+    showToc();
+    spyToc();
+  }
+
+  /** The sidebar shows in Preview and Edit when the document has headings and it is switched on. */
+  function showToc() {
+    const has = lastToc.length > 0;
+    const on = tocWanted && has && mode !== 'split';
+    tocPane.hidden = !on;
+    document.body.classList.toggle('toc-open', on);
+    tocToggle.hidden = !has || mode === 'split';
+    tocToggle.setAttribute('aria-pressed', String(tocWanted));
+  }
+
+  /** Highlight the section at the top of the preview. */
+  let tocJump = 0; // while a jump from the sidebar scrolls, keep its entry highlighted
+
+  function markToc(current) {
+    if (current === tocList.querySelector('a.active')) return;
+    tocLinks.forEach((a) => a.classList.toggle('active', a === current));
+    if (current) {
+      const r = current.getBoundingClientRect();
+      const pr = tocPane.getBoundingClientRect();
+      if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) tocPane.scrollTop += r.top - pr.top - pr.height / 3;
+    }
+  }
+
+  function spyToc() {
+    if (tocPane.hidden || !tocLinks.length || Date.now() < tocJump) return;
+    const limit = previewPane.getBoundingClientRect().top + 48;
+    let current = null;
+    for (const a of tocLinks) {
+      const h = document.getElementById(a.dataset.id);
+      if (!h || !h.offsetParent) continue;
+      if (h.getBoundingClientRect().top <= limit) current = a;
+      else break;
+    }
+    // At the very bottom, the last heading on screen is the current one.
+    if (previewPane.scrollTop + previewPane.clientHeight >= previewPane.scrollHeight - 2) {
+      for (const a of tocLinks) {
+        const h = document.getElementById(a.dataset.id);
+        if (h && h.offsetParent && h.getBoundingClientRect().top < previewPane.getBoundingClientRect().bottom) current = a;
+      }
+    }
+    markToc(current);
+  }
+
+  let spyFrame = 0;
+  previewPane.addEventListener('scroll', () => {
+    if (!spyFrame) spyFrame = requestAnimationFrame(() => { spyFrame = 0; spyToc(); });
+  }, { passive: true });
+  previewPane.addEventListener('scrollend', () => { tocJump = 0; spyToc(); });
+
+  tocList.addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(a.dataset.id);
+    if (!target) return;
+    reveal(target);
+    const y = target.getBoundingClientRect().top - previewPane.getBoundingClientRect().top + previewPane.scrollTop - 16;
+    previewPane.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    markToc(a);
+    tocJump = Date.now() + 1000;
+    if (narrow.matches) { tocWanted = false; showToc(); }
+  });
+
+  tocToggle.addEventListener('click', () => {
+    tocWanted = !tocWanted;
+    if (!narrow.matches) store.set('texdown:toc', tocWanted ? 'on' : 'off');
+    showToc();
+    spyToc();
+  });
+  // On a phone the contents open as a drawer over the page: start closed, and
+  // close it again on a tap outside it or Escape.
+  document.addEventListener('pointerdown', (e) => {
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target)) { tocWanted = false; showToc(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && narrow.matches && tocWanted) { tocWanted = false; showToc(); }
+  });
+  if (narrow.matches) tocWanted = false;
 
   function showStatus(text, warn) {
     status.textContent = text;
@@ -232,6 +346,7 @@
     if (m !== 'edit') closeEditor(true);
     sourcePane.hidden = m !== 'split';
     $('splitter').hidden = m !== 'split';
+    showToc();
     if (m === 'split' && !wasSplit) {
       setSource(doc);
       anchors = null;
@@ -472,7 +587,7 @@
     }
     const cs = getComputedStyle(source);
     Object.assign(mirror.style, {
-      position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
+      position: 'fixed', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
       boxSizing: 'border-box', width: source.clientWidth + 'px', padding: cs.padding, font: cs.font,
       lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
       whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak,

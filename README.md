@@ -25,6 +25,10 @@ be hosted on GitHub Pages as is. Then:
   and references update as you type. Esc or a click outside finishes; ↑ and ↓
   at the edges of a block move to the neighbouring block. **Add text at the
   end** appends a new paragraph.
+- In Preview and Edit, a **Contents** sidebar lists the sections (and the
+  references). Click an entry to jump there; the section you are reading is
+  highlighted as you scroll. The **Contents** button hides or shows it, and on
+  a phone it opens as a drawer.
 - **Fold** sections and proofs with the arrow beside them (or click a section
   heading or a folded proof in Preview mode). **Hide proofs** folds every
   proof at once to its first line. Folds are remembered, and following a
