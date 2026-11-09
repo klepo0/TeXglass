@@ -1,0 +1,16 @@
+{
+  "name": "texdown",
+  "version": "0.1.0",
+  "description": "View LaTeX files like a Markdown preview: math, sections, and numbered theorems with working references.",
+  "license": "MIT",
+  "main": "src/texdown.js",
+  "bin": { "texdown": "bin/texdown.js" },
+  "files": ["src", "bin", "styles.css"],
+  "scripts": {
+    "start": "node bin/serve.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "katex": "0.16.11"
+  }
+}
