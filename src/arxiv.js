@@ -75,7 +75,7 @@
   const decodeText = (bytes) => {
     const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     // Old submissions are often Latin-1; fall back when UTF-8 decoding hit invalid bytes.
-    return utf8.includes('�') ? new TextDecoder('latin1').decode(bytes) : utf8;
+    return utf8.includes('\uFFFD') ? new TextDecoder('latin1').decode(bytes) : utf8;
   };
 
   /** The main .tex file: the one with \documentclass (and \begin{document}), preferring common names. */
