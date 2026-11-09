@@ -19,7 +19,7 @@ Any static file server works too (`python3 -m http.server`), and the page can
 be hosted on GitHub Pages as is. Then:
 
 - **Open** (or Ctrl+O), or drag a file onto the page.
-- **Preview / Edit** (Ctrl+E) switches modes. In Edit mode, click any
+- **Preview / Edit / Split** switch modes (Ctrl+E toggles Edit). In Edit mode, click any
   paragraph, theorem, equation or heading to edit its LaTeX right there; the
   caret lands where you clicked. Everything else stays rendered, and numbering
   and references update as you type. Esc or a click outside finishes; ↑ and ↓
@@ -33,7 +33,10 @@ be hosted on GitHub Pages as is. Then:
   downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and
   the preview updates within a second (unless you have unsaved edits here).
-- **Source** (Ctrl+Shift+E) shows the whole file next to the preview.
+- **Split** (Ctrl+Shift+E) shows the source and the preview side by side.
+  They scroll together: scroll either one and the other follows to the same
+  place. Typing re-renders live, and clicking a block in the preview puts the
+  cursor at its source.
 - Hover a reference to preview the theorem or equation it points to; click
   it to jump there.
 - The status in the toolbar counts undefined references and duplicate labels.

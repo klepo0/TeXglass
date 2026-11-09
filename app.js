@@ -156,6 +156,7 @@
     fp.textContent = allFolded ? 'Show proofs' : 'Hide proofs';
     fp.setAttribute('aria-pressed', String(allFolded));
     fp.disabled = proofs === 0;
+    anchors = null; // folding moves things around
   }
 
   function setFold(key, on) {
@@ -192,8 +193,8 @@
   // Registered before the Edit-mode click handler, so toggles never open the editor.
   preview.addEventListener('click', (e) => {
     const btn = e.target.closest('.fold-toggle');
-    const foldedProof = !btn && mode === 'preview' && e.target.closest('.proof.folded');
-    const heading = !btn && mode === 'preview' && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const foldedProof = !btn && mode !== 'edit' && e.target.closest('.proof.folded');
+    const heading = !btn && mode !== 'edit' && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
     const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
     if (!target) return;
     e.preventDefault();
@@ -212,12 +213,20 @@
   // --- in-place editing ------------------------------------------------------
 
   function setMode(m) {
+    const wasSplit = mode === 'split';
     mode = m;
     document.body.classList.toggle('mode-edit', m === 'edit');
-    $('mode-preview').setAttribute('aria-pressed', String(m === 'preview'));
-    $('mode-edit').setAttribute('aria-pressed', String(m === 'edit'));
+    document.body.classList.toggle('editing', m === 'split');
+    for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
     store.set('texdown:mode', m);
-    if (m === 'preview') closeEditor(true);
+    if (m !== 'edit') closeEditor(true);
+    sourcePane.hidden = m !== 'split';
+    if (m === 'split' && !wasSplit) {
+      source.value = doc;
+      anchors = null;
+      // Line the source up with what was on screen in the preview.
+      requestAnimationFrame(() => syncFrom('pre'));
+    }
   }
 
   function makeEditor() {
@@ -425,30 +434,122 @@
 
   $('mode-preview').addEventListener('click', () => setMode('preview'));
   $('mode-edit').addEventListener('click', () => setMode('edit'));
+  $('mode-split').addEventListener('click', () => setMode('split'));
   $('add-block').addEventListener('click', addBlockAtEnd);
 
   // --- the whole-file source pane ---------------------------------------------
 
-  function toggleSource() {
-    const show = sourcePane.hidden;
-    sourcePane.hidden = !show;
-    $('toggle-source').setAttribute('aria-pressed', String(show));
-    document.body.classList.toggle('editing', show);
-    store.set('texdown:source', show ? '1' : '');
-    if (show) {
-      source.value = doc;
-      source.focus();
+  // --- Split mode: source and preview side by side, scrolling together ---------
+
+  // Pairs of matching vertical positions {src, pre}: where each rendered block
+  // starts in the source text and in the preview. Scrolling one side maps its
+  // position between the two nearest pairs onto the other side.
+  let anchors = null;
+  let mirror = null;
+  let driver = null;
+  let driverTimer = null;
+
+  function buildAnchors() {
+    const blocks = Array.from(preview.querySelectorAll(':scope > .src-block')).filter((b) => b.offsetParent);
+    // Measure where offsets fall in the wrapped textarea with an invisible copy of it.
+    if (!mirror) {
+      mirror = document.createElement('div');
+      mirror.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(mirror);
     }
+    const cs = getComputedStyle(source);
+    Object.assign(mirror.style, {
+      position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
+      boxSizing: 'border-box', width: source.clientWidth + 'px', padding: cs.padding, font: cs.font,
+      lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
+      whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak,
+    });
+    mirror.textContent = '';
+    const marks = [];
+    let pos = 0;
+    for (const b of blocks) {
+      const at = Math.min(Number(b.dataset.s), doc.length);
+      if (at < pos) { marks.push(null); continue; }
+      mirror.append(doc.slice(pos, at));
+      const mark = document.createElement('span');
+      mirror.append(mark);
+      marks.push(mark);
+      pos = at;
+    }
+    mirror.append(doc.slice(pos) + '\n');
+    const paneTop = previewPane.getBoundingClientRect().top - previewPane.scrollTop;
+    const list = [{ src: 0, pre: 0 }];
+    blocks.forEach((b, k) => {
+      if (!marks[k]) return;
+      const src = marks[k].offsetTop;
+      const pre = b.getBoundingClientRect().top - paneTop;
+      const last = list[list.length - 1];
+      if (src >= last.src && pre >= last.pre) list.push({ src, pre });
+    });
+    const end = {
+      src: Math.max(0, source.scrollHeight - source.clientHeight),
+      pre: Math.max(0, previewPane.scrollHeight - previewPane.clientHeight),
+    };
+    const last = list[list.length - 1];
+    if (end.src > last.src && end.pre > last.pre) list.push(end);
+    anchors = list;
   }
 
-  $('toggle-source').addEventListener('click', toggleSource);
+  function mapY(y, from, to) {
+    const a = anchors;
+    for (let k = 1; k < a.length; k++) {
+      if (y <= a[k][from] || k === a.length - 1) {
+        const p = a[k - 1];
+        const q = a[k];
+        const t = q[from] === p[from] ? 0 : Math.max(0, Math.min(1, (y - p[from]) / (q[from] - p[from])));
+        return p[to] + t * (q[to] - p[to]);
+      }
+    }
+    return 0;
+  }
+
+  /** Scroll the other side to match `side` ('src' or 'pre'). */
+  function syncFrom(side) {
+    if (mode !== 'split') return;
+    if (!anchors) buildAnchors();
+    driver = side;
+    clearTimeout(driverTimer);
+    driverTimer = setTimeout(() => { driver = null; }, 120);
+    if (side === 'src') previewPane.scrollTop = mapY(source.scrollTop, 'src', 'pre');
+    else source.scrollTop = mapY(previewPane.scrollTop, 'pre', 'src');
+  }
+
+  const onScroll = (side) => () => {
+    if (mode !== 'split' || (driver && driver !== side)) return;
+    syncFrom(side);
+  };
+  source.addEventListener('scroll', onScroll('src'), { passive: true });
+  previewPane.addEventListener('scroll', onScroll('pre'), { passive: true });
+  window.addEventListener('resize', () => { anchors = null; });
+  if (document.fonts) document.fonts.ready.then(() => { anchors = null; });
+
+  // In Split mode, clicking the preview puts the cursor at that block's source.
+  preview.addEventListener('click', (e) => {
+    if (mode !== 'split' || e.target.closest('a, .fold-toggle') || String(window.getSelection())) return;
+    const block = e.target.closest('.src-block');
+    if (!block) return;
+    const at = Number(block.dataset.s);
+    const top = previewPane.scrollTop;
+    source.focus({ preventScroll: true });
+    source.setSelectionRange(at, at);
+    previewPane.scrollTop = top;
+    syncFrom('pre');
+  });
   source.addEventListener('input', () => {
     closeEditor(false);
     doc = source.value;
     setDirty(true);
     rememberSoon();
     clearTimeout(renderTimer);
-    renderTimer = setTimeout(render, 150);
+    renderTimer = setTimeout(() => {
+      render();
+      if (mode === 'split') requestAnimationFrame(() => syncFrom('src'));
+    }, 150);
   });
   source.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
@@ -584,7 +685,7 @@
     const key = e.key.toLowerCase();
     if (mod && key === 'o') { e.preventDefault(); openWithPicker(); }
     if (mod && key === 's') { e.preventDefault(); save(); }
-    if (mod && e.shiftKey && key === 'e') { e.preventDefault(); toggleSource(); }
+    if (mod && e.shiftKey && key === 'e') { e.preventDefault(); setMode(mode === 'split' ? 'preview' : 'split'); }
     else if (mod && key === 'e') { e.preventDefault(); setMode(mode === 'edit' ? 'preview' : 'edit'); }
   });
 
@@ -655,8 +756,8 @@
   $('load-sample').addEventListener('click', loadSample);
 
   function start() {
-    setMode(store.get('texdown:mode') === 'edit' ? 'edit' : 'preview');
-    if (store.get('texdown:source')) toggleSource();
+    const saved = store.get('texdown:mode');
+    setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
     const last = store.get('texdown:last');
     if (last) return load(last, store.get('texdown:last-name'));
     return loadSample();

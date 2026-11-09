@@ -109,7 +109,8 @@ body {
 .mode-switch { display: inline-flex; }
 .mode-switch button { border-radius: 0; }
 .mode-switch button:first-child { border-radius: 6px 0 0 6px; }
-.mode-switch button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.mode-switch button:last-child { border-radius: 0 6px 6px 0; }
+.mode-switch button + button { margin-left: -1px; }
 .mode-switch button[aria-pressed="true"] { position: relative; }
 .file-name.dirty::after { content: " •"; color: var(--accent); }
 .file-name { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
