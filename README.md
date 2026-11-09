@@ -18,11 +18,22 @@ npm start     # serves the viewer at http://localhost:8000
 Any static file server works too (`python3 -m http.server`), and the page can
 be hosted on GitHub Pages as is. Then:
 
-- **Open .tex** (or Ctrl+O), or drag a file onto the page.
+- **Open** (or Ctrl+O), or drag a file onto the page.
+- **Preview / Edit** (Ctrl+E) switches modes. In Edit mode, click any
+  paragraph, theorem, equation or heading to edit its LaTeX right there; the
+  caret lands where you clicked. Everything else stays rendered, and numbering
+  and references update as you type. Esc or a click outside finishes; ↑ and ↓
+  at the edges of a block move to the neighbouring block. **Add text at the
+  end** appends a new paragraph.
+- **Fold** sections and proofs with the arrow beside them (or click a section
+  heading or a folded proof in Preview mode). **Hide proofs** folds every
+  proof at once to its first line. Folds are remembered, and following a
+  reference into folded content unfolds it.
+- **Save** (Ctrl+S) writes back to the opened file in Chrome and Edge, and
+  downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and
-  the preview updates within a second.
-- **Edit source** (Ctrl+E) shows the source next to the preview, with live
-  re-rendering as you type.
+  the preview updates within a second (unless you have unsaved edits here).
+- **Source** (Ctrl+Shift+E) shows the whole file next to the preview.
 - Hover a reference to preview the theorem or equation it points to; click
   it to jump there.
 - The status in the toolbar counts undefined references and duplicate labels.
@@ -59,4 +70,6 @@ the browser, since the page cannot read files next to the `.tex` file.
 ## Development
 
 The converter is `src/texdown.js`, a dependency-free module that works in the
-browser and in Node. `npm test` runs the test suite.
+browser and in Node. With `{ sourceMap: true }` it wraps each top-level block
+in `<div class="src-block" data-s data-e>` giving its range in the source,
+which is what Edit mode uses. `npm test` runs the test suite.
