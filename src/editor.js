@@ -426,6 +426,88 @@
       return true;
     }
 
+    // --- math delimiters: $ $, $$ $$, \( \), \[ \] ----------------------------
+
+    /** Replace [from, to) with text, keeping the browser's undo history where possible. */
+    function edit(from, to, text, caretStart, caretEnd) {
+      const expected = textarea.value.slice(0, from) + text + textarea.value.slice(to);
+      textarea.setSelectionRange(from, to);
+      try {
+        if (from !== to || text) document.execCommand(text ? 'insertText' : 'delete', false, text);
+      } catch (err) { /* fall back below */ }
+      if (textarea.value !== expected) {
+        textarea.value = expected;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      textarea.setSelectionRange(caretStart, caretEnd == null ? caretStart : caretEnd);
+    }
+
+    /** Is the character at `pos` preceded by an odd number of backslashes? */
+    function escapedAt(v, pos) {
+      let n = 0;
+      while (pos - 1 - n >= 0 && v[pos - 1 - n] === '\\') n++;
+      return n % 2 === 1;
+    }
+
+    function inComment(v, pos) {
+      const line = v.slice(v.lastIndexOf('\n', pos - 1) + 1, pos);
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '\\') { i++; continue; }
+        if (line[i] === '%') return true;
+      }
+      return false;
+    }
+
+    let lastPair = null; // where the last $|$ was auto-inserted
+
+    /** Auto-close and step over math delimiters. Returns true if it handled the key. */
+    function pairKey(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return false;
+      const v = textarea.value;
+      const s = textarea.selectionStart;
+      const en = textarea.selectionEnd;
+      if (inComment(v, s)) return false;
+      const sel = v.slice(s, en);
+      if (e.key === '$') {
+        if (escapedAt(v, s)) return false; // typing \$
+        if (s !== en) { edit(s, en, '$' + sel + '$', s + 1, en + 1); return true; }
+        if (v[s] === '$') {
+          // A second $ right after an auto-inserted $|$ makes it $$|$$;
+          // otherwise step over the closing $.
+          if (lastPair && lastPair.pos === s && lastPair.value === v) {
+            lastPair = null;
+            edit(s, s, '$$', s + 1);
+          } else textarea.setSelectionRange(s + 1, s + 1);
+          return true;
+        }
+        edit(s, s, '$$', s + 1);
+        lastPair = { pos: s + 1, value: textarea.value };
+        return true;
+      }
+      if (e.key === '(' || e.key === '[') {
+        if (!escapedAt(v, s)) return false; // only right after an unescaped backslash
+        const close = e.key === '(' ? '\\)' : '\\]';
+        if (s !== en) { edit(s, en, e.key + sel + close, s + 1, en + 1); return true; }
+        edit(s, s, e.key + close, s + 1);
+        return true;
+      }
+      if ((e.key === ')' || e.key === ']') && s === en && escapedAt(v, s) && v.startsWith('\\' + e.key, s)) {
+        // Typing \) right before the auto-inserted \) steps over it.
+        edit(s - 1, s + 2, '\\' + e.key, s + 1);
+        return true;
+      }
+      if (e.key === 'Backspace' && s === en && s > 0) {
+        // Deleting the opening of an empty pair deletes the closing too.
+        if (v.slice(s - 2, s + 2) === '$$$$' && !escapedAt(v, s - 2)) { edit(s - 2, s + 2, '', s - 2); return true; }
+        if (v[s - 1] === '$' && v[s] === '$' && v[s - 2] !== '$' && v[s + 1] !== '$' && !escapedAt(v, s - 1)) { edit(s - 1, s + 1, '', s - 1); return true; }
+        const two = v.slice(s - 2, s);
+        if ((two === '\\(' && v.startsWith('\\)', s)) || (two === '\\[' && v.startsWith('\\]', s))) {
+          if (!escapedAt(v, s - 2)) { edit(s - 2, s + 2, '', s - 2); return true; }
+        }
+      }
+      return false;
+    }
+
     textarea.addEventListener('input', () => {
       if (document.activeElement === textarea) show();
     });
@@ -440,6 +522,11 @@
         } else if (e.key === 'Escape') {
           close();
         } else return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (pairKey(e)) {
         e.preventDefault();
         e.stopImmediatePropagation();
         return;

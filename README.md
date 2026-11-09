@@ -35,6 +35,10 @@ be hosted on GitHub Pages as is. Then:
   environments (including your own `\newtheorem`s), and `\ref{`/`\eqref{`/
   `\cref{` for your labels with their numbers. Tab or Enter accepts, Tab then
   jumps between the snippet's fields, Ctrl+Space opens the list.
+- Math delimiters close themselves: typing `$`, `$$`, `\(` or `\[` adds the
+  closing `$`, `$$`, `\)` or `\]` with the cursor inside, typing the closing
+  delimiter steps over it, Backspace on an empty pair removes both, and
+  typing `$` with text selected wraps it in `$…$`.
 - **Save** (Ctrl+S) writes back to the opened file in Chrome and Edge, and
   downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and
