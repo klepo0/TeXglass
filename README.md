@@ -39,6 +39,8 @@ be hosted on GitHub Pages as is. Then:
   closing `$`, `$$`, `\)` or `\]` with the cursor inside, typing the closing
   delimiter steps over it, Backspace on an empty pair removes both, and
   typing `$` with text selected wraps it in `$…$`.
+- **Tab out**: with the cursor right before a closing `$`, `$$`, `\)`, `\]`,
+  `}`, `)` or `]`, Tab jumps past it (after any snippet fields are done).
 - **Save** (Ctrl+S) writes back to the opened file in Chrome and Edge, and
   downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and

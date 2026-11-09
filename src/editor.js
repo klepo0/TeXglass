@@ -458,6 +458,23 @@
       return false;
     }
 
+    /**
+     * Tab right before a closing delimiter ($, $$, \\), \\], }, ), ]) jumps past
+     * it. At the start of a line Tab still indents.
+     */
+    function tabOut() {
+      const v = textarea.value;
+      const s = textarea.selectionStart;
+      if (s !== textarea.selectionEnd) return false;
+      const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+      if (!v.slice(lineStart, s).trim()) return false;
+      const m = /^(\$\$|\$|\\\)|\\\]|\\\}|\\rangle|\\rvert|\\rVert|[})\]])/.exec(v.slice(s, s + 8));
+      if (!m) return false;
+      textarea.setSelectionRange(s + m[0].length, s + m[0].length);
+      lastPair = null;
+      return true;
+    }
+
     let lastPair = null; // where the last $|$ was auto-inserted
 
     /** Auto-close and step over math delimiters. Returns true if it handled the key. */
@@ -531,7 +548,7 @@
         e.stopImmediatePropagation();
         return;
       }
-      if (e.key === 'Tab' && !e.shiftKey && nextStop()) {
+      if (e.key === 'Tab' && !e.shiftKey && (nextStop() || tabOut())) {
         e.preventDefault();
         e.stopImmediatePropagation();
       } else if (e.key === ' ' && e.ctrlKey) {
