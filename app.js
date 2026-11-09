@@ -24,6 +24,8 @@
   let warningsText = '';
   let lastLabels = {};
   let lastToc = [];
+  let imageUrls = []; // object URLs for the figures of an imported arXiv paper
+  let resolveImage = null;
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -42,7 +44,7 @@
 
   function renderHtml() {
     try {
-      const result = TeXdown.render(doc, { sourceMap: true });
+      const result = TeXdown.render(doc, { sourceMap: true, resolveImage: resolveImage || undefined });
       lastLabels = result.labels;
       lastToc = result.toc;
       document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
@@ -200,8 +202,16 @@
     saveTimer = setTimeout(() => store.set('texdown:last', doc), 400);
   }
 
-  function load(text, name) {
+  function load(text, name, images) {
     closeEditor(false);
+    imageUrls.forEach((u) => URL.revokeObjectURL(u));
+    imageUrls = [];
+    resolveImage = null;
+    if (images && Object.keys(images).length && window.TeXdownArxiv) {
+      const urls = {};
+      for (const [path, blob] of Object.entries(images)) imageUrls.push((urls[path] = URL.createObjectURL(blob)));
+      resolveImage = TeXdownArxiv.imageResolver(urls, text);
+    }
     doc = text.replace(/\r\n?/g, '\n');
     setSource(doc);
     fileName.textContent = name || 'untitled.tex';
@@ -961,6 +971,82 @@
 
   // --- start -----------------------------------------------------------------
 
+  // --- import from arXiv ------------------------------------------------------------
+
+  const arxivDialog = $('arxiv-dialog');
+  const arxivInput = $('arxiv-input');
+  const arxivMessage = $('arxiv-message');
+  const arxivGo = $('arxiv-go');
+  let arxivBusy = false;
+
+  function arxivSay(text, warn) {
+    arxivMessage.textContent = text;
+    arxivMessage.classList.toggle('warn', !!warn);
+  }
+
+  async function importArxiv(input) {
+    if (arxivBusy) return false;
+    const id = TeXdownArxiv.parseId(input);
+    if (!id) {
+      arxivSay('That does not look like an arXiv link or id, e.g. 2301.00001 or arxiv.org/abs/2301.00001.', true);
+      return false;
+    }
+    arxivBusy = true;
+    arxivGo.disabled = true;
+    arxivSay(`Downloading ${id} from arXiv…`);
+    showStatus(`Importing ${id}…`);
+    try {
+      const paper = await TeXdownArxiv.importPaper(id);
+      fileHandle = null;
+      load(paper.source, paper.name, paper.images);
+      if (arxivDialog.open) arxivDialog.close();
+      flashStatus(`Imported ${id} from arXiv`);
+      return true;
+    } catch (e) {
+      const blocked = e instanceof TypeError || /Failed to fetch|NetworkError|Load failed|Could not reach/.test(e.message);
+      arxivSay(blocked
+        ? `Could not download ${id}. This page may not be allowed to reach arxiv.org here. Download arxiv.org/src/${id}, unpack it and open the .tex file instead.`
+        : e.message, true);
+      showStatus(warningsText);
+      if (!arxivDialog.open) openArxivDialog(input);
+      return false;
+    } finally {
+      arxivBusy = false;
+      arxivGo.disabled = false;
+    }
+  }
+
+  function openArxivDialog(value) {
+    if (value != null) arxivInput.value = value;
+    if (!arxivDialog.open) {
+      if (arxivDialog.showModal) arxivDialog.showModal();
+      else arxivDialog.setAttribute('open', '');
+    }
+    arxivInput.focus();
+    arxivInput.select();
+  }
+
+  $('arxiv').addEventListener('click', () => {
+    arxivSay('The source is downloaded from arxiv.org; figures in PNG or JPEG are shown too.');
+    openArxivDialog();
+  });
+  $('arxiv-cancel').addEventListener('click', () => arxivDialog.close());
+  $('arxiv-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    importArxiv(arxivInput.value);
+  });
+
+  // Pasting an arXiv link anywhere outside a text field imports it.
+  document.addEventListener('paste', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
+    const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    if (/arxiv/i.test(text) && TeXdownArxiv.parseId(text)) {
+      e.preventDefault();
+      importArxiv(text);
+    }
+  });
+
   async function loadSample() {
     fileHandle = null;
     try {
@@ -981,6 +1067,13 @@
   function start() {
     const saved = store.get('texdown:mode');
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
+    // ?arxiv=2301.00001 opens that paper.
+    const param = new URLSearchParams(location.search).get('arxiv');
+    if (param && window.TeXdownArxiv) {
+      const last = store.get('texdown:last');
+      if (last) load(last, store.get('texdown:last-name'));
+      return importArxiv(param);
+    }
     const last = store.get('texdown:last');
     if (last) return load(last, store.get('texdown:last-name'));
     return loadSample();

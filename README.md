@@ -19,6 +19,12 @@ Any static file server works too (`python3 -m http.server`), and the page can
 be hosted on GitHub Pages as is. Then:
 
 - **Open** (or Ctrl+O), or drag a file onto the page.
+- **arXiv** imports a paper's LaTeX source: paste a link such as
+  `https://arxiv.org/abs/2301.00001` (or just `2301.00001`, `arXiv:…`,
+  `math/0211159`). TeXdown downloads the source from arxiv.org, picks the main
+  file, inlines its `\input`/`\include` files and the `.bbl` bibliography, and
+  shows PNG/JPEG figures. Pasting an arXiv link onto the page, or opening
+  `index.html?arxiv=2301.00001`, does the same.
 - **Preview / Edit / Split** switch modes (Ctrl+E toggles Edit). In Edit mode, click any
   paragraph, theorem, equation or heading to edit its LaTeX right there; the
   caret lands where you clicked. Everything else stays rendered, and numbering

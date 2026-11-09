@@ -10,6 +10,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="src/texdown.js"></script>
   <script defer src="src/editor.js"></script>
+  <script defer src="src/arxiv.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -21,6 +22,7 @@
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
     <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
+    <button id="arxiv" type="button" title="Import a paper's LaTeX source from arXiv">arXiv</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
     <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
     <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the table of contents">Contents</button>
@@ -48,6 +50,19 @@
       <div class="add-block-row"><button id="add-block" type="button" class="add-block">+ Add text at the end</button></div>
     </section>
   </main>
+
+  <dialog id="arxiv-dialog" class="arxiv-dialog" aria-labelledby="arxiv-title">
+    <form id="arxiv-form" method="dialog">
+      <h2 id="arxiv-title">Import from arXiv</h2>
+      <label for="arxiv-input">Paste an arXiv link or id</label>
+      <input id="arxiv-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://arxiv.org/abs/2301.00001 or 2301.00001">
+      <p id="arxiv-message" class="arxiv-message" role="status"></p>
+      <div class="arxiv-actions">
+        <button type="button" id="arxiv-cancel">Cancel</button>
+        <button type="submit" id="arxiv-go" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file to view it</div></div>
   <div id="ref-popover" class="ref-popover document" role="tooltip" hidden></div>

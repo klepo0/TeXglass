@@ -131,6 +131,47 @@ body {
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
+/* Import from arXiv */
+.arxiv-dialog {
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.arxiv-dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
+.arxiv-dialog h2 { margin: 0 0 12px; font-size: 17px; }
+.arxiv-dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.arxiv-dialog input {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.arxiv-dialog input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.arxiv-message { min-height: 1.4em; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.arxiv-message.warn { color: var(--warn); }
+.arxiv-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.arxiv-actions button {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.arxiv-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.arxiv-actions button:disabled { opacity: 0.6; cursor: default; }
+img.graphic { max-width: 100%; height: auto; }
+
 .mode-switch { display: inline-flex; }
 .mode-switch button { border-radius: 0; }
 .mode-switch button:first-child { border-radius: 6px 0 0 6px; }
