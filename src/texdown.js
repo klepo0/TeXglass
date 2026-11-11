@@ -224,6 +224,75 @@
     return parts;
   }
 
+  /** KaTeX macros for commands from common packages that KaTeX lacks. */
+  const MATH_MACROS = {
+    '\\hdots': '\\ldots',
+    '\\MoveEqLeft': '',
+    '\\intertext': '\\text{#1}',
+    '\\shortintertext': '\\text{#1}',
+    // bbm: \mathbbm{1} is the indicator 𝟙; KaTeX's \mathbb has no digits or small letters.
+    '\\mathbbm': (ctx) => {
+      const arg = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('');
+      return Array.from(arg.replace(/\s+/g, ''))
+        .map((c) => {
+          if (/[0-9]/.test(c)) return `\\text{${String.fromCodePoint(0x1d7d8 + +c)}}`;
+          if (/[a-z]/.test(c)) return `\\text{${String.fromCodePoint(0x1d552 + c.charCodeAt(0) - 97)}}`;
+          return `\\mathbb{${c}}`;
+        })
+        .join('');
+    },
+  };
+  MATH_MACROS['\\mathbbmss'] = MATH_MACROS['\\mathbbm'];
+
+  /**
+   * A KaTeX macro for a mathtools \DeclarePairedDelimiter: \cmd{x} puts plain
+   * delimiters, \cmd*{x} \left…\right ones, \cmd[\big]{x} \bigl…\bigr ones.
+   */
+  function pairedMacro(p) {
+    return (ctx) => {
+      ctx.consumeSpaces();
+      let size = '';
+      let star = false;
+      const t = ctx.future();
+      if (t.text === '*') {
+        ctx.popToken();
+        star = true;
+      } else if (t.text === '[') {
+        ctx.popToken();
+        const toks = [];
+        let depth = 0;
+        for (;;) {
+          const k = ctx.popToken();
+          if (k.text === 'EOF') break;
+          if (k.text === '{') depth++;
+          else if (k.text === '}') depth--;
+          else if (k.text === ']' && depth === 0) break;
+          toks.push(k.text);
+        }
+        size = toks.join(' ').trim();
+      }
+      let open;
+      let close;
+      let mid;
+      if (star) {
+        open = `\\left${p.open}`;
+        close = `\\right${p.close}`;
+        mid = '\\middle';
+      } else if (size) {
+        const big = /^\\(big|Big|bigg|Bigg)$/.test(size);
+        open = `${size}${big ? 'l' : ''}${p.open}`;
+        close = `${size}${big ? 'r' : ''}${p.close}`;
+        mid = size;
+      } else {
+        open = `\\mathopen{${p.open}}`;
+        close = `\\mathclose{${p.close}}`;
+        mid = '';
+      }
+      const body = p.body.replace(/\\delimsize\b/g, mid);
+      return `${p.pre}${open} ${body} ${close}${p.post}`;
+    };
+  }
+
   const rowSep = (s, i) => {
     if (!s.startsWith('\\\\', i)) return 0;
     let j = i + 2;
@@ -339,6 +408,7 @@
       this.footnotes = [];
       this.warnings = [];
       this.macros = Object.create(null); // name (without backslash) -> {nargs, def, body}
+      this.paired = Object.create(null); // \DeclarePairedDelimiter definitions
       this.envs = Object.create(null); // \newenvironment definitions
       this.theorems = Object.create(null);
       this.thmStyle = 'plain';
@@ -453,8 +523,9 @@
 
     katexMacros(tex) {
       if (!this._katexMacros) {
-        const m = {};
+        const m = Object.assign({}, MATH_MACROS);
         for (const name in this.macros) m['\\' + name] = this.macros[name].body;
+        for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name]);
         this._katexMacros = m;
       }
       // KaTeX only writes to the macros object for global definitions, so the
@@ -875,6 +946,27 @@
           };
           this._katexMacros = null;
           return res('', body.end);
+        }
+        case 'DeclarePairedDelimiter': case 'DeclarePairedDelimiterX': case 'DeclarePairedDelimiterXPP': {
+          // mathtools: \norm{x}, \norm*{x} (\left…\right) and \norm[\big]{x}.
+          const nm = readArg(src, i);
+          let j = nm.end;
+          const x = name !== 'DeclarePairedDelimiter';
+          let nargs = 1;
+          if (x) {
+            const n = readOpt(src, j);
+            if (n) j = n.end;
+            nargs = n ? parseInt(n.content, 10) || 0 : 0;
+          }
+          const take = () => { const a = readArg(src, j); j = a.end; return a.content; };
+          const pre = name === 'DeclarePairedDelimiterXPP' ? take() : '';
+          const open = take();
+          const close = take();
+          const post = name === 'DeclarePairedDelimiterXPP' ? take() : '';
+          const body = x ? take() : '#1';
+          this.paired[nm.content.trim().replace(/^\\/, '')] = { nargs, pre, open, close, post, body };
+          this._katexMacros = null;
+          return res('', j);
         }
         case 'newenvironment': {
           const s = readStar(src, i);
@@ -1354,20 +1446,70 @@
           body = body.slice(a.end);
         }
         const rows = splitTop(body, rowSep);
-        const out = rows.map((row, k) => {
-          if (!row.trim() && k === rows.length - 1) return null;
+        const env = base === 'gather' ? 'gather*' : base === 'alignat' ? 'alignat*' : 'align*';
+        // \intertext{…} between rows: end the display, put the text, start another.
+        const parts = [];
+        let group = [];
+        let groupId = id;
+        rows.forEach((row, k) => {
+          const it = /^\s*\\(?:short)?intertext\s*(?=\{)/.exec(row);
+          if (it) {
+            const a = readArg(row, it[0].length);
+            if (group.length) parts.push({ id: groupId, rows: group });
+            parts.push({ text: a.content });
+            group = [];
+            groupId = this.newId('eq');
+            row = row.slice(a.end);
+          }
+          if (!row.trim() && k === rows.length - 1) return;
           if (base === 'eqnarray') {
             // a & = & b  ->  a &= {} b
             const cells = splitTop(row, cellSep);
             if (cells.length >= 3) row = `${cells[0]} &${cells[1]}{} ${cells.slice(2).join(' ')}`;
           }
-          const r = this.numberRow(row, !starred, id);
-          return r.tex + r.tag;
-        }).filter((r) => r !== null);
-        const env = base === 'gather' ? 'gather*' : base === 'alignat' ? 'alignat*' : 'align*';
-        tex = `\\begin{${env}}${lead}${out.join(' \\\\ ')}\\end{${env}}`;
+          const r = this.numberRow(row, !starred, groupId);
+          group.push(r.tex + r.tag);
+        });
+        if (group.length) parts.push({ id: groupId, rows: group });
+        if (parts.length > 1 || (parts[0] && parts[0].text !== undefined)) {
+          return parts
+            .map((g) =>
+              g.text !== undefined
+                ? `<p class="intertext">${this.flow(g.text, true)}</p>`
+                : `<div class="math math-display" id="${g.id}">${this.renderMath(`\\begin{${env}}${lead}${g.rows.join(' \\\\ ')}\\end{${env}}`, true)}</div>`
+            )
+            .join('');
+        }
+        tex = `\\begin{${env}}${lead}${(parts[0] ? parts[0].rows : []).join(' \\\\ ')}\\end{${env}}`;
       }
       return `<div class="math math-display" id="${id}">${this.renderMath(tex, true)}</div>`;
+    }
+
+    /** Expand user macros that stand for a \tag (\newcommand{\mytag}[1]{\tag{…}}), so the row is not numbered twice. */
+    expandTagMacros(row) {
+      const re = /\\([A-Za-z]+)/g;
+      let m;
+      while ((m = re.exec(row))) {
+        const mac = this.macros[m[1]];
+        if (!mac || !/\\tag\b/.test(mac.body)) continue;
+        let j = m.index + m[0].length;
+        const args = [];
+        for (let k = 0; k < mac.nargs; k++) {
+          if (k === 0 && mac.def !== null) {
+            const o = readOpt(row, j);
+            if (o) j = o.end;
+            args.push(o ? o.content : mac.def);
+          } else {
+            const a = readArg(row, j);
+            j = a.end;
+            args.push(a.content);
+          }
+        }
+        const body = mac.body.replace(/#(\d)/g, (_, d) => args[d - 1] || '');
+        row = row.slice(0, m.index) + body + row.slice(j);
+        re.lastIndex = m.index + body.length;
+      }
+      return row;
     }
 
     /** Number one equation row, registering its labels. */
@@ -1378,6 +1520,7 @@
         numbered = false;
         row = row.replace(/\\(nonumber|notag)\b/g, '');
       }
+      row = this.expandTagMacros(row);
       let tag = '';
       let num = '';
       const t = /\\tag(\*?)\s*\{([^}]*)\}/.exec(row);
