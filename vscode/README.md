@@ -49,11 +49,27 @@ is needed, and the preview updates as you type, without saving.
 Long documents are fine: a 350-page paper takes a few seconds to convert, and
 the conversion runs in a background thread, so typing is never held up.
 
+## In the browser: github.dev and vscode.dev
+
+The extension also runs in VS Code for the Web. On any GitHub repository,
+press `.` (or change `github.com` to `github.dev` in the address) to open it
+in the browser, open a `.tex` file, and click the preview icon. Everything
+above works there too, including `\input` files, `.bib` bibliographies and
+figures read straight from the repository. Edit, then commit from the Source
+Control view: nothing to install on your computer and no TeX needed.
+
+github.dev installs extensions from the VS Code Marketplace, so the extension
+has to be published there first (see **Publish** below). Then search for
+"TeXdown" in the Extensions view of github.dev and click **Install**.
+
+In the browser the conversion runs in the extension host (a background web
+worker), not in a separate thread.
+
 ## Install
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texdown-0.1.0.vsix`.
+`code --install-extension texdown-0.2.0.vsix`.
 
 ## Build
 
@@ -66,8 +82,34 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texdown-0.1.0.vsix
+npx vsce package      # makes texdown-0.2.0.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after
 `npm run copy-shared`).
+
+The browser version is `dist/web.js`, one file bundled by
+`npm run build-web` (esbuild; packaging runs it too). To try it in VS Code
+for the Web, with the folder `test/fixtures/web` as a virtual workspace:
+
+```sh
+npm run build-web
+npm run test-web      # opens VS Code in Chromium with the extension loaded
+```
+
+## Publish
+
+Publishing on the [VS Code Marketplace](https://marketplace.visualstudio.com)
+makes the extension installable from the Extensions view, in github.dev and
+vscode.dev as well as on the desktop. Once:
+
+1. Sign in at https://marketplace.visualstudio.com/manage with a Microsoft
+   account and create the publisher `klepo0` (the `publisher` in
+   `package.json`).
+2. In Azure DevOps (https://dev.azure.com), create a personal access token
+   with the **Marketplace → Manage** scope and **All accessible
+   organizations**.
+3. `npx vsce login klepo0` and paste the token.
+
+Then, for each release, raise `version` in `package.json` and run
+`npx vsce publish`.

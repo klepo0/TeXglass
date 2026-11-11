@@ -157,6 +157,17 @@ body {
 .arxiv-dialog input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 .arxiv-message { min-height: 1.4em; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
 .arxiv-message.warn { color: var(--warn); }
+.bookmarklet-hint { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+.bookmarklet {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: grab;
+}
+.gh-link { font-size: 13px; color: var(--accent); white-space: nowrap; }
 .arxiv-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .arxiv-actions button {
   font: inherit;

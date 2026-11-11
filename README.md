@@ -25,6 +25,14 @@ be hosted on GitHub Pages as is. Then:
   file, inlines its `\input`/`\include` files and the `.bbl` bibliography, and
   shows PNG/JPEG figures. Pasting an arXiv link onto the page, or opening
   `index.html?arxiv=2301.00001`, does the same.
+- **GitHub** opens a `.tex` file from a public GitHub repository: paste a link
+  to the file, to a folder or to the whole repo (TeXdown then picks the file
+  with `\documentclass`). Its `\input`/`\include` files, a committed `.bbl` and
+  PNG/JPEG/SVG figures are fetched too. **Edit on GitHub** then opens the file
+  on GitHub to make and commit changes. Pasting a GitHub link onto the page,
+  or opening `index.html?gh=<GitHub link>`, does the same. For one click from
+  any GitHub page, drag **Open in TeXdown** from the GitHub dialog to your
+  bookmarks bar.
 - **Preview / Edit / Split** switch modes (Ctrl+E toggles Edit). In Edit mode, click any
   paragraph, theorem, equation or heading to edit its LaTeX right there; the
   caret lands where you clicked. Everything else stays rendered, and numbering
@@ -79,7 +87,9 @@ The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXdown: Open Preview to the
 Side** (Ctrl+K V). It scrolls along with the editor (a button turns that off),
 and Ctrl+click in the preview jumps to that spot in the source. See [vscode/README.md](vscode/README.md) to build
-and install it.
+and install it. Once published on the Marketplace, it also runs in the browser:
+press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
+file there, and commit your edits.
 
 ## What is supported
 

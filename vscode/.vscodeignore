@@ -10,3 +10,4 @@ node_modules/**
 !node_modules/katex/LICENSE
 .vscode/**
 .gitignore
+.vscode-test-web/**

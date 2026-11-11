@@ -11,6 +11,7 @@
   <script defer src="src/texdown.js"></script>
   <script defer src="src/editor.js"></script>
   <script defer src="src/arxiv.js"></script>
+  <script defer src="src/github.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -23,12 +24,14 @@
     </div>
     <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
     <button id="arxiv" type="button" title="Import a paper's LaTeX source from arXiv">arXiv</button>
+    <button id="github" type="button" title="Open a .tex file from a public GitHub repository">GitHub</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
     <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
     <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the table of contents">Contents</button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <button id="load-sample" type="button" title="Load the example document">Sample</button>
     <span id="file-name" class="file-name"></span>
+    <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
     <span id="status" class="status" role="status"></span>
     <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch between light and dark">
       <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
@@ -60,6 +63,20 @@
       <div class="arxiv-actions">
         <button type="button" id="arxiv-cancel">Cancel</button>
         <button type="submit" id="arxiv-go" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="github-dialog" class="arxiv-dialog" aria-labelledby="github-title">
+    <form id="github-form" method="dialog">
+      <h2 id="github-title">Open from GitHub</h2>
+      <label for="github-input">Paste a link to a .tex file, a folder or a repository</label>
+      <input id="github-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo/blob/main/paper.tex">
+      <p id="github-message" class="arxiv-message" role="status"></p>
+      <p class="bookmarklet-hint">Drag <a id="bookmarklet" class="bookmarklet" href="#" title="Drag me to your bookmarks bar">Open in TeXdown</a> to your bookmarks bar. Click it on any GitHub page to open that file here.</p>
+      <div class="arxiv-actions">
+        <button type="button" id="github-cancel">Cancel</button>
+        <button type="submit" id="github-go" class="primary">Open</button>
       </div>
     </form>
   </dialog>
