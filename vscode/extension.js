@@ -107,6 +107,11 @@ function findInBlock(text, m) {
   return Math.round(fraction * text.length);
 }
 
+/** Set a context key that decides which buttons the preview's title bar shows. */
+function setContext(key, value) {
+  vscode.commands.executeCommand('setContext', key, value);
+}
+
 const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
 
 // --- the preview panel --------------------------------------------------------------
@@ -178,7 +183,7 @@ class Preview {
 <link rel="stylesheet" href="${res('media', 'preview.css')}">
 </head>
 <body>
-<main class="panes"><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
+<main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-title">Contents</div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texdown-status" hidden></div>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
@@ -230,7 +235,7 @@ class Preview {
           return h ? [lineOf(Number(h[1])), lineOf(Math.max(Number(h[1]), Number(h[2]) - 1))] : null;
         });
         this.version = version;
-        this.post({ type: 'render', blocks: r.blocks, lines, warnings: r.warnings });
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: r.warnings });
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
     } finally {
@@ -252,6 +257,10 @@ class Preview {
       case 'ready': {
         this.ready = true;
         this.post({ type: 'doc', uri: this.uri.toString() });
+        this.post({ type: 'prefs', folds: this.context.globalState.get('texdown.folds', []), toc: this.context.globalState.get('texdown.toc', true) });
+        setContext('texdown.tocOpen', this.context.globalState.get('texdown.toc', true));
+        setContext('texdown.hasProofs', false);
+        this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texdown').get('previewTheme', 'auto') });
         this.version = -1;
         this.render().then(() => {
           const ed = this.editor();
@@ -267,6 +276,21 @@ class Preview {
         break;
       case 'scroll':
         this.syncFromPreview(m.line);
+        break;
+      case 'folds':
+        // Keep the most recent ones, like the web viewer.
+        this.context.globalState.update('texdown.folds', m.keys.slice(-500));
+        break;
+      case 'toc':
+        this.context.globalState.update('texdown.toc', m.on);
+        setContext('texdown.tocOpen', m.on);
+        break;
+      case 'set-theme':
+        vscode.workspace.getConfiguration('texdown').update('previewTheme', m.value, vscode.ConfigurationTarget.Global);
+        break;
+      case 'proofs':
+        setContext('texdown.hasProofs', m.has);
+        setContext('texdown.proofsFolded', m.folded);
         break;
       case 'shown':
         this.shown = m; // what the webview shows, for the tests
@@ -391,6 +415,19 @@ function activate(context) {
     // The button in the preview's title bar turns scrolling in step on or off.
     vscode.commands.registerCommand('texdown.enableScrollSync', () => setScrollSync(true)),
     vscode.commands.registerCommand('texdown.disableScrollSync', () => setScrollSync(false)),
+    // The Contents and Hide/Show proofs buttons in the preview's title bar.
+    vscode.commands.registerCommand('texdown.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
+    vscode.commands.registerCommand('texdown.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
+    vscode.commands.registerCommand('texdown.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
+    vscode.commands.registerCommand('texdown.toggleTheme', () => {
+      if (preview) preview.post({ type: 'toggle-theme' });
+      else vscode.window.showInformationMessage('Open a TeXdown preview first (Ctrl+K V in a .tex file).');
+    }),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (preview && e.affectsConfiguration('texdown.previewTheme')) {
+        preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texdown').get('previewTheme', 'auto') });
+      }
+    }),
     vscode.commands.registerCommand('texdown.toggleScrollSync', () =>
       setScrollSync(!vscode.workspace.getConfiguration('texdown').get('scrollSync', true))),
 
