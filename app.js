@@ -392,8 +392,9 @@
     saveTimer = setTimeout(() => store.set('texdown:last', doc), 400);
   }
 
-  function load(text, name, images) {
+  function load(text, name, images, gh) {
     closeEditor(false);
+    setGitHub(gh || null);
     imageUrls.forEach((u) => URL.revokeObjectURL(u));
     imageUrls = [];
     imageMap = null;
@@ -410,6 +411,17 @@
     previewPane.scrollTop = 0;
     store.set('texdown:last', doc);
     store.set('texdown:last-name', name || '');
+  }
+
+  // Where the open document came from on GitHub: { links: { view, edit, dev }, path }.
+  const ghLink = $('gh-link');
+  function setGitHub(gh) {
+    ghLink.hidden = !gh;
+    if (gh) {
+      ghLink.href = gh.links.edit;
+      ghLink.title = `Open ${gh.path} on GitHub to edit and commit it. Or press "." there to edit it in github.dev.`;
+    }
+    store.set('texdown:last-gh', gh ? JSON.stringify(gh) : '');
   }
 
   // --- folding sections and proofs -------------------------------------------
@@ -1233,7 +1245,7 @@
     importArxiv(arxivInput.value);
   });
 
-  // Pasting an arXiv link anywhere outside a text field imports it.
+  // Pasting an arXiv or GitHub link anywhere outside a text field opens it.
   document.addEventListener('paste', (e) => {
     const t = e.target;
     if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
@@ -1241,7 +1253,80 @@
     if (/arxiv/i.test(text) && TeXdownArxiv.parseId(text)) {
       e.preventDefault();
       importArxiv(text);
+    } else if (/github/i.test(text) && window.TeXdownGitHub && TeXdownGitHub.parseUrl(text)) {
+      e.preventDefault();
+      importGitHub(text);
     }
+  });
+
+  // --- opening files from GitHub ---------------------------------------------
+
+  const ghDialog = $('github-dialog');
+  const ghInput = $('github-input');
+  const ghMessage = $('github-message');
+  const ghGo = $('github-go');
+  let ghBusy = false;
+
+  function ghSay(text, warn) {
+    ghMessage.textContent = text;
+    ghMessage.classList.toggle('warn', !!warn);
+  }
+
+  async function importGitHub(input) {
+    if (ghBusy || !window.TeXdownGitHub) return false;
+    if (!TeXdownGitHub.parseUrl(input)) {
+      ghSay('That does not look like a GitHub link, e.g. https://github.com/owner/repo/blob/main/paper.tex.', true);
+      if (!ghDialog.open) openGitHubDialog(input);
+      return false;
+    }
+    ghBusy = true;
+    ghGo.disabled = true;
+    ghSay('Downloading from GitHub…');
+    showStatus('Opening from GitHub…');
+    try {
+      const file = await TeXdownGitHub.importFile(input);
+      fileHandle = null;
+      load(file.source, file.name, file.images, { links: file.links, path: `${file.owner}/${file.repo}/${file.path}` });
+      if (ghDialog.open) ghDialog.close();
+      const more = file.files.length > 1 ? ` with ${file.files.length - 1} included file${file.files.length > 2 ? 's' : ''}` : '';
+      flashStatus(`Opened ${file.path} from ${file.owner}/${file.repo}${more}`);
+      return true;
+    } catch (e) {
+      ghSay(e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message, true);
+      showStatus(warningsText);
+      if (!ghDialog.open) openGitHubDialog(input);
+      return false;
+    } finally {
+      ghBusy = false;
+      ghGo.disabled = false;
+    }
+  }
+
+  function openGitHubDialog(value) {
+    if (value != null) ghInput.value = value;
+    if (!ghDialog.open) {
+      if (ghDialog.showModal) ghDialog.showModal();
+      else ghDialog.setAttribute('open', '');
+    }
+    ghInput.focus();
+    ghInput.select();
+  }
+
+  const bookmarkletLink = $('bookmarklet');
+  if (window.TeXdownGitHub) bookmarkletLink.href = TeXdownGitHub.bookmarklet(location.href);
+  bookmarkletLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    ghSay('Drag the button to your bookmarks bar instead of clicking it here.');
+  });
+
+  $('github').addEventListener('click', () => {
+    ghSay('Public repositories only. Included files, the .bbl and PNG or JPEG figures are fetched too.');
+    openGitHubDialog();
+  });
+  $('github-cancel').addEventListener('click', () => ghDialog.close());
+  $('github-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    importGitHub(ghInput.value);
   });
 
   async function loadSample() {
@@ -1264,15 +1349,23 @@
   function start() {
     const saved = store.get('texdown:mode');
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
-    // ?arxiv=2301.00001 opens that paper.
-    const param = new URLSearchParams(location.search).get('arxiv');
-    if (param && window.TeXdownArxiv) {
-      const last = store.get('texdown:last');
-      if (last) load(last, store.get('texdown:last-name'));
-      return importArxiv(param);
-    }
+    let lastGh = null;
+    try { lastGh = JSON.parse(store.get('texdown:last-gh') || 'null'); } catch (e) { /* ignore */ }
+    const loadLast = () => load(last, store.get('texdown:last-name'), null, lastGh);
     const last = store.get('texdown:last');
-    if (last) return load(last, store.get('texdown:last-name'));
+    // ?arxiv=2301.00001 opens that paper; ?gh=<GitHub link> opens that file.
+    const params = new URLSearchParams(location.search);
+    const arxiv = params.get('arxiv');
+    const gh = params.get('gh') || params.get('github');
+    if (arxiv && window.TeXdownArxiv) {
+      if (last) loadLast();
+      return importArxiv(arxiv);
+    }
+    if (gh && window.TeXdownGitHub) {
+      if (last) loadLast();
+      return importGitHub(gh);
+    }
+    if (last) return loadLast();
     return loadSample();
   }
 
