@@ -198,3 +198,37 @@ test('sourceMap marks each top-level block with its range in the original source
   ]);
   assert.ok(!plain(src).html.includes('data-s'), 'off by default');
 });
+
+test('mathtools paired delimiters, \\mathbbm, \\hdots, \\intertext and \\tag macros', () => {
+  const real = (src) =>
+    TeXdown.render(src, {
+      renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true, strict: 'ignore' }),
+    });
+  const warn = console.warn;
+  console.warn = () => {}; // KaTeX has no metrics for the 𝟙 glyph
+  let html;
+  try {
+    ({ html } = real(String.raw`
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+\DeclarePairedDelimiter\abs\lvert\rvert
+\DeclarePairedDelimiterX{\inp}[2]{\langle}{\rangle}{#1, #2}
+\DeclarePairedDelimiterX\set[1]\lbrace\rbrace{\def\given{\;\delimsize\vert\;} #1}
+\newcommand*{\Gtag}[1]{\tag{G$#1$}}
+\begin{document}
+$\norm{x}_p + \norm*{\frac ab} + \norm[\Big]{y} + \abs{z} + \inp{u}{v} + \set*{x \given x>0} + \mathbbm{1}_A + 1,\hdots,n$
+\begin{align}
+a &= b \label{e1}\\\shortintertext{and}
+c &= d \label{e2}
+\end{align}
+\begin{equation}\Gtag{1} X = 1\end{equation}
+\eqref{e1} \eqref{e2}
+\end{document}`));
+  } finally {
+    console.warn = warn;
+  }
+  assert.doesNotMatch(html, /cc0000|katex-error/);
+  assert.match(html, /𝟙/);
+  assert.match(html, /<p class="intertext">and<\/p>/);
+  const t = text(html);
+  assert.match(t, /\(1\)\s*\(2\)/);
+});

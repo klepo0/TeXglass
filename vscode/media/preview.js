@@ -71,7 +71,7 @@
     for (const entry of fresh) entry.nodes.forEach((n) => preview.insertBefore(n, ref));
     shown = old.slice(0, p).concat(fresh, tail);
     // Blocks with a source range, for scrolling in step with the editor.
-    allAnchors = shown.filter((e) => e.range && e.nodes[0] && e.nodes[0].nodeType === 1).map((e) => ({ el: e.nodes[0], line: e.range[0], end: e.range[1] }));
+    allAnchors = shown.filter((e) => e.range && e.nodes[0] && e.nodes[0].nodeType === 1).map((e) => ({ el: e.nodes[0], line: e.range[0], end: e.range[1], file: e.range[2] || 0 }));
     applyFolds();
   }
 
@@ -320,8 +320,10 @@
 
   const topOf = (el) => el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
 
-  /** Scroll so that source line `line` is at the top. */
-  function scrollToLine(line) {
+  /** Scroll so that line `line` of source file number `file` is at the top. */
+  function scrollToLine(line, file) {
+    // Blocks from that file (a document can pull in several with \input).
+    const anchors = allVisible().filter((a) => a.file === (file || 0));
     if (!anchors.length) return;
     let lo = 0;
     let hi = anchors.length - 1;
@@ -349,9 +351,11 @@
     ignoreScrollUntil = Date.now() + 200;
   }
 
-  /** The source line at the top of the preview. */
+  const allVisible = () => anchors;
+
+  /** The source file and line at the top of the preview. */
   function lineAtTop() {
-    if (!anchors.length) return 0;
+    if (!anchors.length) return { line: 0, file: 0 };
     const y = pane.scrollTop + 8;
     let lo = 0;
     let hi = anchors.length - 1;
@@ -363,7 +367,7 @@
     const a = anchors[lo];
     const h = a.el.offsetHeight || 1;
     const t = Math.max(0, Math.min(1, (y - topOf(a.el)) / h));
-    return a.line + t * (a.end - a.line + 1);
+    return { line: a.line + t * (a.end - a.line + 1), file: a.file };
   }
 
   let scrollFrame = 0;
@@ -371,7 +375,8 @@
     if (Date.now() < ignoreScrollUntil || scrollFrame) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = 0;
-      vscode.postMessage({ type: 'scroll', line: lineAtTop() });
+      const at = lineAtTop();
+      vscode.postMessage({ type: 'scroll', line: at.line, file: at.file });
     });
   }, { passive: true });
 
@@ -550,7 +555,7 @@
         setStatus(m.text);
         break;
       case 'scroll-to':
-        scrollToLine(m.line);
+        scrollToLine(m.line, m.file);
         break;
       default:
     }

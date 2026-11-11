@@ -30,6 +30,17 @@ is needed, and the preview updates as you type, without saving.
   can also be set back to `auto`, which follows VS Code's theme).
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
+- **Documents in several files**: `\input`, `\include`, `\subfile` and
+  `\import` files are pulled in, and edits in any of them show up live (even
+  before saving). Previewing a chapter shows the whole document: TeXdown finds
+  the main file from a `% !TEX root = main.tex` line, or by looking for the
+  file that includes the chapter. Ctrl+click jumps into the right file.
+- **Bibliographies**: `\bibliography{refs}` (BibTeX) and `\addbibresource` +
+  `\printbibliography` (biblatex) are filled in from your `.bib` files, with
+  only the entries you cite (or all, with `\nocite{*}`), sorted
+  alphabetically, or in citation order for `unsrt`-like styles, with
+  `[Sch12]`-style labels for `alpha` styles. If a `.bbl` from an earlier
+  LaTeX run covers every citation, it is used as is.
 - Figures (`\includegraphics`) are shown when a PNG, JPEG, SVG, GIF or WebP
   file with that name sits next to the document (`\graphicspath` is
   respected). PDF and EPS figures are shown only if a PNG of the same name

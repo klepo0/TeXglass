@@ -9,6 +9,8 @@
 'use strict';
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
+const { assemble, locate, findRoot } = require('./project.js');
 const { Worker } = require('worker_threads');
 
 const VIEW_TYPE = 'texdown.preview';
@@ -112,6 +114,34 @@ function setContext(key, value) {
   vscode.commands.executeCommand('setContext', key, value);
 }
 
+const normPath = (p) => (process.platform === 'win32' || process.platform === 'darwin' ? path.resolve(p).toLowerCase() : path.resolve(p));
+
+/** The text of a file: from its editor if it is open (unsaved changes included), else from disk. */
+function readSource(p) {
+  const want = normPath(p);
+  const doc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && normPath(d.uri.fsPath) === want);
+  if (doc) return doc.getText();
+  try {
+    return fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    return null;
+  }
+}
+
+/** The main file of the project `uri` belongs to (see findRoot in project.js). */
+function rootOf(uri, text) {
+  if (uri.scheme !== 'file') return uri;
+  const listTex = (dir) => {
+    try {
+      return fs.readdirSync(dir).filter((n) => /\.tex$/i.test(n)).slice(0, 200).map((n) => path.join(dir, n));
+    } catch (e) {
+      return [];
+    }
+  };
+  const root = findRoot(uri.fsPath, text, listTex, readSource);
+  return root === uri.fsPath || !fs.existsSync(root) ? uri : vscode.Uri.file(root);
+}
+
 const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
 
 // --- the preview panel --------------------------------------------------------------
@@ -122,7 +152,7 @@ class Preview {
     this.converter = converter;
     this.panel = panel;
     this.uri = uri;
-    this.version = -1;
+    this.renderedText = null;
     this.busy = false;
     this.again = false;
     this.timer = null;
@@ -149,7 +179,7 @@ class Preview {
     panel.title = `Preview ${path.basename(this.uri.fsPath || this.uri.path)}`;
     panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'icon.svg');
     this.ready = false;
-    this.version = -1;
+    this.renderedText = null;
     panel.webview.html = this.html();
   }
 
@@ -204,21 +234,17 @@ class Preview {
       this.again = true;
       return;
     }
-    let doc = this.document;
-    if (!doc) {
-      try {
-        doc = await vscode.workspace.openTextDocument(this.uri);
-      } catch (e) {
-        this.post({ type: 'error', text: `Could not open ${this.uri.fsPath || this.uri}: ${e.message || e}` });
-        return;
-      }
+    const project = await this.assembleProject();
+    if (this.disposed || !project) return;
+    if (project.error) {
+      this.post({ type: 'error', text: project.error });
+      return;
     }
-    if (this.disposed || doc.uri.toString() !== this.uri.toString() || doc.version === this.version) return;
+    if (project.text === this.renderedText) return;
     this.busy = true;
-    const version = doc.version;
-    const text = doc.getText().replace(/\r\n?/g, '\n');
-    const isFile = doc.uri.scheme === 'file';
-    const dir = isFile ? path.dirname(doc.uri.fsPath) : null;
+    const text = project.text;
+    const isFile = this.uri.scheme === 'file';
+    const dir = isFile ? path.dirname(this.uri.fsPath) : null;
     const base = isFile ? this.panel.webview.asWebviewUri(vscode.Uri.file(dir)).toString() : null;
     const slow = setTimeout(() => this.post({ type: 'status', text: 'Rendering…' }), 400);
     try {
@@ -228,14 +254,19 @@ class Preview {
       if (m.error) {
         this.post({ type: 'error', text: m.error });
       } else {
-        const lineOf = lineIndex(text);
         const r = m.result;
+        const lineOf = project.files.map((f) => lineIndex(project.texts[f] || ''));
         const lines = r.blocks.map((html) => {
           const h = BLOCK_HEAD.exec(html);
-          return h ? [lineOf(Number(h[1])), lineOf(Math.max(Number(h[1]), Number(h[2]) - 1))] : null;
+          if (!h) return null;
+          const a = locate(project, Number(h[1]));
+          const b = locate(project, Math.max(Number(h[1]), Number(h[2]) - 1));
+          const line = lineOf[a.file](a.offset);
+          return [line, b.file === a.file ? Math.max(line, lineOf[a.file](b.offset)) : line, a.file];
         });
-        this.version = version;
-        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: r.warnings });
+        this.project = project;
+        this.renderedText = text;
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings) });
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
     } finally {
@@ -246,6 +277,44 @@ class Preview {
         this.render();
       }
     }
+  }
+
+  /**
+   * The document as TeXdown sees it: the file with its \input files and
+   * bibliography pulled in. Open editors win over the files on disk, so the
+   * preview shows unsaved changes in any of them.
+   */
+  async assembleProject() {
+    if (this.uri.scheme !== 'file') {
+      let doc = this.document;
+      try {
+        if (!doc) doc = await vscode.workspace.openTextDocument(this.uri);
+      } catch (e) {
+        return { error: `Could not open ${this.uri}: ${e.message || e}` };
+      }
+      const text = doc.getText().replace(/\r\n?/g, '\n');
+      const key = this.uri.toString();
+      return { text, files: [key], texts: { [key]: text }, segments: [{ start: 0, end: text.length, file: 0, at: 0 }], deps: [], warnings: [] };
+    }
+    const project = assemble(this.uri.fsPath, readSource);
+    if (!project) return { error: `Could not read ${this.uri.fsPath}.` };
+    this.deps = new Set(project.deps.map(normPath));
+    return project;
+  }
+
+  /** Whether the preview shows (part of) this file, or would change with it. */
+  depends(fsPath) {
+    return !!this.deps && this.deps.has(normPath(fsPath));
+  }
+
+  hasFile(fsPath) {
+    return !!this.project && this.project.files.some((f) => normPath(f) === normPath(fsPath));
+  }
+
+  fileIndex(uri) {
+    if (!this.project) return -1;
+    const key = uri.scheme === 'file' ? normPath(uri.fsPath) : uri.toString();
+    return this.project.files.findIndex((f) => (uri.scheme === 'file' ? normPath(f) : f) === key);
   }
 
   post(message) {
@@ -261,7 +330,7 @@ class Preview {
         setContext('texdown.tocOpen', this.context.globalState.get('texdown.toc', true));
         setContext('texdown.hasProofs', false);
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texdown').get('previewTheme', 'auto') });
-        this.version = -1;
+        this.renderedText = null;
         this.render().then(() => {
           const ed = this.editor();
           if (ed && ed.visibleRanges.length) this.syncFromEditor(ed);
@@ -269,13 +338,13 @@ class Preview {
         break;
       }
       case 'reveal':
-        this.reveal(m.line);
+        this.reveal(m.file || 0, m.line);
         break;
       case 'reveal-at':
         this.revealAt(m);
         break;
       case 'scroll':
-        this.syncFromPreview(m.line);
+        this.syncFromPreview(m.line, m.file || 0);
         break;
       case 'folds':
         // Keep the most recent ones, like the web viewer.
@@ -302,28 +371,37 @@ class Preview {
     }
   }
 
-  editor() {
-    return vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === this.uri.toString());
+  /** A visible editor showing the main file or one it pulls in (the active one first), or one for file number `file`. */
+  editor(file) {
+    const eds = [vscode.window.activeTextEditor].concat(vscode.window.visibleTextEditors).filter(Boolean);
+    if (file !== undefined) return eds.find((e) => this.fileIndex(e.document.uri) === file);
+    return eds.find((e) => this.fileIndex(e.document.uri) >= 0) || eds.find((e) => e.document.uri.toString() === this.uri.toString());
   }
 
-  /** Put the cursor at `line` in the source, opening it if needed. */
   /** Go to the spot in the source that was clicked in the preview (see whereClicked in preview.js). */
   async revealAt(m) {
-    const doc = this.document || (await vscode.workspace.openTextDocument(this.uri));
-    const text = doc.getText().replace(/\r\n?/g, '\n');
+    const project = this.project;
+    if (!project) return;
+    const text = project.text;
     const s = Math.min(m.s, text.length);
-    const offset = s + findInBlock(text.slice(s, Math.min(m.e, text.length)), m);
+    const at = locate(project, s + findInBlock(text.slice(s, Math.min(m.e, text.length)), m));
+    const file = project.files[at.file];
+    const source = project.texts[file] || '';
     // Offsets are in the text with \n line endings, so count lines there.
-    const line = lineIndex(text)(offset);
-    const col = offset - (text.lastIndexOf('\n', offset - 1) + 1);
-    return this.reveal(line, col);
+    const line = lineIndex(source)(at.offset);
+    const col = at.offset - (source.lastIndexOf('\n', at.offset - 1) + 1);
+    return this.reveal(at.file, line, col);
   }
 
-  async reveal(line, col) {
-    let ed = this.editor();
+  /** Put the cursor at `line` of source file number `file`, opening it if needed. */
+  async reveal(file, line, col) {
+    const name = this.project ? this.project.files[file] : null;
+    const uri = !name ? this.uri : this.uri.scheme === 'file' ? vscode.Uri.file(name) : vscode.Uri.parse(name);
+    let ed = this.editor(file);
     if (!ed) {
-      const doc = await vscode.workspace.openTextDocument(this.uri);
-      ed = await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One });
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const other = this.editor();
+      ed = await vscode.window.showTextDocument(doc, { viewColumn: other ? other.viewColumn : vscode.ViewColumn.One });
     } else {
       ed = await vscode.window.showTextDocument(ed.document, ed.viewColumn);
     }
@@ -338,14 +416,15 @@ class Preview {
 
   syncFromEditor(ed) {
     if (!this.syncEnabled() || Date.now() - this.lastPreviewScroll < 300) return;
+    const file = this.fileIndex(ed.document.uri);
+    if (file < 0 || !ed.visibleRanges.length) return;
     this.lastEditorScroll = Date.now();
-    const range = ed.visibleRanges[0];
-    this.post({ type: 'scroll-to', line: range.start.line });
+    this.post({ type: 'scroll-to', line: ed.visibleRanges[0].start.line, file });
   }
 
-  syncFromPreview(line) {
+  syncFromPreview(line, file) {
     if (!this.syncEnabled() || Date.now() - this.lastEditorScroll < 300) return;
-    const ed = this.editor();
+    const ed = this.editor(file);
     if (!ed) return;
     this.lastPreviewScroll = Date.now();
     const l = Math.max(0, Math.min(Math.floor(line), ed.document.lineCount - 1));
@@ -383,6 +462,12 @@ function activate(context) {
         return;
       }
       uri = ed.document.uri;
+    }
+    // Previewing a chapter shows the whole document it belongs to.
+    try {
+      uri = rootOf(uri, readSource(uri.fsPath) || '');
+    } catch (e) {
+      /* keep the file itself */
     }
     if (preview) {
       preview.setDocument(uri);
@@ -432,14 +517,33 @@ function activate(context) {
       setScrollSync(!vscode.workspace.getConfiguration('texdown').get('scrollSync', true))),
 
     vscode.workspace.onDidChangeTextDocument((e) => {
-      if (preview && e.document.uri.toString() === preview.uri.toString()) preview.update(true);
+      if (!preview || !e.contentChanges.length) return;
+      const d = e.document;
+      if (d.uri.toString() === preview.uri.toString() || (d.uri.scheme === 'file' && preview.depends(d.uri.fsPath))) preview.update(true);
     }),
-    // The preview follows the LaTeX file you are editing.
+    // Files on disk that the preview pulls in: \input files, .bib and .bbl.
+    (() => {
+      const watcher = vscode.workspace.createFileSystemWatcher('**/*.{tex,bib,bbl,ltx}');
+      const changed = (uri) => {
+        if (preview && preview.depends(uri.fsPath)) preview.update(true);
+      };
+      watcher.onDidChange(changed);
+      watcher.onDidCreate(changed);
+      watcher.onDidDelete(changed);
+      return watcher;
+    })(),
+    // The preview follows the LaTeX file you are editing, unless that file is
+    // part of the document it shows already.
     vscode.window.onDidChangeActiveTextEditor((ed) => {
-      if (preview && ed && isTex(ed.document)) preview.setDocument(ed.document.uri);
+      if (!preview || !ed || !isTex(ed.document)) return;
+      if (ed.document.uri.scheme === 'file' && preview.hasFile(ed.document.uri.fsPath)) {
+        preview.syncFromEditor(ed);
+        return;
+      }
+      preview.setDocument(rootOf(ed.document.uri, ed.document.getText()));
     }),
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      if (preview && e.textEditor.document.uri.toString() === preview.uri.toString()) preview.syncFromEditor(e.textEditor);
+      if (preview && preview.fileIndex(e.textEditor.document.uri) >= 0) preview.syncFromEditor(e.textEditor);
     }),
     // Bring back a preview that was open when VS Code was closed.
     vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
