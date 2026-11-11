@@ -2,3 +2,5 @@ node_modules/
 shared/
 .vscode-test/
 *.vsix
+dist/
+.vscode-test-web/

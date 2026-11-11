@@ -21,9 +21,12 @@
     "tex",
     "preview",
     "katex",
-    "math"
+    "math",
+    "github.dev",
+    "vscode.dev"
   ],
   "main": "./extension.js",
+  "browser": "./dist/web.js",
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex",
@@ -176,14 +179,25 @@
   },
   "scripts": {
     "copy-shared": "node scripts/copy-shared.js",
-    "vscode:prepublish": "node scripts/copy-shared.js",
+    "vscode:prepublish": "node scripts/build-web.js --minify",
     "package": "vsce package",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build-web": "node scripts/build-web.js --minify",
+    "test-web": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. test/fixtures/web"
   },
   "dependencies": {
     "katex": "0.16.11"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.10",
+    "path-browserify": "^1.0.1"
+  },
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
   }
 }

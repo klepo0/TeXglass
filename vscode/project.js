@@ -8,7 +8,7 @@
  * the preview can jump to the right file and line.
  */
 'use strict';
-const path = require('path');
+const nodePath = require('path');
 const { parseBib, makeBibliography } = require('./bib.js');
 
 // A comment, an \input-like command, or a bibliography command.
@@ -27,13 +27,15 @@ const COMMANDS = new RegExp(
 const CITE = /\\(?:[a-zA-Z]*cite[a-zA-Z]*|nocite)\*?\s*(?:\[[^\]]*\]\s*){0,2}\{([^}]*)\}/g;
 
 /**
- * read(absolutePath) -> text or null. Returns
+ * read(absolutePath) -> text or null; paths is the path module to use
+ * (Node's by default, path.posix for the paths of virtual files). Returns
  * { text, files: [abs paths], texts: { path: text }, segments, deps, warnings }
  * where segments are [{ start, end, file, at, generated }]: text[start, end)
  * came from files[file] starting at offset `at` (or was made for the command
  * at `at`, if generated).
  */
-function assemble(mainPath, read) {
+function assemble(mainPath, read, paths) {
+  const path = paths || nodePath;
   const mainDir = path.dirname(mainPath);
   const files = [];
   const texts = {};
@@ -138,7 +140,7 @@ function assemble(mainPath, read) {
     const noComments = out.replace(/(?<!\\)%.*$/gm, '');
     for (const m of noComments.matchAll(CITE)) for (const k of m[1].split(',')) if (k.trim()) cited.push(k.trim());
     const style = (/\\bibliographystyle\s*\{([^}]*)\}/.exec(noComments) || [])[1] || '';
-    const bibText = bibliography(mainPath, bib, noComments, cited, style, tryRead, warnings);
+    const bibText = bibliography(mainPath, bib, noComments, cited, style, tryRead, warnings, path);
     if (bibText) {
       // Splice it in where the command was, moving everything after it along.
       const len = bibText.length;
@@ -157,7 +159,7 @@ function assemble(mainPath, read) {
 }
 
 /** The thebibliography for a document: from the .bbl if it covers every citation, else from the .bib files. */
-function bibliography(mainPath, bib, text, cited, style, read, warnings) {
+function bibliography(mainPath, bib, text, cited, style, read, warnings, path) {
   const dir = path.dirname(mainPath);
   const keys = cited.filter((k) => k !== '*');
   const bbl = read(mainPath.replace(/\.[^./\\]+$/, '') + '.bbl');
@@ -206,8 +208,10 @@ function locate(project, offset) {
  * The root of a project a file belongs to: a "% !TEX root = …" line, or, for
  * a file with no \documentclass, a .tex file next to it or one folder up
  * that \input's or \include's it. Returns an absolute path, or `file` itself.
+ * listTex(dir) lists the .tex files in a folder; paths is as for assemble.
  */
-function findRoot(file, text, listTex, read) {
+function findRoot(file, text, listTex, read, paths) {
+  const path = paths || nodePath;
   const head = text.split('\n', 30).join('\n');
   const magic = /^\s*%\s*!\s*TEX\s+root\s*=\s*(.+?)\s*$/im.exec(head);
   if (magic) return path.resolve(path.dirname(file), magic[1]);

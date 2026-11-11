@@ -5,13 +5,23 @@
  * preview. Conversion runs in a worker thread (render-worker.js); the webview
  * (media/preview.js) updates only the blocks that changed, and the two sides
  * keep their scroll positions in step through the source lines of each block.
+ *
+ * The same code runs in the browser (github.dev, vscode.dev), bundled into
+ * dist/web.js with TEXDOWN_WEB set. There files are read through
+ * vscode.workspace.fs, and conversion runs in the extension host itself,
+ * which is a web worker there.
  */
 'use strict';
+/* global TEXDOWN_WEB */
 const vscode = require('vscode');
-const path = require('path');
-const fs = require('fs');
+const WEB = typeof TEXDOWN_WEB !== 'undefined' && TEXDOWN_WEB;
+const path = require('path'); // path-browserify in the web build
+const fs = WEB ? null : require('fs');
+const { Worker } = WEB ? {} : require('worker_threads');
+const { convert } = WEB ? require('./convert.js') : {};
 const { assemble, locate, findRoot } = require('./project.js');
-const { Worker } = require('worker_threads');
+const { withFiles } = require('./vfs.js');
+const { imageResolver, figureNames } = require('./images.js');
 
 const VIEW_TYPE = 'texdown.preview';
 
@@ -47,6 +57,16 @@ class Converter {
   }
 
   render(job) {
+    if (WEB) {
+      // Let the editor's own work go first, then convert here.
+      return new Promise((resolve) => setTimeout(() => {
+        try {
+          resolve({ result: convert(job) });
+        } catch (e) {
+          resolve({ error: String((e && e.stack) || e) });
+        }
+      }, 0));
+    }
     if (!this.worker) this.start();
     return new Promise((resolve) => {
       const id = ++this.nextId;
@@ -114,7 +134,46 @@ function setContext(key, value) {
   vscode.commands.executeCommand('setContext', key, value);
 }
 
-const normPath = (p) => (process.platform === 'win32' || process.platform === 'darwin' ? path.resolve(p).toLowerCase() : path.resolve(p));
+const caseless = typeof process !== 'undefined' && (process.platform === 'win32' || process.platform === 'darwin');
+const normPath = (p) => (caseless ? path.resolve(p).toLowerCase() : path.resolve(p));
+
+/**
+ * Whether a document lives on a file system that can only be read through
+ * vscode.workspace.fs: a GitHub repo in github.dev (vscode-vfs:), any folder
+ * in the browser, a remote repository on the desktop. Untitled documents are
+ * previewed on their own.
+ */
+const isVirtual = (uri) => uri.scheme !== 'untitled' && (WEB || uri.scheme !== 'file');
+
+async function readText(uri) {
+  try {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)).replace(/\r\n?/g, '\n');
+  } catch (e) {
+    return null;
+  }
+}
+
+/** The .tex files in a folder of a virtual file system, as paths. */
+async function listTexVirtual(dirUri) {
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(dirUri);
+    return entries
+      .filter(([n, type]) => type & vscode.FileType.File && /\.tex$/i.test(n))
+      .slice(0, 200)
+      .map(([n]) => path.posix.join(dirUri.path, n));
+  } catch (e) {
+    return [];
+  }
+}
+
+/** The open document for a path on the same virtual file system as `uri`, if any. */
+function openDocsLike(uri) {
+  const docs = new Map();
+  for (const d of vscode.workspace.textDocuments) {
+    if (d.uri.scheme === uri.scheme && d.uri.authority === uri.authority) docs.set(d.uri.path, d);
+  }
+  return docs;
+}
 
 /** The text of a file: from its editor if it is open (unsaved changes included), else from disk. */
 function readSource(p) {
@@ -129,7 +188,16 @@ function readSource(p) {
 }
 
 /** The main file of the project `uri` belongs to (see findRoot in project.js). */
-function rootOf(uri, text) {
+async function rootOf(uri, text) {
+  if (isVirtual(uri)) {
+    const docs = openDocsLike(uri);
+    const root = await withFiles(
+      (get) => findRoot(uri.path, text, (d) => get('#' + d) || [], (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+      (key) => (key[0] === '#' ? listTexVirtual(uri.with({ path: key.slice(1) })) : readText(uri.with({ path: key }))),
+      new Map()
+    );
+    return root === uri.path ? uri : uri.with({ path: root });
+  }
   if (uri.scheme !== 'file') return uri;
   const listTex = (dir) => {
     try {
@@ -160,6 +228,7 @@ class Preview {
     this.lastEditorScroll = 0;
     this.lastPreviewScroll = 0;
     this.disposables = [];
+    this.cache = new Map(); // files read from a virtual file system
 
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
     panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
@@ -180,6 +249,7 @@ class Preview {
     panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'icon.svg');
     this.ready = false;
     this.renderedText = null;
+    this.cache = new Map();
     panel.webview.html = this.html();
   }
 
@@ -243,13 +313,15 @@ class Preview {
     if (project.text === this.renderedText) return;
     this.busy = true;
     const text = project.text;
-    const isFile = this.uri.scheme === 'file';
+    const virtual = isVirtual(this.uri);
+    const isFile = !virtual && this.uri.scheme === 'file';
     const dir = isFile ? path.dirname(this.uri.fsPath) : null;
     const base = isFile ? this.panel.webview.asWebviewUri(vscode.Uri.file(dir)).toString() : null;
     const slow = setTimeout(() => this.post({ type: 'status', text: 'Rendering…' }), 400);
     try {
       const uri = this.uri.toString();
-      const m = await this.converter.render({ text, dir, base });
+      const figures = virtual ? await this.findFigures(text) : undefined;
+      const m = await this.converter.render(virtual ? { text, figures } : { text, dir, base });
       if (this.disposed || uri !== this.uri.toString() || !this.ready) return;
       if (m.error) {
         this.post({ type: 'error', text: m.error });
@@ -285,6 +357,17 @@ class Preview {
    * preview shows unsaved changes in any of them.
    */
   async assembleProject() {
+    if (isVirtual(this.uri)) {
+      const docs = openDocsLike(this.uri);
+      const project = await withFiles(
+        (get) => assemble(this.uri.path, (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+        (p) => readText(this.uri.with({ path: p })),
+        this.cache
+      );
+      if (!project) return { error: `Could not read ${this.uri.path}.` };
+      this.deps = new Set(project.deps);
+      return project;
+    }
     if (this.uri.scheme !== 'file') {
       let doc = this.document;
       try {
@@ -302,19 +385,63 @@ class Preview {
     return project;
   }
 
-  /** Whether the preview shows (part of) this file, or would change with it. */
-  depends(fsPath) {
-    return !!this.deps && this.deps.has(normPath(fsPath));
+  /**
+   * Figures on a virtual file system: { \includegraphics name: webview URL }.
+   * Files are looked up with stat, in parallel, and remembered.
+   */
+  async findFigures(text) {
+    const names = figureNames(text);
+    const figures = {};
+    if (!names.length) return figures;
+    const dir = path.posix.dirname(this.uri.path);
+    const at = (rel) => this.uri.with({ path: path.posix.join(dir, rel) });
+    await withFiles(
+      (get) => {
+        const find = imageResolver(text, (rel) => get('?' + rel) === true, (rel) => rel);
+        for (const n of names) figures[n] = find(n);
+      },
+      (key) => vscode.workspace.fs.stat(at(key.slice(1))).then((st) => (st.type & vscode.FileType.File) !== 0, () => false),
+      this.cache
+    );
+    for (const n of names) figures[n] = figures[n] ? this.panel.webview.asWebviewUri(at(figures[n])).toString() : null;
+    return figures;
   }
 
-  hasFile(fsPath) {
-    return !!this.project && this.project.files.some((f) => normPath(f) === normPath(fsPath));
+  /** How this preview's project names a file: its path (normalized on disk), or null if it cannot be part of it. */
+  keyOf(uri) {
+    if (isVirtual(this.uri)) return uri.scheme === this.uri.scheme && uri.authority === this.uri.authority ? uri.path : null;
+    if (uri.scheme === 'file') return normPath(uri.fsPath);
+    return uri.toString();
+  }
+
+  /** The file a project path names. */
+  uriOf(name) {
+    if (isVirtual(this.uri)) return this.uri.with({ path: name });
+    return this.uri.scheme === 'file' ? vscode.Uri.file(name) : vscode.Uri.parse(name);
+  }
+
+  /** Whether the preview shows (part of) this file, or would change with it. */
+  depends(uri) {
+    const key = this.keyOf(uri);
+    return !!this.deps && key != null && this.deps.has(key);
+  }
+
+  /** Forget what was read of a file on a virtual file system, after it changed. */
+  forget(uri) {
+    const key = this.keyOf(uri);
+    if (key != null) this.cache.delete(key);
+  }
+
+  hasFile(uri) {
+    return this.fileIndex(uri) >= 0;
   }
 
   fileIndex(uri) {
     if (!this.project) return -1;
-    const key = uri.scheme === 'file' ? normPath(uri.fsPath) : uri.toString();
-    return this.project.files.findIndex((f) => (uri.scheme === 'file' ? normPath(f) : f) === key);
+    const key = this.keyOf(uri);
+    if (key == null) return -1;
+    const norm = isVirtual(this.uri) || this.uri.scheme !== 'file' ? (f) => f : normPath;
+    return this.project.files.findIndex((f) => norm(f) === key);
   }
 
   post(message) {
@@ -396,7 +523,7 @@ class Preview {
   /** Put the cursor at `line` of source file number `file`, opening it if needed. */
   async reveal(file, line, col) {
     const name = this.project ? this.project.files[file] : null;
-    const uri = !name ? this.uri : this.uri.scheme === 'file' ? vscode.Uri.file(name) : vscode.Uri.parse(name);
+    const uri = !name ? this.uri : this.uriOf(name);
     let ed = this.editor(file);
     if (!ed) {
       const doc = await vscode.workspace.openTextDocument(uri);
@@ -454,7 +581,7 @@ function activate(context) {
     };
   };
 
-  function open(uri, column) {
+  async function open(uri, column) {
     if (!uri) {
       const ed = vscode.window.activeTextEditor;
       if (!ed || !isTex(ed.document)) {
@@ -465,7 +592,9 @@ function activate(context) {
     }
     // Previewing a chapter shows the whole document it belongs to.
     try {
-      uri = rootOf(uri, readSource(uri.fsPath) || '');
+      const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      const text = doc ? doc.getText() : isVirtual(uri) ? await readText(uri) : uri.scheme === 'file' ? readSource(uri.fsPath) : null;
+      uri = await rootOf(uri, text || '');
     } catch (e) {
       /* keep the file itself */
     }
@@ -519,13 +648,15 @@ function activate(context) {
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (!preview || !e.contentChanges.length) return;
       const d = e.document;
-      if (d.uri.toString() === preview.uri.toString() || (d.uri.scheme === 'file' && preview.depends(d.uri.fsPath))) preview.update(true);
+      if (d.uri.toString() === preview.uri.toString() || preview.depends(d.uri)) preview.update(true);
     }),
     // Files on disk that the preview pulls in: \input files, .bib and .bbl.
     (() => {
       const watcher = vscode.workspace.createFileSystemWatcher('**/*.{tex,bib,bbl,ltx}');
       const changed = (uri) => {
-        if (preview && preview.depends(uri.fsPath)) preview.update(true);
+        if (!preview) return;
+        preview.forget(uri);
+        if (preview.depends(uri)) preview.update(true);
       };
       watcher.onDidChange(changed);
       watcher.onDidCreate(changed);
@@ -534,13 +665,14 @@ function activate(context) {
     })(),
     // The preview follows the LaTeX file you are editing, unless that file is
     // part of the document it shows already.
-    vscode.window.onDidChangeActiveTextEditor((ed) => {
+    vscode.window.onDidChangeActiveTextEditor(async (ed) => {
       if (!preview || !ed || !isTex(ed.document)) return;
-      if (ed.document.uri.scheme === 'file' && preview.hasFile(ed.document.uri.fsPath)) {
+      if (preview.hasFile(ed.document.uri)) {
         preview.syncFromEditor(ed);
         return;
       }
-      preview.setDocument(rootOf(ed.document.uri, ed.document.getText()));
+      const root = await rootOf(ed.document.uri, ed.document.getText());
+      if (preview) preview.setDocument(root);
     }),
     vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
       if (preview && preview.fileIndex(e.textEditor.document.uri) >= 0) preview.syncFromEditor(e.textEditor);

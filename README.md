@@ -87,7 +87,9 @@ The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXdown: Open Preview to the
 Side** (Ctrl+K V). It scrolls along with the editor (a button turns that off),
 and Ctrl+click in the preview jumps to that spot in the source. See [vscode/README.md](vscode/README.md) to build
-and install it.
+and install it. Once published on the Marketplace, it also runs in the browser:
+press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
+file there, and commit your edits.
 
 ## What is supported
 
