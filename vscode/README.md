@@ -69,7 +69,7 @@ worker), not in a separate thread.
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texdown-0.1.0.vsix`.
+`code --install-extension texdown-0.2.0.vsix`.
 
 ## Build
 
@@ -82,7 +82,7 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texdown-0.1.0.vsix
+npx vsce package      # makes texdown-0.2.0.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after
