@@ -133,19 +133,64 @@
     });
   }, { passive: true });
 
-  // Double-click a block to go to its source, like the Markdown preview.
+  // Ctrl+click (Cmd+click on a Mac) or double-click goes to that spot in the
+  // source. The extension finds it from the block's source range, the word
+  // that was clicked and how far into the block it is.
+  function whereClicked(e) {
+    const anchor = anchors.find((a) => a.el.contains(e.target));
+    if (!anchor) return null;
+    const block = anchor.el;
+    const msg = { type: 'reveal-at', s: Number(block.dataset.s), e: Number(block.dataset.e), line: anchor.line };
+    const math = e.target.closest('.katex');
+    if (math) {
+      const ann = math.querySelector('annotation');
+      msg.tex = ann ? ann.textContent.trim() : '';
+      return msg;
+    }
+    let node = null;
+    let offset = 0;
+    if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (p) { node = p.offsetNode; offset = p.offset; }
+    } else if (document.caretRangeFromPoint) {
+      const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+      if (r) { node = r.startContainer; offset = r.startOffset; }
+    }
+    if (!node || node.nodeType !== 3 || !block.contains(node)) {
+      const r = block.getBoundingClientRect();
+      msg.fraction = Math.max(0, Math.min(1, (e.clientY - r.top) / (r.height || 1)));
+      return msg;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.setEnd(node, offset);
+    msg.fraction = range.toString().length / Math.max(1, block.textContent.length);
+    msg.head = (/[\p{L}\p{N}]{1,16}$/u.exec(node.data.slice(0, offset)) || [''])[0];
+    msg.tail = (/^[\p{L}\p{N}]{0,16}/u.exec(node.data.slice(offset)) || [''])[0];
+    return msg;
+  }
+
+  function goToSource(e) {
+    const msg = whereClicked(e);
+    if (!msg) return false;
+    vscode.postMessage(msg);
+    return true;
+  }
+
   preview.addEventListener('dblclick', (e) => {
     if (e.target.closest('a')) return;
-    const anchor = anchors.find((a) => a.el.contains(e.target));
-    if (!anchor) return;
-    const r = anchor.el.getBoundingClientRect();
-    const t = Math.max(0, Math.min(1, (e.clientY - r.top) / (r.height || 1)));
-    vscode.postMessage({ type: 'reveal', line: Math.round(anchor.line + t * (anchor.end - anchor.line)) });
+    goToSource(e);
   });
 
   // --- links and reference previews -----------------------------------------------------
 
   preview.addEventListener('click', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      popover.hidden = true;
+      goToSource(e);
+      return;
+    }
     const a = e.target.closest('a[href]');
     if (!a) return;
     const href = a.getAttribute('href');

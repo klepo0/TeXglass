@@ -77,8 +77,8 @@ npx texdown paper.tex -o paper.html
 
 The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXdown: Open Preview to the
-Side** (Ctrl+K V). It scrolls along with the editor, and double-clicking the
-preview jumps to the source. See [vscode/README.md](vscode/README.md) to build
+Side** (Ctrl+K V). It scrolls along with the editor (a button turns that off),
+and Ctrl+click in the preview jumps to that spot in the source. See [vscode/README.md](vscode/README.md) to build
 and install it.
 
 ## What is supported

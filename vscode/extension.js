@@ -75,6 +75,38 @@ function lineIndex(text) {
   };
 }
 
+/**
+ * Where in a block's source a click in its rendering falls: the formula that
+ * was clicked, else the clicked word nearest the same fraction of the way
+ * through, else just that fraction.
+ */
+function findInBlock(text, m) {
+  if (m.tex !== undefined) {
+    for (const n of [30, 15, 8, 4]) {
+      const needle = m.tex.slice(0, n);
+      if (needle.length < Math.min(n, m.tex.length)) continue;
+      const k = needle ? text.indexOf(needle) : -1;
+      if (k >= 0) return k;
+    }
+    return 0;
+  }
+  const fraction = typeof m.fraction === 'number' ? m.fraction : 0;
+  const word = (m.head || '') + (m.tail || '');
+  if (word.length >= 2) {
+    let best = -1;
+    let bestDist = Infinity;
+    for (let k = text.indexOf(word); k >= 0; k = text.indexOf(word, k + 1)) {
+      const dist = Math.abs(k / text.length - fraction);
+      if (dist < bestDist) {
+        best = k;
+        bestDist = dist;
+      }
+    }
+    if (best >= 0) return best + m.head.length;
+  }
+  return Math.round(fraction * text.length);
+}
+
 const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
 
 // --- the preview panel --------------------------------------------------------------
@@ -230,6 +262,9 @@ class Preview {
       case 'reveal':
         this.reveal(m.line);
         break;
+      case 'reveal-at':
+        this.revealAt(m);
+        break;
       case 'scroll':
         this.syncFromPreview(m.line);
         break;
@@ -248,7 +283,19 @@ class Preview {
   }
 
   /** Put the cursor at `line` in the source, opening it if needed. */
-  async reveal(line) {
+  /** Go to the spot in the source that was clicked in the preview (see whereClicked in preview.js). */
+  async revealAt(m) {
+    const doc = this.document || (await vscode.workspace.openTextDocument(this.uri));
+    const text = doc.getText().replace(/\r\n?/g, '\n');
+    const s = Math.min(m.s, text.length);
+    const offset = s + findInBlock(text.slice(s, Math.min(m.e, text.length)), m);
+    // Offsets are in the text with \n line endings, so count lines there.
+    const line = lineIndex(text)(offset);
+    const col = offset - (text.lastIndexOf('\n', offset - 1) + 1);
+    return this.reveal(line, col);
+  }
+
+  async reveal(line, col) {
     let ed = this.editor();
     if (!ed) {
       const doc = await vscode.workspace.openTextDocument(this.uri);
@@ -256,7 +303,7 @@ class Preview {
     } else {
       ed = await vscode.window.showTextDocument(ed.document, ed.viewColumn);
     }
-    const pos = new vscode.Position(Math.max(0, Math.min(line, ed.document.lineCount - 1)), 0);
+    const pos = ed.document.validatePosition(new vscode.Position(Math.max(0, line), col || 0));
     ed.selection = new vscode.Selection(pos, pos);
     ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
@@ -325,9 +372,27 @@ function activate(context) {
     attach(new Preview(context, converter, panel, uri));
   }
 
+  function setScrollSync(on) {
+    const config = vscode.workspace.getConfiguration('texdown');
+    // Change it where it is set now: the workspace if it overrides it there, else for the user.
+    const info = config.inspect('scrollSync');
+    const target = info && info.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+    return config.update('scrollSync', on, target).then(() => {
+      vscode.window.setStatusBarMessage(on ? 'TeXdown: the preview scrolls with the editor' : 'TeXdown: the preview scrolls on its own', 2500);
+      // Line the preview up again straight away.
+      const ed = preview && preview.editor();
+      if (on && ed) preview.syncFromEditor(ed);
+    });
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('texdown.openPreviewToSide', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Beside)),
     vscode.commands.registerCommand('texdown.openPreview', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Active)),
+    // The button in the preview's title bar turns scrolling in step on or off.
+    vscode.commands.registerCommand('texdown.enableScrollSync', () => setScrollSync(true)),
+    vscode.commands.registerCommand('texdown.disableScrollSync', () => setScrollSync(false)),
+    vscode.commands.registerCommand('texdown.toggleScrollSync', () =>
+      setScrollSync(!vscode.workspace.getConfiguration('texdown').get('scrollSync', true))),
 
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (preview && e.document.uri.toString() === preview.uri.toString()) preview.update(true);
@@ -357,4 +422,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, lineIndex };
+module.exports = { activate, deactivate, lineIndex, findInBlock };

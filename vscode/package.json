@@ -5,10 +5,24 @@
   "version": "0.1.0",
   "publisher": "klepo0",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/klepo0/TeXdown" },
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Programming Languages", "Visualization"],
-  "keywords": ["latex", "tex", "preview", "katex", "math"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/klepo0/TeXdown"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization"
+  ],
+  "keywords": [
+    "latex",
+    "tex",
+    "preview",
+    "katex",
+    "math"
+  ],
   "main": "./extension.js",
   "activationEvents": [
     "onLanguage:latex",
@@ -27,6 +41,23 @@
         "command": "texdown.openPreview",
         "title": "Open Preview",
         "category": "TeXdown"
+      },
+      {
+        "command": "texdown.disableScrollSync",
+        "title": "Stop Scrolling with the Editor",
+        "category": "TeXdown",
+        "icon": "$(link)"
+      },
+      {
+        "command": "texdown.enableScrollSync",
+        "title": "Scroll with the Editor",
+        "category": "TeXdown",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "texdown.toggleScrollSync",
+        "title": "Toggle Scrolling with the Editor",
+        "category": "TeXdown"
       }
     ],
     "menus": {
@@ -35,6 +66,16 @@
           "command": "texdown.openPreviewToSide",
           "when": "resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
           "group": "navigation"
+        },
+        {
+          "command": "texdown.disableScrollSync",
+          "when": "activeWebviewPanelId == 'texdown.preview' && config.texdown.scrollSync",
+          "group": "navigation"
+        },
+        {
+          "command": "texdown.enableScrollSync",
+          "when": "activeWebviewPanelId == 'texdown.preview' && !config.texdown.scrollSync",
+          "group": "navigation"
         }
       ],
       "explorer/context": [
@@ -42,6 +83,16 @@
           "command": "texdown.openPreview",
           "when": "resourceExtname == .tex",
           "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "texdown.disableScrollSync",
+          "when": "false"
+        },
+        {
+          "command": "texdown.enableScrollSync",
+          "when": "false"
         }
       ]
     },

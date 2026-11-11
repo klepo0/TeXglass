@@ -13,9 +13,12 @@ is needed, and the preview updates as you type, without saving.
   **TeXdown: Open Preview** opens it in the current editor group instead;
   it is also in the Explorer's right-click menu for `.tex` files.
 - The preview follows the LaTeX file you are editing, and scrolls along with
-  the editor (and the editor with the preview). Turn that off with the
-  `texdown.scrollSync` setting.
-- **Double-click** anything in the preview to jump to its source.
+  the editor (and the editor with the preview). The link button in the
+  preview's title bar turns that off and on again (or **TeXdown: Toggle
+  Scrolling with the Editor**, or the `texdown.scrollSync` setting).
+- **Ctrl+click** (Cmd+click on a Mac) anywhere in the preview, or
+  double-click, to put the cursor at that spot in the source: on the word you
+  clicked, or at the start of the formula.
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
 - Figures (`\includegraphics`) are shown when a PNG, JPEG, SVG, GIF or WebP
