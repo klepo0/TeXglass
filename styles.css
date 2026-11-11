@@ -363,6 +363,14 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
   padding: 40px 16px 24px;
 }
 
+/* Long documents have tens of thousands of blocks. Let the browser skip the
+   layout and painting of the ones that are off screen; the size they had last
+   time they were shown is remembered, so the scrollbar settles as you read. */
+#preview > .src-block {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
 .document p { margin: 0 0 0.9em; }
 .document a { color: var(--accent); text-decoration: none; }
 .document a:hover { text-decoration: underline; }
@@ -612,6 +620,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @media print {
   .toolbar, .source-pane, .ref-popover, .add-block-row, .fold-toggle { display: none !important; }
   .fold-hidden, .proof.folded > * { display: revert !important; }
+  #preview > .src-block { content-visibility: visible; }
   .proof.folded > p:first-child { white-space: normal; color: inherit; }
   .pane { overflow: visible; }
   html, body { overflow: visible; height: auto; }

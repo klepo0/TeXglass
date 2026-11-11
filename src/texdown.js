@@ -445,19 +445,22 @@
     renderMath(tex, display) {
       tex = this.mathRefs(tex).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
       try {
-        return this.renderMathFn(tex, display, this.katexMacros());
+        return this.renderMathFn(tex, display, this.katexMacros(tex));
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>`;
       }
     }
 
-    katexMacros() {
+    katexMacros(tex) {
       if (!this._katexMacros) {
         const m = {};
         for (const name in this.macros) m['\\' + name] = this.macros[name].body;
         this._katexMacros = m;
       }
-      return Object.assign({}, this._katexMacros);
+      // KaTeX only writes to the macros object for global definitions, so the
+      // shared table is safe to hand over unless the formula makes one. (A copy
+      // per formula costs O(macros) each time, which adds up in long papers.)
+      return /\\(gdef|global|xdef)\b/.test(tex) ? Object.assign({}, this._katexMacros) : this._katexMacros;
     }
 
     // --- top level ---------------------------------------------------------
@@ -482,13 +485,16 @@
       this.trackDepth = this.depth + 1;
       this.trackBase = bodyStart;
       this.trackText = src;
+      this.blocks = null;
       let html = this.flow(body, false);
       this.trackDepth = -1;
       if (this.footnotes.length) {
-        html +=
-          '\n<section class="footnotes"><ol>' +
+        const notes =
+          '<section class="footnotes"><ol>' +
           this.footnotes.map((f, k) => `<li id="fn-${k + 1}">${f} <a class="fn-back" href="#fnref-${k + 1}">↩</a></li>`).join('') +
           '</ol></section>';
+        html += '\n' + notes;
+        if (this.blocks) this.blocks.push(notes);
       }
       return html;
     }
@@ -507,6 +513,10 @@
       }
       const out = [];
       let para = '';
+      // Length of `para` when it last ended with a space. Checking this
+      // instead of para.endsWith(' ') avoids flattening the growing string on
+      // every space, which is quadratic in the length of a long paragraph.
+      let spaceAt = -1;
       // With a source map, remember which part of the source made each
       // top-level block, so the viewer can edit it in place.
       const track = !inline && this.srcMap && this.depth === this.trackDepth;
@@ -519,11 +529,12 @@
           if (track) spans[out.length - 1] = [paraStart, pos];
         } else if (inline && para) out.push(para);
         para = '';
+        spaceAt = -1;
         paraStart = -1;
       };
       const emit = (r, pos) => {
         if (r.parbreak) {
-          if (inline) para += ' ';
+          if (inline) add(' ');
           else flush(pos);
         }
         if (!r.html) return;
@@ -531,10 +542,17 @@
           flush(pos);
           out.push(r.html);
           if (track) spans[out.length - 1] = [pos, r.end];
-        } else para += r.html;
+        } else add(r.html);
+      };
+      const add = (html) => {
+        para += html;
+        if (html.endsWith(' ')) spaceAt = para.length;
       };
       const space = () => {
-        if (para && !para.endsWith(' ')) para += ' ';
+        if (para && para.length !== spaceAt) {
+          para += ' ';
+          spaceAt = para.length;
+        }
       };
 
       const n = src.length;
@@ -575,7 +593,7 @@
             continue;
           case '{': {
             const g = readGroup(src, i);
-            para += this.flow(g.content, true);
+            add(this.flow(g.content, true));
             i = g.end;
             continue;
           }
@@ -614,7 +632,7 @@
               continue;
             }
             const r = this.symbolCommand(d, src, i + 2);
-            para += r.html;
+            add(r.html);
             i = r.end;
             continue;
           }
@@ -626,7 +644,8 @@
       flush(n);
       this.depth--;
       if (track) {
-        return out.map((html, k) => (spans[k] ? this.wrapSpan(html, spans[k]) : html)).join('\n');
+        this.blocks = out.map((html, k) => (spans[k] ? this.wrapSpan(html, spans[k]) : html));
+        return this.blocks.join('\n');
       }
       return out.join(inline ? '' : '\n');
     }
@@ -1464,7 +1483,9 @@
    * options.sourceMap  wrap each top-level block in <div class="src-block"
    *   data-s data-e> giving its range in the (newline-normalised) source
    *
-   * Returns { html, title, labels, toc, warnings }.
+   * Returns { html, title, labels, toc, warnings }, plus with sourceMap
+   * `blocks`: the top-level blocks whose HTML, joined by newlines, is `html`
+   * (the viewer uses them to update only the blocks that changed).
    */
   function render(source, options) {
     options = options || {};
@@ -1479,6 +1500,7 @@
     const warnings = Array.from(new Set(first.warnings.filter((w) => !/^Unknown command/.test(w)).concat(second.warnings)));
     return {
       html,
+      blocks: options.sourceMap ? second.blocks || [] : undefined,
       title: second.meta.title ? stripTags(second.flow(second.meta.title, true)).trim() : null,
       labels: second.labels,
       toc: second.toc,

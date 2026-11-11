@@ -209,6 +209,31 @@
 
   let popup = null;
 
+  // Sources longer than this are coloured in chunks (see paintChunked).
+  const CHUNKED_FROM = 30000;
+  const CHUNK = 3000;
+  // Sources longer than this (roughly 100 pages) are not coloured at all.
+  const PLAIN_FROM = 300000;
+
+  /**
+   * Cut text into pieces of at least CHUNK characters at blank lines, so each
+   * piece can be coloured on its own. The newline at each cut is dropped: the
+   * pieces are drawn as blocks, which break the line in its place. A trailing
+   * newline is added to the last piece, as a textarea shows a final empty line.
+   */
+  function splitChunks(text) {
+    const out = [];
+    let from = 0;
+    for (;;) {
+      const cut = text.indexOf('\n\n', from + CHUNK);
+      if (cut < 0) break;
+      out.push(text.slice(from, cut));
+      from = cut + 1;
+    }
+    out.push(text.slice(from) + '\n');
+    return out;
+  }
+
   function attach(textarea, opts) {
     opts = opts || {};
     // Wrap the textarea with the highlight layer behind it.
@@ -234,10 +259,76 @@
       const scrollbar = textarea.offsetWidth - textarea.clientWidth - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth);
       layer.style.paddingRight = parseFloat(cs.paddingRight) + Math.max(0, scrollbar) + 'px';
     };
+    // Long sources are drawn in chunks: each chunk starts as plain text and is
+    // coloured when it scrolls near the view, and an edit redraws only the
+    // chunks it touched. Colouring a whole book on every keystroke, and laying
+    // out hundreds of thousands of spans, froze the page.
+    let chunks = null; // [{ text, el, done }] while in chunked mode
+    const observer = window.IntersectionObserver
+      ? new IntersectionObserver((entries) => {
+        for (const en of entries) {
+          if (!en.isIntersecting) continue;
+          const c = en.target._chunk;
+          if (c && !c.done) {
+            c.done = true;
+            c.el.innerHTML = highlight(c.text);
+          }
+          observer.unobserve(en.target);
+        }
+      }, { root: layer, rootMargin: '1500px 0px' })
+      : null;
+    const makeChunk = (text) => {
+      const el = document.createElement('div');
+      const c = { text, el, done: !observer };
+      el._chunk = c;
+      if (observer) {
+        el.textContent = text;
+        observer.observe(el);
+      } else el.innerHTML = highlight(text);
+      return c;
+    };
+    const paintChunked = (value) => {
+      const texts = splitChunks(value);
+      if (!chunks) {
+        layer.textContent = '';
+        chunks = [];
+      }
+      // Keep the chunks that did not change at either end; replace the rest.
+      let p = 0;
+      while (p < chunks.length && p < texts.length && chunks[p].text === texts[p]) p++;
+      let q = 0;
+      while (q < chunks.length - p && q < texts.length - p && chunks[chunks.length - 1 - q].text === texts[texts.length - 1 - q]) q++;
+      const fresh = texts.slice(p, texts.length - q).map(makeChunk);
+      const stale = chunks.slice(p, chunks.length - q);
+      const next = chunks[chunks.length - q];
+      for (const c of stale) {
+        if (observer) observer.unobserve(c.el);
+        c.el.remove();
+      }
+      const frag = document.createDocumentFragment();
+      fresh.forEach((c) => frag.appendChild(c.el));
+      layer.insertBefore(frag, next ? next.el : null);
+      chunks.splice(p, stale.length, ...fresh);
+    };
     const paint = () => {
       frame = 0;
       copyStyles();
-      layer.innerHTML = highlight(textarea.value) + '\n';
+      const value = textarea.value;
+      // Past a few hundred pages even plain text in the layer takes seconds to
+      // lay out, so very long sources are shown uncoloured.
+      const plain = value.length > PLAIN_FROM;
+      textarea.classList.toggle('hl-input', !plain);
+      layer.hidden = plain;
+      if (plain) {
+        if (chunks && observer) chunks.forEach((c) => observer.unobserve(c.el));
+        chunks = null;
+        layer.textContent = '';
+      } else if (value.length > CHUNKED_FROM) paintChunked(value);
+      else {
+        if (chunks && observer) chunks.forEach((c) => observer.unobserve(c.el));
+        chunks = null;
+        layer.innerHTML = highlight(value) + '\n';
+      }
       layer.scrollTop = textarea.scrollTop;
     };
     const refresh = () => { if (!frame) frame = requestAnimationFrame(paint); };
