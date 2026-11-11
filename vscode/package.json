@@ -58,6 +58,30 @@
         "command": "texdown.toggleScrollSync",
         "title": "Toggle Scrolling with the Editor",
         "category": "TeXdown"
+      },
+      {
+        "command": "texdown.toggleContents",
+        "title": "Show or Hide Contents",
+        "category": "TeXdown",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "texdown.hideProofs",
+        "title": "Hide Proofs",
+        "category": "TeXdown",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "texdown.showProofs",
+        "title": "Show Proofs",
+        "category": "TeXdown",
+        "icon": "$(unfold)"
+      },
+      {
+        "command": "texdown.toggleTheme",
+        "title": "Toggle Light/Dark Preview",
+        "category": "TeXdown",
+        "icon": "$(color-mode)"
       }
     ],
     "menus": {
@@ -68,14 +92,34 @@
           "group": "navigation"
         },
         {
+          "command": "texdown.toggleContents",
+          "when": "activeWebviewPanelId == 'texdown.preview'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "texdown.hideProofs",
+          "when": "activeWebviewPanelId == 'texdown.preview' && texdown.hasProofs && !texdown.proofsFolded",
+          "group": "navigation@2"
+        },
+        {
+          "command": "texdown.showProofs",
+          "when": "activeWebviewPanelId == 'texdown.preview' && texdown.hasProofs && texdown.proofsFolded",
+          "group": "navigation@2"
+        },
+        {
+          "command": "texdown.toggleTheme",
+          "when": "activeWebviewPanelId == 'texdown.preview'",
+          "group": "navigation@3"
+        },
+        {
           "command": "texdown.disableScrollSync",
           "when": "activeWebviewPanelId == 'texdown.preview' && config.texdown.scrollSync",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "texdown.enableScrollSync",
           "when": "activeWebviewPanelId == 'texdown.preview' && !config.texdown.scrollSync",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "explorer/context": [
@@ -111,6 +155,21 @@
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
+        },
+        "texdown.previewTheme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow VS Code's colour theme.",
+            "Always light.",
+            "Always dark."
+          ],
+          "default": "auto",
+          "description": "Colours of the preview. The button in the preview's title bar switches between light and dark."
         }
       }
     }

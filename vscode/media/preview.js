@@ -16,9 +16,12 @@
   // --- theme ---------------------------------------------------------------------
 
   // Follow VS Code's colour theme rather than the system one.
+  // Unless the texdown.previewTheme setting picks light or dark.
+  let forcedTheme = 'auto';
   const applyTheme = () => {
     const dark = document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast');
-    document.documentElement.dataset.theme = dark && !document.body.classList.contains('vscode-high-contrast-light') ? 'dark' : 'light';
+    const vsTheme = dark && !document.body.classList.contains('vscode-high-contrast-light') ? 'dark' : 'light';
+    document.documentElement.dataset.theme = forcedTheme === 'light' || forcedTheme === 'dark' ? forcedTheme : vsTheme;
   };
   applyTheme();
   new MutationObserver(applyTheme).observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -68,12 +71,251 @@
     for (const entry of fresh) entry.nodes.forEach((n) => preview.insertBefore(n, ref));
     shown = old.slice(0, p).concat(fresh, tail);
     // Blocks with a source range, for scrolling in step with the editor.
-    anchors = shown.filter((e) => e.range && e.nodes[0] && e.nodes[0].nodeType === 1).map((e) => ({ el: e.nodes[0], line: e.range[0], end: e.range[1] }));
+    allAnchors = shown.filter((e) => e.range && e.nodes[0] && e.nodes[0].nodeType === 1).map((e) => ({ el: e.nodes[0], line: e.range[0], end: e.range[1] }));
+    applyFolds();
   }
+
+  // --- folding sections and proofs (as in the web viewer) ---------------------------
+
+  // Folds are remembered by the text of the heading or the start of the proof,
+  // so they survive edits elsewhere; the extension keeps them between sessions.
+  const folded = new Set();
+  let hasProofs = false;
+  let proofsFolded = false;
+  const HEADING = ':scope > h1.part, :scope > h1.chapter, :scope > h2.section, :scope > h3.subsection, :scope > h4.subsubsection';
+
+  /** The heading level of a top-level block, or 0 if it is not a heading. */
+  function levelOf(block) {
+    if (block.classList.contains('footnotes')) return 1;
+    if (!block.classList.contains('src-block')) return 0;
+    const h = block.querySelector(HEADING);
+    if (h) return Number(h.tagName[1]) + (h.classList.contains('chapter') ? 0.5 : 0);
+    return block.querySelector(':scope > .bibliography') ? 2 : 0;
+  }
+
+  function toggleButton(key, label) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fold-toggle';
+    b.dataset.key = key;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    return b;
+  }
+
+  function applyFolds() {
+    // Section headings: a toggle on each, and hide what follows a folded one.
+    let hideAt = 0;
+    for (const block of Array.from(preview.children)) {
+      const lvl = levelOf(block);
+      if (hideAt && lvl && lvl <= hideAt) hideAt = 0;
+      block.classList.toggle('fold-hidden', !!hideAt);
+      const h = lvl && block.querySelector(HEADING);
+      if (!h) continue;
+      let btn = h.querySelector(':scope > .fold-toggle');
+      if (!btn) {
+        btn = toggleButton('h:' + h.textContent.trim(), 'Fold or unfold this section');
+        h.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      h.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+      if (isFolded && !hideAt) hideAt = lvl;
+    }
+    // Proofs: fold down to their first line.
+    const proofs = preview.querySelectorAll('.proof');
+    let n = 0;
+    for (const proof of proofs) {
+      let btn = proof.querySelector(':scope > p:first-child > .fold-toggle');
+      if (!btn) {
+        const first = proof.firstElementChild;
+        if (!first) continue;
+        btn = toggleButton('p:' + proof.textContent.trim().slice(0, 80), 'Fold or unfold this proof');
+        first.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      proof.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+      if (isFolded) n++;
+    }
+    anchors = allAnchors.filter((a) => !a.el.classList.contains('fold-hidden'));
+    const has = proofs.length > 0;
+    const all = has && n === proofs.length;
+    if (has !== hasProofs || all !== proofsFolded) {
+      hasProofs = has;
+      proofsFolded = all;
+      vscode.postMessage({ type: 'proofs', has, folded: all });
+    }
+  }
+
+  function setFold(key, on) {
+    if (on) folded.add(key);
+    else folded.delete(key);
+  }
+  const saveFolds = () => vscode.postMessage({ type: 'folds', keys: Array.from(folded) });
+
+  function foldAllProofs(fold) {
+    preview.querySelectorAll('.proof > p:first-child > .fold-toggle').forEach((t) => setFold(t.dataset.key, fold));
+    saveFolds();
+    applyFolds();
+    spyToc();
+  }
+
+  /** Unfold whatever hides `el`, so a reference to it can be followed. */
+  function reveal(el) {
+    let changed = false;
+    const proof = el.closest('.proof.folded');
+    if (proof) {
+      setFold(proof.querySelector('.fold-toggle').dataset.key, false);
+      changed = true;
+    }
+    const block = el.closest('#preview > *');
+    if (block && block.classList.contains('fold-hidden')) {
+      // Unfold every folded heading above it that still covers it.
+      let need = Infinity;
+      for (let b = block.previousElementSibling; b; b = b.previousElementSibling) {
+        const lvl = levelOf(b);
+        if (lvl && lvl < need) {
+          const btn = b.querySelector('.fold-toggle');
+          if (btn) setFold(btn.dataset.key, false);
+          need = lvl;
+        }
+      }
+      changed = true;
+    }
+    if (changed) {
+      saveFolds();
+      applyFolds();
+    }
+  }
+
+  // A click on a toggle, a section heading or a folded proof folds or unfolds it.
+  preview.addEventListener('click', (e) => {
+    if (e.ctrlKey || e.metaKey) return; // that is a jump to the source
+    const btn = e.target.closest('.fold-toggle');
+    const foldedProof = !btn && e.target.closest('.proof.folded');
+    const heading = !btn && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
+    if (!target) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    setFold(target.dataset.key, !folded.has(target.dataset.key));
+    saveFolds();
+    applyFolds();
+    spyToc();
+  });
+
+  // --- contents sidebar ------------------------------------------------------------------
+
+  const tocPane = document.getElementById('toc-pane');
+  const tocList = document.getElementById('toc-list');
+  const narrow = window.matchMedia('(max-width: 760px)');
+  let tocWanted = !narrow.matches;
+  let toc = [];
+  let tocKey = '';
+  let tocLinks = [];
+  let tocJump = 0; // while a jump from the sidebar scrolls, keep its entry highlighted
+  const escapeHtml = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function updateToc(items) {
+    items = items.slice();
+    // The bibliography gets an entry too, after the sections.
+    const bib = preview.querySelector('.bibliography > h2');
+    if (bib && items.length) {
+      bib.id = bib.id || 'references';
+      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: escapeHtml(bib.textContent), id: bib.id });
+    }
+    toc = items;
+    const key = JSON.stringify(items);
+    if (key !== tocKey) {
+      tocKey = key;
+      const top = Math.min(...items.map((t) => t.level));
+      tocList.innerHTML = items
+        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${escapeHtml(t.id)}" data-id="${escapeHtml(t.id)}">${t.num ? `<span class="toc-num">${escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
+        .join('');
+      tocLinks = Array.from(tocList.querySelectorAll('a'));
+    }
+    showToc();
+  }
+
+  function showToc() {
+    tocPane.hidden = !(tocWanted && toc.length);
+    spyToc();
+  }
+
+  function markToc(current) {
+    if (current === tocList.querySelector('a.active')) return;
+    tocLinks.forEach((a) => a.classList.toggle('active', a === current));
+    if (current) {
+      const r = current.getBoundingClientRect();
+      const pr = tocPane.getBoundingClientRect();
+      if (r.top < pr.top + 40 || r.bottom > pr.bottom - 40) tocPane.scrollTop += r.top - pr.top - pr.height / 3;
+    }
+  }
+
+  /** Highlight the section at the top of the preview. */
+  function spyToc() {
+    if (tocPane.hidden || !tocLinks.length || Date.now() < tocJump) return;
+    const limit = pane.getBoundingClientRect().top + 48;
+    let current = null;
+    for (const a of tocLinks) {
+      const h = document.getElementById(a.dataset.id);
+      if (!h || !h.offsetParent) continue;
+      if (h.getBoundingClientRect().top <= limit) current = a;
+      else break;
+    }
+    // At the very bottom, the last heading on screen is the current one.
+    if (pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 2) {
+      for (const a of tocLinks) {
+        const h = document.getElementById(a.dataset.id);
+        if (h && h.offsetParent && h.getBoundingClientRect().top < pane.getBoundingClientRect().bottom) current = a;
+      }
+    }
+    markToc(current);
+  }
+
+  tocList.addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(a.dataset.id);
+    if (!target) return;
+    reveal(target);
+    const y = target.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 16;
+    pane.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    markToc(a);
+    tocJump = Date.now() + 1000;
+    if (narrow.matches) {
+      tocWanted = false;
+      showToc();
+      vscode.postMessage({ type: 'toc', on: false });
+    }
+  });
+  let spyFrame = 0;
+  pane.addEventListener('scroll', () => {
+    if (!spyFrame) spyFrame = requestAnimationFrame(() => { spyFrame = 0; spyToc(); });
+  }, { passive: true });
+  pane.addEventListener('scrollend', () => { tocJump = 0; spyToc(); });
+  // On a narrow preview the contents open as a drawer; a click elsewhere closes it.
+  document.addEventListener('pointerdown', (e) => {
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target)) {
+      tocWanted = false;
+      showToc();
+      vscode.postMessage({ type: 'toc', on: false });
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && narrow.matches && tocWanted) {
+      tocWanted = false;
+      showToc();
+      vscode.postMessage({ type: 'toc', on: false });
+    }
+  });
 
   // --- scrolling in step with the editor -------------------------------------------
 
-  let anchors = [];
+  let allAnchors = []; // every block with a source range
+  let anchors = []; // those not hidden in a folded section
   let ignoreScrollUntil = 0;
 
   const topOf = (el) => el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
@@ -202,6 +444,7 @@
     const target = document.getElementById(decodeURIComponent(href.slice(1)));
     if (!target) return;
     popover.hidden = true;
+    reveal(target);
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     target.classList.remove('flash');
     void target.offsetWidth;
@@ -256,6 +499,7 @@
       case 'doc':
         if ((vscode.getState() || {}).uri !== m.uri) {
           shown = [];
+          allAnchors = [];
           anchors = [];
           preview.replaceChildren();
         }
@@ -263,6 +507,7 @@
         break;
       case 'render': {
         show(m.blocks, m.lines);
+        updateToc(m.toc || []);
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');
@@ -271,11 +516,35 @@
       }
       case 'error':
         shown = [];
+        allAnchors = [];
         anchors = [];
         preview.replaceChildren();
         preview.insertAdjacentHTML('beforeend', '<pre class="render-error"></pre>');
         preview.firstChild.textContent = m.text;
         setStatus('Render failed');
+        break;
+      case 'prefs':
+        folded.clear();
+        (m.folds || []).forEach((k) => folded.add(k));
+        if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
+        applyFolds();
+        showToc();
+        break;
+      case 'toggle-toc':
+        tocWanted = !tocWanted;
+        showToc();
+        vscode.postMessage({ type: 'toc', on: tocWanted });
+        break;
+      case 'fold-proofs':
+        foldAllProofs(m.fold);
+        break;
+      case 'theme':
+        forcedTheme = m.value;
+        applyTheme();
+        break;
+      case 'toggle-theme':
+        // Switch away from what is showing now, whatever chose it.
+        vscode.postMessage({ type: 'set-theme', value: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' });
         break;
       case 'status':
         setStatus(m.text);

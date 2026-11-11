@@ -19,13 +19,21 @@ is needed, and the preview updates as you type, without saving.
 - **Ctrl+click** (Cmd+click on a Mac) anywhere in the preview, or
   double-click, to put the cursor at that spot in the source: on the word you
   clicked, or at the start of the formula.
+- **Fold** sections and proofs with the arrow beside them, or by clicking a
+  section heading or a folded proof. Folds are remembered.
+- The buttons in the preview's title bar: **Contents** shows a sidebar of the
+  sections that highlights the one you are reading (on a narrow preview it
+  opens as a drawer); **Hide proofs** / **Show proofs** folds or unfolds every
+  proof; the link button turns scrolling with the editor off and on; and the
+  half-moon button switches the preview between **light and dark**
+  (**TeXdown: Toggle Light/Dark Preview**; the `texdown.previewTheme` setting
+  can also be set back to `auto`, which follows VS Code's theme).
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
 - Figures (`\includegraphics`) are shown when a PNG, JPEG, SVG, GIF or WebP
   file with that name sits next to the document (`\graphicspath` is
   respected). PDF and EPS figures are shown only if a PNG of the same name
   exists.
-- The preview uses VS Code's light or dark theme.
 
 Long documents are fine: a 350-page paper takes a few seconds to convert, and
 the conversion runs in a background thread, so typing is never held up.
