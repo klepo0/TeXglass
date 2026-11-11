@@ -25,7 +25,7 @@
   let lastLabels = {};
   let lastToc = [];
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
-  let resolveImage = null;
+  let imageMap = null; // { path: object URL } for those figures
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -42,29 +42,219 @@
 
   // --- rendering -------------------------------------------------------------
 
-  function renderHtml() {
+  // Long documents (hundreds of pages, tens of thousands of formulas) take
+  // seconds to convert, so the conversion runs in a worker where it can, and
+  // the preview then replaces only the blocks whose HTML changed. Without a
+  // worker (file:// pages, strict sandboxes) the same code runs here instead.
+  const convert = (() => {
+    const katexScript = document.querySelector('script[src*="katex"]');
+    let worker = null;
+    let ready = Promise.resolve(false);
+    let nextId = 0;
+    const waiting = new Map();
+    const giveUp = () => {
+      if (worker) worker.terminate();
+      worker = null;
+      waiting.forEach((done) => done(null));
+      waiting.clear();
+    };
     try {
-      const result = TeXdown.render(doc, { sourceMap: true, resolveImage: resolveImage || undefined });
-      lastLabels = result.labels;
-      lastToc = result.toc;
-      document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
-      const n = result.warnings.length;
-      warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
-      status.title = result.warnings.join('\n');
-      if (!statusTimer) showStatus(warningsText, n > 0);
-      return result.html || '<p class="empty-doc">This document is empty. Switch to Edit and click “Add text”.</p>';
+      if (window.Worker && katexScript && katexScript.src) {
+        worker = new Worker('src/render-worker.js');
+        ready = new Promise((resolve) => {
+          worker.onmessage = (e) => {
+            const m = e.data;
+            if ('ready' in m) {
+              if (!m.ready) giveUp();
+              resolve(m.ready);
+              return;
+            }
+            const done = waiting.get(m.id);
+            waiting.delete(m.id);
+            if (done) done(m);
+          };
+          worker.onerror = (e) => {
+            e.preventDefault();
+            giveUp();
+            resolve(false);
+          };
+        });
+        worker.postMessage({ katex: katexScript.src });
+      }
     } catch (e) {
-      showStatus('Render failed', true);
-      return `<pre class="render-error">${TeXdown.escapeHtml(e.stack || String(e))}</pre>`;
+      worker = null;
     }
+    const here = (source, images) =>
+      TeXdown.render(source, {
+        sourceMap: true,
+        resolveImage: images && window.TeXdownArxiv ? TeXdownArxiv.imageResolver(images, source) : undefined,
+      });
+    return async (source, images) => {
+      if (worker && (await ready) && worker) {
+        const m = await new Promise((resolve) => {
+          const id = ++nextId;
+          waiting.set(id, resolve);
+          worker.postMessage({ id, source, images });
+        });
+        if (m && m.result) return m.result;
+        if (m && m.error) throw new Error(m.error);
+      }
+      return here(source, images);
+    };
+  })();
+
+  let renderedDoc = null; // the source the preview shows now
+  let shown = []; // [{ html, nodes }] for each top-level block in the preview, except any in the inline editor
+  let busy = false;
+  let waiters = [];
+
+  /** Render the current source. Resolves once the preview shows it. */
+  function render() {
+    return new Promise((resolve) => {
+      waiters.push(resolve);
+      if (!busy) runRender();
+    });
   }
 
-  function render() {
-    const html = renderHtml();
-    if (editing) renderAroundEditor(html);
-    else preview.innerHTML = html;
+  function runRender() {
+    busy = true;
+    const source = doc;
+    const done = waiters;
+    waiters = [];
+    const slow = setTimeout(() => { if (!statusTimer) showStatus('Rendering…'); }, 300);
+    convert(source, imageMap)
+      .then(
+        (result) => showResult(result, source),
+        (e) => {
+          showStatus('Render failed', true);
+          showBlocks([`<pre class="render-error">${TeXdown.escapeHtml(e.stack || e.message || String(e))}</pre>`], source);
+        }
+      )
+      .catch((e) => console.error(e))
+      .then(() => {
+        clearTimeout(slow);
+        busy = false;
+        done.forEach((f) => f());
+        if (waiters.length) runRender();
+      });
+  }
+
+  function showResult(result, source) {
+    lastLabels = result.labels;
+    lastToc = result.toc;
+    document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
+    const n = result.warnings.length;
+    warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
+    status.title = result.warnings.join('\n');
+    if (!statusTimer) showStatus(warningsText, n > 0);
+    const blocks = result.blocks.length ? result.blocks : ['<p class="empty-doc">This document is empty. Switch to Edit and click “Add text”.</p>'];
+    showBlocks(blocks, source);
+  }
+
+  function showBlocks(blocks, source) {
+    renderedDoc = source;
+    patchPreview(blocks);
     applyFolds();
     updateToc();
+  }
+
+  const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
+  /** A block's HTML without its source range, which shifts with every edit above it. */
+  const bodyOf = (html) => (html.startsWith('<div class="src-block"') ? html.slice(html.indexOf('>') + 1) : html);
+
+  /** Parse blocks of HTML into [{ html, nodes }], in one go. */
+  function toEntries(blocks) {
+    if (!blocks.length) return [];
+    const tpl = document.createElement('template');
+    tpl.innerHTML = blocks.join('<!--b-->');
+    const entries = blocks.map((html) => ({ html, nodes: [] }));
+    let k = 0;
+    for (const node of Array.from(tpl.content.childNodes)) {
+      if (node.nodeType === 8 && node.data === 'b') k++;
+      else entries[k].nodes.push(node);
+    }
+    return entries;
+  }
+
+  /** The block element of an entry that carries a source range, if any. */
+  const blockOf = (entry) => entry.nodes.find((n) => n.nodeType === 1 && n.classList.contains('src-block')) || null;
+
+  /**
+   * Show `blocks` in the preview, keeping the DOM of blocks that did not
+   * change. While the inline editor is open, the blocks inside its range go
+   * to its own preview and the rest are laid out around it.
+   */
+  function patchPreview(blocks) {
+    let outside = blocks;
+    let groups = null; // with the editor open: 'b'efore or 'a'fter it, per outside block
+    let inside = [];
+    if (editing) {
+      const { s, len } = editing;
+      const end = s + len;
+      outside = [];
+      groups = [];
+      let group = 'b';
+      for (const html of blocks) {
+        const m = BLOCK_HEAD.exec(html);
+        if (m) {
+          const bs = Number(m[1]);
+          if (bs >= s && bs < end) { inside.push(html); group = 'a'; continue; }
+          group = bs < s ? 'b' : 'a';
+        }
+        outside.push(html);
+        groups.push(group);
+      }
+    }
+    const old = shown;
+    const same = (entry, html) => entry.html === html || bodyOf(entry.html) === bodyOf(html);
+    let p = 0;
+    while (p < old.length && p < outside.length && same(old[p], outside[p])) p++;
+    let q = 0;
+    while (q < old.length - p && q < outside.length - p && same(old[old.length - 1 - q], outside[outside.length - 1 - q])) q++;
+    // Kept blocks may have moved in the source: update their ranges.
+    const keep = (entry, html) => {
+      if (entry.html === html) return entry;
+      const m = BLOCK_HEAD.exec(html);
+      const el = m && blockOf(entry);
+      if (el) { el.dataset.s = m[1]; el.dataset.e = m[2]; }
+      entry.html = html;
+      return entry;
+    };
+    for (let k = 0; k < p; k++) keep(old[k], outside[k]);
+    for (let k = 1; k <= q; k++) keep(old[old.length - k], outside[outside.length - k]);
+    // Replace the rest.
+    for (const entry of old.slice(p, old.length - q)) entry.nodes.forEach((n) => n.remove());
+    const fresh = toEntries(outside.slice(p, outside.length - q));
+    const tail = old.slice(old.length - q);
+    const firstNode = (entries) => (entries.length ? entries[0].nodes[0] || null : null);
+    if (!editing) {
+      const ref = firstNode(tail.filter((e) => e.nodes.length));
+      fresh.forEach((e) => e.nodes.forEach((n) => preview.insertBefore(n, ref)));
+    } else {
+      // New blocks go on their side of the editor.
+      const tailGroups = groups.slice(groups.length - q);
+      const beforeRef = firstNode(tail.filter((e, k) => tailGroups[k] === 'b' && e.nodes.length)) || editing.el;
+      const afterRef = firstNode(tail.filter((e, k) => tailGroups[k] === 'a' && e.nodes.length));
+      if (!editing.el.parentNode) preview.appendChild(editing.el);
+      fresh.forEach((e, k) => {
+        const ref = groups[p + k] === 'b' ? beforeRef : afterRef;
+        e.nodes.forEach((n) => preview.insertBefore(n, ref));
+      });
+      const insideHtml = inside.join('\n');
+      if (insideHtml !== editing.insideHtml) {
+        editing.insideHtml = insideHtml;
+        editing.inside = toEntries(inside);
+        editing.previewEl.replaceChildren(...editing.inside.flatMap((e) => e.nodes));
+      }
+    }
+    shown = old.slice(0, p).concat(fresh, tail);
+  }
+
+  /** Forget the preview, e.g. before showing another document. */
+  function clearPreview() {
+    preview.replaceChildren();
+    shown = [];
+    renderedDoc = null;
   }
 
   // --- table of contents sidebar ------------------------------------------------
@@ -206,16 +396,16 @@
     closeEditor(false);
     imageUrls.forEach((u) => URL.revokeObjectURL(u));
     imageUrls = [];
-    resolveImage = null;
+    imageMap = null;
     if (images && Object.keys(images).length && window.TeXdownArxiv) {
-      const urls = {};
-      for (const [path, blob] of Object.entries(images)) imageUrls.push((urls[path] = URL.createObjectURL(blob)));
-      resolveImage = TeXdownArxiv.imageResolver(urls, text);
+      imageMap = {};
+      for (const [path, blob] of Object.entries(images)) imageUrls.push((imageMap[path] = URL.createObjectURL(blob)));
     }
     doc = text.replace(/\r\n?/g, '\n');
     setSource(doc);
     fileName.textContent = name || 'untitled.tex';
     setDirty(false);
+    clearPreview();
     render();
     previewPane.scrollTop = 0;
     store.set('texdown:last', doc);
@@ -388,73 +578,79 @@
   function openEditor(s, e, caret) {
     if (editing) closeEditor(false);
     const ed = makeEditor();
-    editing = Object.assign(ed, { s, len: e - s });
+    editing = Object.assign(ed, { s, len: e - s, inside: [], insideHtml: '' });
     ed.textarea.value = doc.slice(s, e);
     ed.aids.refresh();
-    // Put the editor where the block was, so the page does not jump.
-    const old = preview.querySelector(`.src-block[data-s="${s}"]`);
-    if (old) old.replaceWith(ed.el);
-    else preview.appendChild(ed.el);
-    renderAroundEditor(renderHtml());
+    // Put the editor where the block was, so the page does not jump, and show
+    // the block's rendering under it.
+    const k = shown.findIndex((entry) => {
+      const el = blockOf(entry);
+      return el && Number(el.dataset.s) === s;
+    });
+    if (k >= 0) {
+      const entry = shown[k];
+      entry.nodes[0].before(ed.el);
+      shown.splice(k, 1);
+      ed.inside = [entry];
+      ed.insideHtml = entry.html;
+      ed.previewEl.replaceChildren(...entry.nodes);
+    } else {
+      const next = shown.find((entry) => {
+        const el = blockOf(entry);
+        return el && Number(el.dataset.s) >= s;
+      });
+      preview.insertBefore(ed.el, next ? next.nodes[0] : null);
+    }
+    applyFolds();
     autosize();
     ed.textarea.focus({ preventScroll: true });
     const pos = Math.max(0, Math.min(caret == null ? 0 : caret, ed.textarea.value.length));
     ed.textarea.setSelectionRange(pos, pos);
   }
 
+  /** Close the inline editor, putting the block it shows back in its place. */
   function closeEditor(rerender) {
     if (!editing) return;
-    const { s, el } = editing;
+    const { el, inside } = editing;
     const top = el.getBoundingClientRect().top;
     editing = null;
-    if (rerender === false) {
-      el.remove();
-      return;
-    }
-    preview.innerHTML = renderHtml();
+    // The editor sits after every block that comes before it in the source.
+    let at = 0;
+    while (at < shown.length && shown[at].nodes.length && el.compareDocumentPosition(shown[at].nodes[0]) & Node.DOCUMENT_POSITION_PRECEDING) at++;
+    const nodes = inside.flatMap((entry) => entry.nodes);
+    if (el.parentNode) el.replaceWith(...nodes);
+    else nodes.forEach((n) => n.remove());
+    shown.splice(at, 0, ...inside);
+    if (rerender === false) return;
     applyFolds();
     // Keep the block that was being edited where it was on screen.
-    const block = preview.querySelector(`.src-block[data-s="${s}"]`);
+    const block = nodes.find((n) => n.nodeType === 1);
     if (block) previewPane.scrollTop += block.getBoundingClientRect().top - top;
-  }
-
-  /** Lay out freshly rendered HTML around the open editor, without moving it. */
-  function renderAroundEditor(html) {
-    const tpl = document.createElement('div');
-    tpl.innerHTML = html;
-    const { s, len, el, previewEl } = editing;
-    const end = s + len;
-    const before = [];
-    const inside = [];
-    const after = [];
-    for (const node of Array.from(tpl.childNodes)) {
-      if (node.nodeType === 1 && node.classList.contains('src-block')) {
-        const bs = Number(node.dataset.s);
-        if (bs >= s && bs < end) inside.push(node);
-        else if (bs < s) before.push(node);
-        else after.push(node);
-      } else if (node.nodeType === 1) {
-        (inside.length || after.length ? after : before).push(node);
-      }
-    }
-    for (const child of Array.from(preview.childNodes)) if (child !== el) child.remove();
-    if (!el.parentNode) preview.appendChild(el);
-    el.before(...before);
-    el.after(...after);
-    previewEl.replaceChildren(...inside);
-    applyFolds();
+    if (doc !== renderedDoc) render();
   }
 
   function onBlockInput() {
     const value = editing.textarea.value;
+    const delta = value.length - editing.len;
     doc = doc.slice(0, editing.s) + value + doc.slice(editing.s + editing.len);
     editing.len = value.length;
+    // Blocks further down moved in the source; keep their ranges right until
+    // the next render, so clicking one opens the right text.
+    if (delta) {
+      for (const entry of shown) {
+        const b = blockOf(entry);
+        if (b && Number(b.dataset.s) > editing.s) {
+          b.dataset.s = Number(b.dataset.s) + delta;
+          b.dataset.e = Number(b.dataset.e) + delta;
+        }
+      }
+    }
     if (document.activeElement !== source) setSource(doc);
     setDirty(true);
     autosize();
     rememberSoon();
     clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => editing && renderAroundEditor(renderHtml()), 120);
+    renderTimer = setTimeout(render, 120);
   }
 
   function autosize() {
@@ -685,8 +881,9 @@
     rememberSoon();
     clearTimeout(renderTimer);
     renderTimer = setTimeout(() => {
-      render();
-      if (mode === 'split') requestAnimationFrame(() => syncFrom('src'));
+      render().then(() => {
+        if (mode === 'split') requestAnimationFrame(() => syncFrom('src'));
+      });
     }, 150);
   });
   source.addEventListener('keydown', (e) => {
