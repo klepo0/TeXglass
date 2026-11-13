@@ -30,8 +30,12 @@ be hosted on GitHub Pages as is. Then:
   `index.html?arxiv=2301.00001`, does the same.
 - **GitHub** opens a `.tex` file from a public GitHub repository: paste a link
   to the file, to a folder or to the whole repo (TeXglass then picks the file
-  with `\documentclass`). Its `\input`/`\include` files, a committed `.bbl` and
-  PNG/JPEG/SVG figures are fetched too. **Edit on GitHub** then opens the file
+  with `\documentclass`). Its `\input`/`\include`/`\subfile`/`\import` files
+  (respecting `\includeonly`), a committed `.bbl` and PNG/JPEG/SVG figures are
+  fetched too. A link to a chapter opens the whole document, scrolled to that
+  chapter: TeXglass finds the main file from a `% !TEX root = main.tex` line,
+  `\documentclass[main]{subfiles}`, or the nearest file with `\documentclass`
+  in that folder or above that includes it. **Edit on GitHub** then opens the file
   on GitHub to make and commit changes. Pasting a GitHub link onto the page,
   or opening `index.html?gh=<GitHub link>`, does the same. For one click from
   any GitHub page, drag **Open in TeXglass** from the GitHub dialog to your
@@ -120,13 +124,18 @@ and install it. Once published on the Marketplace, it also runs in the browser:
 press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
 file there, and commit your edits.
 
+Built `.vsix` files are attached to each
+[release](https://github.com/klepo0/TeXglass/releases): in VS Code, run
+**Extensions: Install from VSIX…** and pick the file.
+
 ## Open arXiv papers from the browser
 
 The [`browser/`](browser) folder is a browser extension for Chrome, Edge and
 Firefox that opens arXiv papers in TeXglass: click its toolbar button on an
 arXiv abstract, PDF or HTML page, right-click a link to an arXiv paper, or use
 the **View in TeXglass** links it adds to arxiv.org. See
-[browser/README.md](browser/README.md) to build and install it.
+[browser/README.md](browser/README.md) to build and install it, or take the
+zips from the latest [release](https://github.com/klepo0/TeXglass/releases).
 
 ## What is supported
 
@@ -152,16 +161,43 @@ the **View in TeXglass** links it adds to arxiv.org. See
   `itemize`/`enumerate`/`description`, footnotes, `thebibliography` with
   `\cite`, `tabular`, `verbatim`, `\verb`, `\url`/`\href`, text styles,
   accents and TeX ligatures (``` `` ''```, `--`, `---`, `~`).
+- **Diagrams**: `tikzcd` (arrows in any direction, labels with `'`,
+  `description` and positions, `bend`, `shift`, `hook`, `two heads`,
+  `Rightarrow`, `equal`, `dashed`, `squiggly`, `phantom` corners, and 2-cells
+  between named labels) and `\xymatrix` (including `@{…}` arrow styles,
+  `@/^/` curves and `\rtwocell`) are drawn, in display math too, where they
+  keep their equation number. Simple `tikzpicture`s are drawn as well:
+  `\draw`, `\fill`, `\node`, `\coordinate`, lines, curves (`to[bend …]`,
+  `controls`), rectangles, circles, arcs, grids, function plots, `\foreach`,
+  scopes and styles (also from `\tikzset` in the preamble). Pictures that use
+  more of TikZ (pgfplots, `\matrix`, decorations, trees) show their source
+  instead. Black and white follow the light/dark theme.
 
 Anything unknown is skipped gracefully: the command disappears and its
-arguments are shown. Pictures (`\includegraphics`, TikZ) show a placeholder in
-the browser, since the page cannot read files next to the `.tex` file.
+arguments are shown. Pictures from files (`\includegraphics`) show a
+placeholder in the browser, since the page cannot read files next to the
+`.tex` file.
 
 ## Development
 
-The editing aids are in `src/editor.js`. The converter is `src/texglass.js`, a dependency-free module that works in the
+Diagrams are parsed in `src/tikz.js` (alongside the converter) and drawn in
+the page by `src/diagrams.js`, which measures the rendered math to place
+arrows and labels. The editing aids are in `src/editor.js`. The converter is `src/texglass.js`, a dependency-free module that works in the
 browser and in Node. With `{ sourceMap: true }` it wraps each top-level block
 in `<div class="src-block" data-s data-e>` giving its range in the source,
 which is what Edit mode uses. `src/export.js` turns rendered HTML into a
 standalone page; the web viewer, the CLI and the VS Code extension all use it.
 `npm test` runs the test suite.
+
+### Releasing
+
+Bump `version` in `vscode/package.json`, merge, then push a matching tag from
+main:
+
+```sh
+git tag v0.5.0 && git push origin v0.5.0
+```
+
+The [Release workflow](.github/workflows/release.yml) runs the tests, builds
+the `.vsix` and the browser zips, and publishes a GitHub Release with them and
+notes listing the pull requests merged since the previous tag.

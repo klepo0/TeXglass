@@ -180,44 +180,59 @@
       mainText = texts[mainPath];
     }
 
-    // Files are keyed relative to the main file's folder, as LaTeX resolves them.
-    const base = dirOf(mainPath);
-    const full = (rel) => normalize((base ? base + '/' : '') + rel);
+    const fix = (t) => (t == null ? null : t.replace(/\r\n?/g, '\n'));
+    // .tex files by path in the repo: a promise of the text, or of null if there is none.
+    const repoTexts = new Map([[mainPath, Promise.resolve(fix(mainText))]]);
+    const fetchRepoTex = (p) => {
+      if (!repoTexts.has(p)) repoTexts.set(p, get(rawUrl(ref, p)).then(fix, () => null));
+      return repoTexts.get(p);
+    };
     const maxFiles = options.maxFiles || 60;
-    const texFiles = {};
-    const name = mainPath.split('/').pop();
-    texFiles[name] = mainText.replace(/\r\n?/g, '\n');
-    const missing = [];
 
-    const fetchTex = async (rel) => {
-      const clean = normalize(rel.trim().replace(/^"|"$/g, ''));
-      if (!clean) return;
-      for (const ext of /\.(tex|ltx|latex)$/i.test(clean) ? [''] : ['.tex', '']) {
-        if (texFiles[clean + ext] != null) return;
-      }
-      if (Object.keys(texFiles).length >= maxFiles) return;
-      for (const ext of /\.(tex|ltx|latex)$/i.test(clean) ? [''] : ['.tex', '']) {
-        const t = await get(rawUrl(ref, full(clean + ext)));
-        if (t != null) {
-          texFiles[clean + ext] = t.replace(/\r\n?/g, '\n');
-          await scan(texFiles[clean + ext]);
-          return;
+    /**
+     * Fetch a main file and everything it pulls in. Files are keyed relative
+     * to the main file's folder, as LaTeX resolves them.
+     * Returns { name, texFiles, missing, full(rel) -> repo path }.
+     */
+    const crawl = async (rootPath) => {
+      const base = dirOf(rootPath);
+      const full = (rel) => normalize((base ? base + '/' : '') + rel);
+      const name = rootPath.split('/').pop();
+      const texFiles = { [name]: await fetchRepoTex(rootPath) };
+      const missing = [];
+      const claimed = new Set([name]);
+      const fetchTex = async (rel) => {
+        const clean = normalize(rel.trim().replace(/^"|"$/g, ''));
+        if (!clean || claimed.has(clean) || claimed.size >= maxFiles) return;
+        claimed.add(clean);
+        for (const ext of /\.(tex|ltx|latex)$/i.test(clean) ? [''] : ['.tex', '']) {
+          const t = await fetchRepoTex(full(clean + ext));
+          if (t != null) {
+            texFiles[clean + ext] = t;
+            await scan(t);
+            return;
+          }
         }
-      }
-      missing.push(clean);
+        missing.push(clean);
+      };
+      const scan = (text) => Promise.all(inputNames(text).map(fetchTex));
+      await scan(texFiles[name]);
+      return { name, texFiles, missing, full };
     };
-    const scan = async (text) => {
-      const names = [];
-      text.replace(INPUTS, (m, pre, arg, impDir, impFile, bare) => {
-        if (pre !== undefined) return m;
-        names.push(arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare);
-        return m;
-      });
-      for (const n of names) await fetchTex(n);
-    };
-    await scan(texFiles[name]);
 
-    let source = texFiles[name];
+    // A chapter opened on its own is shown as part of the whole document.
+    const opened = mainPath;
+    let project = null;
+    if (loc.kind === 'file' && options.findRoot !== false) {
+      const root = await findRoot(mainPath, fix(mainText));
+      if (root) {
+        mainPath = root.path;
+        project = root.project || (await crawl(mainPath));
+      }
+    }
+    if (!project) project = await crawl(mainPath);
+    const { name, texFiles, missing, full } = project;
+
     const all = () => Object.values(texFiles).join('\n');
 
     // A .bbl next to the main file, if one was committed.
@@ -226,7 +241,14 @@
       const bbl = await get(rawUrl(ref, full(bblName)));
       if (bbl != null) texFiles[bblName] = bbl;
     }
-    source = Arxiv.flatten(name, texFiles);
+    const starts = {};
+    const source = Arxiv.flatten(name, texFiles, { starts });
+    // Where the file that was opened begins in the document, if it is not the main file.
+    let start = null;
+    if (opened !== mainPath) {
+      const rel = Object.keys(starts).find((k) => full(k) === opened);
+      if (rel !== undefined) start = starts[rel];
+    }
 
     // Figures.
     const images = {};
@@ -268,10 +290,88 @@
       repo,
       ref,
       path: mainPath,
-      links: links(owner, repo, ref, mainPath),
+      opened,
+      start,
+      links: links(owner, repo, ref, opened),
       files: Object.keys(texFiles).map(full),
       missing,
     };
+
+    /**
+     * The main file of the document `file` belongs to, as { path, project? },
+     * or null if `file` is the main file itself (or none was found):
+     *  - the file named by a "% !TEX root = …" line near the top;
+     *  - for a subfile, the file in \documentclass[main.tex]{subfiles};
+     *  - for a file with no \documentclass, the nearest .tex file with one,
+     *    in its folder or a folder above, that pulls it in (perhaps through
+     *    other files). `project` is then that file's crawl, to reuse.
+     */
+    async function findRoot(file, text) {
+      const head = text.split('\n', 30).join('\n');
+      const magic = /^\s*%\s*!\s*TEX\s+root\s*=\s*(.+?)\s*$/im.exec(head);
+      const body = stripComments(text);
+      const sub = /\\documentclass\s*\[([^\]]*)\]\s*\{subfiles\}/.exec(body);
+      const named = magic ? magic[1] : sub && sub[1].trim() ? sub[1].trim() : null;
+      if (named) {
+        const dir = dirOf(file);
+        const p = normalize((dir ? dir + '/' : '') + named);
+        for (const cand of /\.(tex|ltx)$/i.test(p) ? [p] : [p + '.tex', p]) {
+          if (cand !== file && (await fetchRepoTex(cand)) != null) return { path: cand };
+        }
+        return null;
+      }
+      if (/\\documentclass/.test(body)) return null;
+
+      // The folders to look in: the file's own, then each one above it.
+      const dirs = [];
+      for (let d = dirOf(file); ; d = dirOf(d)) {
+        dirs.push(d);
+        if (!d) break;
+      }
+      const inDir = (p) => dirOf(p);
+      let cands = null;
+      try {
+        const tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, 'json');
+        if (tree && tree.tree) {
+          cands = tree.tree
+            .filter((e) => e.type === 'blob' && /\.(tex|ltx)$/i.test(e.path) && e.path !== file && dirs.includes(inDir(e.path)))
+            .map((e) => e.path);
+        }
+      } catch (e) {
+        cands = null; // rate-limited: guess the usual names instead
+      }
+      if (!cands) {
+        cands = [];
+        for (const d of dirs.slice(0, 4)) for (const n of MAIN_NAMES) cands.push((d ? d + '/' : '') + n + '.tex');
+      }
+      const rank = (p) => dirs.indexOf(inDir(p)) * 10 - (MAIN_NAMES.includes(p.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase()) ? 1 : 0);
+      cands.sort((a, b) => rank(a) - rank(b));
+      cands = cands.slice(0, 40);
+      const texts = await Promise.all(cands.map(fetchRepoTex));
+      const mains = cands.filter((p, i) => {
+        const t = texts[i] && stripComments(texts[i]);
+        return t && /\\documentclass/.test(t) && !/\\documentclass\s*\[[^\]]*\]\s*\{subfiles\}/.test(t);
+      });
+      for (const cand of mains.slice(0, 4)) {
+        const project = await crawl(cand);
+        if (Object.keys(project.texFiles).some((k) => project.full(k) === file)) return { path: cand, project };
+      }
+      return null;
+    }
+  }
+
+  const MAIN_NAMES = ['main', 'paper', 'thesis', 'ms', 'article', 'book', 'notes', 'root', 'master', 'manuscript', 'dissertation', 'report', 'index'];
+  const stripComments = (t) => t.replace(/(^|[^\\])%.*$/gm, '$1');
+
+  /** The files a text names with \input, \include, \subfile or \import. */
+  function inputNames(text) {
+    const names = [];
+    text.replace(INPUTS, (m, pre, arg, impDir, impFile, bare) => {
+      if (pre !== undefined) return m;
+      names.push(arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare);
+      return m;
+    });
+    return names;
   }
 
   /**

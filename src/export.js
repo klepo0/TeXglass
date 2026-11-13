@@ -132,9 +132,14 @@ body { display: block; }
    *   katexCss   KaTeX's stylesheet to put inside the page (see
    *              embedKatexFonts); without it the page links KaTeX's from a CDN
    *   theme      'light' or 'dark' to fix the colours; else they follow the system
+   *   diagramsJs src/diagrams.js, which draws the arrows of tikzcd/xymatrix and
+   *              the tikzpicture paths; put inside the page when it has diagrams
    *   print      open the print dialog as soon as the page has loaded
    */
-  function page({ body, title, css, katexCss, theme, print }) {
+  function page({ body, title, css, katexCss, theme, diagramsJs, print }) {
+    const diagrams = diagramsJs && /class="tg-diagram/.test(body || '')
+      ? `\n<script>${diagramsJs.replace(/<\/script/gi, '<\\/script')}</script>`
+      : '';
     const katex = katexCss
       ? `<style>${katexCss.replace(/<\/style/gi, '<\\/style')}</style>`
       : `<link rel="stylesheet" href="${KATEX_CDN}katex.min.css" crossorigin="anonymous">`;
@@ -155,7 +160,7 @@ ${PAGE_CSS}</style>
 <main class="panes"><section class="pane"><article id="preview" class="document">
 ${body}
 </article></section></main>
-<script>${THEME_SCRIPT}</script>
+<script>${THEME_SCRIPT}</script>${diagrams}
 ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
 </html>
 `;

@@ -494,6 +494,28 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
   font-family: ui-monospace, monospace;
 }
 
+/* Diagrams (tikzcd, xymatrix, tikzpicture): src/tikz.js + src/diagrams.js */
+.tg-diagram { display: block; margin: 0.8em 0; text-align: center; overflow-x: auto; overflow-y: hidden; position: relative; }
+.math-inline .tg-diagram, .diagram-display .tg-diagram, .float .tg-diagram { display: inline-block; margin: 0; vertical-align: middle; max-width: 100%; }
+.cd-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
+.cd-grid { display: inline-grid; align-items: center; justify-items: center; vertical-align: middle; }
+.cd-cell { display: block; }
+.cd-node { display: inline-block; padding: 0.1em 0.32em; white-space: nowrap; }
+.cd-node.cd-empty { padding: 0; width: 0; height: 0; }
+.cd-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.cd-label { position: absolute; left: 0; top: 0; visibility: hidden; white-space: nowrap; line-height: 1.1; padding: 0.04em 0.06em; }
+.cd-label.cd-desc { padding: 0.08em 0.16em; }
+.diagram-display { display: flex; align-items: center; justify-content: center; gap: 0.3em; position: relative; }
+.diagram-row { display: inline-flex; align-items: center; gap: 0.25em; max-width: 100%; }
+.diagram-tag { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+.tikz-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
+.tikz-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.tikz-node { position: absolute; left: 0; top: 0; white-space: nowrap; line-height: 1.2; visibility: hidden; }
+.tikz-node.tikz-multi { white-space: normal; text-align: center; }
+.tikz-note { display: block; font-size: 0.75em; color: var(--muted); margin-top: 0.3em; }
+.tikz-fallback { text-align: left; display: inline-block; max-width: 100%; }
+.tikz-fallback pre { font-size: 0.8em; max-height: 16em; overflow: auto; margin: 0.4em 0 0; }
+
 .center { text-align: center; }
 .flushright { text-align: right; }
 .flushleft { text-align: left; }
@@ -791,13 +813,13 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 
   /* Keep things whole across pages. */
   .theorem, .math-display, .float, .title-block, .abstract, .tabular, .graphic,
-  .list .item, .bibliography li, pre.verbatim, .qed-line { break-inside: avoid; }
+  .list .item, .bibliography li, pre.verbatim, .qed-line, .tg-diagram { break-inside: avoid; }
   h1, h2, h3, h4, .thm-head-only, .proof-head, .caption { break-after: avoid; }
   .document h1.chapter, .document h1.part { break-before: page; }
   #preview > .src-block:first-child h1.chapter, #preview > .src-block:first-child h1.part { break-before: auto; }
 
   /* Wide content wraps or shows in full: a scrollbar does not print. */
-  .math-display, .table-wrap, pre.verbatim { overflow: visible !important; }
+  .math-display, .table-wrap, pre.verbatim, .tg-diagram { overflow: visible !important; }
   pre.verbatim { white-space: pre-wrap; padding: 0; border-radius: 0; }
 
   /* Links read as text. A link whose words are not its address gets the address after it. */

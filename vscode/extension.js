@@ -191,10 +191,12 @@ function readSource(p) {
 
 /** The main file of the project `uri` belongs to (see findRoot in project.js). */
 async function rootOf(uri, text) {
+  // Look for the main file no higher than the workspace folder.
+  const top = vscode.workspace.getWorkspaceFolder(uri);
   if (isVirtual(uri)) {
     const docs = openDocsLike(uri);
     const root = await withFiles(
-      (get) => findRoot(uri.path, text, (d) => get('#' + d) || [], (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+      (get) => findRoot(uri.path, text, (d) => get('#' + d) || [], (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix, top && top.uri.path),
       (key) => (key[0] === '#' ? listTexVirtual(uri.with({ path: key.slice(1) })) : readText(uri.with({ path: key }))),
       new Map()
     );
@@ -208,7 +210,7 @@ async function rootOf(uri, text) {
       return [];
     }
   };
-  const root = findRoot(uri.fsPath, text, listTex, readSource);
+  const root = findRoot(uri.fsPath, text, listTex, readSource, path, top && top.uri.fsPath);
   return root === uri.fsPath || !fs.existsSync(root) ? uri : vscode.Uri.file(root);
 }
 
@@ -347,6 +349,7 @@ class Preview {
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -680,7 +683,11 @@ async function exportHtml(context, converter, uri, out, print) {
         katexCss = null; // link KaTeX's stylesheet instead
       }
     }
-    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, print: !!print });
+    let diagramsJs = '';
+    if (/class="tg-diagram/.test(m.result.html)) {
+      try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
+    }
+    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print });
     await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
     if (print) {
       if (!(await vscode.env.openExternal(out))) vscode.window.showErrorMessage(`TeXglass could not open ${out.fsPath} in a browser.`);

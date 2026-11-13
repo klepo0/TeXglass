@@ -79,3 +79,20 @@ test('imageResolver follows \\graphicspath', () => {
   assert.equal(r('plot'), 'blob:p');
   assert.equal(r('nothing'), null);
 });
+
+test('flatten honours \\includeonly, keeps only a subfile\'s body and reports where files start', () => {
+  const files = {
+    'm.tex': '\\documentclass{book}\n\\includeonly{b}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\subfile{s}\n\\end{document}',
+    'a.tex': 'AAA',
+    'b.tex': 'BBB',
+    's.tex': '\\documentclass[m]{subfiles}\n\\begin{document}\nSSS\n\\end{document}',
+  };
+  const starts = {};
+  const out = A.flatten('m.tex', files, { starts });
+  assert.doesNotMatch(out, /AAA/);
+  assert.match(out, /BBB/);
+  assert.match(out, /\nSSS\n/);
+  assert.doesNotMatch(out, /subfiles|\u0000/);
+  assert.equal(out.slice(starts['b.tex'], starts['b.tex'] + 3), 'BBB');
+  assert.ok(!('a.tex' in starts));
+});

@@ -1,0 +1,67 @@
+# Publishes a GitHub Release when a version tag is pushed:
+#
+#   git tag v0.5.0 && git push origin v0.5.0
+#
+# The tag must match the VS Code extension's version in vscode/package.json.
+# The release carries the .vsix and the browser extension zips, with notes
+# generated from the pull requests merged since the previous tag.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            vscode/package-lock.json
+
+      - name: Check the tag matches the extension version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ext=$(node -p "require('./vscode/package.json').version")
+          if [ "$tag" != "$ext" ]; then
+            echo "::error::Tag v$tag does not match vscode/package.json version $ext"
+            exit 1
+          fi
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix vscode
+
+      - name: Test
+        run: |
+          npm test
+          npm run copy-shared --prefix vscode
+          npm test --prefix vscode
+
+      - name: Build the VS Code extension
+        working-directory: vscode
+        run: npx vsce package -o "../texglass-${GITHUB_REF_NAME#v}.vsix"
+
+      - name: Build the browser extension
+        run: node browser/build.js
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "TeXglass $GITHUB_REF_NAME" \
+            --generate-notes \
+            texglass-*.vsix \
+            browser/dist/texglass-arxiv-chrome-*.zip \
+            browser/dist/texglass-arxiv-firefox-*.zip
