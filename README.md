@@ -113,13 +113,18 @@ and install it. Once published on the Marketplace, it also runs in the browser:
 press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
 file there, and commit your edits.
 
+Built `.vsix` files are attached to each
+[release](https://github.com/klepo0/TeXglass/releases): in VS Code, run
+**Extensions: Install from VSIX…** and pick the file.
+
 ## Open arXiv papers from the browser
 
 The [`browser/`](browser) folder is a browser extension for Chrome, Edge and
 Firefox that opens arXiv papers in TeXglass: click its toolbar button on an
 arXiv abstract, PDF or HTML page, right-click a link to an arXiv paper, or use
 the **View in TeXglass** links it adds to arxiv.org. See
-[browser/README.md](browser/README.md) to build and install it.
+[browser/README.md](browser/README.md) to build and install it, or take the
+zips from the latest [release](https://github.com/klepo0/TeXglass/releases).
 
 ## What is supported
 
@@ -158,3 +163,16 @@ in `<div class="src-block" data-s data-e>` giving its range in the source,
 which is what Edit mode uses. `src/export.js` turns rendered HTML into a
 standalone page; the web viewer, the CLI and the VS Code extension all use it.
 `npm test` runs the test suite.
+
+### Releasing
+
+Bump `version` in `vscode/package.json`, merge, then push a matching tag from
+main:
+
+```sh
+git tag v0.5.0 && git push origin v0.5.0
+```
+
+The [Release workflow](.github/workflows/release.yml) runs the tests, builds
+the `.vsix` and the browser zips, and publishes a GitHub Release with them and
+notes listing the pull requests merged since the previous tag.
