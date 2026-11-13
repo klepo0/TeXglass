@@ -99,7 +99,13 @@ file there, and commit your edits.
 - **Math**: `$…$`, `\(…\)`, `$$…$$`, `\[…\]`, and `equation`, `align`,
   `gather`, `multline`, `alignat`, `eqnarray` (starred or not). Each
   numbered row gets its own number; `\nonumber`, `\notag` and `\tag` work.
-  `\newcommand`, `\def` and `\DeclareMathOperator` macros are passed to KaTeX.
+- **Macros**: `\newcommand`, `\renewcommand`, `\providecommand`, `\def`
+  (including delimited parameters such as `\def\pr(#1,#2){…}`), `\let` and
+  `\DeclareMathOperator` (and `\DeclareMathOperator*`) apply in math and in
+  text. Arguments, including a default for the first one
+  (`\newcommand{\pair}[2][x]{…}`), work in both. A macro whose body is math,
+  like `\R` or `\abs{x}`, is set as math when used in running text.
+  `\renewcommand{\thesection}{…}` changes how numbers and references look.
 - **Theorems**: `\newtheorem{name}{Title}`, `\newtheorem{name}[shared]{Title}`,
   `\newtheorem{name}{Title}[section]`, `\newtheorem*`, and `\theoremstyle`
   (`plain`, `definition`, `remark`). Common environments (`theorem`, `lemma`,
