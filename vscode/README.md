@@ -57,6 +57,8 @@ is needed, and the preview updates as you type, without saving.
   alphabetically, or in citation order for `unsrt`-like styles, with
   `[Sch12]`-style labels for `alpha` styles. If a `.bbl` from an earlier
   LaTeX run covers every citation, it is used as is.
+- Commutative diagrams (`tikzcd`, `\xymatrix`) and simple `tikzpicture`s
+  are drawn, and follow the light/dark theme.
 - Figures (`\includegraphics`) are shown when a PNG, JPEG, SVG, GIF or WebP
   file with that name sits next to the document (`\graphicspath` is
   respected). PDF and EPS figures are shown only if a PNG of the same name

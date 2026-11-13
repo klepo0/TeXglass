@@ -1,6 +1,8 @@
 \documentclass{amsart}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{hyperref,cleveref}
+\usepackage{tikz,tikz-cd}
+\usepackage[all]{xy}
 
 % Theorem-like environments, numbered within sections and sharing a counter.
 \newtheorem{theorem}{Theorem}[section]
@@ -116,6 +118,53 @@ Equation \eqref{eq:holder} & \ref{eq:holder} \\
 \end{tabular}
 \caption{Where things ended up.}\label{tab:summary}
 \end{table}
+
+\section{Diagrams}\label{sec:diagrams}
+
+Commutative diagrams written with \texttt{tikz-cd} or \texttt{xymatrix} are
+drawn in the preview, and can be numbered and referenced like equations. The
+square
+\begin{equation}\label{eq:square}
+\begin{tikzcd}
+P \arrow[r, "f"] \arrow[d, "g"', hook] \arrow[dr, phantom, "\lrcorner", very near start] & B \arrow[d, "h", two heads] \\
+C \arrow[r, "k"'] & D
+\end{tikzcd}
+\end{equation}
+in \eqref{eq:square} is a pullback.
+
+\begin{lemma}[Snake lemma]\label{lem:snake}
+Given a map of short exact sequences
+\[
+\xymatrix{
+0 \ar[r] & A \ar[r]^{f} \ar[d]_{\alpha} & B \ar[r]^{g} \ar[d]^{\beta} & C \ar[r] \ar[d]^{\gamma} & 0 \\
+0 \ar[r] & A' \ar[r]_{f'} & B' \ar[r]_{g'} & C' \ar[r] & 0
+}
+\]
+there is an exact sequence $\ker\alpha \to \ker\beta \to \ker\gamma \to \operatorname{coker}\alpha \to \operatorname{coker}\beta \to \operatorname{coker}\gamma$.
+\end{lemma}
+
+An adjunction and a natural transformation:
+\[
+\begin{tikzcd}
+\mathcal{C} \arrow[r, shift left=1.2, "F"] & \mathcal{D} \arrow[l, shift left=1.2, "G"]
+\end{tikzcd}
+\qquad
+\begin{tikzcd}[column sep=large]
+\mathcal{C} \arrow[r, bend left=45, "F", ""{name=U, below}] \arrow[r, bend right=45, "G"', ""{name=D}] & \mathcal{D}
+\arrow[Rightarrow, from=U, to=D, "\eta"]
+\end{tikzcd}
+\]
+
+Simple TikZ pictures are drawn too:
+\begin{center}
+\begin{tikzpicture}[scale=1.1]
+  \draw[->] (-0.3,0) -- (3.3,0) node[right] {$x$};
+  \draw[->] (0,-0.3) -- (0,2.3) node[above] {$y$};
+  \draw[thick, blue, domain=0:3.1, samples=40] plot (\x, {0.2*\x*\x});
+  \draw[dashed] (2,0) node[below] {$2$} -- (2,0.8) -- (0,0.8) node[left] {$0.8$};
+  \fill (2,0.8) circle (1.5pt);
+\end{tikzpicture}
+\end{center}
 
 \begin{thebibliography}{9}
 \bibitem{rudin} W.~Rudin, \emph{Real and Complex Analysis}, McGraw--Hill, 1987.

@@ -346,6 +346,7 @@ class Preview {
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
