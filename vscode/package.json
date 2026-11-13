@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "klepo0",
   "license": "MIT",
   "repository": {
@@ -113,6 +113,12 @@
         "title": "Export to HTML",
         "category": "TeXglass",
         "icon": "$(export)"
+      },
+      {
+        "command": "texglass.print",
+        "title": "Print / Save as PDF",
+        "category": "TeXglass",
+        "icon": "$(printer)"
       }
     ],
     "menus": {
@@ -161,6 +167,11 @@
           "command": "texglass.exportHtml",
           "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
           "group": "1_texglass"
+        },
+        {
+          "command": "texglass.print",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "group": "1_texglass"
         }
       ],
       "explorer/context": [
@@ -171,6 +182,11 @@
         },
         {
           "command": "texglass.exportHtml",
+          "when": "resourceExtname == .tex",
+          "group": "navigation"
+        },
+        {
+          "command": "texglass.print",
           "when": "resourceExtname == .tex",
           "group": "navigation"
         }

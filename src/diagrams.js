@@ -664,6 +664,13 @@
     }).observe(document.body, { childList: true, subtree: true });
     // Fonts change the size of every label once they load.
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const e of document.querySelectorAll(sel)) { seen.delete(e); layout(e); } });
+    // Printing sets the text at another size and width, and the ResizeObserver
+    // does not run in between, so redraw for the printout and again after it.
+    const redraw = () => { for (const e of document.querySelectorAll(sel)) { seen.delete(e); layout(e); } };
+    const printing = window.matchMedia && window.matchMedia('print');
+    if (printing && printing.addEventListener) printing.addEventListener('change', redraw);
+    window.addEventListener('beforeprint', redraw);
+    window.addEventListener('afterprint', redraw);
   }
 
   const api = { observe, refresh: () => { for (const e of document.querySelectorAll(sel)) { seen.delete(e); layout(e); } }, _: { drawArrow, bez, bezTan, bezSlice, clipCurve, labelCenter, backgroundOf, el, tip, f2, LINE } };

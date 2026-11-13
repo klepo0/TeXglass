@@ -605,6 +605,9 @@
         forcedTheme = m.value;
         applyTheme();
         break;
+      case 'print':
+        window.print();
+        break;
       case 'toggle-theme':
         // Switch away from what is showing now, whatever chose it.
         vscode.postMessage({ type: 'set-theme', value: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' });

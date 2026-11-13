@@ -51,6 +51,18 @@ body { display: block; }
 })();
 `;
 
+  // For a page made to be printed (VS Code's Print / Save as PDF): open the
+  // print dialog once the fonts have loaded, so the math is set in KaTeX's.
+  const PRINT_SCRIPT = `
+(function () {
+  function go() { setTimeout(function () { window.print(); }, 200); }
+  window.addEventListener('load', function () {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(go, go);
+    else go();
+  });
+})();
+`;
+
   const SRC_BLOCK = /^<div class="src-block" data-s="\d+" data-e="\d+">/;
 
   /** The preview's blocks (render with sourceMap) as plain HTML, without their source ranges. */
@@ -122,8 +134,9 @@ body { display: block; }
    *   theme      'light' or 'dark' to fix the colours; else they follow the system
    *   diagramsJs src/diagrams.js, which draws the arrows of tikzcd/xymatrix and
    *              the tikzpicture paths; put inside the page when it has diagrams
+   *   print      open the print dialog as soon as the page has loaded
    */
-  function page({ body, title, css, katexCss, theme, diagramsJs }) {
+  function page({ body, title, css, katexCss, theme, diagramsJs, print }) {
     const diagrams = diagramsJs && /class="tg-diagram/.test(body || '')
       ? `\n<script>${diagramsJs.replace(/<\/script/gi, '<\\/script')}</script>`
       : '';
@@ -148,7 +161,7 @@ ${PAGE_CSS}</style>
 ${body}
 </article></section></main>
 <script>${THEME_SCRIPT}</script>${diagrams}
-</body>
+${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
 </html>
 `;
   }
