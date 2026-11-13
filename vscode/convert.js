@@ -6,6 +6,9 @@
  * job: { text, dir, base } for a document on disk: dir is its folder (for
  * figures) and base the webview URL of that folder; or { text, figures } with
  * figures mapping each \includegraphics name to a URL, found beforehand.
+ * With job.plain set (Export to HTML) the result is one piece of HTML in
+ * result.html, without the source ranges the preview needs; base may then be
+ * a relative path ('.' for the same folder).
  */
 'use strict';
 const katex = require('katex');
@@ -32,11 +35,12 @@ function resolverFor(job) {
 
 function convert(job) {
   const result = TeXglass.render(job.text, {
-    sourceMap: true,
+    sourceMap: !job.plain,
     renderMath: (tex, displayMode, macros) =>
       katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' }),
     resolveImage: resolverFor(job),
   });
+  if (job.plain) return { html: result.html, title: result.title, warnings: result.warnings };
   delete result.html; // the blocks carry the same HTML
   return result;
 }

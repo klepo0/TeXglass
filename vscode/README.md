@@ -37,6 +37,15 @@ is needed, and the preview updates as you type, without saving.
   or **TeXglass: Go to Theorem, Equation or Section…**): type `Lemma 4.1`,
   `(3.2)`, `§2` or just `3.2` and press Enter. A kind (`lemma`) or a title
   lists those too.
+- **Export to HTML** (**TeXglass: Export to HTML**, in the preview's `…` menu,
+  the editor's `…` menu and the Explorer's right-click menu) saves the document
+  as one standalone `.html` page, next to the `.tex` file unless you pick
+  another place: math rendered, theorems and equations numbered and references
+  linked as in the preview. Exporting a chapter exports the whole document.
+  KaTeX's fonts go inside the page (about 350 KB) so it looks right offline;
+  set `texglass.exportEmbedFonts` to `false` to load them from a CDN instead.
+  Figures are linked relative to the page. Other extensions can call the
+  command with the `.tex` file's URI and the output URI to skip the dialog.
 - **Documents in several files**: `\input`, `\include`, `\subfile` and
   `\import` files are pulled in, and edits in any of them show up live (even
   before saving). Previewing a chapter shows the whole document: TeXglass finds

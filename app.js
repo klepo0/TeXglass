@@ -981,6 +981,65 @@
     flashStatus('Downloaded');
   }
 
+  // --- export to HTML --------------------------------------------------------
+
+  const readAsDataUrl = (blob) =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+
+  /** KaTeX's stylesheet with its fonts inside, fetched from where this page loads them; null if that fails. */
+  async function katexCssWithFonts() {
+    const link = document.querySelector('link[rel="stylesheet"][href*="katex"]');
+    if (!link) return null;
+    try {
+      const res = await fetch(link.href);
+      if (!res.ok) return null;
+      return await TeXglassExport.embedKatexFonts(await res.text(), async (name) => {
+        const r = await fetch(new URL('fonts/' + name, link.href));
+        if (!r.ok) throw new Error(name);
+        return (await readAsDataUrl(await r.blob())).replace(/^data:[^,]*,/, '');
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Download the document as one standalone .html page, with the math rendered
+   * and the theorems numbered as in the preview, and imported figures inside it.
+   */
+  async function exportHtml() {
+    if (!window.TeXglassExport) return;
+    showStatus('Exporting…');
+    try {
+      const result = await convert(doc, imageMap);
+      const isBlob = (u) => u.startsWith('blob:');
+      const body = await TeXglassExport.replaceImages(TeXglassExport.joinBlocks(result.blocks), isBlob, async (u) => readAsDataUrl(await (await fetch(u)).blob()));
+      const cssLink = document.querySelector('link[rel="stylesheet"][href$="styles.css"]');
+      const css = cssLink ? await (await fetch(cssLink.href)).text() : '';
+      const html = TeXglassExport.page({ body, title: result.title || fileName.textContent || 'Document', css, katexCss: await katexCssWithFonts() });
+      const name = TeXglassExport.fileName(fileName.textContent, result.title);
+      if (inFrame) {
+        // Downloads are blocked in an embedded page; copy the page instead.
+        await navigator.clipboard.writeText(html);
+        flashStatus('HTML copied to the clipboard');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      flashStatus('Exported ' + name);
+    } catch (e) {
+      flashStatus('Could not export: ' + (e.message || e));
+    }
+  }
+
   // Re-render when the file changes on disk (browsers with the File System Access API),
   // unless there are edits made here that would be lost.
   setInterval(async () => {
@@ -1002,6 +1061,7 @@
 
   $('open').addEventListener('click', openWithPicker);
   $('save').addEventListener('click', save);
+  $('export').addEventListener('click', exportHtml);
   $('file-input').addEventListener('change', (e) => {
     if (e.target.files[0]) openFile(e.target.files[0]);
     e.target.value = '';

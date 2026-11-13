@@ -131,6 +131,76 @@ test('user macros reach KaTeX and expand in text', () => {
   assert.match(text(r.html), /M i\.e\./);
 });
 
+// Render with real KaTeX and drop the source annotation, so a formula using
+// user macros can be compared with the same formula written out by hand.
+const katexOpts = { throwOnError: true, strict: 'ignore' };
+const dropAnnotation = (html) => html.replace(/<annotation[^]*?<\/annotation>/g, '');
+const realMath = (src) =>
+  TeXglass.render(src, {
+    renderMath: (tex, displayMode, macros) =>
+      dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts))),
+  });
+const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
+const MACRO_PREAMBLE = String.raw`
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\pair}[2][x]{\langle #1, #2\rangle}
+\newcommand\abs[1]{\lvert #1\rvert}
+\newcommand{\second}[2]{#2}
+\renewcommand{\phi}{\varphi}
+\def\eps{\varepsilon}
+\def\inner#1#2{(#1|#2)}
+\def\pr(#1,#2){P(#1\mid #2)}
+\DeclareMathOperator{\Hom}{Hom}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\newcommand{\RR}{\R}
+\newcommand{\name}[1][World]{Hello #1}
+`;
+
+test('user macros in math: arguments, defaults, \\def and operators', () => {
+  const cases = [
+    [String.raw`\pair{y}`, String.raw`\langle x, y\rangle`],
+    [String.raw`\pair[z]{w}+1`, String.raw`\langle z, w\rangle+1`],
+    [String.raw`\pair {y}`, String.raw`\langle x, y\rangle`],
+    [String.raw`\abs{\pair{y}}`, String.raw`\lvert \langle x, y\rangle\rvert`],
+    [String.raw`\second{A}{B}C`, 'BC'],
+    [String.raw`\phi\eps`, String.raw`\varphi\varepsilon`],
+    [String.raw`\inner{a}{b}`, '(a|b)'],
+    [String.raw`\pr(a,b)`, String.raw`P(a\mid b)`],
+    [String.raw`\Hom(A,B)`, String.raw`\operatorname{Hom}(A,B)`],
+    [String.raw`\argmax_x f`, String.raw`\operatorname*{arg\,max}_x f`],
+    [String.raw`\RR^n`, String.raw`\mathbb{R}^n`],
+  ];
+  for (const [use, hand] of cases) {
+    const { html } = realMath(MACRO_PREAMBLE + `\\begin{document}$${use}$\\end{document}`);
+    assert.ok(html.includes(handMath(hand)), `${use} should render as ${hand}`);
+  }
+});
+
+test('user macros in text: defaults, math bodies and delimited \\def', () => {
+  const { html, warnings } = realMath(MACRO_PREAMBLE + String.raw`\begin{document}
+\name, \name[You]; \R, \RR, \eps, \abs{t}, \pair{y}, \Hom; \pr(a,b); file\_name.
+\end{document}`);
+  const t = text(html.replace(/<span class="katex">[^]*?<\/math>/g, ''));
+  assert.match(t, /Hello World, Hello You;/);
+  assert.match(t, /file_name\./);
+  const hands = [String.raw`\mathbb{R}`, String.raw`\varepsilon`, String.raw`\lvert t\rvert`, String.raw`\langle x, y\rangle`, String.raw`\operatorname{Hom}`, String.raw`P(a\mid b)`];
+  for (const hand of hands) assert.ok(html.includes(handMath(hand)), `text should contain ${hand}`);
+  assert.deepEqual(warnings, []);
+});
+
+test('\\renewcommand of \\thesection changes numbers and references', () => {
+  const t = text(plain(String.raw`\renewcommand{\thesection}{\Roman{section}}
+\newtheorem{thm}{Theorem}[section]
+\begin{document}
+\section{A}\label{s}
+\section{B}
+\begin{thm}\label{t} x \end{thm}
+See \ref{s} and \ref{t}.
+\end{document}`).html);
+  assert.match(t, /Theorem II\.1\. x/);
+  assert.match(t, /See I and II\.1\./);
+});
+
 test('text formatting, footnotes, quotes and dashes', () => {
   const { html } = plain("\\textbf{b} \\emph{e} ``q'' a--b a---b x\\footnote{note} 50\\% \\'e");
   assert.ok(html.includes('<strong>b</strong>'));

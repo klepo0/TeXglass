@@ -293,6 +293,76 @@
     };
   }
 
+  /**
+   * A KaTeX macro for a user command that takes arguments. A plain string
+   * body would not do: KaTeX counts the arguments from the #n it finds, so
+   * an argument the body never uses is left behind in the formula, and it
+   * has no notion of a default for the first one (\newcommand{\c}[2][x]{…}).
+   * The default is handled by pushing `{default}` (or `{what was in […]}`)
+   * back onto the input, where KaTeX then reads it as argument #1.
+   */
+  function userMathMacro(m) {
+    let body = null;
+    let delimiters = null;
+    const lex = (ctx, s) => {
+      const lexer = new ctx.lexer.constructor(s, ctx.settings);
+      const out = [];
+      for (let t = lexer.lex(); t.text !== 'EOF'; t = lexer.lex()) out.push(t);
+      return out;
+    };
+    return (ctx) => {
+      if (!body) {
+        body = lex(ctx, m.body).reverse();
+        if (m.delims) {
+          delimiters = m.delims.map((d) => lex(ctx, d).map((t) => t.text).filter((t) => t !== ' '));
+          // An undelimited parameter (#1#2) has an empty list.
+          if (!delimiters.some((d) => d.length)) delimiters = null;
+        }
+      }
+      if (m.def !== null && m.def !== undefined) {
+        ctx.consumeSpaces();
+        const braces = lex(ctx, '{}'); // [ '{', '}' ]
+        let arg;
+        if (ctx.future().text === '[') {
+          ctx.popToken();
+          arg = ctx.consumeArg([']']).tokens; // already in stack order
+        } else {
+          arg = lex(ctx, m.def).reverse();
+        }
+        ctx.pushToken(braces[1]);
+        ctx.pushTokens(arg);
+        ctx.pushToken(braces[0]);
+      }
+      return { tokens: body, numArgs: m.nargs, delimiters: delimiters || undefined };
+    };
+  }
+
+  /**
+   * Commands that only make sense in math. A user macro whose body uses one
+   * of these is set as math when it appears in running text (\R, \eps,
+   * \abs{x}), as it would have to be wrapped in \ensuremath to work in TeX.
+   */
+  const MATH_ONLY = new RegExp(
+    '(?<!\\\\)[\\^_]|\\\\(?:' +
+      [
+        'math[a-z]*', 'operatorname\\*?', 'bm', 'boldsymbol', 'pmb',
+        'v?[aA]lpha', 'beta', '[gG]amma', '[dD]elta', 'v?epsilon', 'varepsilon', 'zeta', 'eta', 'v?[tT]heta',
+        'iota', 'kappa', 'varkappa', '[lL]ambda', 'mu', 'nu', '[xX]i', 'v?pi', '[pP]i', 'v?rho', 'v?[sS]igma',
+        'tau', '[uU]psilon', 'v?[pP]hi', 'varphi', 'chi', '[pP]si', '[oO]mega', 'digamma',
+        'frac', 'dfrac', 'tfrac', 'binom', 'sqrt', 'left', 'right', 'big[lr]?', 'Big[lr]?', 'bigg[lr]?', 'Bigg[lr]?',
+        '[lr]vert', '[lr]Vert', '[lr]angle', 'langle', 'rangle', '[lr]floor', '[lr]ceil', 'mid', 'vert', 'Vert',
+        'infty', 'partial', 'nabla', 'sum', 'prod', 'coprod', 'int', 'iint', 'oint', 'bigcup', 'bigcap',
+        'bigoplus', 'bigotimes', 'cup', 'cap', 'oplus', 'otimes', 'circ', 'cdot', 'cdots', 'times', 'setminus',
+        'le', 'leq', 'ge', 'geq', 'neq', 'ne', 'approx', 'sim', 'simeq', 'cong', 'equiv', 'subset', 'subseteq',
+        'supset', 'supseteq', 'in', 'notin', 'ni', 'to', 'mapsto', 'rightarrow', 'leftarrow', 'Rightarrow',
+        'hookrightarrow', 'twoheadrightarrow', 'longrightarrow', 'emptyset', 'varnothing', 'forall', 'exists',
+        'hat', 'widehat', 'tilde', 'widetilde', 'bar', 'overline', 'vec', 'dot', 'ddot', 'check',
+        'overrightarrow', 'underbrace', 'overbrace', 'ell', 'wp', 'Re', 'Im', 'aleph', 'hbar',
+        'lim', 'sup', 'inf', 'max', 'min', 'log', 'ln', 'exp', 'sin', 'cos', 'tan', 'det', 'dim', 'ker', 'deg',
+      ].join('|') +
+      ')(?![A-Za-z])'
+  );
+
   const rowSep = (s, i) => {
     if (!s.startsWith('\\\\', i)) return 0;
     let j = i + 2;
@@ -454,6 +524,16 @@
     fmt(name) {
       const c = this.counters[name];
       if (!c) return '';
+      // \renewcommand{\thesection}{\Roman{section}} and the like.
+      const own = this.macros['the' + name];
+      if (own && !own.nargs && (this.fmtDepth || 0) < 5) {
+        this.fmtDepth = (this.fmtDepth || 0) + 1;
+        try {
+          return stripTags(this.flow(own.body, true)).trim();
+        } finally {
+          this.fmtDepth--;
+        }
+      }
       let v = String(c.value);
       if (this.appendix && name === this.topLevel) v = alpha(c.value, true);
       if (name === 'part') v = roman(c.value, true);
@@ -524,7 +604,10 @@
     katexMacros(tex) {
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS);
-        for (const name in this.macros) m['\\' + name] = this.macros[name].body;
+        for (const name in this.macros) {
+          const mac = this.macros[name];
+          m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
+        }
         for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name]);
         this._katexMacros = m;
       }
@@ -923,10 +1006,16 @@
         case 'def': case 'gdef': case 'edef': case 'xdef': {
           const nm = readArg(src, i);
           let j = nm.end;
-          const params = /^(?:#\d)*/.exec(src.slice(j))[0];
-          j += params.length;
-          const body = readArg(src, j);
-          this.macros[nm.content.replace(/^\\/, '')] = { nargs: params.length / 2, def: null, body: body.content };
+          // The parameter text runs up to the body's brace. Besides #1#2 it
+          // may hold delimiters, as in \def\pair(#1,#2){…}.
+          let k = j;
+          while (k < src.length && src[k] !== '{') k += src[k] === '\\' ? 2 : 1;
+          const params = src.slice(j, k);
+          const parts = params.split(/#[1-9]/);
+          const body = readArg(src, k);
+          const mac = { nargs: parts.length - 1, def: null, body: body.content };
+          if (parts.some((p) => p.trim())) mac.delims = parts.map((p) => p.trim());
+          this.macros[nm.content.replace(/^\\/, '')] = mac;
           this._katexMacros = null;
           return res('', body.end);
         }
@@ -1079,7 +1168,24 @@
     expandMacro(m, src, i, inline) {
       const args = [];
       let j = i;
+      if (m.delims) {
+        // \def with delimited parameters: each argument runs up to the text
+        // that follows it in the definition.
+        const lead = m.delims[0];
+        const at = skipWhite(src, j);
+        if (lead) {
+          if (!src.startsWith(lead, at)) return { html: '', end: j };
+          j = at + lead.length;
+        }
+      }
       for (let k = 0; k < m.nargs; k++) {
+        const stop = m.delims && m.delims[k + 1];
+        if (stop) {
+          const e = findDelim(src, j, stop);
+          args.push(src.slice(j, e).trim());
+          j = Math.min(src.length, e + stop.length);
+          continue;
+        }
         if (k === 0 && m.def !== null) {
           const o = readOpt(src, j);
           args.push(o ? o.content : m.def);
@@ -1093,10 +1199,26 @@
       const body = m.body.replace(/#(\d)/g, (_, d) => (args[d - 1] !== undefined ? args[d - 1] : ''));
       // Math-only macros (\R -> \mathbb{R}) are sometimes used in text; TeX
       // would complain, we just render them as math.
-      if (/^\\(math|operatorname|mathbb|mathcal|mathfrak|mathrm|mathsf|mathscr|boldsymbol|bm)\b/.test(body.trim())) {
-        return { html: this.inlineMath(body), end: j };
-      }
+      if (this.isMathBody(body, 0)) return { html: this.inlineMath(body), end: j };
       return { html: this.flow(body, true), end: j };
+    }
+
+    /**
+     * Whether a macro body only makes sense as math, directly or through
+     * another user macro (\newcommand{\RR}{\R}). Bodies that switch to math
+     * themselves ($…$, \ensuremath) or hold links are left as text.
+     */
+    isMathBody(body, depth) {
+      if (/\$|\\\(|\\(?:ensuremath|url|href|text[a-z]*|begin)(?![A-Za-z])/.test(body)) return false;
+      if (MATH_ONLY.test(body)) return true;
+      if (depth > 8) return false;
+      const re = /\\([A-Za-z@]+)/g;
+      let m;
+      while ((m = re.exec(body))) {
+        const mac = this.macros[m[1]];
+        if (mac && this.isMathBody(mac.body, depth + 1)) return true;
+      }
+      return false;
     }
 
     // --- footnotes, citations, title, toc ----------------------------------
@@ -1559,6 +1681,19 @@
   function skipAfterWord(src, i) {
     // TeX ignores spaces (and one newline) after a control word.
     return skipWhite(src, i);
+  }
+
+  /** Where `delim` next occurs in src from i, outside braces (src.length if nowhere). */
+  function findDelim(src, i, delim) {
+    let depth = 0;
+    for (let k = i; k < src.length; k++) {
+      const c = src[k];
+      if (depth === 0 && src.startsWith(delim, k)) return k;
+      if (c === '\\') { k++; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+    }
+    return src.length;
   }
 
   function skipInline(src, i) {
