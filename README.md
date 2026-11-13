@@ -113,6 +113,14 @@ and install it. Once published on the Marketplace, it also runs in the browser:
 press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
 file there, and commit your edits.
 
+## Open arXiv papers from the browser
+
+The [`browser/`](browser) folder is a browser extension for Chrome, Edge and
+Firefox that opens arXiv papers in TeXglass: click its toolbar button on an
+arXiv abstract, PDF or HTML page, right-click a link to an arXiv paper, or use
+the **View in TeXglass** links it adds to arxiv.org. See
+[browser/README.md](browser/README.md) to build and install it.
+
 ## What is supported
 
 - **Math**: `$…$`, `\(…\)`, `$$…$$`, `\[…\]`, and `equation`, `align`,
