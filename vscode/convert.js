@@ -9,7 +9,7 @@
  */
 'use strict';
 const katex = require('katex');
-const TeXdown = require('./shared/texdown.js');
+const TeXglass = require('./shared/texglass.js');
 const { imageResolver } = require('./images.js');
 
 function resolverFor(job) {
@@ -31,7 +31,7 @@ function resolverFor(job) {
 }
 
 function convert(job) {
-  const result = TeXdown.render(job.text, {
+  const result = TeXglass.render(job.text, {
     sourceMap: true,
     renderMath: (tex, displayMode, macros) =>
       katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' }),

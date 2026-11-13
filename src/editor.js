@@ -7,10 +7,10 @@
  * visible). Completion pops up while typing a command after "\", an
  * environment name after "\begin{", or a label after "\ref{"/"\eqref{"/….
  *
- *   TeXdownEditor.attach(textarea, { labels: () => ({key: {num, kindName}}),
+ *   TeXglassEditor.attach(textarea, { labels: () => ({key: {num, kindName}}),
  *                                    source: () => fullDocumentText })
  *
- * Works in the browser only (window.TeXdownEditor).
+ * Works in the browser only (window.TeXglassEditor).
  */
 (function (root) {
   'use strict';
@@ -675,5 +675,5 @@
     return { x, y, h };
   }
 
-  root.TeXdownEditor = { attach, highlight };
+  root.TeXglassEditor = { attach, highlight };
 })(typeof self !== 'undefined' ? self : this);

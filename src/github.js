@@ -15,7 +15,7 @@
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./arxiv.js'));
-  else root.TeXdownGitHub = factory(root.TeXdownArxiv);
+  else root.TeXglassGitHub = factory(root.TeXglassArxiv);
 })(typeof self !== 'undefined' ? self : this, function (Arxiv) {
   'use strict';
 
@@ -275,7 +275,7 @@
   }
 
   /**
-   * A bookmarklet that opens the GitHub page being viewed in TeXdown at viewerUrl.
+   * A bookmarklet that opens the GitHub page being viewed in TeXglass at viewerUrl.
    */
   function bookmarklet(viewerUrl) {
     const target = String(viewerUrl).replace(/[?#].*$/, '');

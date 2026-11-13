@@ -4,10 +4,10 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const katex = require('katex');
-const TeXdown = require('../src/texdown.js');
+const TeXglass = require('../src/texglass.js');
 
 // Render math as a readable marker so tests can see exactly what KaTeX would get.
-const plain = (src) => TeXdown.render(src, { renderMath: (t, d) => `[${d ? 'D' : 'I'}:${t.trim()}]`, today: 'TODAY' });
+const plain = (src) => TeXglass.render(src, { renderMath: (t, d) => `[${d ? 'D' : 'I'}:${t.trim()}]`, today: 'TODAY' });
 const text = (html) => html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
 
 test('numbers theorems within sections with a shared counter', () => {
@@ -123,7 +123,7 @@ test('enumerate items can be labelled and referenced', () => {
 
 test('user macros reach KaTeX and expand in text', () => {
   let seen = null;
-  const r = TeXdown.render(String.raw`\newcommand{\R}{\mathbb{R}}\newcommand{\ie}{i.e.}\DeclareMathOperator{\Hom}{Hom} $\R \Hom$ \ie`, {
+  const r = TeXglass.render(String.raw`\newcommand{\R}{\mathbb{R}}\newcommand{\ie}{i.e.}\DeclareMathOperator{\Hom}{Hom} $\R \Hom$ \ie`, {
     renderMath: (t, d, macros) => { seen = macros; return 'M'; },
   });
   assert.equal(seen['\\R'], '\\mathbb{R}');
@@ -170,7 +170,7 @@ test('figures and tables get numbered captions', () => {
 test('the sample document renders with KaTeX without warnings', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'sample.tex'), 'utf8');
   const errors = [];
-  const r = TeXdown.render(src, {
+  const r = TeXglass.render(src, {
     renderMath: (tex, displayMode, macros) => {
       try {
         return katex.renderToString(tex, { displayMode, macros, throwOnError: true, strict: 'ignore' });
@@ -188,7 +188,7 @@ test('the sample document renders with KaTeX without warnings', () => {
 
 test('sourceMap marks each top-level block with its range in the original source', () => {
   const src = '\\begin{document}\n\\section{Intro}\nSome text % a comment\nmore text.\n\n\\begin{theorem}\\label{t}$x$\\end{theorem}\n\n$$y$$\n\\end{document}\n';
-  const r = TeXdown.render(src, { sourceMap: true, renderMath: () => 'M' });
+  const r = TeXglass.render(src, { sourceMap: true, renderMath: () => 'M' });
   const spans = Array.from(r.html.matchAll(/data-s="(\d+)" data-e="(\d+)"/g)).map((m) => src.slice(+m[1], +m[2]));
   assert.deepEqual(spans, [
     '\\section{Intro}',
@@ -201,7 +201,7 @@ test('sourceMap marks each top-level block with its range in the original source
 
 test('mathtools paired delimiters, \\mathbbm, \\hdots, \\intertext and \\tag macros', () => {
   const real = (src) =>
-    TeXdown.render(src, {
+    TeXglass.render(src, {
       renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true, strict: 'ignore' }),
     });
   const warn = console.warn;

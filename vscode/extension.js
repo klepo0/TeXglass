@@ -1,5 +1,5 @@
 /*
- * TeXdown for VS Code: a live preview of LaTeX files beside the editor.
+ * TeXglass for VS Code: a live preview of LaTeX files beside the editor.
  *
  * The preview follows the active LaTeX editor, like VS Code's Markdown
  * preview. Conversion runs in a worker thread (render-worker.js); the webview
@@ -7,14 +7,14 @@
  * keep their scroll positions in step through the source lines of each block.
  *
  * The same code runs in the browser (github.dev, vscode.dev), bundled into
- * dist/web.js with TEXDOWN_WEB set. There files are read through
+ * dist/web.js with TEXGLASS_WEB set. There files are read through
  * vscode.workspace.fs, and conversion runs in the extension host itself,
  * which is a web worker there.
  */
 'use strict';
-/* global TEXDOWN_WEB */
+/* global TEXGLASS_WEB */
 const vscode = require('vscode');
-const WEB = typeof TEXDOWN_WEB !== 'undefined' && TEXDOWN_WEB;
+const WEB = typeof TEXGLASS_WEB !== 'undefined' && TEXGLASS_WEB;
 const path = require('path'); // path-browserify in the web build
 const fs = WEB ? null : require('fs');
 const { Worker } = WEB ? {} : require('worker_threads');
@@ -23,7 +23,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 
-const VIEW_TYPE = 'texdown.preview';
+const VIEW_TYPE = 'texglass.preview';
 
 function isTex(doc) {
   return !!doc && (doc.languageId === 'latex' || doc.languageId === 'tex' || /\.(tex|ltx|latex)$/i.test(doc.fileName));
@@ -285,7 +285,7 @@ class Preview {
 <body>
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-title">Contents</div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
-<div id="status" class="texdown-status" hidden></div>
+<div id="status" class="texglass-status" hidden></div>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -352,7 +352,7 @@ class Preview {
   }
 
   /**
-   * The document as TeXdown sees it: the file with its \input files and
+   * The document as TeXglass sees it: the file with its \input files and
    * bibliography pulled in. Open editors win over the files on disk, so the
    * preview shows unsaved changes in any of them.
    */
@@ -453,10 +453,10 @@ class Preview {
       case 'ready': {
         this.ready = true;
         this.post({ type: 'doc', uri: this.uri.toString() });
-        this.post({ type: 'prefs', folds: this.context.globalState.get('texdown.folds', []), toc: this.context.globalState.get('texdown.toc', true) });
-        setContext('texdown.tocOpen', this.context.globalState.get('texdown.toc', true));
-        setContext('texdown.hasProofs', false);
-        this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texdown').get('previewTheme', 'auto') });
+        this.post({ type: 'prefs', folds: this.context.globalState.get('texglass.folds', []), toc: this.context.globalState.get('texglass.toc', true) });
+        setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
+        setContext('texglass.hasProofs', false);
+        this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
         this.renderedText = null;
         this.render().then(() => {
           const ed = this.editor();
@@ -475,18 +475,18 @@ class Preview {
         break;
       case 'folds':
         // Keep the most recent ones, like the web viewer.
-        this.context.globalState.update('texdown.folds', m.keys.slice(-500));
+        this.context.globalState.update('texglass.folds', m.keys.slice(-500));
         break;
       case 'toc':
-        this.context.globalState.update('texdown.toc', m.on);
-        setContext('texdown.tocOpen', m.on);
+        this.context.globalState.update('texglass.toc', m.on);
+        setContext('texglass.tocOpen', m.on);
         break;
       case 'set-theme':
-        vscode.workspace.getConfiguration('texdown').update('previewTheme', m.value, vscode.ConfigurationTarget.Global);
+        vscode.workspace.getConfiguration('texglass').update('previewTheme', m.value, vscode.ConfigurationTarget.Global);
         break;
       case 'proofs':
-        setContext('texdown.hasProofs', m.has);
-        setContext('texdown.proofsFolded', m.folded);
+        setContext('texglass.hasProofs', m.has);
+        setContext('texglass.proofsFolded', m.folded);
         break;
       case 'shown':
         this.shown = m; // what the webview shows, for the tests
@@ -538,7 +538,7 @@ class Preview {
   }
 
   syncEnabled() {
-    return vscode.workspace.getConfiguration('texdown').get('scrollSync', true);
+    return vscode.workspace.getConfiguration('texglass').get('scrollSync', true);
   }
 
   syncFromEditor(ed) {
@@ -569,7 +569,42 @@ class Preview {
 
 // --- activation -------------------------------------------------------------------
 
+/**
+ * Until version 0.3.0 the extension was called TeXdown and its settings were
+ * texdown.scrollSync and texdown.previewTheme. Copy any the user had set to
+ * the texglass.* names, once for the user settings and once per workspace, so
+ * that clearing a new setting later does not bring the old value back. The old
+ * entries stay in settings.json: VS Code refuses to write keys that no
+ * installed extension declares.
+ */
+const OLD_SETTINGS = ['scrollSync', 'previewTheme'];
+
+async function migrateOldSettings(context) {
+  const oldConfig = vscode.workspace.getConfiguration('texdown');
+  const config = vscode.workspace.getConfiguration('texglass');
+  const levels = [
+    { memento: context.globalState, target: vscode.ConfigurationTarget.Global, value: 'globalValue' },
+  ];
+  if (vscode.workspace.workspaceFolders) {
+    levels.push({ memento: context.workspaceState, target: vscode.ConfigurationTarget.Workspace, value: 'workspaceValue' });
+  }
+  for (const level of levels) {
+    if (level.memento.get('texglass.settingsMigrated')) continue;
+    for (const key of OLD_SETTINGS) {
+      const was = oldConfig.inspect(key);
+      const now = config.inspect(key);
+      if (was && was[level.value] !== undefined && (!now || now[level.value] === undefined)) {
+        try {
+          await config.update(key, was[level.value], level.target);
+        } catch (e) { /* settings not writable here: keep the default */ }
+      }
+    }
+    await level.memento.update('texglass.settingsMigrated', true);
+  }
+}
+
 function activate(context) {
+  migrateOldSettings(context).catch(() => {});
   const converter = new Converter(context.extensionPath);
   context.subscriptions.push(converter);
   let preview = null;
@@ -585,7 +620,7 @@ function activate(context) {
     if (!uri) {
       const ed = vscode.window.activeTextEditor;
       if (!ed || !isTex(ed.document)) {
-        vscode.window.showInformationMessage('Open a .tex file to preview it with TeXdown.');
+        vscode.window.showInformationMessage('Open a .tex file to preview it with TeXglass.');
         return;
       }
       uri = ed.document.uri;
@@ -611,12 +646,12 @@ function activate(context) {
   }
 
   function setScrollSync(on) {
-    const config = vscode.workspace.getConfiguration('texdown');
+    const config = vscode.workspace.getConfiguration('texglass');
     // Change it where it is set now: the workspace if it overrides it there, else for the user.
     const info = config.inspect('scrollSync');
     const target = info && info.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
     return config.update('scrollSync', on, target).then(() => {
-      vscode.window.setStatusBarMessage(on ? 'TeXdown: the preview scrolls with the editor' : 'TeXdown: the preview scrolls on its own', 2500);
+      vscode.window.setStatusBarMessage(on ? 'TeXglass: the preview scrolls with the editor' : 'TeXglass: the preview scrolls on its own', 2500);
       // Line the preview up again straight away.
       const ed = preview && preview.editor();
       if (on && ed) preview.syncFromEditor(ed);
@@ -624,26 +659,26 @@ function activate(context) {
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('texdown.openPreviewToSide', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Beside)),
-    vscode.commands.registerCommand('texdown.openPreview', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Active)),
+    vscode.commands.registerCommand('texglass.openPreviewToSide', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Beside)),
+    vscode.commands.registerCommand('texglass.openPreview', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Active)),
     // The button in the preview's title bar turns scrolling in step on or off.
-    vscode.commands.registerCommand('texdown.enableScrollSync', () => setScrollSync(true)),
-    vscode.commands.registerCommand('texdown.disableScrollSync', () => setScrollSync(false)),
+    vscode.commands.registerCommand('texglass.enableScrollSync', () => setScrollSync(true)),
+    vscode.commands.registerCommand('texglass.disableScrollSync', () => setScrollSync(false)),
     // The Contents and Hide/Show proofs buttons in the preview's title bar.
-    vscode.commands.registerCommand('texdown.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
-    vscode.commands.registerCommand('texdown.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
-    vscode.commands.registerCommand('texdown.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
-    vscode.commands.registerCommand('texdown.toggleTheme', () => {
+    vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
+    vscode.commands.registerCommand('texglass.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
+    vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
+    vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
-      else vscode.window.showInformationMessage('Open a TeXdown preview first (Ctrl+K V in a .tex file).');
+      else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (preview && e.affectsConfiguration('texdown.previewTheme')) {
-        preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texdown').get('previewTheme', 'auto') });
+      if (preview && e.affectsConfiguration('texglass.previewTheme')) {
+        preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
       }
     }),
-    vscode.commands.registerCommand('texdown.toggleScrollSync', () =>
-      setScrollSync(!vscode.workspace.getConfiguration('texdown').get('scrollSync', true))),
+    vscode.commands.registerCommand('texglass.toggleScrollSync', () =>
+      setScrollSync(!vscode.workspace.getConfiguration('texglass').get('scrollSync', true))),
 
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (!preview || !e.contentChanges.length) return;

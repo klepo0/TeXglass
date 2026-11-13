@@ -1,5 +1,5 @@
 'use strict';
-// Run `npm run copy-shared` first: the worker loads ../shared/texdown.js.
+// Run `npm run copy-shared` first: the worker loads ../shared/texglass.js.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -28,7 +28,7 @@ test('renders blocks with source ranges and KaTeX math', async () => {
 });
 
 test('finds figures next to the file, trying image extensions', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'texdown-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'texglass-'));
   fs.mkdirSync(path.join(dir, 'figs'));
   fs.writeFileSync(path.join(dir, 'figs', 'plot one.png'), '');
   const text = '\\graphicspath{{figs/}}\\begin{document}\n\\includegraphics{plot one.pdf}\n\\includegraphics{missing}\n\\includegraphics{../secret}\n\\end{document}\n';

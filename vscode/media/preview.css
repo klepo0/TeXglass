@@ -1,6 +1,6 @@
 /* Additions to the viewer's stylesheet for the VS Code preview. */
 
-.texdown-status {
+.texglass-status {
   position: fixed;
   right: 12px;
   bottom: 8px;
@@ -11,7 +11,7 @@
   background: var(--paper);
   border: 1px solid var(--rule);
 }
-.texdown-status[hidden] { display: none; }
+.texglass-status[hidden] { display: none; }
 
 /* VS Code adds its own padding to the webview body. */
 body { padding: 0; }

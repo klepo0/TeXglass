@@ -9,7 +9,7 @@ const root = path.join(__dirname, '..', '..');
 const out = path.join(__dirname, '..', 'shared');
 fs.mkdirSync(out, { recursive: true });
 for (const [from, to] of [
-  ['src/texdown.js', 'texdown.js'],
+  ['src/texglass.js', 'texglass.js'],
   ['styles.css', 'styles.css'],
 ]) {
   const src = path.join(root, from);

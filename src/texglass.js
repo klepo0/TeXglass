@@ -1,5 +1,5 @@
 /*
- * TeXdown — render LaTeX documents to HTML, the way a Markdown previewer
+ * TeXglass — render LaTeX documents to HTML, the way a Markdown previewer
  * renders Markdown.
  *
  * The converter is a small, forgiving, single-file LaTeX-to-HTML translator.
@@ -15,11 +15,11 @@
  * everything and collects labels, citations and the table of contents; the
  * second pass renders with that information, so forward references work.
  *
- * Works in the browser (window.TeXdown) and in Node (require).
+ * Works in the browser (window.TeXglass) and in Node (require).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.TeXdown = factory();
+  else root.TeXglass = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 

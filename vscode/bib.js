@@ -1,6 +1,6 @@
 /*
  * A small BibTeX reader: turns the entries a document cites into a
- * thebibliography environment that TeXdown can render, in the spirit of the
+ * thebibliography environment that TeXglass can render, in the spirit of the
  * amsplain style (or alpha labels, or citation order, following
  * \bibliographystyle).
  */
