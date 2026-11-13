@@ -434,7 +434,7 @@
   preview.addEventListener('click', (e) => {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
       e.preventDefault();
-      popover.hidden = true;
+      hidePopover();
       goToSource(e);
       return;
     }
@@ -448,22 +448,43 @@
     }
     const target = document.getElementById(decodeURIComponent(href.slice(1)));
     if (!target) return;
-    popover.hidden = true;
+    jumpTo(target);
+  });
+
+  function jumpTo(target) {
+    hidePopover();
     reveal(target);
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     target.classList.remove('flash');
     void target.offsetWidth;
     target.classList.add('flash');
-  });
+  }
 
+  // The popover stays open while the pointer is on the link or on the popover
+  // itself, so a long preview can be scrolled. It closes a moment after the
+  // pointer has left both.
+  const HIDE_DELAY = 250;
   let hideTimer = null;
+  let popoverLink = null;
+  function hidePopover() {
+    clearTimeout(hideTimer);
+    popover.hidden = true;
+    popoverLink = null;
+  }
+  function hidePopoverSoon() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hidePopover, HIDE_DELAY);
+  }
   preview.addEventListener('mouseover', (e) => {
     const a = e.target.closest('a.ref, .cite a');
     if (!a) return;
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target || target.contains(a)) return;
     clearTimeout(hideTimer);
-    popover.innerHTML = '';
+    if (popoverLink === a && !popover.hidden) return;
+    popoverLink = a;
+    const body = document.createElement('div');
+    body.className = 'ref-popover-body';
     let node = target;
     if (node.classList.contains('caption') && node.parentElement.tagName === 'FIGURE') node = node.parentElement;
     if (/^H[1-6]$/.test(node.tagName)) {
@@ -471,24 +492,48 @@
       const b = document.createElement('strong');
       b.innerHTML = node.innerHTML;
       p.appendChild(b);
-      popover.appendChild(p);
+      body.appendChild(p);
     } else {
       const clone = node.cloneNode(true);
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-      popover.appendChild(clone);
+      body.appendChild(clone);
     }
+    popover.replaceChildren(body);
     popover.hidden = false;
     const r = a.getBoundingClientRect();
     const width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
     popover.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
+    // The popover's own 8px padding is the gap to the link (the hover bridge).
     const h = popover.offsetHeight;
-    popover.style.top = (r.bottom + 8 + h > window.innerHeight && r.top - h - 8 > 0 ? r.top - h - 8 : r.bottom + 8) + 'px';
+    popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
   });
   preview.addEventListener('mouseout', (e) => {
-    if (!e.target.closest('a.ref, .cite a')) return;
-    hideTimer = setTimeout(() => { popover.hidden = true; }, 120);
+    const a = e.target.closest('a.ref, .cite a');
+    if (!a || popover.hidden || a.contains(e.relatedTarget)) return;
+    if (popover.contains(e.relatedTarget)) return; // moving into the popover
+    hidePopoverSoon();
+  });
+  popover.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  popover.addEventListener('mouseleave', (e) => {
+    if (popoverLink && popoverLink.contains(e.relatedTarget)) return;
+    hidePopoverSoon();
+  });
+  popover.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href]');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    if (!href.startsWith('#')) {
+      vscode.postMessage({ type: 'open-link', href });
+      return;
+    }
+    const target = document.getElementById(decodeURIComponent(href.slice(1)));
+    if (target) jumpTo(target);
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !popover.hidden) hidePopover();
   });
 
   // --- messages from the extension ----------------------------------------------------

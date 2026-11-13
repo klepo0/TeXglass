@@ -69,7 +69,7 @@ worker), not in a separate thread.
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texglass-0.3.0.vsix`.
+`code --install-extension texglass-0.3.1.vsix`.
 
 Upgrading from TeXdown Preview (0.2.0 and earlier): the extension was
 renamed, so VS Code sees TeXglass Preview as a new extension. Uninstall
@@ -90,7 +90,7 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texglass-0.3.0.vsix
+npx vsce package      # makes texglass-0.3.1.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after

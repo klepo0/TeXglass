@@ -445,20 +445,27 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { from { background: var(--flash); } }
 
+/* The outer box is transparent and padded, so the 8px gap between the link
+   and the card is part of the popover: the pointer can cross it without the
+   popover closing, then scroll inside the card. */
 .ref-popover {
   position: fixed;
   z-index: 10;
+  padding: 8px 0;
+  font-size: 16px;
+}
+.ref-popover[hidden] { display: none; }
+.ref-popover-body {
+  position: relative; /* keeps KaTeX's MathML inside the scroll box */
   max-height: 60vh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 0.6em 1em;
   background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: 8px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
-  font-size: 16px;
-  pointer-events: none;
 }
-.ref-popover[hidden] { display: none; }
 .ref-popover .theorem, .ref-popover .math-display { margin: 0; }
 
 /* Lists */
