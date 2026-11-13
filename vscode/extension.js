@@ -190,10 +190,12 @@ function readSource(p) {
 
 /** The main file of the project `uri` belongs to (see findRoot in project.js). */
 async function rootOf(uri, text) {
+  // Look for the main file no higher than the workspace folder.
+  const top = vscode.workspace.getWorkspaceFolder(uri);
   if (isVirtual(uri)) {
     const docs = openDocsLike(uri);
     const root = await withFiles(
-      (get) => findRoot(uri.path, text, (d) => get('#' + d) || [], (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+      (get) => findRoot(uri.path, text, (d) => get('#' + d) || [], (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix, top && top.uri.path),
       (key) => (key[0] === '#' ? listTexVirtual(uri.with({ path: key.slice(1) })) : readText(uri.with({ path: key }))),
       new Map()
     );
@@ -207,7 +209,7 @@ async function rootOf(uri, text) {
       return [];
     }
   };
-  const root = findRoot(uri.fsPath, text, listTex, readSource);
+  const root = findRoot(uri.fsPath, text, listTex, readSource, path, top && top.uri.fsPath);
   return root === uri.fsPath || !fs.existsSync(root) ? uri : vscode.Uri.file(root);
 }
 

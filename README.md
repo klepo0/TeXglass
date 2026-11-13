@@ -30,8 +30,12 @@ be hosted on GitHub Pages as is. Then:
   `index.html?arxiv=2301.00001`, does the same.
 - **GitHub** opens a `.tex` file from a public GitHub repository: paste a link
   to the file, to a folder or to the whole repo (TeXglass then picks the file
-  with `\documentclass`). Its `\input`/`\include` files, a committed `.bbl` and
-  PNG/JPEG/SVG figures are fetched too. **Edit on GitHub** then opens the file
+  with `\documentclass`). Its `\input`/`\include`/`\subfile`/`\import` files
+  (respecting `\includeonly`), a committed `.bbl` and PNG/JPEG/SVG figures are
+  fetched too. A link to a chapter opens the whole document, scrolled to that
+  chapter: TeXglass finds the main file from a `% !TEX root = main.tex` line,
+  `\documentclass[main]{subfiles}`, or the nearest file with `\documentclass`
+  in that folder or above that includes it. **Edit on GitHub** then opens the file
   on GitHub to make and commit changes. Pasting a GitHub link onto the page,
   or opening `index.html?gh=<GitHub link>`, does the same. For one click from
   any GitHub page, drag **Open in TeXglass** from the GitHub dialog to your
