@@ -1021,7 +1021,8 @@
       const body = await TeXglassExport.replaceImages(TeXglassExport.joinBlocks(result.blocks), isBlob, async (u) => readAsDataUrl(await (await fetch(u)).blob()));
       const cssLink = document.querySelector('link[rel="stylesheet"][href$="styles.css"]');
       const css = cssLink ? await (await fetch(cssLink.href)).text() : '';
-      const html = TeXglassExport.page({ body, title: result.title || fileName.textContent || 'Document', css, katexCss: await katexCssWithFonts() });
+      const diagramsJs = /class="tg-diagram/.test(body) ? await (await fetch('src/diagrams.js')).text().catch(() => '') : '';
+      const html = TeXglassExport.page({ body, title: result.title || fileName.textContent || 'Document', css, katexCss: await katexCssWithFonts(), diagramsJs });
       const name = TeXglassExport.fileName(fileName.textContent, result.title);
       if (inFrame) {
         // Downloads are blocked in an embedded page; copy the page instead.

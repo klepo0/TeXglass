@@ -176,3 +176,11 @@ test('a diagram wrapped in an array or \\fbox keeps the math around it balanced'
   assert.doesNotMatch(html, /\\begin\{array\}|\\fbox/);
   assert.equal(models(html, 'data-cd').length, 2);
 });
+
+test('an exported page carries the diagram script only when it has diagrams', () => {
+  const Export = require('../src/export.js');
+  const js = 'window.X = "</script>";';
+  const withD = Export.page({ body: plain(String.raw`\begin{tikzcd}A\end{tikzcd}`).html, diagramsJs: js });
+  assert.match(withD, /<script>window\.X = "<\\\/script>";<\/script>/);
+  assert.doesNotMatch(Export.page({ body: '<p>x</p>', diagramsJs: js }), /window\.X/);
+});

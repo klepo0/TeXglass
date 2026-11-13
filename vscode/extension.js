@@ -670,7 +670,11 @@ async function exportHtml(context, converter, uri, out) {
         katexCss = null; // link KaTeX's stylesheet instead
       }
     }
-    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss });
+    let diagramsJs = '';
+    if (/class="tg-diagram/.test(m.result.html)) {
+      try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
+    }
+    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs });
     await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
     const actions = out.scheme === 'file' && !WEB ? ['Open in Browser'] : [];
     vscode.window.showInformationMessage(`Exported ${path.posix.basename(out.path)}`, ...actions).then((pick) => {
