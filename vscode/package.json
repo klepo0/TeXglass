@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "klepo0",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,8 @@
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex",
-    "onWebviewPanel:texglass.preview"
+    "onWebviewPanel:texglass.preview",
+    "onCommand:texglass.exportHtml"
   ],
   "contributes": {
     "commands": [
@@ -85,6 +86,12 @@
         "title": "Toggle Light/Dark Preview",
         "category": "TeXglass",
         "icon": "$(color-mode)"
+      },
+      {
+        "command": "texglass.exportHtml",
+        "title": "Export to HTML",
+        "category": "TeXglass",
+        "icon": "$(export)"
       }
     ],
     "menus": {
@@ -123,11 +130,21 @@
           "command": "texglass.enableScrollSync",
           "when": "activeWebviewPanelId == 'texglass.preview' && !config.texglass.scrollSync",
           "group": "navigation@3"
+        },
+        {
+          "command": "texglass.exportHtml",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "group": "1_texglass"
         }
       ],
       "explorer/context": [
         {
           "command": "texglass.openPreview",
+          "when": "resourceExtname == .tex",
+          "group": "navigation"
+        },
+        {
+          "command": "texglass.exportHtml",
           "when": "resourceExtname == .tex",
           "group": "navigation"
         }
@@ -173,6 +190,11 @@
           ],
           "default": "auto",
           "description": "Colours of the preview. The button in the preview's title bar switches between light and dark."
+        },
+        "texglass.exportEmbedFonts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Put KaTeX's stylesheet and fonts (about 350 KB) inside pages made with Export to HTML, so their math looks right offline. Turn off to load them from a CDN instead and keep the files small."
         }
       }
     }

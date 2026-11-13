@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Copy the converter and the stylesheet from the web viewer into the extension,
+/* Copy the converter, the HTML export and the stylesheet from the web viewer into the extension,
  * so both stay one source. Runs before packaging (vscode:prepublish). */
 'use strict';
 const fs = require('fs');
@@ -10,6 +10,7 @@ const out = path.join(__dirname, '..', 'shared');
 fs.mkdirSync(out, { recursive: true });
 for (const [from, to] of [
   ['src/texglass.js', 'texglass.js'],
+  ['src/export.js', 'export.js'],
   ['styles.css', 'styles.css'],
 ]) {
   const src = path.join(root, from);

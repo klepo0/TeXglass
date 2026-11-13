@@ -62,6 +62,12 @@ be hosted on GitHub Pages as is. Then:
   typing `$` with text selected wraps it in `$…$`.
 - **Tab out**: with the cursor right before a closing `$`, `$$`, `\)`, `\]`,
   `}`, `)` or `]`, Tab jumps past it (after any snippet fields are done).
+- **Export** downloads the document as one standalone `.html` page: the math
+  rendered, theorems and equations numbered and references linked as in the
+  preview, with KaTeX's fonts and any imported figures inside the file, so it
+  opens anywhere, offline too. The page follows the reader's light or dark
+  setting and has its own switch. (Inside an embedded page, where downloads
+  are blocked, the HTML is copied to the clipboard instead.)
 - **Save** (Ctrl+S) writes back to the opened file in Chrome and Edge, and
   downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and
@@ -84,12 +90,17 @@ be hosted on GitHub Pages as is. Then:
 npx texglass paper.tex -o paper.html
 ```
 
+This writes the same standalone page as the Export button. Figures are linked
+relative to the output file. KaTeX's fonts go inside the page (about 350 KB);
+add `--link-katex` to load them from a CDN instead.
+
 ## Preview in VS Code
 
 The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXglass: Open Preview to the
 Side** (Ctrl+K V). It scrolls along with the editor (a button turns that off),
-and Ctrl+click in the preview jumps to that spot in the source. See [vscode/README.md](vscode/README.md) to build
+and Ctrl+click in the preview jumps to that spot in the source. **TeXglass:
+Export to HTML** saves the document as a standalone page. See [vscode/README.md](vscode/README.md) to build
 and install it. Once published on the Marketplace, it also runs in the browser:
 press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
 file there, and commit your edits.
@@ -128,4 +139,6 @@ the browser, since the page cannot read files next to the `.tex` file.
 The editing aids are in `src/editor.js`. The converter is `src/texglass.js`, a dependency-free module that works in the
 browser and in Node. With `{ sourceMap: true }` it wraps each top-level block
 in `<div class="src-block" data-s data-e>` giving its range in the source,
-which is what Edit mode uses. `npm test` runs the test suite.
+which is what Edit mode uses. `src/export.js` turns rendered HTML into a
+standalone page; the web viewer, the CLI and the VS Code extension all use it.
+`npm test` runs the test suite.

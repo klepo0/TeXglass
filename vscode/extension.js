@@ -22,6 +22,7 @@ const { convert } = WEB ? require('./convert.js') : {};
 const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
+const TeXglassExport = require('./shared/export.js');
 
 const VIEW_TYPE = 'texglass.preview';
 
@@ -210,6 +211,64 @@ async function rootOf(uri, text) {
   return root === uri.fsPath || !fs.existsSync(root) ? uri : vscode.Uri.file(root);
 }
 
+/**
+ * The document as TeXglass sees it: the file with its \\input files and
+ * bibliography pulled in. Open editors win over the files on disk, so the
+ * preview shows unsaved changes in any of them. `deps` are the files it read,
+ * as the preview's keys for them (see Preview.keyOf). `cache` remembers what
+ * was read from a virtual file system.
+ */
+async function assembleDocument(uri, cache) {
+  if (isVirtual(uri)) {
+    const docs = openDocsLike(uri);
+    const project = await withFiles(
+      (get) => assemble(uri.path, (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+      (p) => readText(uri.with({ path: p })),
+      cache
+    );
+    if (!project) return { error: `Could not read ${uri.path}.` };
+    return project;
+  }
+  if (uri.scheme !== 'file') {
+    let doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+    try {
+      if (!doc) doc = await vscode.workspace.openTextDocument(uri);
+    } catch (e) {
+      return { error: `Could not open ${uri}: ${e.message || e}` };
+    }
+    const text = doc.getText().replace(/\r\n?/g, '\n');
+    const key = uri.toString();
+    return { text, files: [key], texts: { [key]: text }, segments: [{ start: 0, end: text.length, file: 0, at: 0 }], deps: [], warnings: [] };
+  }
+  const project = assemble(uri.fsPath, readSource);
+  if (!project) return { error: `Could not read ${uri.fsPath}.` };
+  project.deps = project.deps.map(normPath);
+  return project;
+}
+
+/**
+ * Figures of a document on a virtual file system: { \\includegraphics name:
+ * the file's Uri, or null }. Files are looked up with stat, in parallel, and
+ * remembered in `cache`.
+ */
+async function findFigureFiles(uri, text, cache) {
+  const names = figureNames(text);
+  const figures = {};
+  if (!names.length) return figures;
+  const dir = path.posix.dirname(uri.path);
+  const at = (rel) => uri.with({ path: path.posix.join(dir, rel) });
+  await withFiles(
+    (get) => {
+      const find = imageResolver(text, (rel) => get('?' + rel) === true, (rel) => rel);
+      for (const n of names) figures[n] = find(n);
+    },
+    (key) => vscode.workspace.fs.stat(at(key.slice(1))).then((st) => (st.type & vscode.FileType.File) !== 0, () => false),
+    cache
+  );
+  for (const n of names) figures[n] = figures[n] ? at(figures[n]) : null;
+  return figures;
+}
+
 const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
 
 // --- the preview panel --------------------------------------------------------------
@@ -351,59 +410,17 @@ class Preview {
     }
   }
 
-  /**
-   * The document as TeXglass sees it: the file with its \input files and
-   * bibliography pulled in. Open editors win over the files on disk, so the
-   * preview shows unsaved changes in any of them.
-   */
+  /** The document with its \\input files and bibliography (see assembleDocument). */
   async assembleProject() {
-    if (isVirtual(this.uri)) {
-      const docs = openDocsLike(this.uri);
-      const project = await withFiles(
-        (get) => assemble(this.uri.path, (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
-        (p) => readText(this.uri.with({ path: p })),
-        this.cache
-      );
-      if (!project) return { error: `Could not read ${this.uri.path}.` };
-      this.deps = new Set(project.deps);
-      return project;
-    }
-    if (this.uri.scheme !== 'file') {
-      let doc = this.document;
-      try {
-        if (!doc) doc = await vscode.workspace.openTextDocument(this.uri);
-      } catch (e) {
-        return { error: `Could not open ${this.uri}: ${e.message || e}` };
-      }
-      const text = doc.getText().replace(/\r\n?/g, '\n');
-      const key = this.uri.toString();
-      return { text, files: [key], texts: { [key]: text }, segments: [{ start: 0, end: text.length, file: 0, at: 0 }], deps: [], warnings: [] };
-    }
-    const project = assemble(this.uri.fsPath, readSource);
-    if (!project) return { error: `Could not read ${this.uri.fsPath}.` };
-    this.deps = new Set(project.deps.map(normPath));
+    const project = await assembleDocument(this.uri, this.cache);
+    if (project && project.deps) this.deps = new Set(project.deps);
     return project;
   }
 
-  /**
-   * Figures on a virtual file system: { \includegraphics name: webview URL }.
-   * Files are looked up with stat, in parallel, and remembered.
-   */
+  /** Figures on a virtual file system: { \\includegraphics name: webview URL }. */
   async findFigures(text) {
-    const names = figureNames(text);
-    const figures = {};
-    if (!names.length) return figures;
-    const dir = path.posix.dirname(this.uri.path);
-    const at = (rel) => this.uri.with({ path: path.posix.join(dir, rel) });
-    await withFiles(
-      (get) => {
-        const find = imageResolver(text, (rel) => get('?' + rel) === true, (rel) => rel);
-        for (const n of names) figures[n] = find(n);
-      },
-      (key) => vscode.workspace.fs.stat(at(key.slice(1))).then((st) => (st.type & vscode.FileType.File) !== 0, () => false),
-      this.cache
-    );
-    for (const n of names) figures[n] = figures[n] ? this.panel.webview.asWebviewUri(at(figures[n])).toString() : null;
+    const figures = await findFigureFiles(this.uri, text, this.cache);
+    for (const n of Object.keys(figures)) figures[n] = figures[n] ? this.panel.webview.asWebviewUri(figures[n]).toString() : null;
     return figures;
   }
 
@@ -567,6 +584,100 @@ class Preview {
   }
 }
 
+// --- export to HTML ----------------------------------------------------------------
+
+/** A file inside the extension, as bytes: through the file system, or fetched in the browser. */
+async function readExtensionFile(context, ...parts) {
+  const uri = vscode.Uri.joinPath(context.extensionUri, ...parts);
+  try {
+    return await vscode.workspace.fs.readFile(uri);
+  } catch (e) {
+    if (typeof fetch !== 'function') throw e;
+    const res = await fetch(uri.toString(true));
+    if (!res.ok) throw new Error(`${res.status} ${uri}`);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+}
+
+function base64(bytes) {
+  if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** Where a figure is, seen from the folder the page is written to: a relative path when it can be. */
+function figureUrlFrom(outDir, file) {
+  if (file.scheme === outDir.scheme && file.authority === outDir.authority) {
+    const rel = path.posix.relative(outDir.path, file.path);
+    if (!/^[a-z]:/i.test(rel)) return rel.split('/').map(encodeURIComponent).join('/');
+  }
+  return file.scheme === 'file' ? file.toString() : null;
+}
+
+/**
+ * Write the document `uri` belongs to as one standalone HTML page, with the
+ * math rendered and the theorems numbered as in the preview. Asks where to
+ * save it, next to the .tex file by default, unless `out` says.
+ */
+async function exportHtml(context, converter, uri, out) {
+  const project = await assembleDocument(uri, new Map());
+  if (!project || project.error) {
+    vscode.window.showErrorMessage(project ? project.error : `Could not read ${uri}.`);
+    return null;
+  }
+  const name = path.posix.basename(uri.path);
+  const suggested = uri.scheme === 'untitled' ? undefined : vscode.Uri.joinPath(uri, '..', TeXglassExport.fileName(name));
+  if (!out) out = await vscode.window.showSaveDialog({
+    defaultUri: suggested,
+    filters: { HTML: ['html', 'htm'] },
+    saveLabel: 'Export',
+    title: 'Export to HTML',
+  });
+  if (!out) return null;
+  return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'TeXglass: exporting to HTML…' }, async () => {
+    const text = project.text;
+    const outDir = vscode.Uri.joinPath(out, '..');
+    let job;
+    if (isVirtual(uri)) {
+      const figures = await findFigureFiles(uri, text, new Map());
+      for (const n of Object.keys(figures)) figures[n] = figures[n] ? figureUrlFrom(outDir, figures[n]) : null;
+      job = { text, figures, plain: true };
+    } else if (uri.scheme === 'file') {
+      const dir = path.dirname(uri.fsPath);
+      const base = figureUrlFrom(outDir, vscode.Uri.file(dir)) || vscode.Uri.file(dir).toString();
+      job = { text, dir, base: base === '' ? '.' : base, plain: true };
+    } else {
+      job = { text, figures: {}, plain: true };
+    }
+    const m = await converter.render(job);
+    if (m.error) {
+      vscode.window.showErrorMessage('TeXglass could not convert the document: ' + m.error.split('\n')[0]);
+      return null;
+    }
+    const decode = (b) => new TextDecoder().decode(b);
+    const css = decode(await readExtensionFile(context, 'shared', 'styles.css'));
+    let katexCss = null;
+    if (vscode.workspace.getConfiguration('texglass').get('exportEmbedFonts', true)) {
+      try {
+        katexCss = await TeXglassExport.embedKatexFonts(
+          decode(await readExtensionFile(context, 'node_modules', 'katex', 'dist', 'katex.min.css')),
+          async (font) => base64(await readExtensionFile(context, 'node_modules', 'katex', 'dist', 'fonts', font))
+        );
+      } catch (e) {
+        katexCss = null; // link KaTeX's stylesheet instead
+      }
+    }
+    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss });
+    await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
+    const actions = out.scheme === 'file' && !WEB ? ['Open in Browser'] : [];
+    vscode.window.showInformationMessage(`Exported ${path.posix.basename(out.path)}`, ...actions).then((pick) => {
+      if (pick === 'Open in Browser') vscode.env.openExternal(out);
+    });
+    return out;
+  });
+}
+
 // --- activation -------------------------------------------------------------------
 
 /**
@@ -671,6 +782,29 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
+    }),
+    // Export the document as a standalone .html file: the one given (Explorer),
+    // else the LaTeX file being edited, else the one the preview shows.
+    // Other extensions and tasks may pass where to write it as a second argument.
+    vscode.commands.registerCommand('texglass.exportHtml', async (uri, out) => {
+      if (!(uri instanceof vscode.Uri)) {
+        const ed = vscode.window.activeTextEditor;
+        if (ed && isTex(ed.document)) uri = ed.document.uri;
+        else if (preview) uri = preview.uri;
+        else {
+          vscode.window.showInformationMessage('Open a .tex file to export it to HTML.');
+          return null;
+        }
+      }
+      if (!(preview && uri.toString() === preview.uri.toString())) {
+        // A chapter exports the whole document it belongs to, as the preview shows it.
+        try {
+          const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+          const text = doc ? doc.getText() : isVirtual(uri) ? await readText(uri) : uri.scheme === 'file' ? readSource(uri.fsPath) : null;
+          uri = await rootOf(uri, text || '');
+        } catch (e) { /* keep the file itself */ }
+      }
+      return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined);
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
