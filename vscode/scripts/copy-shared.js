@@ -11,6 +11,7 @@ fs.mkdirSync(out, { recursive: true });
 for (const [from, to] of [
   ['src/texglass.js', 'texglass.js'],
   ['styles.css', 'styles.css'],
+  ['src/find.js', 'find.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));

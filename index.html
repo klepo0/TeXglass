@@ -12,6 +12,7 @@
   <script defer src="src/editor.js"></script>
   <script defer src="src/arxiv.js"></script>
   <script defer src="src/github.js"></script>
+  <script defer src="src/find.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -28,6 +29,7 @@
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
     <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
     <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the table of contents">Contents</button>
+    <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)">Find</button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <button id="load-sample" type="button" title="Load the example document">Sample</button>
     <span id="file-name" class="file-name"></span>

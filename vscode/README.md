@@ -30,6 +30,13 @@ is needed, and the preview updates as you type, without saving.
   can also be set back to `auto`, which follows VS Code's theme).
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
+- **Find in the preview** (Ctrl+F or the search button in the title bar, with
+  the preview focused): every match is highlighted, and Enter / Shift+Enter
+  (or F3 / Shift+F3) go to the next and previous one. Formulas are not searched.
+- **Go to a theorem, equation or section** (Ctrl+G with the preview focused,
+  or **TeXglass: Go to Theorem, Equation or Section…**): type `Lemma 4.1`,
+  `(3.2)`, `§2` or just `3.2` and press Enter. A kind (`lemma`) or a title
+  lists those too.
 - **Documents in several files**: `\input`, `\include`, `\subfile` and
   `\import` files are pulled in, and edits in any of them show up live (even
   before saving). Previewing a chapter shows the whole document: TeXglass finds

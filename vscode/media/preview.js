@@ -536,6 +536,19 @@
     if (e.key === 'Escape' && !popover.hidden) hidePopover();
   });
 
+  // --- find and go to ----------------------------------------------------------------
+
+  // Opened by the texglass.find / texglass.goTo commands (Ctrl+F, Ctrl+G), which
+  // VS Code runs for keys pressed in here too, so no key handling of our own.
+  const finder = window.TeXglassFind
+    ? window.TeXglassFind.attach({ root: preview, scroller: pane, reveal, onJump: hidePopover })
+    : null;
+
+  function selectedText() {
+    const s = String(window.getSelection()).trim();
+    return s && s.length <= 100 && !/\n/.test(s) ? s : null;
+  }
+
   // --- messages from the extension ----------------------------------------------------
 
   function setStatus(text) {
@@ -598,6 +611,13 @@
         break;
       case 'status':
         setStatus(m.text);
+        break;
+      case 'find':
+        if (finder) finder.open(m.mode, m.mode === 'find' ? selectedText() : null);
+        break;
+      case 'find-step':
+        if (finder && finder.isOpen()) finder[m.dir < 0 ? 'prev' : 'next']();
+        else if (finder) finder.open('find');
         break;
       case 'scroll-to':
         scrollToLine(m.line, m.file);

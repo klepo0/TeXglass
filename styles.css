@@ -645,3 +645,89 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .toc-pane, #toc-toggle { display: none !important; }
   body { display: block; background: #fff; }
 }
+
+/* Find bar: search the text, or go to a theorem, equation or section by number. */
+.find-bar {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+.find-bar[hidden] { display: none; }
+.find-row { display: flex; align-items: center; gap: 4px; padding: 6px; }
+.find-modes { display: flex; flex: none; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.find-modes button {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.find-modes button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); }
+.find-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+}
+.find-input:focus { border-color: var(--accent); }
+.find-bar.no-match .find-input { border-color: var(--missing); }
+.find-count { flex: none; font-size: 12px; color: var(--muted); min-width: 0; white-space: nowrap; }
+.find-count:empty { display: none; }
+.find-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.find-icon[hidden] { display: none; }
+.find-icon svg { display: block; width: 16px; height: 16px; }
+.find-icon:hover:not(:disabled) { background: var(--accent-soft); }
+.find-icon:disabled { opacity: 0.35; cursor: default; }
+.goto-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+}
+.goto-list[hidden] { display: none; }
+.goto-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.goto-list li[aria-selected="true"] { background: var(--accent-soft); }
+.goto-name { flex: none; font-weight: 600; }
+.goto-title { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.goto-list li.goto-empty { color: var(--muted); cursor: default; white-space: normal; }
+::highlight(texglass-find) { background-color: rgba(255, 200, 0, 0.35); color: inherit; }
+::highlight(texglass-find-current) { background-color: rgba(255, 150, 0, 0.75); color: inherit; }
+@media (max-width: 520px) {
+  .find-modes button { padding: 3px 6px; }
+}
+@media print { .find-bar { display: none !important; } }
