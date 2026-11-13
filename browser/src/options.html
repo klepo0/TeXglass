@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TeXglass for arXiv options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <h1>TeXglass for arXiv</h1>
+  <form id="form">
+    <fieldset>
+      <legend>Open papers in</legend>
+      <label>
+        <input type="radio" name="viewer" value="builtin">
+        <span><strong>The viewer bundled with this extension</strong><br>
+        Works without any website and without an internet connection, apart from downloading the paper from arXiv.</span>
+      </label>
+      <label>
+        <input type="radio" name="viewer" value="web">
+        <span><strong>The TeXglass website</strong><br>
+        <input type="url" id="webUrl" spellcheck="false" aria-label="Web viewer address"></span>
+      </label>
+    </fieldset>
+    <p class="status" id="status" role="status"></p>
+  </form>
+  <p class="hint">Click the toolbar button on an arXiv page, right-click a link to an arXiv paper, or use
+    the <em>View in TeXglass</em> links on arxiv.org. TeXglass downloads the LaTeX source from
+    arxiv.org/src, picks the main file and inlines its <code>\input</code> and <code>\include</code> files.</p>
+  <script src="options.js"></script>
+</body>
+</html>

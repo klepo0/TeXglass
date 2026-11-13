@@ -1,0 +1,42 @@
+.full-text a.texglass-abs::before {
+  content: "∑ ";
+  font-family: Georgia, serif;
+  font-style: italic;
+}
+
+a.texglass-list {
+  white-space: nowrap;
+}
+
+a.texglass-float {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: #3b5ba9;
+  color: #fff !important;
+  font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-decoration: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0.88;
+}
+
+a.texglass-float:hover,
+a.texglass-float:focus-visible {
+  opacity: 1;
+}
+
+a.texglass-float::before {
+  content: "∑ ";
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-weight: normal;
+}
+
+@media print {
+  a.texglass-float {
+    display: none;
+  }
+}

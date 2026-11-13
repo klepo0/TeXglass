@@ -1324,7 +1324,11 @@
   }
 
   const bookmarkletLink = $('bookmarklet');
-  if (window.TeXglassGitHub) bookmarkletLink.href = TeXglassGitHub.bookmarklet(location.href);
+  // Inside the browser extension the page is a chrome-extension:// or moz-extension://
+  // URL that ordinary pages can't open, so the bookmarklet points at the website.
+  const inExtension = /^(chrome|moz|ms-browser)-extension:$/.test(location.protocol);
+  const bookmarkletTarget = inExtension ? 'https://klepo0.github.io/TeXglass/' : location.href;
+  if (window.TeXglassGitHub) bookmarkletLink.href = TeXglassGitHub.bookmarklet(bookmarkletTarget);
   bookmarkletLink.addEventListener('click', (e) => {
     e.preventDefault();
     ghSay('Drag the button to your bookmarks bar instead of clicking it here.');
@@ -1348,7 +1352,7 @@
       load(await res.text(), 'sample.tex');
     } catch (e) {
       load(
-        '\\section*{Welcome to \\TeX down}\nOpen a \\texttt{.tex} file with the button above, or drop one on this page.\n\n' +
+        '\\section*{Welcome to TeXglass}\nOpen a \\texttt{.tex} file with the button above, or drop one on this page.\n\n' +
           'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
         'welcome.tex'
       );
