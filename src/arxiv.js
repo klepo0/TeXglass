@@ -114,13 +114,40 @@
     return out.join('/');
   }
 
+  const stripComments = (t) => t.replace(/(^|[^\\])%.*$/gm, '$1');
+
+  /** How \include and \includeonly name a file: trimmed, without "./" or ".tex". */
+  const includeName = (name) => String(name || '').trim().replace(/^"|"$/g, '').replace(/^(\.\/)+/, '').replace(/\.tex$/i, '');
+
+  /** The names in \includeonly{…} (see includeName), or null if there is none. */
+  function includeOnly(text) {
+    const m = /\\includeonly\s*\{([^}]*)\}/.exec(stripComments(text || ''));
+    return m ? new Set(m[1].split(',').map(includeName).filter(Boolean)) : null;
+  }
+
+  /** The body of a whole document pulled in with \subfile: what is inside \begin{document}. */
+  function subfileBody(text) {
+    const b = /\\begin\s*\{document\}/.exec(text);
+    if (!b) return text;
+    const rest = text.slice(b.index + b[0].length);
+    const e = /\\end\s*\{document\}/.exec(rest);
+    return e ? rest.slice(0, e.index) : rest;
+  }
+
   /**
    * Inline \input, \include, \subfile and \import into the main file, and
    * replace \bibliography{…} with the .bbl that arXiv keeps next to it.
+   * \include files left out by \includeonly are dropped, and a \subfile
+   * brings in only its document body.
+   * If opts.starts is an object, it is filled with { path: offset } of where
+   * each pulled-in file's text begins in the result.
    */
-  function flatten(mainPath, texFiles) {
+  function flatten(mainPath, texFiles, opts) {
+    const starts = opts && opts.starts;
+    const mark = (p) => (starts ? `\u0000${p}\u0000` : '');
     const dirOf = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
     const mainDir = dirOf(mainPath);
+    const only = includeOnly(texFiles[mainPath]);
     const seen = new Set();
     const expand = (path, depth) => {
       if (depth > 20 || seen.has(path)) return '';
@@ -130,9 +157,12 @@
         (m, pre, comment, cmd, arg, impDir, impFile, bare) => {
           if (comment !== undefined) return m;
           const name = arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare;
+          if (cmd === 'include' && only && !only.has(includeName(name))) return '\n';
           const found = resolvePath(texFiles, mainDir, name, ['', '.tex', '.ltx']);
           if (!found || found === path) return m;
-          const body = expand(found, depth + 1);
+          let body = expand(found, depth + 1);
+          if (cmd === 'subfile') body = '\n' + subfileBody(body) + '\n';
+          body = mark(found) + body;
           seen.delete(found);
           return (cmd === 'include' ? '\n' : '') + body + (cmd === 'include' ? '\n' : '');
         });
@@ -150,6 +180,17 @@
         return texFiles[bbl];
       });
       if (!used) text = text.replace(/\\end\{document\}/, () => texFiles[bbl] + '\n\\end{document}');
+    }
+    if (starts) {
+      // Take out the marks, remembering where they were.
+      let out = '';
+      let last = 0;
+      for (const m of text.matchAll(/\u0000([^\u0000]*)\u0000/g)) {
+        out += text.slice(last, m.index);
+        if (!(m[1] in starts)) starts[m[1]] = out.length;
+        last = m.index + m[0].length;
+      }
+      text = out + text.slice(last);
     }
     return text;
   }
@@ -218,5 +259,5 @@
     };
   }
 
-  return { parseId, untar, pickMain, flatten, importPaper, imageResolver };
+  return { parseId, untar, pickMain, flatten, includeOnly, includeName, importPaper, imageResolver };
 });

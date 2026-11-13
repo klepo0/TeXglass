@@ -93,3 +93,51 @@ test('bookmarklet opens the viewer with the current page', () => {
   assert.match(b, /^javascript:/);
   assert.ok(b.includes('"https://klepo0.github.io/TeXglass/?gh="'));
 });
+
+test('importFile opens a chapter as part of the document that includes it', async () => {
+  const API = 'https://api.github.com/repos/o/r';
+  const fetch = fakeFetch({
+    [`${API}/git/trees/main?recursive=1`]: { tree: [
+      { type: 'blob', path: 'thesis/thesis.tex' },
+      { type: 'blob', path: 'thesis/other.tex' },
+      { type: 'blob', path: 'thesis/parts/one.tex' },
+      { type: 'blob', path: 'thesis/parts/ch/intro.tex' },
+    ] },
+    [`${RAW}/main/thesis/thesis.tex`]: '\\documentclass{book}\n\\begin{document}\nFront.\n\\include{parts/one}\n\\end{document}\n',
+    [`${RAW}/main/thesis/other.tex`]: '\\documentclass{article}\\begin{document}Other.\\end{document}',
+    [`${RAW}/main/thesis/parts/one.tex`]: 'Part one.\n\\input{parts/ch/intro}\n',
+    [`${RAW}/main/thesis/parts/ch/intro.tex`]: '\\chapter{Intro}\nHello.',
+  });
+  const r = await G.importFile('https://github.com/o/r/blob/main/thesis/parts/ch/intro.tex', { fetch });
+  assert.equal(r.path, 'thesis/thesis.tex');
+  assert.equal(r.opened, 'thesis/parts/ch/intro.tex');
+  assert.match(r.source, /Front\.\n\nPart one\.\n\\chapter\{Intro\}\nHello\./);
+  assert.equal(r.source.slice(r.start, r.start + 15), '\\chapter{Intro}');
+  assert.equal(r.links.edit, 'https://github.com/o/r/edit/main/thesis/parts/ch/intro.tex');
+  assert.deepEqual(r.files.sort(), ['thesis/parts/ch/intro.tex', 'thesis/parts/one.tex', 'thesis/thesis.tex']);
+});
+
+test('importFile follows % !TEX root and subfiles, and guesses the main file when listing is refused', async () => {
+  const fetch = fakeFetch({
+    [`${RAW}/main/doc/main.tex`]: '\\documentclass{article}\n\\includeonly{a}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\subfile{s/c}\n\\end{document}\n',
+    [`${RAW}/main/doc/a.tex`]: '% !TEX root = main.tex\nAAA',
+    [`${RAW}/main/doc/b.tex`]: 'BBB',
+    [`${RAW}/main/doc/s/c.tex`]: '\\documentclass[../main]{subfiles}\n\\begin{document}\nCCC\n\\end{document}\n',
+  });
+  const viaMagic = await G.importFile('https://github.com/o/r/blob/main/doc/a.tex', { fetch });
+  assert.equal(viaMagic.path, 'doc/main.tex');
+  assert.match(viaMagic.source, /AAA/);
+  assert.doesNotMatch(viaMagic.source, /BBB/, '\\includeonly leaves b out');
+  assert.match(viaMagic.source, /\nCCC\n/);
+  assert.doesNotMatch(viaMagic.source, /subfiles/);
+  const viaSubfile = await G.importFile('https://github.com/o/r/blob/main/doc/s/c.tex', { fetch });
+  assert.equal(viaSubfile.path, 'doc/main.tex');
+  assert.equal(viaSubfile.source.slice(viaSubfile.start).trim().slice(0, 3), 'CCC');
+  // b.tex has no root line; the tree API 404s here, so the usual names are tried.
+  const viaGuess = await G.importFile('https://github.com/o/r/blob/main/doc/b.tex', { fetch });
+  assert.equal(viaGuess.path, 'doc/main.tex');
+  // A file that is a whole document stays on its own.
+  const own = await G.importFile('https://github.com/o/r/blob/main/doc/main.tex', { fetch });
+  assert.equal(own.path, 'doc/main.tex');
+  assert.equal(own.start, null);
+});

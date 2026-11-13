@@ -48,9 +48,12 @@ is needed, and the preview updates as you type, without saving.
   command with the `.tex` file's URI and the output URI to skip the dialog.
 - **Documents in several files**: `\input`, `\include`, `\subfile` and
   `\import` files are pulled in, and edits in any of them show up live (even
-  before saving). Previewing a chapter shows the whole document: TeXglass finds
-  the main file from a `% !TEX root = main.tex` line, or by looking for the
-  file that includes the chapter. Ctrl+click jumps into the right file.
+  before saving), as do changes made on disk. `\includeonly` is respected.
+  Previewing a chapter shows the whole document: TeXglass finds the main file
+  from a `% !TEX root = main.tex` line, from `\documentclass[main]{subfiles}`,
+  or by looking in the chapter's folder and the folders above it (up to the
+  workspace folder) for the file that includes it, directly or through other
+  files. Ctrl+click jumps into the right file.
 - **Bibliographies**: `\bibliography{refs}` (BibTeX) and `\addbibresource` +
   `\printbibliography` (biblatex) are filled in from your `.bib` files, with
   only the entries you cite (or all, with `\nocite{*}`), sorted

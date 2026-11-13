@@ -90,3 +90,37 @@ test('names and the project root', () => {
   assert.strictEqual(e.k.fields.month, 'January');
   assert.match(makeBibliography(e, ['k', 'missing'], '').text, /\\bibitem\{k\}/);
 });
+
+test('\\includeonly leaves out the other \\include files but not \\input ones', () => {
+  const files = {
+    [P('main.tex')]: '\\documentclass{book}\n\\includeonly{ch/two}\n\\begin{document}\n\\include{ch/one}\n\\include{./ch/two.tex}\n\\input{ch/three}\n\\end{document}\n',
+    [P('ch/one.tex')]: 'One.',
+    [P('ch/two.tex')]: 'Two.',
+    [P('ch/three.tex')]: 'Three.',
+  };
+  const pr = assemble(P('main.tex'), fsOf(files));
+  assert.doesNotMatch(pr.text, /One\./);
+  assert.match(pr.text, /Two\./);
+  assert.match(pr.text, /Three\./);
+  assert.doesNotMatch(pr.text, /\\include\{ch\/one\}/);
+  assert.deepStrictEqual(pr.warnings, []);
+});
+
+test('findRoot searches up through folders and nested inputs, and reads subfiles', () => {
+  const files = {
+    [P('thesis.tex')]: '\\documentclass{book}\\begin{document}\\include{parts/part1}\\subfile{ch/sub}\\end{document}',
+    [P('notes.tex')]: '\\documentclass{article}\\begin{document}Other.\\end{document}',
+    [P('parts/part1.tex')]: '\\input{parts/deep/sec}',
+    [P('parts/deep/sec.tex')]: 'A section.',
+    [P('parts/deep/orphan.tex')]: 'Nobody includes me.',
+    [P('ch/sub.tex')]: '\\documentclass[../thesis.tex]{subfiles}\n\\begin{document}Sub.\\end{document}',
+  };
+  const list = (d) => Object.keys(files).filter((f) => path.dirname(f) === d);
+  const root = (n, top) => findRoot(P(n), files[P(n)], list, fsOf(files), path, top);
+  assert.strictEqual(root('parts/deep/sec.tex'), P('thesis.tex'));
+  assert.strictEqual(root('parts/part1.tex'), P('thesis.tex'));
+  assert.strictEqual(root('ch/sub.tex'), P('thesis.tex'));
+  assert.strictEqual(root('parts/deep/orphan.tex'), P('parts/deep/orphan.tex'));
+  // Not above the workspace folder.
+  assert.strictEqual(root('parts/deep/sec.tex', P('parts')), P('parts/deep/sec.tex'));
+});

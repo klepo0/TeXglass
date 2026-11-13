@@ -69,6 +69,8 @@ function assemble(mainPath, read, paths) {
     }
     return null;
   };
+  // \includeonly{a,b} in the main file: any other \include is left out, as LaTeX does.
+  let only = null;
   const bibCommands = []; // { pos in out, kind, arg }
   const stack = new Set();
 
@@ -91,6 +93,12 @@ function assemble(mainPath, read, paths) {
         continue;
       }
       const name = m[2] !== undefined ? m[2] : m[4] !== undefined ? m[3].replace(/\/?$/, '/') + m[4] : m[5];
+      if (m[1] === 'include' && only && !only.has(includeName(name))) {
+        emit(text.slice(last, at), file, last);
+        emit('\n\n', file, at, true);
+        last = at + m[0].length;
+        continue;
+      }
       // \import{dir}{file} looks in dir; the others relative to the main file (as LaTeX does).
       const found = depth < 20 ? resolveTex(name, m[3] !== undefined ? path.resolve(mainDir, m[3]) : mainDir) : null;
       if (!found) {
@@ -131,6 +139,7 @@ function assemble(mainPath, read, paths) {
 
   const main = tryRead(mainPath);
   if (main == null) return null;
+  only = includeOnly(main);
   expand(mainPath, main, 0);
 
   // Bibliography: one environment for the first \bibliography / \printbibliography.
@@ -204,33 +213,81 @@ function locate(project, offset) {
   return { file: s.file, offset: s.generated ? s.at : s.at + Math.min(offset - s.start, s.end - s.start) };
 }
 
+/** The names in \includeonly{…} as includeName gives them, or null if there is none. */
+function includeOnly(text) {
+  const m = /\\includeonly\s*\{([^}]*)\}/.exec(stripComments(text));
+  if (!m) return null;
+  return new Set(m[1].split(',').map(includeName).filter(Boolean));
+}
+
+/** How \include and \includeonly name a file: trimmed, without "./" or ".tex". */
+function includeName(name) {
+  return String(name || '').trim().replace(/^"|"$/g, '').replace(/^(\.\/)+/, '').replace(/\.tex$/i, '');
+}
+
+const stripComments = (t) => t.replace(/(?<!\\)%.*$/gm, '');
+
+// The files a document names with \input, \include, \subfile or \import.
+const INCLUDES = /\\(?:input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\%]+)/g;
+function includedNames(text) {
+  const out = [];
+  for (const m of stripComments(text).matchAll(INCLUDES)) {
+    const n = m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2].replace(/\/?$/, '/') + m[3] : m[4];
+    if (n && n.trim()) out.push(n.trim().replace(/^"|"$/g, ''));
+  }
+  return out;
+}
+
 /**
- * The root of a project a file belongs to: a "% !TEX root = …" line, or, for
- * a file with no \documentclass, a .tex file next to it or one folder up
- * that \input's or \include's it. Returns an absolute path, or `file` itself.
- * listTex(dir) lists the .tex files in a folder; paths is as for assemble.
+ * The root of a project a file belongs to:
+ *  - a "% !TEX root = …" line near the top;
+ *  - for a subfile, the main file in \documentclass[main.tex]{subfiles};
+ *  - for a file with no \documentclass, the nearest .tex file in its folder or
+ *    a folder above it (up to `top`, or four levels) that pulls it in with
+ *    \input, \include, \subfile or \import, directly or through other files.
+ * Returns an absolute path, or `file` itself. listTex(dir) lists the .tex
+ * files in a folder; paths is as for assemble.
  */
-function findRoot(file, text, listTex, read, paths) {
+function findRoot(file, text, listTex, read, paths, top) {
   const path = paths || nodePath;
   const head = text.split('\n', 30).join('\n');
   const magic = /^\s*%\s*!\s*TEX\s+root\s*=\s*(.+?)\s*$/im.exec(head);
   if (magic) return path.resolve(path.dirname(file), magic[1]);
-  if (/\\documentclass/.test(text)) return file;
-  const stem = path.basename(file).replace(/\.tex$/i, '');
-  const dirs = [path.dirname(file), path.dirname(path.dirname(file))];
-  for (const d of dirs) {
-    for (const cand of listTex(d)) {
+  const body = stripComments(text);
+  const sub = /\\documentclass\s*\[([^\]]*)\]\s*\{subfiles\}/.exec(body);
+  if (sub && sub[1].trim()) {
+    const p = path.resolve(path.dirname(file), sub[1].trim());
+    return /\.(tex|ltx)$/i.test(p) ? p : p + '.tex';
+  }
+  if (/\\documentclass/.test(body)) return file;
+  const target = file.replace(/\.tex$/i, '');
+  // Whether `text` (part of the document whose main file is in mainDir) pulls in the target.
+  const pullsIn = (text, mainDir, depth, seen) => {
+    for (const name of includedNames(text)) {
+      const p = path.resolve(mainDir, name).replace(/\.tex$/i, '');
+      if (p === target) return true;
+      if (depth >= 3 || seen.has(p)) continue;
+      seen.add(p);
+      const t = read(p + '.tex');
+      if (t && pullsIn(t, mainDir, depth + 1, seen)) return true;
+    }
+    return false;
+  };
+  let dir = path.dirname(file);
+  for (let up = 0; up < 5; up++) {
+    for (const cand of listTex(dir)) {
       if (cand === file) continue;
       const t = read(cand);
-      if (!t || !/\\documentclass/.test(t)) continue;
-      const re = /\\(?:input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}/g;
-      for (const m of t.replace(/(?<!\\)%.*$/gm, '').matchAll(re)) {
-        const name = (m[1] !== undefined ? m[1] : m[2].replace(/\/?$/, '/') + m[3]).trim().replace(/\.tex$/i, '');
-        if (path.resolve(path.dirname(cand), name) === path.resolve(path.dirname(file), stem)) return cand;
-      }
+      if (!t) continue;
+      const tb = stripComments(t);
+      if (!/\\documentclass/.test(tb) || /\\documentclass\s*\[[^\]]*\]\s*\{subfiles\}/.test(tb)) continue;
+      if (pullsIn(t, path.dirname(cand), 0, new Set())) return cand;
     }
+    const parent = path.dirname(dir);
+    if (parent === dir || (top && path.relative(top, dir) === '') || (top && path.relative(top, dir).startsWith('..'))) break;
+    dir = parent;
   }
   return file;
 }
 
-module.exports = { assemble, locate, findRoot };
+module.exports = { assemble, locate, findRoot, includeOnly, includeName };
