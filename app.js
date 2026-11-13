@@ -1196,6 +1196,22 @@
     jumpTo(target);
   });
 
+  // --- find and go to ----------------------------------------------------------------
+
+  // Ctrl+F searches the rendered text; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2".
+  if (window.TeXglassFind) {
+    const finder = window.TeXglassFind.attach({
+      root: preview,
+      scroller: previewPane,
+      reveal,
+      onJump: hidePopover,
+    });
+    window.TeXglassFind.bindKeys(window, finder);
+    $('find').addEventListener('click', () => finder.open('find'));
+  } else {
+    $('find').hidden = true;
+  }
+
   // --- resizable split ------------------------------------------------------------
 
   const panes = $('panes');

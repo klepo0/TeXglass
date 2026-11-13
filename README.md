@@ -83,6 +83,14 @@ be hosted on GitHub Pages as is. Then:
 - Hover a reference to preview the theorem or equation it points to; click
   it to jump there.
 - The status in the toolbar counts undefined references and duplicate labels.
+- **Find** (Ctrl+F) searches the text of the document, highlighting every
+  match; Enter and Shift+Enter (or F3 and Shift+F3) go to the next and previous
+  one, opening folded sections and proofs on the way. Formulas are not
+  searched. While you type in the source pane, Ctrl+F is the browser's own find.
+- **Go to** (Ctrl+G, or the Go to tab of the find bar) jumps to a theorem,
+  equation, section, figure or table by its number: type `Lemma 4.1`,
+  `thm 4.1`, `(3.2)`, `§2` or just `3.2`, and pick from the list. Typing a
+  kind (`lemma`) or a title (`Hahn-Banach`, `intro`) lists those too.
 
 ## Converting to HTML from the command line
 

@@ -1,0 +1,663 @@
+/*
+ * TeXglass find bar: search the rendered document, and go to a theorem,
+ * equation, section, figure or table by its number.
+ *
+ * Shared by the web viewer and the VS Code preview. It reads only the
+ * rendered HTML (theorems carry data-number, headings a .secnum, equation
+ * numbers are KaTeX \tag spans, captions a .caption-head), so the converter
+ * needs no changes. Matches are painted with the CSS Custom Highlight API,
+ * which leaves the DOM alone, so the preview can keep patching its blocks
+ * while a search is open; the search re-runs when the preview changes.
+ *
+ * Works in the browser (window.TeXglassFind) and in Node (require), where
+ * only the pure helpers (findRegex, parseJump, rankTargets) are of use.
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.TeXglassFind = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Pure helpers
+  // ---------------------------------------------------------------------------
+
+  /** A case-insensitive regex for `query`, where any run of spaces matches any whitespace. */
+  function findRegex(query) {
+    const q = String(query || '').trim();
+    if (!q) return null;
+    const src = q.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    return new RegExp(src, 'giu');
+  }
+
+  // Short names people type for the kinds of things a paper numbers.
+  const ALIASES = {
+    th: 'theorem', thm: 'theorem', thms: 'theorem',
+    lem: 'lemma', lma: 'lemma', lm: 'lemma',
+    pr: 'proposition', prop: 'proposition', props: 'proposition',
+    cor: 'corollary', coro: 'corollary', corr: 'corollary',
+    def: 'definition', defn: 'definition', dfn: 'definition',
+    rem: 'remark', rmk: 'remark', rk: 'remark',
+    ex: 'example', exa: 'example', exm: 'example', eg: 'example',
+    exer: 'exercise', exc: 'exercise',
+    conj: 'conjecture', cj: 'conjecture',
+    hyp: 'hypothesis', ass: 'assumption', asm: 'assumption', assump: 'assumption',
+    obs: 'observation', nota: 'notation', notn: 'notation',
+    alg: 'algorithm', algo: 'algorithm', prob: 'problem', qu: 'question', ques: 'question',
+    ax: 'axiom', cond: 'condition', fact: 'fact', cl: 'claim',
+    eq: 'equation', eqn: 'equation', eqs: 'equation', eqns: 'equation', formula: 'equation',
+    s: 'section', sec: 'section', sect: 'section', secs: 'section', '§': 'section',
+    ss: 'subsection', subsec: 'subsection', subsect: 'subsection',
+    ch: 'chapter', chap: 'chapter', chapt: 'chapter',
+    app: 'appendix', apx: 'appendix', appx: 'appendix',
+    fig: 'figure', figs: 'figure', tab: 'table', tbl: 'table',
+  };
+
+  const words = (s) => String(s || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+  /**
+   * Split what was typed into the Go to box into kind words and a number:
+   * "Lemma 4.1" → { kinds: ['lemma'], num: '4.1' }, "(3.2)" → equation 3.2,
+   * "§2" → section 2, "thm3" → theorem 3, "hahn banach" → { words }.
+   */
+  function parseJump(query) {
+    let q = String(query || '').trim().replace(/\s+/g, ' ');
+    const kinds = [];
+    if (q.startsWith('§')) {
+      kinds.push('section');
+      q = q.replace(/^§+\s*/, '');
+    }
+    let paren = /^(.*?)\s*\(([^()]*)\)?$/.exec(q);
+    if (paren && paren[2] !== undefined && /\d/.test(paren[2]) && !/[()]/.test(paren[1])) {
+      // "(3.2)", "eq (3.2)", or "(3.2" while typing.
+      if (!paren[1]) kinds.push('equation');
+      q = (paren[1] + ' ' + paren[2]).trim();
+    } else if ((paren = /^\(([^()]*\d[^()]*)$/.exec(q))) {
+      kinds.push('equation');
+      q = paren[1];
+    }
+    // "thm3.2" → "thm 3.2"
+    q = q.replace(/^([\p{L}]+\.?)(?=\d)/u, '$1 ');
+    const toks = q.split(' ').filter(Boolean);
+    let num = '';
+    const last = toks[toks.length - 1];
+    if (last && (/\d/.test(last) || (toks.length > 1 && /^[A-Z](\.[\dA-Za-z]+)*\.?$/.test(last)))) {
+      num = toks.pop().replace(/^[([]+|[)\].,:;]+$/g, '');
+    }
+    for (const t of toks) {
+      const w = t.toLowerCase().replace(/\.$/, '');
+      if (w) kinds.push(w);
+    }
+    return { kinds, num, words: words(query) };
+  }
+
+  /** Does kind word `w` (as typed) name one of `kindWords`? */
+  function kindMatches(w, kindWords) {
+    const full = ALIASES[w];
+    return kindWords.some((k) => k.startsWith(w) || (full && k.startsWith(full)));
+  }
+
+  /**
+   * The targets that match `query`, best first. A target is
+   * { kinds: [words], num, label, title } plus whatever the caller needs.
+   */
+  function rankTargets(targets, query, limit) {
+    const max = limit || 200;
+    const p = parseJump(query);
+    const out = [];
+    targets.forEach((t, order) => {
+      let score;
+      if (p.num) {
+        if (!t.num) return;
+        const n = t.num.toLowerCase();
+        const want = p.num.toLowerCase();
+        if (n === want) score = 0;
+        else if (n.startsWith(want) && /^[^\p{L}\p{N}]/u.test(n.slice(want.length))) score = 1;
+        else if (n.startsWith(want)) score = 2;
+        else return;
+        if (!p.kinds.every((w) => kindMatches(w, t.kinds))) return;
+      } else {
+        if (!p.words.length) {
+          score = 0;
+        } else {
+          const hay = t.kinds.concat(words(t.label), words(t.title), words(t.num));
+          const ok = p.words.every((w) => hay.some((h) => h.startsWith(w)) || kindMatches(w, t.kinds));
+          if (!ok) return;
+          // Kind matches ("lemma") before title matches.
+          score = p.words.every((w) => kindMatches(w, t.kinds)) ? 0 : 1;
+        }
+      }
+      out.push({ t, score, order });
+    });
+    out.sort((a, b) => a.score - b.score || a.order - b.order);
+    return out.slice(0, max).map((x) => x.t);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reading the rendered document
+  // ---------------------------------------------------------------------------
+
+  // Not searched: math (KaTeX glyph soup), our own buttons and editors.
+  const SKIP = '.katex, .math-src, .fold-toggle, button, textarea, input, select, script, style, .find-bar';
+  const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|SECTION|ARTICLE|FIGURE|TABLE|TR|TD|TH|BLOCKQUOTE|PRE|DT|DD|NAV)$/;
+  const SEP = '￼'; // stands in for a formula, so words on either side don't run together
+
+  /** The visible text of `root`, with a map back to its text nodes. */
+  function indexText(rootEl) {
+    const doc = rootEl.ownerDocument;
+    const parts = []; // { node, start } for text, { node: null, start } for separators
+    let text = '';
+    const push = (node, s) => {
+      parts.push({ node, start: text.length });
+      text += s;
+    };
+    const walker = doc.createTreeWalker(rootEl, 5 /* SHOW_ELEMENT | SHOW_TEXT */, {
+      acceptNode(n) {
+        if (n.nodeType === 3) return 1; // FILTER_ACCEPT
+        if (n.matches(SKIP)) {
+          if (n.matches('.katex, .math-src')) push(null, SEP);
+          return 2; // FILTER_REJECT: skip the subtree
+        }
+        if (BLOCK.test(n.tagName) || n.tagName === 'BR') push(null, '\n');
+        return 3; // FILTER_SKIP: look inside
+      },
+    });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) push(n, n.data);
+    return { text, parts };
+  }
+
+  /** The DOM position of character `pos`; `end` picks the end of the previous text node at a separator. */
+  function locate(index, pos, end) {
+    const parts = index.parts;
+    let lo = 0;
+    let hi = parts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (parts[mid].start < pos || (!end && parts[mid].start === pos)) lo = mid;
+      else hi = mid - 1;
+    }
+    let k = lo;
+    if (!end) {
+      while (k < parts.length && !parts[k].node) k++;
+      if (k >= parts.length) return null;
+      return { node: parts[k].node, offset: Math.max(0, pos - parts[k].start) };
+    }
+    while (k >= 0 && !parts[k].node) k--;
+    if (k < 0) return null;
+    return { node: parts[k].node, offset: Math.min(parts[k].node.data.length, pos - parts[k].start) };
+  }
+
+  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+
+  /** The text of `el`, with each formula as its LaTeX source and no fold arrows. */
+  function plainText(el) {
+    if (!el) return '';
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll('.katex').forEach((k) => {
+      const tex = k.querySelector('annotation[encoding="application/x-tex"]');
+      k.replaceWith(tex ? tex.textContent : '');
+    });
+    copy.querySelectorAll('.fold-toggle, .secnum').forEach((n) => n.remove());
+    return clean(copy.textContent);
+  }
+
+  /** Everything in `rootEl` that has a number or a name to go to, in document order. */
+  function collectTargets(rootEl) {
+    const found = [];
+    const sel = '[data-number], h1, h2, h3, h4, h5, h6, .math-display .katex-html .tag, .caption';
+    for (const el of rootEl.querySelectorAll(sel)) {
+      if (el.closest('.ref-popover, .find-bar, .toc, .editing')) continue;
+      if (el.hasAttribute('data-number')) {
+        const nameEl = el.querySelector('.thm-name');
+        if (!nameEl) continue;
+        const num = el.getAttribute('data-number') || '';
+        const name = plainText(nameEl);
+        const kind = num && name.endsWith(num) ? clean(name.slice(0, -num.length)) : name;
+        const note = el.querySelector('.thm-note');
+        found.push({ kinds: words(kind), label: kind, num, title: note ? plainText(note).replace(/^\((.*)\)$/, '$1') : '', el, block: el, type: 'theorem' });
+      } else if (/^H[1-6]$/.test(el.tagName)) {
+        if (!el.id || el.closest('.theorem, .proof')) continue;
+        const numEl = el.querySelector('.secnum');
+        let num = numEl ? clean(numEl.textContent) : '';
+        const kindWord = (el.className.match(/\b(part|chapter|section|subsection|subsubsection|paragraph)\b/) || [])[1];
+        const title = plainText(el);
+        let label = kindWord ? kindWord[0].toUpperCase() + kindWord.slice(1) : 'Section';
+        const kinds = [kindWord || 'section'];
+        if (/^appendix\b/i.test(num)) {
+          num = clean(num.replace(/^appendix\b/i, ''));
+          label = 'Appendix';
+          kinds.push('appendix');
+        } else if (/^[A-Z]\b/.test(num)) {
+          kinds.push('appendix');
+        }
+        if (kindWord && kindWord !== 'section' && /section$/.test(kindWord)) kinds.push('section');
+        if (el.classList.contains('doc-title')) continue;
+        found.push({ kinds, label, num, title, el, block: el, type: 'section' });
+      } else if (el.classList.contains('tag')) {
+        // One \tag per row; a multi-line display stacks them in one column.
+        const rows = Array.from(el.querySelectorAll('.mord.text')).filter((r) => !r.parentElement.closest('.mord.text'));
+        const block = el.closest('.math-display');
+        for (const row of rows.length ? rows : [el]) {
+          const num = clean(row.textContent).replace(/^\((.*)\)$/, '$1');
+          if (num) found.push({ kinds: ['equation'], label: 'Equation', num, title: '', el: row, block, type: 'equation' });
+        }
+      } else {
+        const head = el.querySelector('.caption-head');
+        if (!head) continue;
+        const m = /^(.*?)\s*([^\s]+?)\.?$/.exec(clean(head.textContent));
+        if (!m) continue;
+        const kind = m[1] || m[2];
+        const num = m[1] ? m[2] : '';
+        const title = plainText(el).slice(clean(head.textContent).length).trim();
+        const block = el.parentElement && el.parentElement.tagName === 'FIGURE' ? el.parentElement : el;
+        found.push({ kinds: words(kind), label: kind, num, title, el: block, block, type: 'figure' });
+      }
+    }
+    return found;
+  }
+
+  /** How a target reads in the Go to list: "Lemma 4.1", "(3.2)", "Section 2". */
+  function displayName(t) {
+    if (t.type === 'equation') return `Equation (${t.num})`;
+    return t.num ? `${t.label} ${t.num}` : t.label;
+  }
+
+  // ---------------------------------------------------------------------------
+  // The find bar
+  // ---------------------------------------------------------------------------
+
+  const MAX_MATCHES = 10000;
+  const ICONS = {
+    up: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    down: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    close: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  };
+
+  /**
+   * Add the find bar to a preview.
+   * options: { root: the rendered document, scroller: the element that scrolls it,
+   *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target }
+   * Returns { open(mode, text), close(), next(), prev(), refresh(), state() }.
+   */
+  function attach(options) {
+    const rootEl = options.root;
+    const scroller = options.scroller || rootEl;
+    const doc = rootEl.ownerDocument;
+    const win = doc.defaultView;
+    const reveal = options.reveal || (() => {});
+    const hasHighlights = !!(win.CSS && win.CSS.highlights && win.Highlight);
+
+    const bar = doc.createElement('div');
+    bar.className = 'find-bar';
+    bar.hidden = true;
+    bar.setAttribute('role', 'search');
+    bar.innerHTML =
+      '<div class="find-row">' +
+      '<div class="find-modes" role="tablist" aria-label="Search or go to">' +
+      '<button type="button" role="tab" data-mode="find" title="Search the text (Ctrl+F)">Find</button>' +
+      '<button type="button" role="tab" data-mode="goto" title="Go to a theorem, equation or section by its number (Ctrl+G)">Go to</button>' +
+      '</div>' +
+      '<input class="find-input" type="text" spellcheck="false" autocomplete="off" aria-label="Search">' +
+      '<span class="find-count" aria-live="polite"></span>' +
+      `<button type="button" class="find-icon find-prev" title="Previous match (Shift+Enter)" aria-label="Previous match">${ICONS.up}</button>` +
+      `<button type="button" class="find-icon find-next" title="Next match (Enter)" aria-label="Next match">${ICONS.down}</button>` +
+      `<button type="button" class="find-icon find-close" title="Close (Esc)" aria-label="Close">${ICONS.close}</button>` +
+      '</div>' +
+      '<ul class="goto-list" role="listbox" aria-label="Places to go to" hidden></ul>';
+    doc.body.appendChild(bar);
+    const input = bar.querySelector('.find-input');
+    const count = bar.querySelector('.find-count');
+    const list = bar.querySelector('.goto-list');
+    const prevBtn = bar.querySelector('.find-prev');
+    const nextBtn = bar.querySelector('.find-next');
+
+    let mode = 'find';
+    let matches = []; // Ranges, in document order
+    let current = -1;
+    let capped = false;
+    let results = []; // Go to: targets shown in the list
+    let selected = 0;
+    let queries = { find: '', goto: '' };
+    let searchTimer = 0;
+    let stale = false;
+    let lastQuery = '';
+
+    // --- placing the bar over the top-right corner of the preview ---
+    function place() {
+      if (bar.hidden) return;
+      const r = scroller.getBoundingClientRect();
+      const vw = doc.documentElement.clientWidth;
+      const width = Math.min(440, Math.max(240, r.width - 24));
+      bar.style.width = width + 'px';
+      bar.style.top = Math.max(0, r.top) + 8 + 'px';
+      bar.style.left = Math.max(8, Math.min(r.right - width - 20, vw - width - 8)) + 'px';
+    }
+    win.addEventListener('resize', place);
+    if (win.ResizeObserver) new win.ResizeObserver(place).observe(scroller);
+
+    // --- highlights ---
+    function paint() {
+      if (!hasHighlights) return;
+      if (matches.length) win.CSS.highlights.set('texglass-find', new win.Highlight(...matches));
+      else win.CSS.highlights.delete('texglass-find');
+      if (current >= 0 && matches[current]) win.CSS.highlights.set('texglass-find-current', new win.Highlight(matches[current]));
+      else win.CSS.highlights.delete('texglass-find-current');
+    }
+    function clearPaint() {
+      if (!hasHighlights) return;
+      win.CSS.highlights.delete('texglass-find');
+      win.CSS.highlights.delete('texglass-find-current');
+    }
+
+    function showCount() {
+      const q = input.value.trim();
+      if (mode !== 'find') return;
+      bar.classList.toggle('no-match', !!q && !matches.length);
+      if (!q) count.textContent = '';
+      else if (!matches.length) count.textContent = 'No results';
+      else count.textContent = `${current + 1} of ${matches.length}${capped ? '+' : ''}`;
+      prevBtn.disabled = nextBtn.disabled = matches.length === 0;
+    }
+
+    /** Find every match; keep the current one near where it was. */
+    function search(keepPlace) {
+      stale = false;
+      lastQuery = input.value.trim();
+      const re = findRegex(input.value);
+      const before = keepPlace && current >= 0 && matches[current] ? matches[current] : null;
+      matches = [];
+      current = -1;
+      capped = false;
+      if (re) {
+        const index = indexText(rootEl);
+        let m;
+        while ((m = re.exec(index.text))) {
+          if (!m[0]) { re.lastIndex++; continue; }
+          const a = locate(index, m.index, false);
+          const b = locate(index, m.index + m[0].length, true);
+          if (!a || !b) continue;
+          const range = doc.createRange();
+          try {
+            range.setStart(a.node, a.offset);
+            range.setEnd(b.node, b.offset);
+          } catch (e) { continue; }
+          if (range.collapsed) continue;
+          matches.push(range);
+          if (matches.length >= MAX_MATCHES) { capped = true; break; }
+        }
+      }
+      if (matches.length) {
+        if (before) {
+          // The first match at or after where we were.
+          current = matches.findIndex((r) => {
+            try { return r.compareBoundaryPoints(0 /* START_TO_START */, before) >= 0; } catch (e) { return false; }
+          });
+          if (current < 0) current = 0;
+        } else {
+          current = firstInView();
+        }
+      }
+      paint();
+      showCount();
+    }
+
+    /** The first match at or below the top of the view, so a new search starts where you are reading. */
+    function firstInView() {
+      const top = scroller.getBoundingClientRect().top;
+      for (let k = 0; k < matches.length; k++) {
+        const r = matches[k].getBoundingClientRect();
+        if ((r.width || r.height) && r.bottom >= top) return k;
+      }
+      return 0;
+    }
+
+    function scrollToRange(range) {
+      const node = range.startContainer;
+      const el = node.nodeType === 1 ? node : node.parentElement;
+      if (!el) return;
+      reveal(el);
+      const view = scroller.getBoundingClientRect();
+      let r = range.getBoundingClientRect();
+      if (!r.width && !r.height) {
+        el.scrollIntoView({ block: 'center' });
+        r = range.getBoundingClientRect();
+      }
+      const margin = 64; // clear of the bar
+      if (r.top < view.top + margin || r.bottom > view.bottom - 24) {
+        scroller.scrollTop += r.top - (view.top + view.height / 3);
+      }
+      if (!hasHighlights) {
+        const s = win.getSelection();
+        s.removeAllRanges();
+        s.addRange(range);
+      }
+    }
+
+    function step(dir) {
+      if (mode !== 'find') return;
+      if (stale) search(true);
+      if (!matches.length) return;
+      current = (current + dir + matches.length) % matches.length;
+      paint();
+      showCount();
+      scrollToRange(matches[current]);
+    }
+
+    // --- Go to ---
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    }
+    function showGoto() {
+      results = rankTargets(collectTargets(rootEl), input.value, 200);
+      selected = 0;
+      const q = input.value.trim();
+      list.innerHTML = results.length
+        ? results.map((t, k) =>
+          `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}"${k === 0 ? ' aria-selected="true"' : ''}>` +
+          `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
+          (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
+          '</li>').join('')
+        : `<li class="goto-empty">${q ? 'Nothing numbered or named “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, equations or sections.'}</li>`;
+      list.hidden = false;
+      count.textContent = '';
+      bar.classList.toggle('no-match', !!q && !results.length);
+      input.setAttribute('aria-activedescendant', results.length ? 'goto-0' : '');
+    }
+    function select(k) {
+      if (!results.length) return;
+      selected = (k + results.length) % results.length;
+      list.querySelectorAll('[aria-selected]').forEach((li) => li.removeAttribute('aria-selected'));
+      const li = list.querySelector(`[data-k="${selected}"]`);
+      if (li) {
+        li.setAttribute('aria-selected', 'true');
+        li.scrollIntoView({ block: 'nearest' });
+        input.setAttribute('aria-activedescendant', li.id);
+      }
+    }
+    function go(k) {
+      const t = results[k];
+      if (!t || !t.el.isConnected) return;
+      close();
+      reveal(t.el);
+      t.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const flash = t.block || t.el;
+      flash.classList.remove('flash');
+      void flash.offsetWidth;
+      flash.classList.add('flash');
+      if (options.onJump) options.onJump(t.el);
+    }
+
+    // --- modes, opening and closing ---
+    function setMode(m) {
+      queries[mode] = input.value;
+      mode = m;
+      bar.dataset.mode = m;
+      bar.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
+      input.value = queries[m];
+      input.placeholder = m === 'find' ? 'Find in document' : 'Lemma 4.1, (3.2), §2, or a name';
+      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : 'Go to a theorem, equation or section');
+      input.setAttribute('role', m === 'goto' ? 'combobox' : 'searchbox');
+      if (m === 'goto') input.setAttribute('aria-expanded', 'true');
+      else input.removeAttribute('aria-expanded');
+      prevBtn.hidden = nextBtn.hidden = m !== 'find';
+      if (m === 'find') {
+        list.hidden = true;
+        bar.classList.remove('no-match');
+        search(false);
+        if (current >= 0) scrollToRange(matches[current]);
+      } else {
+        clearPaint();
+        showGoto();
+      }
+    }
+
+    function open(m, text) {
+      const wasOpen = !bar.hidden;
+      bar.hidden = false;
+      place();
+      if (text != null) queries[m || mode] = text;
+      if (!wasOpen || (m && m !== mode) || text != null) setMode(m || mode);
+      input.focus();
+      input.select();
+    }
+
+    function close() {
+      if (bar.hidden) return;
+      queries[mode] = input.value;
+      bar.hidden = true;
+      clearPaint();
+      list.hidden = true;
+      if (!hasHighlights && mode === 'find') win.getSelection().removeAllRanges();
+      // Leave the current match selected, like a browser's find.
+      if (hasHighlights && mode === 'find' && matches[current]) {
+        try {
+          const s = win.getSelection();
+          s.removeAllRanges();
+          s.addRange(matches[current]);
+        } catch (e) { /* ignore */ }
+      }
+      matches = [];
+      current = -1;
+      if (doc.activeElement === input || bar.contains(doc.activeElement)) scroller.focus({ preventScroll: true });
+    }
+
+    // --- events ---
+    input.addEventListener('input', () => {
+      queries[mode] = input.value;
+      if (mode === 'goto') return showGoto();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        search(false);
+        if (current >= 0) scrollToRange(matches[current]);
+      }, input.value.length < 3 ? 250 : 100);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (mode === 'find') {
+          clearTimeout(searchTimer);
+          if (input.value.trim() !== lastQuery) {
+            // Typed but not searched yet: land on the first match, not the second.
+            search(false);
+            if (current >= 0) scrollToRange(matches[current]);
+          } else {
+            step(e.shiftKey ? -1 : 1);
+          }
+        } else {
+          go(selected);
+        }
+      } else if (mode === 'goto' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        select(selected + (e.key === 'ArrowDown' ? 1 : -1));
+      }
+    });
+    bar.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-mode]');
+      if (tab) {
+        setMode(tab.dataset.mode);
+        input.focus();
+        return;
+      }
+      if (e.target.closest('.find-prev')) step(-1);
+      else if (e.target.closest('.find-next')) step(1);
+      else if (e.target.closest('.find-close')) close();
+      else {
+        const li = e.target.closest('li[data-k]');
+        if (li) go(Number(li.dataset.k));
+      }
+    });
+    list.addEventListener('mousemove', (e) => {
+      const li = e.target.closest('li[data-k]');
+      if (li && Number(li.dataset.k) !== selected) select(Number(li.dataset.k));
+    });
+
+    // Keep matches current while the preview re-renders underneath.
+    let refreshTimer = 0;
+    function refresh() {
+      if (bar.hidden) return;
+      if (mode === 'find') {
+        stale = true;
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { if (!bar.hidden && mode === 'find') search(true); }, 200);
+      } else {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { if (!bar.hidden && mode === 'goto') { const k = selected; showGoto(); select(Math.min(k, results.length - 1)); } }, 200);
+      }
+    }
+    if (win.MutationObserver) {
+      new win.MutationObserver((records) => {
+        if (records.some((r) => !bar.contains(r.target))) refresh();
+      }).observe(rootEl, { childList: true, subtree: true, characterData: true });
+    }
+
+    return {
+      open,
+      close,
+      next: () => step(1),
+      prev: () => step(-1),
+      refresh,
+      isOpen: () => !bar.hidden,
+      state: () => ({ open: !bar.hidden, mode, query: input.value, count: matches.length, current, results: results.map(displayName) }),
+      element: bar,
+    };
+  }
+
+  /**
+   * The usual shortcuts: Ctrl/Cmd+F to find, Ctrl/Cmd+G to go to, F3 and
+   * Shift+F3 for the next and previous match. Not while typing in an editor,
+   * so the source pane keeps the browser's own find.
+   */
+  function bindKeys(win, finder, options) {
+    const opts = options || {};
+    win.addEventListener('keydown', (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const t = e.target;
+      const typing = t && t.closest && !t.closest('.find-bar') && t.matches('textarea, input, [contenteditable="true"]');
+      if (typing && !opts.evenWhileTyping) return;
+      const key = e.key.toLowerCase();
+      if (mod && !e.altKey && !e.shiftKey && key === 'f') {
+        e.preventDefault();
+        finder.open('find', selectedText(win));
+      } else if (mod && !e.altKey && !e.shiftKey && key === 'g') {
+        e.preventDefault();
+        finder.open('goto');
+      } else if (e.key === 'F3' && finder.isOpen()) {
+        e.preventDefault();
+        if (e.shiftKey) finder.prev();
+        else finder.next();
+      }
+    });
+  }
+
+  /** A short single-line selection seeds the search, like a browser's find. */
+  function selectedText(win) {
+    const s = String(win.getSelection ? win.getSelection() : '').trim();
+    return s && s.length <= 100 && !/\n/.test(s) ? s : null;
+  }
+
+  return { attach, bindKeys, findRegex, parseJump, rankTargets, collectTargets, indexText, locate, displayName };
+});

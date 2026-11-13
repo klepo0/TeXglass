@@ -345,6 +345,7 @@ class Preview {
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-title">Contents</div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
+<script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -776,6 +777,10 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.enableScrollSync', () => setScrollSync(true)),
     vscode.commands.registerCommand('texglass.disableScrollSync', () => setScrollSync(false)),
     // The Contents and Hide/Show proofs buttons in the preview's title bar.
+    vscode.commands.registerCommand('texglass.find', () => preview && preview.post({ type: 'find', mode: 'find' })),
+    vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
+    vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
+    vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
     vscode.commands.registerCommand('texglass.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
     vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
