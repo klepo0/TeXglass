@@ -150,14 +150,28 @@ zips from the latest [release](https://github.com/klepo0/TeXglass/releases).
   `itemize`/`enumerate`/`description`, footnotes, `thebibliography` with
   `\cite`, `tabular`, `verbatim`, `\verb`, `\url`/`\href`, text styles,
   accents and TeX ligatures (``` `` ''```, `--`, `---`, `~`).
+- **Diagrams**: `tikzcd` (arrows in any direction, labels with `'`,
+  `description` and positions, `bend`, `shift`, `hook`, `two heads`,
+  `Rightarrow`, `equal`, `dashed`, `squiggly`, `phantom` corners, and 2-cells
+  between named labels) and `\xymatrix` (including `@{…}` arrow styles,
+  `@/^/` curves and `\rtwocell`) are drawn, in display math too, where they
+  keep their equation number. Simple `tikzpicture`s are drawn as well:
+  `\draw`, `\fill`, `\node`, `\coordinate`, lines, curves (`to[bend …]`,
+  `controls`), rectangles, circles, arcs, grids, function plots, `\foreach`,
+  scopes and styles (also from `\tikzset` in the preamble). Pictures that use
+  more of TikZ (pgfplots, `\matrix`, decorations, trees) show their source
+  instead. Black and white follow the light/dark theme.
 
 Anything unknown is skipped gracefully: the command disappears and its
-arguments are shown. Pictures (`\includegraphics`, TikZ) show a placeholder in
-the browser, since the page cannot read files next to the `.tex` file.
+arguments are shown. Pictures from files (`\includegraphics`) show a
+placeholder in the browser, since the page cannot read files next to the
+`.tex` file.
 
 ## Development
 
-The editing aids are in `src/editor.js`. The converter is `src/texglass.js`, a dependency-free module that works in the
+Diagrams are parsed in `src/tikz.js` (alongside the converter) and drawn in
+the page by `src/diagrams.js`, which measures the rendered math to place
+arrows and labels. The editing aids are in `src/editor.js`. The converter is `src/texglass.js`, a dependency-free module that works in the
 browser and in Node. With `{ sourceMap: true }` it wraps each top-level block
 in `<div class="src-block" data-s data-e>` giving its range in the source,
 which is what Edit mode uses. `src/export.js` turns rendered HTML into a

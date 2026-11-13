@@ -45,6 +45,83 @@
 
   const isLetter = (c) => c !== undefined && /[A-Za-z@]/.test(c);
 
+  /** The diagram module (src/tikz.js), if it is loaded. */
+  function tikz() {
+    if (typeof module === 'object' && module.exports && typeof require === 'function') {
+      try { return require('./tikz.js'); } catch (e) { return null; }
+    }
+    return typeof self !== 'undefined' && self.TeXglassTikz ? self.TeXglassTikz : null;
+  }
+
+  const DIAGRAM_RE = /\\begin\s*\{(tikzcd|tikzpicture)\}|\\xymatrix(?![A-Za-z])/;
+
+  /** Where the diagram starting at match m of DIAGRAM_RE in s ends. */
+  function diagramEnd(s, m) {
+    const at = m.index + m[0].length;
+    if (m[1]) return findEnvEnd(s, at, m[1]).end;
+    const open = s.indexOf('{', at);
+    if (open < 0) return s.length;
+    let depth = 0;
+    for (let k = open; k < s.length; k++) {
+      if (s[k] === '\\') { k++; continue; }
+      if (s[k] === '{') depth++;
+      else if (s[k] === '}' && --depth === 0) return k + 1;
+    }
+    return s.length;
+  }
+
+  /**
+   * A piece of math cut out from around a diagram may hold half of a group
+   * (\fbox{ … }, \left( … \right)); drop the unmatched halves.
+   */
+  function balanceMath(t) {
+    const drop = new Set();
+    const open = [];
+    for (let k = 0; k < t.length; k++) {
+      if (t[k] === '\\') { k++; continue; }
+      if (t[k] === '{') open.push(k);
+      else if (t[k] === '}') { if (open.length) open.pop(); else drop.add(k); }
+    }
+    for (const k of open) drop.add(k);
+    let out = '';
+    for (let k = 0; k < t.length; k++) if (!drop.has(k)) out += t[k];
+    if (open.length) out = out.replace(/\\(fbox|mbox|hbox|vbox|vcenter|text|boxed|raisebox|scalebox|resizebox|makebox|framebox|colorbox)\s*(\{[^{}]*\}\s*|\[[^\]]*\]\s*)*$/, '');
+    // row and column breaks belonged to an outer layout
+    if (!/\\begin\b/.test(out)) out = out.replace(/\\\\(\s*\[[^\]]*\])?/g, ' ').replace(/(^|[^\\])&/g, '$1 ');
+    const lefts = (out.match(/\\left(?![a-z])/g) || []).length;
+    const rights = (out.match(/\\right(?![a-z])/g) || []).length;
+    if (lefts !== rights) out = out.replace(/\\(left|right)(?![a-z])\s*\.?/g, '');
+    return out;
+  }
+
+  /**
+   * Remove wrappers such as \begin{array}{c} … \end{array} or gathered around
+   * diagrams (they would be cut in half), turning their row breaks into spaces.
+   */
+  function unwrapDiagrams(tex) {
+    const re = /\\begin\s*\{(array|gathered|aligned|matrix|split)(\*?)\}/g;
+    let m;
+    for (let guard = 0; guard < 50 && (m = re.exec(tex)); guard++) {
+      const name = m[1] + m[2];
+      const e = findEnvEnd(tex, m.index + m[0].length, name);
+      let body = tex.slice(m.index + m[0].length, e.contentEnd);
+      if (!DIAGRAM_RE.test(body)) continue;
+      if (m[1] === 'array') body = body.replace(/^\s*\{[^}]*\}/, '');
+      // row breaks outside the diagrams become spaces
+      let out = '';
+      let rest = body;
+      for (let d; (d = DIAGRAM_RE.exec(rest)); ) {
+        const end = diagramEnd(rest, d);
+        out += rest.slice(0, d.index).replace(/\\\\(\[[^\]]*\])?|&/g, ' ') + rest.slice(d.index, end);
+        rest = rest.slice(end);
+      }
+      out += rest.replace(/\\\\(\[[^\]]*\])?|&/g, ' ');
+      tex = tex.slice(0, m.index) + out + tex.slice(e.end);
+      re.lastIndex = m.index;
+    }
+    return tex;
+  }
+
   function safeUrl(url) {
     const u = String(url).trim();
     if (/^(https?:|mailto:|#|\.{0,2}\/)/i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
@@ -230,6 +307,8 @@
     '\\MoveEqLeft': '',
     '\\intertext': '\\text{#1}',
     '\\shortintertext': '\\text{#1}',
+    // a \label that reaches KaTeX through a user macro: drop it
+    '\\label': (ctx) => { ctx.consumeArgs(1); return ''; },
     // bbm: \mathbbm{1} is the indicator 𝟙; KaTeX's \mathbb has no digits or small letters.
     '\\mathbbm': (ctx) => {
       const arg = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('');
@@ -407,6 +486,7 @@
     'pagenumbering', 'linespread', 'colorlet', 'definecolor', 'crefname', 'Crefname', 'creflabelformat',
     'allowdisplaybreaks', 'captionsetup', 'lstset', 'newtheoremstyle', 'setcounter_', 'phantom', 'hphantom',
     'vphantom', 'newlength', 'settowidth', 'tikzset', 'pgfplotsset', 'setlist', 'renewenvironment_',
+    'usetikzlibrary', 'tikzcdset', 'SelectTips', 'xyoption', 'pgfdeclarelayer', 'pgfsetlayers', 'CompileMatrices',
     'DeclareGraphicsExtensions', 'urlstyle', 'keywords', 'subjclass', 'address', 'email', 'curraddr',
     'dedicatory', 'translator', 'setcopyright', 'raisebox_', 'enlargethispage', 'looseness', 'spacing',
   ]);
@@ -816,6 +896,7 @@
     }
 
     inlineMath(tex) {
+      if (DIAGRAM_RE.test(tex) && tikz()) return `<span class="math math-inline">${this.mathWithDiagrams(tex)}</span>`;
       return `<span class="math math-inline">${this.renderMath(tex, false)}</span>`;
     }
 
@@ -878,6 +959,19 @@
       }
       if (name === 'color') return res('', readArg(src, i).end);
 
+      // TikZ styles and colours, kept for tikzpicture.
+      if (name === 'tikzset') {
+        const a = readArg(src, i);
+        this.tikzStyles = (this.tikzStyles ? this.tikzStyles + ',' : '') + a.content;
+        return res('', a.end);
+      }
+      if (name === 'definecolor' || name === 'colorlet') {
+        const n = readArg(src, i);
+        const m = name === 'definecolor' ? readArg(src, n.end) : null;
+        const v = readArg(src, m ? m.end : n.end);
+        (this.tikzColors || (this.tikzColors = {}))[n.content.trim()] = m ? [m.content.trim(), v.content.trim()] : ['alias', v.content.trim()];
+        return res('', v.end);
+      }
       if (DROP_ARGS.has(name)) return res('', dropArgs(src, i));
 
       switch (name) {
@@ -1402,8 +1496,12 @@
           const w = readArg(body, o ? o.end : 0);
           return `<div class="minipage">${this.flow(body.slice(w.end), false)}</div>`;
         }
-        case 'tikzpicture': case 'tikzcd': case 'picture': case 'pgfpicture': case 'axis':
-          if (name === 'tikzcd') return this.displayMath('displaymath', `\\begin{CD}\\text{[tikzcd diagram]}\\end{CD}`);
+        case 'tikzcd':
+          if (tikz()) return tikz().tikzcd(body, (t, display) => this.renderMath(t, display));
+          return `<div class="graphic-placeholder">[tikzcd diagram]</div>`;
+        case 'tikzpicture':
+          return this.tikzpicture(body);
+        case 'picture': case 'pgfpicture': case 'axis':
           return `<div class="graphic-placeholder">[${escapeHtml(name)} diagram]</div>`;
         default:
           return `<div class="env env-${escapeHtml(name.replace(/\*/g, ''))}">${this.flow(body.replace(/^\s*\[[^\]]*\]/, ''), false)}</div>`;
@@ -1553,6 +1651,13 @@
       const starred = name.endsWith('*') || name === 'displaymath';
       const base = name.replace(/\*$/, '');
       const id = this.newId('eq');
+      if (DIAGRAM_RE.test(body) && tikz()) {
+        // A diagram (with maybe some math around it and an equation number).
+        const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
+        const t = /\\tag(\*?)\{(.*)\}$/.exec(r.tag);
+        const tag = t ? `<span class="diagram-tag">${this.renderMath(t[1] ? t[2] : `(${t[2]})`, false)}</span>` : '';
+        return `<div class="math math-display diagram-display" id="${id}"><span class="diagram-row">${this.mathWithDiagrams(r.tex)}</span>${tag}</div>`;
+      }
       const multiRow = /^(align|gather|flalign|alignat|eqnarray)$/.test(base);
       let tex;
       if (!multiRow) {
@@ -1605,6 +1710,53 @@
         tex = `\\begin{${env}}${lead}${(parts[0] ? parts[0].rows : []).join(' \\\\ ')}\\end{${env}}`;
       }
       return `<div class="math math-display" id="${id}">${this.renderMath(tex, true)}</div>`;
+    }
+
+    /** Math that contains tikzcd, xymatrix or tikzpicture: diagrams between pieces of KaTeX. */
+    mathWithDiagrams(tex) {
+      const T = tikz();
+      const math = (t, display) => this.renderMath(t, display);
+      const out = [];
+      let rest = unwrapDiagrams(tex.replace(/\\index\s*\{[^}]*\}|\\SelectTips\s*\{[^}]*\}\s*\{[^}]*\}/g, ''));
+      // \xymatrixcolsep{…} and \xymatrixrowsep{…} apply to the next \xymatrix
+      rest = rest.replace(/\\xymatrix(col|row)sep\s*\{([^}]*)\}\s*([\s\S]*?)\\xymatrix(?![A-Za-z])/g, (m, w, v, between) =>
+        `${between}\\xymatrix@${w === 'col' ? 'C' : 'R'}=${v}`);
+      const piece = (t) => {
+        t = balanceMath(t).replace(/\\(?=[\n\r\t])/g, '\\ ').replace(/^\s+/, '').replace(/(?<!\\)\s+$/, '');
+        if (t.trim()) out.push(`<span class="diagram-math">${this.renderMath(`\\displaystyle ${t}`, false)}</span>`);
+      };
+      for (let guard = 0; guard < 100; guard++) {
+        const m = DIAGRAM_RE.exec(rest);
+        if (!m) break;
+        piece(rest.slice(0, m.index));
+        if (m[1]) {
+          const at = m.index + m[0].length;
+          const e = findEnvEnd(rest, at, m[1]);
+          const body = rest.slice(at, e.contentEnd);
+          out.push(m[1] === 'tikzcd' ? T.tikzcd(body, math) : this.tikzpicture(body));
+          rest = rest.slice(e.end);
+        } else {
+          const r = T.xymatrix(rest.slice(m.index + m[0].length), math);
+          if (!r) { piece(rest.slice(m.index, m.index + m[0].length)); rest = rest.slice(m.index + m[0].length); continue; }
+          out.push(r.html);
+          rest = rest.slice(m.index + m[0].length + r.end);
+        }
+      }
+      piece(rest);
+      return out.join('');
+    }
+
+    tikzpicture(body) {
+      const T = tikz();
+      if (T && T.tikzpicture) {
+        return T.tikzpicture(body, {
+          math: (t, display) => this.renderMath(t, display),
+          text: (t) => this.flow(t, true),
+          styles: this.tikzStyles || '',
+          colors: this.tikzColors || null,
+        });
+      }
+      return `<span class="graphic-placeholder">[tikzpicture diagram]</span>`;
     }
 
     /** Expand user macros that stand for a \tag (\newcommand{\mytag}[1]{\tag{…}}), so the row is not numbered twice. */

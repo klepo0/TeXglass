@@ -15,7 +15,7 @@ self.onmessage = (e) => {
   const msg = e.data;
   if (msg.katex) {
     try {
-      importScripts(msg.katex, 'texglass.js', 'arxiv.js');
+      importScripts(msg.katex, 'tikz.js', 'texglass.js', 'arxiv.js');
       ready = true;
       self.postMessage({ ready: true });
     } catch (err) {
