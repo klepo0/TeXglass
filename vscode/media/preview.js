@@ -1,5 +1,5 @@
 /*
- * The TeXdown preview inside VS Code. It receives the rendered blocks from the
+ * The TeXglass preview inside VS Code. It receives the rendered blocks from the
  * extension, keeps the DOM of blocks that did not change, and reports where
  * it is scrolled to (as a source line) so the editor can follow, and back.
  */
@@ -16,7 +16,7 @@
   // --- theme ---------------------------------------------------------------------
 
   // Follow VS Code's colour theme rather than the system one.
-  // Unless the texdown.previewTheme setting picks light or dark.
+  // Unless the texglass.previewTheme setting picks light or dark.
   let forcedTheme = 'auto';
   const applyTheme = () => {
     const dark = document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast');

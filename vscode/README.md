@@ -1,4 +1,4 @@
-# TeXdown Preview for VS Code
+# TeXglass Preview for VS Code
 
 Preview LaTeX files beside the editor the way VS Code previews Markdown: math
 rendered with [KaTeX](https://katex.org), and sections, equations and
@@ -9,13 +9,13 @@ is needed, and the preview updates as you type, without saving.
 ## Use
 
 - Open a `.tex` file and click the preview icon in the editor title bar, or run
-  **TeXdown: Open Preview to the Side** (Ctrl+K V, Cmd+K V on a Mac).
-  **TeXdown: Open Preview** opens it in the current editor group instead;
+  **TeXglass: Open Preview to the Side** (Ctrl+K V, Cmd+K V on a Mac).
+  **TeXglass: Open Preview** opens it in the current editor group instead;
   it is also in the Explorer's right-click menu for `.tex` files.
 - The preview follows the LaTeX file you are editing, and scrolls along with
   the editor (and the editor with the preview). The link button in the
-  preview's title bar turns that off and on again (or **TeXdown: Toggle
-  Scrolling with the Editor**, or the `texdown.scrollSync` setting).
+  preview's title bar turns that off and on again (or **TeXglass: Toggle
+  Scrolling with the Editor**, or the `texglass.scrollSync` setting).
 - **Ctrl+click** (Cmd+click on a Mac) anywhere in the preview, or
   double-click, to put the cursor at that spot in the source: on the word you
   clicked, or at the start of the formula.
@@ -26,13 +26,13 @@ is needed, and the preview updates as you type, without saving.
   opens as a drawer); **Hide proofs** / **Show proofs** folds or unfolds every
   proof; the link button turns scrolling with the editor off and on; and the
   half-moon button switches the preview between **light and dark**
-  (**TeXdown: Toggle Light/Dark Preview**; the `texdown.previewTheme` setting
+  (**TeXglass: Toggle Light/Dark Preview**; the `texglass.previewTheme` setting
   can also be set back to `auto`, which follows VS Code's theme).
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
 - **Documents in several files**: `\input`, `\include`, `\subfile` and
   `\import` files are pulled in, and edits in any of them show up live (even
-  before saving). Previewing a chapter shows the whole document: TeXdown finds
+  before saving). Previewing a chapter shows the whole document: TeXglass finds
   the main file from a `% !TEX root = main.tex` line, or by looking for the
   file that includes the chapter. Ctrl+click jumps into the right file.
 - **Bibliographies**: `\bibliography{refs}` (BibTeX) and `\addbibresource` +
@@ -60,7 +60,7 @@ Control view: nothing to install on your computer and no TeX needed.
 
 github.dev installs extensions from the VS Code Marketplace, so the extension
 has to be published there first (see **Publish** below). Then search for
-"TeXdown" in the Extensions view of github.dev and click **Install**.
+"TeXglass" in the Extensions view of github.dev and click **Install**.
 
 In the browser the conversion runs in the extension host (a background web
 worker), not in a separate thread.
@@ -69,12 +69,20 @@ worker), not in a separate thread.
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texdown-0.2.0.vsix`.
+`code --install-extension texglass-0.3.0.vsix`.
+
+Upgrading from TeXdown Preview (0.2.0 and earlier): the extension was
+renamed, so VS Code sees TeXglass Preview as a new extension. Uninstall
+TeXdown Preview after installing it, or both previews will open on Ctrl+K V.
+Your `texdown.scrollSync` and `texdown.previewTheme` settings are copied to
+`texglass.scrollSync` and `texglass.previewTheme` the first time it runs, and
+the old entries can then be deleted from settings.json. The commands are now
+`texglass.*`, so update any keybindings that name `texdown.*` commands.
 
 ## Build
 
-The extension uses the converter (`src/texdown.js`) and stylesheet
-(`styles.css`) of the TeXdown web viewer in the parent folder; packaging
+The extension uses the converter (`src/texglass.js`) and stylesheet
+(`styles.css`) of the TeXglass web viewer in the parent folder; packaging
 copies them into `shared/`.
 
 ```sh
@@ -82,7 +90,7 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texdown-0.2.0.vsix
+npx vsce package      # makes texglass-0.3.0.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after

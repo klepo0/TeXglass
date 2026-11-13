@@ -22,7 +22,7 @@ function normalize(p) {
 }
 
 /**
- * A resolveImage function for TeXdown.render: name -> URL or null.
+ * A resolveImage function for TeXglass.render: name -> URL or null.
  * exists(rel) says whether the file at that path relative to the document's
  * folder exists; url(rel) is where the preview can load it.
  */

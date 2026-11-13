@@ -12,7 +12,7 @@
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.TeXdownArxiv = factory();
+  else root.TeXglassArxiv = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
@@ -197,7 +197,7 @@
   }
 
   /**
-   * A resolveImage function for TeXdown.render from { path: url }:
+   * A resolveImage function for TeXglass.render from { path: url }:
    * matches \includegraphics paths with or without extension, relative to \graphicspath.
    */
   function imageResolver(urls, source) {

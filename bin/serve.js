@@ -23,4 +23,4 @@ http
       res.end(data);
     });
   })
-  .listen(port, () => console.log(`TeXdown viewer at http://localhost:${port}`));
+  .listen(port, () => console.log(`TeXglass viewer at http://localhost:${port}`));

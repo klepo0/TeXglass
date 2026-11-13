@@ -1,5 +1,5 @@
 /*
- * Put a LaTeX project together into one text for TeXdown: pull in the files
+ * Put a LaTeX project together into one text for TeXglass: pull in the files
  * named by \input, \include, \subfile and \import, and turn
  * \bibliography / \printbibliography into a thebibliography built from the
  * .bbl (when it is up to date) or the .bib files.

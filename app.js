@@ -1,4 +1,4 @@
-/* TeXdown viewer: opening files, live reload, in-place editing and reference previews. */
+/* TeXglass viewer: opening files, live reload, in-place editing and reference previews. */
 (function () {
   'use strict';
 
@@ -29,7 +29,7 @@
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
-  const sourceAids = window.TeXdownEditor ? TeXdownEditor.attach(source, editorOptions) : { refresh() {}, close() {} };
+  const sourceAids = window.TeXglassEditor ? TeXglassEditor.attach(source, editorOptions) : { refresh() {}, close() {} };
   const setSource = (text) => {
     source.value = text;
     sourceAids.refresh();
@@ -39,6 +39,17 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
   };
+  // Until November 2026 the viewer was called TeXdown and kept its state under
+  // texdown:* keys. Carry those over once, so the last document, folds, theme
+  // and layout survive the rename.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('texdown:') && localStorage.getItem('texglass:' + k.slice(8)) === null) {
+        localStorage.setItem('texglass:' + k.slice(8), localStorage.getItem(k));
+      }
+    }
+  } catch (e) { /* storage unavailable */ }
 
   // --- rendering -------------------------------------------------------------
 
@@ -85,9 +96,9 @@
       worker = null;
     }
     const here = (source, images) =>
-      TeXdown.render(source, {
+      TeXglass.render(source, {
         sourceMap: true,
-        resolveImage: images && window.TeXdownArxiv ? TeXdownArxiv.imageResolver(images, source) : undefined,
+        resolveImage: images && window.TeXglassArxiv ? TeXglassArxiv.imageResolver(images, source) : undefined,
       });
     return async (source, images) => {
       if (worker && (await ready) && worker) {
@@ -127,7 +138,7 @@
         (result) => showResult(result, source),
         (e) => {
           showStatus('Render failed', true);
-          showBlocks([`<pre class="render-error">${TeXdown.escapeHtml(e.stack || e.message || String(e))}</pre>`], source);
+          showBlocks([`<pre class="render-error">${TeXglass.escapeHtml(e.stack || e.message || String(e))}</pre>`], source);
         }
       )
       .catch((e) => console.error(e))
@@ -142,7 +153,7 @@
   function showResult(result, source) {
     lastLabels = result.labels;
     lastToc = result.toc;
-    document.title = result.title ? `${result.title} — TeXdown` : 'TeXdown';
+    document.title = result.title ? `${result.title} — TeXglass` : 'TeXglass';
     const n = result.warnings.length;
     warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
     status.title = result.warnings.join('\n');
@@ -263,7 +274,7 @@
   const tocList = $('toc-list');
   const tocToggle = $('toc-toggle');
   const narrow = window.matchMedia('(max-width: 760px)');
-  let tocWanted = store.get('texdown:toc') !== 'off';
+  let tocWanted = store.get('texglass:toc') !== 'off';
   let tocKey = '';
   let tocLinks = [];
 
@@ -273,7 +284,7 @@
     const bib = preview.querySelector('.bibliography > h2');
     if (bib && items.length) {
       bib.id = bib.id || 'references';
-      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: TeXdown.escapeHtml(bib.textContent), id: bib.id });
+      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: TeXglass.escapeHtml(bib.textContent), id: bib.id });
     }
     lastToc = items;
     const key = JSON.stringify(items);
@@ -281,7 +292,7 @@
       tocKey = key;
       const top = Math.min(...items.map((t) => t.level));
       tocList.innerHTML = items
-        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXdown.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
+        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXglass.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
         .join('');
       tocLinks = Array.from(tocList.querySelectorAll('a'));
     }
@@ -354,7 +365,7 @@
 
   tocToggle.addEventListener('click', () => {
     tocWanted = !tocWanted;
-    if (!narrow.matches) store.set('texdown:toc', tocWanted ? 'on' : 'off');
+    if (!narrow.matches) store.set('texglass:toc', tocWanted ? 'on' : 'off');
     showToc();
     spyToc();
   });
@@ -389,7 +400,7 @@
 
   function rememberSoon() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => store.set('texdown:last', doc), 400);
+    saveTimer = setTimeout(() => store.set('texglass:last', doc), 400);
   }
 
   function load(text, name, images, gh) {
@@ -398,7 +409,7 @@
     imageUrls.forEach((u) => URL.revokeObjectURL(u));
     imageUrls = [];
     imageMap = null;
-    if (images && Object.keys(images).length && window.TeXdownArxiv) {
+    if (images && Object.keys(images).length && window.TeXglassArxiv) {
       imageMap = {};
       for (const [path, blob] of Object.entries(images)) imageUrls.push((imageMap[path] = URL.createObjectURL(blob)));
     }
@@ -409,8 +420,8 @@
     clearPreview();
     render();
     previewPane.scrollTop = 0;
-    store.set('texdown:last', doc);
-    store.set('texdown:last-name', name || '');
+    store.set('texglass:last', doc);
+    store.set('texglass:last-name', name || '');
   }
 
   // Where the open document came from on GitHub: { links: { view, edit, dev }, path }.
@@ -421,7 +432,7 @@
       ghLink.href = gh.links.edit;
       ghLink.title = `Open ${gh.path} on GitHub to edit and commit it. Or press "." there to edit it in github.dev.`;
     }
-    store.set('texdown:last-gh', gh ? JSON.stringify(gh) : '');
+    store.set('texglass:last-gh', gh ? JSON.stringify(gh) : '');
   }
 
   // --- folding sections and proofs -------------------------------------------
@@ -429,8 +440,8 @@
   // Folded items are remembered by their text, so they stay folded across
   // re-renders and edits elsewhere in the document.
   const folded = new Set();
-  try { JSON.parse(store.get('texdown:folds') || '[]').forEach((k) => folded.add(k)); } catch (e) { /* ignore */ }
-  const saveFolds = () => store.set('texdown:folds', JSON.stringify(Array.from(folded).slice(-500)));
+  try { JSON.parse(store.get('texglass:folds') || '[]').forEach((k) => folded.add(k)); } catch (e) { /* ignore */ }
+  const saveFolds = () => store.set('texglass:folds', JSON.stringify(Array.from(folded).slice(-500)));
 
   const HEADING = ':scope > h1.part, :scope > h1.chapter, :scope > h2.section, :scope > h3.subsection, :scope > h4.subsubsection';
 
@@ -554,7 +565,7 @@
     document.body.classList.toggle('mode-edit', m === 'edit');
     document.body.classList.toggle('editing', m === 'split');
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
-    store.set('texdown:mode', m);
+    store.set('texglass:mode', m);
     if (m !== 'edit') closeEditor(true);
     sourcePane.hidden = m !== 'split';
     $('splitter').hidden = m !== 'split';
@@ -580,7 +591,7 @@
     const previewEl = document.createElement('div');
     previewEl.className = 'inline-preview';
     el.append(textarea, hint, previewEl);
-    const aids = window.TeXdownEditor ? TeXdownEditor.attach(textarea, editorOptions) : { refresh() {}, close() {} };
+    const aids = window.TeXglassEditor ? TeXglassEditor.attach(textarea, editorOptions) : { refresh() {}, close() {} };
     textarea.addEventListener('input', onBlockInput);
     textarea.addEventListener('keydown', onBlockKey);
     return { el, textarea, previewEl, aids };
@@ -982,7 +993,7 @@
         doc = (await file.text()).replace(/\r\n?/g, '\n');
         setSource(doc);
         render();
-        store.set('texdown:last', doc);
+        store.set('texglass:last', doc);
       }
     } catch (e) {
       fileHandle = null;
@@ -1098,7 +1109,7 @@
       splitter.setAttribute('aria-valuenow', String(Math.round(pct)));
     }
     anchors = null;
-    if (remember) store.set('texdown:split', pct == null ? '' : String(pct));
+    if (remember) store.set('texglass:split', pct == null ? '' : String(pct));
   }
 
   const isStacked = () => getComputedStyle(panes).flexDirection === 'column';
@@ -1145,7 +1156,7 @@
     e.preventDefault();
   });
   {
-    const saved = parseFloat(store.get('texdown:split'));
+    const saved = parseFloat(store.get('texglass:split'));
     if (!isNaN(saved)) setSplit(saved, false);
   }
 
@@ -1166,11 +1177,11 @@
   themeButton.addEventListener('click', () => {
     const next = isDark() ? 'light' : 'dark';
     rootEl.dataset.theme = next;
-    store.set('texdown:theme', next);
+    store.set('texglass:theme', next);
     updateThemeButton();
   });
   {
-    const saved = store.get('texdown:theme');
+    const saved = store.get('texglass:theme');
     if (saved === 'light' || saved === 'dark') rootEl.dataset.theme = saved;
     if (darkQuery && darkQuery.addEventListener) darkQuery.addEventListener('change', updateThemeButton);
     // The page's host may also change the theme attribute.
@@ -1195,7 +1206,7 @@
 
   async function importArxiv(input) {
     if (arxivBusy) return false;
-    const id = TeXdownArxiv.parseId(input);
+    const id = TeXglassArxiv.parseId(input);
     if (!id) {
       arxivSay('That does not look like an arXiv link or id, e.g. 2301.00001 or arxiv.org/abs/2301.00001.', true);
       return false;
@@ -1205,7 +1216,7 @@
     arxivSay(`Downloading ${id} from arXiv…`);
     showStatus(`Importing ${id}…`);
     try {
-      const paper = await TeXdownArxiv.importPaper(id);
+      const paper = await TeXglassArxiv.importPaper(id);
       fileHandle = null;
       load(paper.source, paper.name, paper.images);
       if (arxivDialog.open) arxivDialog.close();
@@ -1250,10 +1261,10 @@
     const t = e.target;
     if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
     const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
-    if (/arxiv/i.test(text) && TeXdownArxiv.parseId(text)) {
+    if (/arxiv/i.test(text) && TeXglassArxiv.parseId(text)) {
       e.preventDefault();
       importArxiv(text);
-    } else if (/github/i.test(text) && window.TeXdownGitHub && TeXdownGitHub.parseUrl(text)) {
+    } else if (/github/i.test(text) && window.TeXglassGitHub && TeXglassGitHub.parseUrl(text)) {
       e.preventDefault();
       importGitHub(text);
     }
@@ -1273,8 +1284,8 @@
   }
 
   async function importGitHub(input) {
-    if (ghBusy || !window.TeXdownGitHub) return false;
-    if (!TeXdownGitHub.parseUrl(input)) {
+    if (ghBusy || !window.TeXglassGitHub) return false;
+    if (!TeXglassGitHub.parseUrl(input)) {
       ghSay('That does not look like a GitHub link, e.g. https://github.com/owner/repo/blob/main/paper.tex.', true);
       if (!ghDialog.open) openGitHubDialog(input);
       return false;
@@ -1284,7 +1295,7 @@
     ghSay('Downloading from GitHub…');
     showStatus('Opening from GitHub…');
     try {
-      const file = await TeXdownGitHub.importFile(input);
+      const file = await TeXglassGitHub.importFile(input);
       fileHandle = null;
       load(file.source, file.name, file.images, { links: file.links, path: `${file.owner}/${file.repo}/${file.path}` });
       if (ghDialog.open) ghDialog.close();
@@ -1313,7 +1324,7 @@
   }
 
   const bookmarkletLink = $('bookmarklet');
-  if (window.TeXdownGitHub) bookmarkletLink.href = TeXdownGitHub.bookmarklet(location.href);
+  if (window.TeXglassGitHub) bookmarkletLink.href = TeXglassGitHub.bookmarklet(location.href);
   bookmarkletLink.addEventListener('click', (e) => {
     e.preventDefault();
     ghSay('Drag the button to your bookmarks bar instead of clicking it here.');
@@ -1347,21 +1358,21 @@
   $('load-sample').addEventListener('click', loadSample);
 
   function start() {
-    const saved = store.get('texdown:mode');
+    const saved = store.get('texglass:mode');
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
     let lastGh = null;
-    try { lastGh = JSON.parse(store.get('texdown:last-gh') || 'null'); } catch (e) { /* ignore */ }
-    const loadLast = () => load(last, store.get('texdown:last-name'), null, lastGh);
-    const last = store.get('texdown:last');
+    try { lastGh = JSON.parse(store.get('texglass:last-gh') || 'null'); } catch (e) { /* ignore */ }
+    const loadLast = () => load(last, store.get('texglass:last-name'), null, lastGh);
+    const last = store.get('texglass:last');
     // ?arxiv=2301.00001 opens that paper; ?gh=<GitHub link> opens that file.
     const params = new URLSearchParams(location.search);
     const arxiv = params.get('arxiv');
     const gh = params.get('gh') || params.get('github');
-    if (arxiv && window.TeXdownArxiv) {
+    if (arxiv && window.TeXglassArxiv) {
       if (last) loadLast();
       return importArxiv(arxiv);
     }
-    if (gh && window.TeXdownGitHub) {
+    if (gh && window.TeXglassGitHub) {
       if (last) loadLast();
       return importGitHub(gh);
     }

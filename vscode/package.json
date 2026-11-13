@@ -1,13 +1,13 @@
 {
-  "name": "texdown",
-  "displayName": "TeXdown Preview",
+  "name": "texglass",
+  "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "klepo0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/klepo0/TeXdown"
+    "url": "https://github.com/klepo0/TeXglass"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -30,136 +30,136 @@
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex",
-    "onWebviewPanel:texdown.preview"
+    "onWebviewPanel:texglass.preview"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "texdown.openPreviewToSide",
+        "command": "texglass.openPreviewToSide",
         "title": "Open Preview to the Side",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(open-preview)"
       },
       {
-        "command": "texdown.openPreview",
+        "command": "texglass.openPreview",
         "title": "Open Preview",
-        "category": "TeXdown"
+        "category": "TeXglass"
       },
       {
-        "command": "texdown.disableScrollSync",
+        "command": "texglass.disableScrollSync",
         "title": "Stop Scrolling with the Editor",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(link)"
       },
       {
-        "command": "texdown.enableScrollSync",
+        "command": "texglass.enableScrollSync",
         "title": "Scroll with the Editor",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(debug-disconnect)"
       },
       {
-        "command": "texdown.toggleScrollSync",
+        "command": "texglass.toggleScrollSync",
         "title": "Toggle Scrolling with the Editor",
-        "category": "TeXdown"
+        "category": "TeXglass"
       },
       {
-        "command": "texdown.toggleContents",
+        "command": "texglass.toggleContents",
         "title": "Show or Hide Contents",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(list-tree)"
       },
       {
-        "command": "texdown.hideProofs",
+        "command": "texglass.hideProofs",
         "title": "Hide Proofs",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(fold)"
       },
       {
-        "command": "texdown.showProofs",
+        "command": "texglass.showProofs",
         "title": "Show Proofs",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(unfold)"
       },
       {
-        "command": "texdown.toggleTheme",
+        "command": "texglass.toggleTheme",
         "title": "Toggle Light/Dark Preview",
-        "category": "TeXdown",
+        "category": "TeXglass",
         "icon": "$(color-mode)"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "texdown.openPreviewToSide",
+          "command": "texglass.openPreviewToSide",
           "when": "resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
           "group": "navigation"
         },
         {
-          "command": "texdown.toggleContents",
-          "when": "activeWebviewPanelId == 'texdown.preview'",
+          "command": "texglass.toggleContents",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "navigation@1"
         },
         {
-          "command": "texdown.hideProofs",
-          "when": "activeWebviewPanelId == 'texdown.preview' && texdown.hasProofs && !texdown.proofsFolded",
+          "command": "texglass.hideProofs",
+          "when": "activeWebviewPanelId == 'texglass.preview' && texglass.hasProofs && !texglass.proofsFolded",
           "group": "navigation@2"
         },
         {
-          "command": "texdown.showProofs",
-          "when": "activeWebviewPanelId == 'texdown.preview' && texdown.hasProofs && texdown.proofsFolded",
+          "command": "texglass.showProofs",
+          "when": "activeWebviewPanelId == 'texglass.preview' && texglass.hasProofs && texglass.proofsFolded",
           "group": "navigation@2"
         },
         {
-          "command": "texdown.toggleTheme",
-          "when": "activeWebviewPanelId == 'texdown.preview'",
+          "command": "texglass.toggleTheme",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "navigation@3"
         },
         {
-          "command": "texdown.disableScrollSync",
-          "when": "activeWebviewPanelId == 'texdown.preview' && config.texdown.scrollSync",
+          "command": "texglass.disableScrollSync",
+          "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.scrollSync",
           "group": "navigation@3"
         },
         {
-          "command": "texdown.enableScrollSync",
-          "when": "activeWebviewPanelId == 'texdown.preview' && !config.texdown.scrollSync",
+          "command": "texglass.enableScrollSync",
+          "when": "activeWebviewPanelId == 'texglass.preview' && !config.texglass.scrollSync",
           "group": "navigation@3"
         }
       ],
       "explorer/context": [
         {
-          "command": "texdown.openPreview",
+          "command": "texglass.openPreview",
           "when": "resourceExtname == .tex",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "texdown.disableScrollSync",
+          "command": "texglass.disableScrollSync",
           "when": "false"
         },
         {
-          "command": "texdown.enableScrollSync",
+          "command": "texglass.enableScrollSync",
           "when": "false"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "texdown.openPreviewToSide",
+        "command": "texglass.openPreviewToSide",
         "key": "ctrl+k v",
         "mac": "cmd+k v",
         "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex"
       }
     ],
     "configuration": {
-      "title": "TeXdown",
+      "title": "TeXglass",
       "properties": {
-        "texdown.scrollSync": {
+        "texglass.scrollSync": {
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
         },
-        "texdown.previewTheme": {
+        "texglass.previewTheme": {
           "type": "string",
           "enum": [
             "auto",
