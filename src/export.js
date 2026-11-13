@@ -51,6 +51,18 @@ body { display: block; }
 })();
 `;
 
+  // For a page made to be printed (VS Code's Print / Save as PDF): open the
+  // print dialog once the fonts have loaded, so the math is set in KaTeX's.
+  const PRINT_SCRIPT = `
+(function () {
+  function go() { setTimeout(function () { window.print(); }, 200); }
+  window.addEventListener('load', function () {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(go, go);
+    else go();
+  });
+})();
+`;
+
   const SRC_BLOCK = /^<div class="src-block" data-s="\d+" data-e="\d+">/;
 
   /** The preview's blocks (render with sourceMap) as plain HTML, without their source ranges. */
@@ -120,8 +132,9 @@ body { display: block; }
    *   katexCss   KaTeX's stylesheet to put inside the page (see
    *              embedKatexFonts); without it the page links KaTeX's from a CDN
    *   theme      'light' or 'dark' to fix the colours; else they follow the system
+   *   print      open the print dialog as soon as the page has loaded
    */
-  function page({ body, title, css, katexCss, theme }) {
+  function page({ body, title, css, katexCss, theme, print }) {
     const katex = katexCss
       ? `<style>${katexCss.replace(/<\/style/gi, '<\\/style')}</style>`
       : `<link rel="stylesheet" href="${KATEX_CDN}katex.min.css" crossorigin="anonymous">`;
@@ -143,7 +156,7 @@ ${PAGE_CSS}</style>
 ${body}
 </article></section></main>
 <script>${THEME_SCRIPT}</script>
-</body>
+${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
 </html>
 `;
   }

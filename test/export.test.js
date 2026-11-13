@@ -64,3 +64,26 @@ test('the CLI writes a standalone page with fonts inside and figures relative to
   assert.ok(/Theorem[^<]*<\/span>|Theorem 1/.test(html));
   assert.ok(!html.slice(html.indexOf('<body>')).includes('class="src-block"'));
 });
+
+test('a page made for printing opens the print dialog once loaded; others do not', () => {
+  const printed = TeXglassExport.page({ body: '<p>Hi</p>', title: 't', css: '', print: true });
+  assert.ok(printed.includes('window.print()'));
+  assert.ok(printed.includes('document.fonts.ready'));
+  assert.ok(!TeXglassExport.page({ body: '<p>Hi</p>', title: 't', css: '' }).includes('window.print()'));
+});
+
+test('the stylesheet prints like a paper', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  const print = css.slice(css.lastIndexOf('@media print'));
+  assert.ok(/@page\s*\{[^}]*margin/.test(css));
+  for (const ui of ['.toolbar', '.toc-pane', '.ref-popover', '.find-bar', '.fold-toggle', '.theme-toggle']) assert.ok(print.includes(ui), ui);
+  assert.ok(/--bg: #fff !important/.test(print), 'light colours forced');
+  assert.ok(/\.fold-hidden \{ display: revert !important; \}/.test(print), 'sections unfolded');
+  assert.ok(/break-inside: avoid/.test(print));
+});
+
+test('\\url and \\href links are marked, so print shows the address of an \\href', () => {
+  const { html } = TeXglass.render('\\url{https://a.org} and \\href{https://b.org}{B}', { renderMath: (t) => t });
+  assert.ok(html.includes('<a class="url" href="https://a.org">'));
+  assert.ok(html.includes('<a class="href" href="https://b.org">B</a>'));
+});

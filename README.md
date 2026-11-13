@@ -68,6 +68,12 @@ be hosted on GitHub Pages as is. Then:
   opens anywhere, offline too. The page follows the reader's light or dark
   setting and has its own switch. (Inside an embedded page, where downloads
   are blocked, the HTML is copied to the clipboard instead.)
+- **Print** (or Ctrl+P) prints the document, or saves it as a PDF, laid out
+  like a paper: no toolbar or sidebar, black serif text on white whatever the
+  theme, paper margins, every folded section and proof opened, no page break
+  inside a theorem or a displayed equation, and links printed as text, with
+  the address after a link whose words are not its address. Exported pages
+  print the same way.
 - **Save** (Ctrl+S) writes back to the opened file in Chrome and Edge, and
   downloads a copy elsewhere.
 - In Chrome and Edge, an opened file is **watched**: save it in your editor and
@@ -108,7 +114,8 @@ The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXglass: Open Preview to the
 Side** (Ctrl+K V). It scrolls along with the editor (a button turns that off),
 and Ctrl+click in the preview jumps to that spot in the source. **TeXglass:
-Export to HTML** saves the document as a standalone page. See [vscode/README.md](vscode/README.md) to build
+Export to HTML** saves the document as a standalone page, and **TeXglass:
+Print / Save as PDF** opens it in the browser, ready to print like a paper. See [vscode/README.md](vscode/README.md) to build
 and install it. Once published on the Marketplace, it also runs in the browser:
 press `.` on a GitHub repository to open it in github.dev, preview a `.tex`
 file there, and commit your edits.

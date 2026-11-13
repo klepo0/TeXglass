@@ -18,6 +18,7 @@ const WEB = typeof TEXGLASS_WEB !== 'undefined' && TEXGLASS_WEB;
 const path = require('path'); // path-browserify in the web build
 const fs = WEB ? null : require('fs');
 const { Worker } = WEB ? {} : require('worker_threads');
+const os = WEB ? null : require('os');
 const { convert } = WEB ? require('./convert.js') : {};
 const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
@@ -620,8 +621,13 @@ function figureUrlFrom(outDir, file) {
  * Write the document `uri` belongs to as one standalone HTML page, with the
  * math rendered and the theorems numbered as in the preview. Asks where to
  * save it, next to the .tex file by default, unless `out` says.
+ *
+ * With `print`, the page goes to a temporary folder instead and opens in the
+ * browser, which shows its print dialog at once: the stylesheet's print rules
+ * lay it out like a paper, and "Save as PDF" there makes the PDF. (VS Code's
+ * own webviews cannot print.)
  */
-async function exportHtml(context, converter, uri, out) {
+async function exportHtml(context, converter, uri, out, print) {
   const project = await assembleDocument(uri, new Map());
   if (!project || project.error) {
     vscode.window.showErrorMessage(project ? project.error : `Could not read ${uri}.`);
@@ -629,6 +635,11 @@ async function exportHtml(context, converter, uri, out) {
   }
   const name = path.posix.basename(uri.path);
   const suggested = uri.scheme === 'untitled' ? undefined : vscode.Uri.joinPath(uri, '..', TeXglassExport.fileName(name));
+  if (print && !out) {
+    const dir = path.join(os.tmpdir(), 'texglass-print');
+    fs.mkdirSync(dir, { recursive: true });
+    out = vscode.Uri.file(path.join(dir, TeXglassExport.fileName(name)));
+  }
   if (!out) out = await vscode.window.showSaveDialog({
     defaultUri: suggested,
     filters: { HTML: ['html', 'htm'] },
@@ -636,7 +647,7 @@ async function exportHtml(context, converter, uri, out) {
     title: 'Export to HTML',
   });
   if (!out) return null;
-  return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'TeXglass: exporting to HTML…' }, async () => {
+  return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: print ? 'TeXglass: preparing to print…' : 'TeXglass: exporting to HTML…' }, async () => {
     const text = project.text;
     const outDir = vscode.Uri.joinPath(out, '..');
     let job;
@@ -669,8 +680,12 @@ async function exportHtml(context, converter, uri, out) {
         katexCss = null; // link KaTeX's stylesheet instead
       }
     }
-    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss });
+    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, print: !!print });
     await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
+    if (print) {
+      if (!(await vscode.env.openExternal(out))) vscode.window.showErrorMessage(`TeXglass could not open ${out.fsPath} in a browser.`);
+      return out;
+    }
     const actions = out.scheme === 'file' && !WEB ? ['Open in Browser'] : [];
     vscode.window.showInformationMessage(`Exported ${path.posix.basename(out.path)}`, ...actions).then((pick) => {
       if (pick === 'Open in Browser') vscode.env.openExternal(out);
@@ -791,13 +806,13 @@ function activate(context) {
     // Export the document as a standalone .html file: the one given (Explorer),
     // else the LaTeX file being edited, else the one the preview shows.
     // Other extensions and tasks may pass where to write it as a second argument.
-    vscode.commands.registerCommand('texglass.exportHtml', async (uri, out) => {
+    vscode.commands.registerCommand('texglass.exportHtml', async (uri, out, print) => {
       if (!(uri instanceof vscode.Uri)) {
         const ed = vscode.window.activeTextEditor;
         if (ed && isTex(ed.document)) uri = ed.document.uri;
         else if (preview) uri = preview.uri;
         else {
-          vscode.window.showInformationMessage('Open a .tex file to export it to HTML.');
+          vscode.window.showInformationMessage(print ? 'Open a .tex file to print it.' : 'Open a .tex file to export it to HTML.');
           return null;
         }
       }
@@ -809,7 +824,18 @@ function activate(context) {
           uri = await rootOf(uri, text || '');
         } catch (e) { /* keep the file itself */ }
       }
-      return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined);
+      return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined, print === true);
+    }),
+    // Print the document, or save it as a PDF, laid out like a paper. On the
+    // desktop it opens in the browser (webviews cannot print); in vscode.dev and
+    // github.dev, where the preview is a page of the browser, it prints the preview.
+    vscode.commands.registerCommand('texglass.print', async (uri, out) => {
+      if (WEB) {
+        if (preview) preview.post({ type: 'print' });
+        else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file), then print it.');
+        return null;
+      }
+      return vscode.commands.executeCommand('texglass.exportHtml', uri, out, true);
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {

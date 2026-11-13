@@ -1062,6 +1062,15 @@
   $('open').addEventListener('click', openWithPicker);
   $('save').addEventListener('click', save);
   $('export').addEventListener('click', exportHtml);
+
+  // --- print / save as PDF -----------------------------------------------------
+  // The print stylesheet (styles.css) lays the document out like a paper. Before
+  // printing, finish any inline edit so that the printout is the document itself.
+  window.addEventListener('beforeprint', () => {
+    if (editing) closeEditor();
+    hidePopover();
+  });
+  $('print').addEventListener('click', () => window.print());
   $('file-input').addEventListener('change', (e) => {
     if (e.target.files[0]) openFile(e.target.files[0]);
     e.target.value = '';

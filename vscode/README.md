@@ -46,6 +46,14 @@ is needed, and the preview updates as you type, without saving.
   set `texglass.exportEmbedFonts` to `false` to load them from a CDN instead.
   Figures are linked relative to the page. Other extensions can call the
   command with the `.tex` file's URI and the output URI to skip the dialog.
+- **Print / Save as PDF** (**TeXglass: Print / Save as PDF**, in the same
+  menus) opens the document in your browser with its print dialog showing;
+  pick "Save as PDF" there for a PDF. The printout looks like a paper: serif
+  text in black on white, paper margins, all proofs and sections unfolded, no
+  page break inside a theorem or a displayed equation, and links as text.
+  (VS Code's preview panes cannot print themselves, so the page is written to
+  a temporary folder first.) In vscode.dev and github.dev it prints the
+  preview directly.
 - **Documents in several files**: `\input`, `\include`, `\subfile` and
   `\import` files are pulled in, and edits in any of them show up live (even
   before saving). Previewing a chapter shows the whole document: TeXglass finds

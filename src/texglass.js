@@ -914,12 +914,12 @@
         }
         case 'url': case 'nolinkurl': {
           const a = readArg(src, i);
-          return res(`<a href="${escapeHtml(safeUrl(a.content))}">${escapeHtml(a.content)}</a>`, a.end);
+          return res(`<a class="url" href="${escapeHtml(safeUrl(a.content))}">${escapeHtml(a.content)}</a>`, a.end);
         }
         case 'href': {
           const u = readArg(src, i);
           const t = readArg(src, u.end);
-          return res(`<a href="${escapeHtml(safeUrl(u.content))}">${this.flow(t.content, true)}</a>`, t.end);
+          return res(`<a class="href" href="${escapeHtml(safeUrl(u.content))}">${this.flow(t.content, true)}</a>`, t.end);
         }
         case 'verb': {
           const s = readStar(src, i);

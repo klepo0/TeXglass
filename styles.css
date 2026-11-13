@@ -635,15 +635,6 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 }
 .drop-overlay[hidden] { display: none; }
 
-@media print {
-  .toolbar, .source-pane, .ref-popover, .add-block-row, .fold-toggle { display: none !important; }
-  .fold-hidden, .proof.folded > * { display: revert !important; }
-  #preview > .src-block { content-visibility: visible; }
-  .proof.folded > p:first-child { white-space: normal; color: inherit; }
-  .pane { overflow: visible; }
-  html, body { overflow: visible; height: auto; }
-  .toc-pane, #toc-toggle { display: none !important; }
-  body { display: block; background: #fff; }
 }
 
 /* Find bar: search the text, or go to a theorem, equation or section by number. */
@@ -730,4 +721,100 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @media (max-width: 520px) {
   .find-modes button { padding: 3px 6px; }
 }
-@media print { .find-bar { display: none !important; } }
+
+/* --- printing: Print / Save as PDF looks like a paper ----------------------------
+   Used by the web viewer, the VS Code preview and exported pages alike. Only the
+   document is printed, in black on white whatever the theme, with paper
+   margins, every fold opened, and no page break inside a theorem or a display. */
+
+@page { margin: 2.2cm 2.4cm 2.4cm; }
+
+@media print {
+  :root {
+    --bg: #fff !important;
+    --paper: #fff !important;
+    --ink: #000 !important;
+    --muted: #444 !important;
+    --rule: #bbb !important;
+    --accent: #000 !important;
+    --missing: #c62828 !important;
+    --code-bg: transparent !important;
+    color-scheme: light !important;
+  }
+
+  /* Everything but the document. */
+  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .add-block-row,
+  .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
+  .texglass-status, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
+
+  /* One long page that the printer cuts, not a window with scrolling panes. */
+  html, body { height: auto !important; overflow: visible !important; }
+  body { display: block; background: #fff; color: #000; }
+  .panes, .pane { display: block; overflow: visible !important; }
+  #preview > .src-block { content-visibility: visible; contain-intrinsic-size: none; }
+
+  /* Paper: a serif text block, justified, with no screen padding. */
+  #preview {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  .document {
+    font-size: 11pt;
+    line-height: 1.42;
+    text-align: justify;
+    orphans: 3;
+    widows: 3;
+  }
+  .document .center, .document .title-block, .document .float, .document .abstract-title { text-align: center; }
+  .document .flushright { text-align: right; }
+  .document .flushleft, .document pre { text-align: left; }
+  .document h1.part { margin-top: 0; }
+  .doc-title { font-size: 1.7em; }
+
+  /* Open every folded section and proof. */
+  .fold-hidden { display: revert !important; }
+  .proof.folded > * { display: revert !important; }
+  .proof.folded > p:first-child { white-space: normal; overflow: visible; color: inherit; }
+  .proof.folded > p:first-child .qed { display: revert !important; }
+  .folded::after { content: none !important; }
+
+  /* Theorems as LaTeX sets them: no boxes, just the heading and the text. */
+  .theorem, .thm-definition, .thm-remark {
+    margin: 0.9em 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .toc { border: 0; padding: 0; background: none; }
+
+  /* Keep things whole across pages. */
+  .theorem, .math-display, .float, .title-block, .abstract, .tabular, .graphic,
+  .list .item, .bibliography li, pre.verbatim, .qed-line { break-inside: avoid; }
+  h1, h2, h3, h4, .thm-head-only, .proof-head, .caption { break-after: avoid; }
+  .document h1.chapter, .document h1.part { break-before: page; }
+  #preview > .src-block:first-child h1.chapter, #preview > .src-block:first-child h1.part { break-before: auto; }
+
+  /* Wide content wraps or shows in full: a scrollbar does not print. */
+  .math-display, .table-wrap, pre.verbatim { overflow: visible !important; }
+  pre.verbatim { white-space: pre-wrap; padding: 0; border-radius: 0; }
+
+  /* Links read as text. A link whose words are not its address gets the address after it. */
+  .document a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+  .document a.url { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.88em; }
+  .document a.href[href^="http"]::after, .document a.href[href^="mailto:"]::after {
+    content: " ⟨" attr(href) "⟩";
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.8em;
+    overflow-wrap: anywhere;
+  }
+
+  /* Nothing left over from reading or editing on screen. */
+  .flash { animation: none; }
+  .mode-edit .src-block, .mode-edit .src-block:hover { box-shadow: none; background: none; }
+  .inline-editor { margin: 0; padding: 0; border: 0; box-shadow: none; background: none; }
+  .inline-editor textarea { display: none; }
+  .inline-preview:not(:empty) { margin: 0; padding: 0; }
+  ::highlight(texglass-find), ::highlight(texglass-find-current) { background-color: transparent; }
+}
