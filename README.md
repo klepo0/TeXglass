@@ -1,10 +1,29 @@
-# TeXglass
+<p align="center">
+  <img src="docs/images/logo.svg" width="96" height="96" alt="TeXglass logo">
+</p>
+
+<h1 align="center">TeXglass</h1>
 
 A viewer for LaTeX files that works like a Markdown preview. Open a `.tex`
 file and read it as a nicely typeset page: math is rendered with
 [KaTeX](https://katex.org), and sections, equations and theorem-like
 environments are numbered the way LaTeX would number them, with `\ref`,
 `\eqref` and `\cref` resolving to those numbers.
+
+<p align="center">
+  <img src="docs/images/tour.gif" width="820" alt="Scrolling a paper in TeXglass: hovering a reference previews Lemma 1.3, Go to jumps to the Snake lemma, and the page switches to dark">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/hover.png" alt="Hovering a reference shows the lemma it points to"><br><sub>Hover a reference to preview the theorem or equation.</sub></td>
+    <td width="50%"><img src="docs/images/goto.png" alt="The Go to bar listing lemmas by number"><br><sub><b>Go to</b> a theorem, equation or section by its number.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/diagrams.png" alt="tikz-cd and xymatrix diagrams drawn in the preview"><br><sub><code>tikz-cd</code> and <code>xymatrix</code> diagrams, numbered like equations.</sub></td>
+    <td width="50%"><img src="docs/images/overview-dark.png" alt="Numbered definitions, lemmas and equations in the dark theme"><br><sub>Light and dark themes.</sub></td>
+  </tr>
+</table>
 
 TeXglass was called TeXdown until November 2026. Settings and the last open
 document carry over from the old name.
@@ -113,6 +132,8 @@ relative to the output file. KaTeX's fonts go inside the page (about 350 KB);
 add `--link-katex` to load them from a CDN instead.
 
 ## Preview in VS Code
+
+![The TeXglass preview beside a .tex file in VS Code](docs/images/vscode-dark.png)
 
 The [`vscode/`](vscode) folder is a VS Code extension that shows the same
 preview beside the editor, live as you type: **TeXglass: Open Preview to the
