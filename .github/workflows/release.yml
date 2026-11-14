@@ -59,12 +59,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "TeXglass $GITHUB_REF_NAME" \
-            --generate-notes \
-            texglass-*.vsix \
-            browser/dist/texglass-arxiv-chrome-*.zip \
-            browser/dist/texglass-arxiv-firefox-*.zip
+          files="texglass-*.vsix browser/dist/texglass-arxiv-chrome-*.zip browser/dist/texglass-arxiv-firefox-*.zip"
+          # On a re-run (e.g. after fixing a publish token) the release exists:
+          # replace its files instead of failing.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "TeXglass $GITHUB_REF_NAME" \
+              --generate-notes \
+              $files
+          fi
 
       - name: Publish to the VS Code Marketplace
         env:
