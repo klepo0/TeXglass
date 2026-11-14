@@ -737,7 +737,38 @@ async function migrateOldSettings(context) {
   }
 }
 
+// Before 0.7.1 the extension was published as klepo0.texglass. Both copies
+// contribute the same commands and menus, so with both installed every
+// preview toolbar button shows up twice. Offer to remove the old copy.
+const OLD_IDS = ['klepo0.texglass'];
+
+function warnAboutOldCopy(context) {
+  const self = context.extension ? context.extension.id.toLowerCase() : '';
+  const old = OLD_IDS.find((id) => id !== self && vscode.extensions.getExtension(id));
+  if (!old) return;
+  const choice = 'Uninstall old copy';
+  vscode.window
+    .showWarningMessage(
+      `An older TeXglass (${old}) is also installed, so the preview buttons appear twice. Uninstall it and reload?`,
+      choice
+    )
+    .then(async (picked) => {
+      if (picked !== choice) return;
+      try {
+        await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', old);
+        await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      } catch (e) {
+        vscode.window.showErrorMessage(`Could not uninstall ${old}: ${e.message}. Remove it from the Extensions view.`);
+      }
+    });
+}
+
 function activate(context) {
+  try {
+    warnAboutOldCopy(context);
+  } catch (e) {
+    /* never block activation */
+  }
   migrateOldSettings(context).catch(() => {});
   const converter = new Converter(context.extensionPath);
   context.subscriptions.push(converter);
