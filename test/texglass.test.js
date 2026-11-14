@@ -302,3 +302,14 @@ c &= d \label{e2}
   const t = text(html);
   assert.match(t, /\(1\)\s*\(2\)/);
 });
+
+test('\\hyperref, \\hyperlink and \\hypertarget make links', () => {
+  const { html, warnings } = plain(String.raw`\begin{enumerate}\item\label{ass.sewing.R} a\end{enumerate}
+See \hyperref[ass.sewing.R]{(R)}, \hyperref[nope]{X}, \hyperlink{t}{go}, \hypertarget{t}{here} and \hyperref{http://a.b/c}{sec}{2}{ext}.`);
+  assert.match(html, /<a class="ref" href="#item-1" data-label="ass.sewing.R">\(R\)<\/a>/);
+  assert.match(html, /<span class="ref-missing" title="Undefined label: nope">X<\/span>/);
+  assert.match(html, /<a class="ref" href="#ht-t">go<\/a>/);
+  assert.match(html, /<span id="ht-t">here<\/span>/);
+  assert.match(html, /<a class="href" href="http:\/\/a\.b\/c#sec\.2">ext<\/a>/);
+  assert.deepEqual(warnings, ['Undefined reference "nope".']);
+});
