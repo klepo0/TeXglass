@@ -1566,8 +1566,6 @@
     }
   }
 
-  $('load-sample').addEventListener('click', loadSample);
-
   function start() {
     const saved = store.get('texglass:mode');
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
