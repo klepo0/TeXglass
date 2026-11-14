@@ -379,6 +379,64 @@
   });
   if (narrow.matches) tocWanted = false;
 
+  // The contents go on the left of the document, or on the right.
+  const tocSide = $('toc-side');
+  function setTocSide(right) {
+    document.body.classList.toggle('toc-right', right);
+    const label = right ? 'Move the contents to the left' : 'Move the contents to the right';
+    tocSide.setAttribute('aria-label', label);
+    tocSide.title = label;
+  }
+  setTocSide(store.get('texglass:toc-side') === 'right');
+  tocSide.addEventListener('click', () => {
+    const right = !document.body.classList.contains('toc-right');
+    store.set('texglass:toc-side', right ? 'right' : 'left');
+    setTocSide(right);
+  });
+
+  // --- zoom ----------------------------------------------------------------------
+
+  // Ctrl/Cmd +, − and 0, or the toolbar buttons, scale the document and leave
+  // the toolbar as it is. The level is remembered; printing is always at 100%.
+  const zoomLevel = $('zoom-level');
+  const zoom = window.TeXglassZoom
+    ? TeXglassZoom.create({
+      pane: previewPane,
+      document: preview,
+      onChange(z) {
+        store.set('texglass:zoom', String(z));
+        showZoom();
+      },
+    })
+    : null;
+  function showZoom() {
+    zoomLevel.textContent = zoom.label();
+    $('zoom-out').disabled = zoom.level <= TeXglassZoom.MIN;
+    $('zoom-in').disabled = zoom.level >= TeXglassZoom.MAX;
+  }
+  if (zoom) {
+    zoom.set(TeXglassZoom.parse(store.get('texglass:zoom')), true);
+    showZoom();
+    $('zoom-in').addEventListener('click', () => zoom.step(1));
+    $('zoom-out').addEventListener('click', () => zoom.step(-1));
+    zoomLevel.addEventListener('click', () => zoom.reset());
+    window.addEventListener('keydown', (e) => {
+      const dir = TeXglassZoom.keyStep(e);
+      if (dir === null) return;
+      e.preventDefault();
+      if (dir) zoom.step(dir);
+      else zoom.reset();
+    });
+    // Ctrl + mouse wheel or a trackpad pinch over the document zooms it too.
+    previewPane.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoom.set(zoom.level * Math.exp(-e.deltaY / 300));
+    }, { passive: false });
+  } else {
+    zoomLevel.parentNode.hidden = true;
+  }
+
   function showStatus(text, warn) {
     status.textContent = text;
     status.classList.toggle('warn', !!warn);

@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -124,6 +124,28 @@
         "title": "Print / Save as PDF",
         "category": "TeXglass",
         "icon": "$(printer)"
+      },
+      {
+        "command": "texglass.zoomIn",
+        "title": "Zoom In",
+        "category": "TeXglass",
+        "icon": "$(zoom-in)"
+      },
+      {
+        "command": "texglass.zoomOut",
+        "title": "Zoom Out",
+        "category": "TeXglass",
+        "icon": "$(zoom-out)"
+      },
+      {
+        "command": "texglass.resetZoom",
+        "title": "Reset Zoom",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.toggleContentsPosition",
+        "title": "Move Contents to the Other Side",
+        "category": "TeXglass"
       }
     ],
     "menus": {
@@ -177,6 +199,26 @@
           "command": "texglass.print",
           "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
           "group": "1_texglass"
+        },
+        {
+          "command": "texglass.zoomIn",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_zoom@1"
+        },
+        {
+          "command": "texglass.zoomOut",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_zoom@2"
+        },
+        {
+          "command": "texglass.resetZoom",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_zoom@3"
+        },
+        {
+          "command": "texglass.toggleContentsPosition",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_zoom@4"
         }
       ],
       "explorer/context": [
@@ -220,6 +262,22 @@
         {
           "command": "texglass.findPrevious",
           "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.zoomIn",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.zoomOut",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.resetZoom",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.toggleContentsPosition",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
         }
       ]
     },
@@ -251,6 +309,54 @@
         "command": "texglass.findPrevious",
         "key": "shift+f3",
         "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomIn",
+        "key": "ctrl+=",
+        "mac": "cmd+=",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomIn",
+        "key": "ctrl+shift+=",
+        "mac": "cmd+shift+=",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomIn",
+        "key": "ctrl+numpad_add",
+        "mac": "cmd+numpad_add",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomOut",
+        "key": "ctrl+-",
+        "mac": "cmd+-",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomOut",
+        "key": "ctrl+shift+-",
+        "mac": "cmd+shift+-",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.zoomOut",
+        "key": "ctrl+numpad_subtract",
+        "mac": "cmd+numpad_subtract",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.resetZoom",
+        "key": "ctrl+0",
+        "mac": "cmd+0",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.resetZoom",
+        "key": "ctrl+numpad0",
+        "mac": "cmd+numpad0",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
       }
     ],
     "configuration": {
@@ -275,6 +381,19 @@
           ],
           "default": "auto",
           "description": "Colours of the preview. The button in the preview's title bar switches between light and dark."
+        },
+        "texglass.contentsPosition": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "enumDescriptions": [
+            "Contents on the left of the document.",
+            "Contents on the right of the document."
+          ],
+          "default": "left",
+          "description": "Which side of the preview the table of contents is on. The button at the top of the contents switches sides."
         },
         "texglass.exportEmbedFonts": {
           "type": "boolean",

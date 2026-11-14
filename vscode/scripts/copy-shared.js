@@ -15,6 +15,7 @@ for (const [from, to] of [
   ['src/diagrams.js', 'diagrams.js'],
   ['styles.css', 'styles.css'],
   ['src/find.js', 'find.js'],
+  ['src/zoom.js', 'zoom.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));

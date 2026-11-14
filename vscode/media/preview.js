@@ -312,6 +312,56 @@
     }
   });
 
+  // The contents go on the left or the right (the texglass.contentsPosition setting).
+  const tocSide = document.getElementById('toc-side');
+  function setTocSide(right) {
+    document.body.classList.toggle('toc-right', right);
+    const label = right ? 'Move the contents to the left' : 'Move the contents to the right';
+    tocSide.setAttribute('aria-label', label);
+    tocSide.title = label;
+  }
+  tocSide.addEventListener('click', () => {
+    const right = !document.body.classList.contains('toc-right');
+    setTocSide(right); // straight away; the setting follows
+    vscode.postMessage({ type: 'set-toc-side', value: right ? 'right' : 'left' });
+  });
+
+  // --- zoom -----------------------------------------------------------------------------
+
+  // The texglass.zoomIn / zoomOut / resetZoom commands (Ctrl/Cmd +, - and 0,
+  // which VS Code runs for keys pressed in here too) scale the document. The
+  // level shows in a small box at the bottom left while it is not 100%.
+  const zoomFloat = document.getElementById('zoom-float');
+  const zoomLevel = document.getElementById('zoom-level');
+  let zoomHide = 0;
+  const zoom = window.TeXglassZoom
+    ? window.TeXglassZoom.create({
+      pane,
+      document: preview,
+      onChange(z) {
+        vscode.postMessage({ type: 'zoomed', level: z });
+        showZoom(true);
+      },
+    })
+    : null;
+  function showZoom(changed) {
+    zoomLevel.textContent = zoom.label();
+    clearTimeout(zoomHide);
+    zoomFloat.hidden = zoom.level === 1 && !changed;
+    if (zoom.level === 1 && changed) zoomHide = setTimeout(() => { if (zoom.level === 1) zoomFloat.hidden = true; }, 1500);
+  }
+  if (zoom) {
+    document.getElementById('zoom-in').addEventListener('click', () => zoom.step(1));
+    document.getElementById('zoom-out').addEventListener('click', () => zoom.step(-1));
+    zoomLevel.addEventListener('click', () => zoom.reset());
+    // Ctrl + mouse wheel or a trackpad pinch zooms too.
+    pane.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      zoom.set(zoom.level * Math.exp(-e.deltaY / 300));
+    }, { passive: false });
+  }
+
   // --- scrolling in step with the editor -------------------------------------------
 
   let allAnchors = []; // every block with a source range
@@ -597,6 +647,22 @@
         tocWanted = !tocWanted;
         showToc();
         vscode.postMessage({ type: 'toc', on: tocWanted });
+        break;
+      case 'zoom':
+        if (zoom) {
+          zoom.set(window.TeXglassZoom.parse(m.level), true);
+          showZoom(false);
+        }
+        break;
+      case 'zoom-step':
+        if (zoom) {
+          if (m.dir) zoom.step(m.dir);
+          else zoom.reset();
+          showZoom(true);
+        }
+        break;
+      case 'toc-side':
+        setTocSide(m.value === 'right');
         break;
       case 'fold-proofs':
         foldAllProofs(m.fold);

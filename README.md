@@ -68,7 +68,12 @@ be hosted on GitHub Pages as is. Then:
 - In Preview and Edit, a **Contents** sidebar lists the sections (and the
   references). Click an entry to jump there; the section you are reading is
   highlighted as you scroll. The **Contents** button hides or shows it, and on
-  a phone it opens as a drawer.
+  a phone it opens as a drawer. The small button beside its title moves it to
+  the other side of the document; the choice is remembered.
+- **Zoom** the document with − / 100% / + in the toolbar, Ctrl/Cmd + and −
+  (Ctrl/Cmd 0 resets), or Ctrl + mouse wheel. Only the document grows, math and
+  diagrams included; the toolbar stays as it is. The level is remembered, and
+  printing is always at 100%.
 - **Fold** sections and proofs with the arrow beside them (or click a section
   heading or a folded proof in Preview mode). **Hide proofs** folds every
   proof at once to its first line. Folds are remembered, and following a
