@@ -27,10 +27,35 @@ Install **TeXglass** from the
 [Marketplace](https://marketplace.visualstudio.com/items?itemName=klepo1.texglass)
 (`ext install klepo1.texglass`), open a `.tex` file and press **Ctrl+K V**.
 
-- **Live** preview beside the editor, updated as you type.
-- **Scroll sync** both ways; **Ctrl+click** in the preview jumps to the source.
-- **Export to HTML** (one standalone page) and **Print / Save as PDF**.
-- Works in **github.dev** too: press `.` on any GitHub repo, preview, commit.
+- **Live preview** beside the editor (Ctrl+K V) or in place (**Open
+  Preview**, also in the Explorer's right-click menu), updated as you type,
+  without saving.
+- **Scroll sync** both ways, with a title-bar button and the
+  `texglass.scrollSync` setting to turn it off.
+- **Jump to source**: Ctrl+click or double-click in the preview puts the
+  cursor on that word.
+- **Table of contents** sidebar that highlights the section you are reading,
+  on the left or right (`texglass.contentsPosition`).
+- **Search** the preview (Ctrl+F, F3 / Shift+F3 for next and previous).
+- **Go to** a theorem, equation or section by number (Ctrl+G).
+- **Hover previews** of references and citations; click to jump there.
+- **Light and dark themes**, toggled from the title bar, or following VS Code
+  (`texglass.previewTheme`).
+- **Fold** sections and proofs; **Hide proofs** folds them all at once.
+- **Zoom** with Ctrl +/−/0 or Ctrl + mouse wheel, remembered per workspace.
+- **Multi-file documents**: `\input`, `\include`, `\subfile`, `\import`
+  and `\includeonly`, live across files. Previewing a chapter shows the whole
+  document (`% !TEX root`, subfiles, or the file that includes it).
+- **Bibliographies** from your `.bib` files (BibTeX and biblatex), or an
+  existing `.bbl`.
+- **Figures** in PNG, JPEG, SVG, GIF or WebP, with `\graphicspath`.
+- **Diagrams**: `tikz-cd`, `xymatrix` and simple TikZ, drawn.
+- **Export to HTML**: one standalone page that works offline
+  (`texglass.exportEmbedFonts`).
+- **Print / Save as PDF**, laid out like a paper.
+- **Fast on long papers**: conversion runs in a background thread.
+- Works in **github.dev and vscode.dev**: press `.` on any GitHub repo,
+  preview, edit, commit.
 
 Prefer a file? Every [release](https://github.com/klepo0/TeXglass/releases)
 has a `.vsix` (**Extensions: Install from VSIX…**). More in
@@ -38,8 +63,8 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 
 ## Web viewer
 
-**[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: drop a
-`.tex` file on the page, or paste an arXiv or GitHub link.
+**[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
+drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
 
 <table>
   <tr>
@@ -52,27 +77,49 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
   </tr>
 </table>
 
-- **arXiv import**: paste `2301.00001` or any arXiv link. Includes, the
-  bibliography and figures come along. Also `?arxiv=2301.00001`.
-- **GitHub import**: paste a link to a file, folder or repo; the main file is
-  found for you. Also `?gh=<link>`, plus a bookmarklet.
-- **Edit in place**: click any paragraph, theorem or equation to edit its
-  LaTeX; numbering updates as you type. Or **Split** for source beside preview.
-- **Navigate**: Contents sidebar, **Find** (Ctrl+F), **Go to** (Ctrl+G),
-  fold sections and proofs, zoom.
-- **Out**: **Export** a standalone offline `.html`, or **Print** as a clean
-  paper-style PDF.
-- **Autocomplete and syntax colouring** in the editor, including your own
-  labels and `\newtheorem`s.
+- **Open** a file (Ctrl+O) or drag it onto the page.
+- **arXiv import**: paste `2301.00001` or any arXiv link. Included files, the
+  `.bbl` and figures come along. Also `?arxiv=2301.00001`.
+- **GitHub import**: paste a link to a file, folder or repo of a public
+  repository; the main file, included files, `.bbl` and figures are found for
+  you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
+- **Three modes**: **Preview**, **Edit** (click any paragraph, theorem or
+  equation to edit its LaTeX in place, Ctrl+E) and **Split** (source beside
+  preview, scrolling together, resizable divider, Ctrl+Shift+E).
+- **Table of contents** sidebar that highlights the section you are reading,
+  on either side, or as a drawer on a phone.
+- **Search** the document (Ctrl+F, Enter / Shift+Enter or F3 / Shift+F3).
+- **Go to** a theorem, equation, section, figure or table by number (Ctrl+G).
+- **Hover previews** of references; click to jump there.
+- **Light and dark themes**, following your system until you pick one.
+- **Fold** sections and proofs; **Hide proofs** folds them all at once.
+- **Zoom** the document (toolbar, Ctrl +/−/0, Ctrl + mouse wheel).
+- **Editor**: LaTeX syntax colouring, autocomplete for commands, snippets,
+  environments (your `\newtheorem`s too) and labels with their numbers,
+  auto-closing math delimiters, and Tab to step out of brackets.
+- **Save** back to the file (Ctrl+S) and **live reload** when the file changes
+  on disk (Chrome and Edge).
+- **Export** a standalone offline `.html` page.
+- **Print** (Ctrl+P) as a clean paper-style PDF.
+- **Status** counts undefined references and duplicate labels.
+- **Fast on long papers**: conversion runs in a background worker.
 
 Run it locally with `npm start` (http://localhost:8000). It is a static page
 with no build step.
 
 ## arXiv browser extension
 
-For **Chrome, Edge and Firefox**. Click its toolbar button on any arXiv
-abstract, PDF or HTML page, right-click an arXiv link, or use the **View in
-TeXglass** links it adds to arxiv.org. Grab the zips from the latest
+For **Chrome, Edge and Firefox**.
+
+- **Toolbar button**: on an arXiv abstract, PDF or HTML page, opens that paper
+  in TeXglass.
+- **Right-click menu**: open any link to an arXiv paper, on any site.
+- **Links on arxiv.org**: *View in TeXglass* on abstract pages, a *texglass*
+  link in listings, and a floating button on HTML papers.
+- **Self-contained**: papers open in a viewer bundled with the extension, so
+  only arxiv.org needs to be reachable. The options can switch to the website.
+
+Grab the zips from the latest
 [release](https://github.com/klepo0/TeXglass/releases/latest); install steps
 are in [browser/README.md](browser/README.md).
 
