@@ -1,6 +1,6 @@
 # Publishes a GitHub Release when a version tag is pushed:
 #
-#   git tag v0.5.0 && git push origin v0.5.0
+#   git tag v0.7.1 && git push origin v0.7.1
 #
 # The tag must match the VS Code extension's version in vscode/package.json.
 # The release carries the .vsix and the browser extension zips, with notes
@@ -65,3 +65,24 @@ jobs:
             texglass-*.vsix \
             browser/dist/texglass-arxiv-chrome-*.zip \
             browser/dist/texglass-arxiv-firefox-*.zip
+
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::warning::VSCE_PAT secret not set; skipping the VS Code Marketplace"
+            exit 0
+          fi
+          cd vscode
+          npx vsce publish --skip-duplicate --packagePath ../texglass-*.vsix
+
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::notice::OVSX_PAT secret not set; skipping Open VSX"
+            exit 0
+          fi
+          npx --yes ovsx@1.3.0 publish --skip-duplicate --packagePath texglass-*.vsix
