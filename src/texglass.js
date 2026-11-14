@@ -122,6 +122,11 @@
     return tex;
   }
 
+  /** Element id for a \hypertarget name. */
+  function hyperId(name) {
+    return 'ht-' + name.trim().replace(/\s+/g, '-');
+  }
+
   function safeUrl(url) {
     const u = String(url).trim();
     if (/^(https?:|mailto:|#|\.{0,2}\/)/i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
@@ -662,6 +667,17 @@
         .join(', ');
     }
 
+    /** \hyperref[key]{html}: the given text as a link to the label's target. */
+    labelLink(key, html) {
+      key = key.trim();
+      const info = this.lookup(key);
+      if (!info) {
+        if (this.known) this.warnings.push(`Undefined reference "${key}".`);
+        return `<span class="ref-missing" title="Undefined label: ${escapeHtml(key)}">${html}</span>`;
+      }
+      return `<a class="ref" href="#${info.id}" data-label="${escapeHtml(key)}">${html}</a>`;
+    }
+
     /** Resolve \ref-like commands inside math to plain text. */
     mathRefs(tex) {
       return tex.replace(/\\(eqref|ref|cref|Cref|autoref)\s*\{([^}]*)\}/g, (_, cmd, key) => {
@@ -1014,6 +1030,32 @@
           const u = readArg(src, i);
           const t = readArg(src, u.end);
           return res(`<a class="href" href="${escapeHtml(safeUrl(u.content))}">${this.flow(t.content, true)}</a>`, t.end);
+        }
+        case 'hyperref': {
+          // \hyperref[label]{text}: link text to a \label, like \ref.
+          const o = readOpt(src, i);
+          if (o) {
+            const a = readArg(src, o.end);
+            return res(this.labelLink(o.content, this.flow(a.content, true)), a.end);
+          }
+          // \hyperref{url}{category}{name}{text} links to url#category.name.
+          const u = readArg(src, i);
+          const c = readArg(src, u.end);
+          const n = readArg(src, c.end);
+          const t = readArg(src, n.end);
+          const frag = [c.content.trim(), n.content.trim()].filter(Boolean).join('.');
+          const url = u.content.trim() + (frag ? '#' + frag : '');
+          return res(`<a class="href" href="${escapeHtml(safeUrl(url))}">${this.flow(t.content, true)}</a>`, t.end);
+        }
+        case 'hypertarget': {
+          const n = readArg(src, i);
+          const t = readArg(src, n.end);
+          return res(`<span id="${escapeHtml(hyperId(n.content))}">${this.flow(t.content, true)}</span>`, t.end);
+        }
+        case 'hyperlink': {
+          const n = readArg(src, i);
+          const t = readArg(src, n.end);
+          return res(`<a class="ref" href="#${escapeHtml(hyperId(n.content))}">${this.flow(t.content, true)}</a>`, t.end);
         }
         case 'verb': {
           const s = readStar(src, i);
