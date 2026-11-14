@@ -132,6 +132,19 @@ function findInBlock(text, m) {
 }
 
 /** Set a context key that decides which buttons the preview's title bar shows. */
+/** Where the contents go: 'left' or 'right' of the document. */
+function contentsPosition() {
+  return vscode.workspace.getConfiguration('texglass').get('contentsPosition', 'left') === 'right' ? 'right' : 'left';
+}
+
+/** Change a setting where it is set now: the workspace if it overrides it there, else for the user. */
+function setConfig(key, value) {
+  const config = vscode.workspace.getConfiguration('texglass');
+  const info = config.inspect(key);
+  const target = info && info.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  return config.update(key, value, target);
+}
+
 function setContext(key, value) {
   vscode.commands.executeCommand('setContext', key, value);
 }
@@ -345,11 +358,13 @@ class Preview {
 <link rel="stylesheet" href="${res('media', 'preview.css')}">
 </head>
 <body>
-<main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-title">Contents</div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
+<main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div><button id="toc-side" class="toc-side" type="button" aria-label="Move the contents to the right" title="Move the contents to the right"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg></button></div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
+<div id="zoom-float" class="zoom-float" role="group" aria-label="Zoom" hidden><button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (Ctrl+−)">−</button><button id="zoom-level" class="zoom-level" type="button" title="Reset the zoom to 100% (Ctrl+0)">100%</button><button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (Ctrl++)">+</button></div>
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -478,6 +493,8 @@ class Preview {
         this.post({ type: 'prefs', folds: this.context.globalState.get('texglass.folds', []), toc: this.context.globalState.get('texglass.toc', true) });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
+        this.post({ type: 'zoom', level: this.context.workspaceState.get('texglass.zoom', 1) });
+        this.post({ type: 'toc-side', value: contentsPosition() });
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
         this.renderedText = null;
         this.render().then(() => {
@@ -502,6 +519,12 @@ class Preview {
       case 'toc':
         this.context.globalState.update('texglass.toc', m.on);
         setContext('texglass.tocOpen', m.on);
+        break;
+      case 'zoomed':
+        this.context.workspaceState.update('texglass.zoom', m.level);
+        break;
+      case 'set-toc-side':
+        setConfig('contentsPosition', m.value === 'right' ? 'right' : 'left');
         break;
       case 'set-theme':
         vscode.workspace.getConfiguration('texglass').update('previewTheme', m.value, vscode.ConfigurationTarget.Global);
@@ -804,6 +827,12 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
+    // Zoom the document in the preview (Ctrl/Cmd +, - and 0 while it has focus).
+    vscode.commands.registerCommand('texglass.zoomIn', () => preview && preview.post({ type: 'zoom-step', dir: 1 })),
+    vscode.commands.registerCommand('texglass.zoomOut', () => preview && preview.post({ type: 'zoom-step', dir: -1 })),
+    vscode.commands.registerCommand('texglass.resetZoom', () => preview && preview.post({ type: 'zoom-step', dir: 0 })),
+    vscode.commands.registerCommand('texglass.toggleContentsPosition', () =>
+      setConfig('contentsPosition', contentsPosition() === 'right' ? 'left' : 'right')),
     vscode.commands.registerCommand('texglass.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
     vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
@@ -845,6 +874,9 @@ function activate(context) {
       return vscode.commands.executeCommand('texglass.exportHtml', uri, out, true);
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
+        preview.post({ type: 'toc-side', value: contentsPosition() });
+      }
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
         preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
       }

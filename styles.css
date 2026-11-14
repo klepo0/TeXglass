@@ -212,7 +212,54 @@ img.graphic { max-width: 100%; height: auto; }
   overscroll-behavior: contain;
 }
 .toc-pane[hidden] { display: none; }
-.toc-pane-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 8px; }
+/* The contents can sit on the right of the document instead. */
+body.toc-right .toc-pane { order: 2; border-right: 0; border-left: 1px solid var(--rule); padding: 20px 16px 32px 10px; }
+.toc-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px 8px; }
+.toc-pane-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.toc-pane-head .toc-pane-title { margin: 0; }
+.toc-side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.toc-side:hover { color: var(--ink); border-color: var(--rule); background: var(--paper); }
+.toc-side svg { width: 15px; height: 15px; }
+body.toc-right .toc-side svg { transform: scaleX(-1); }
+
+/* Zoom: − 100% + in the toolbar, and a small floating one in the VS Code preview. */
+.zoom-group { display: inline-flex; align-items: center; }
+.zoom-group[hidden] { display: none; }
+.toolbar .zoom-group button { border-radius: 0; padding: 5px 9px; }
+.toolbar .zoom-group button:first-child { border-radius: 6px 0 0 6px; }
+.toolbar .zoom-group button:last-child { border-radius: 0 6px 6px 0; }
+.toolbar .zoom-group button + button { margin-left: -1px; }
+.toolbar .zoom-group .zoom-level { min-width: 4.2em; padding: 5px 4px; font-variant-numeric: tabular-nums; }
+.zoom-float {
+  position: fixed;
+  left: 12px;
+  bottom: 8px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  font: 12px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--muted);
+  opacity: 0.92;
+}
+.zoom-float[hidden] { display: none; }
+.zoom-float button { font: inherit; color: inherit; background: none; border: 0; padding: 1px 8px; cursor: pointer; }
+.zoom-float button:hover { color: var(--ink); }
+.zoom-float .zoom-level { min-width: 3.6em; font-variant-numeric: tabular-nums; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
 .toc-list { list-style: none; margin: 0; padding: 0; }
 .toc-list a {
   display: flex;
@@ -244,6 +291,7 @@ img.graphic { max-width: 100%; height: auto; }
     width: min(300px, 85vw);
     box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
   }
+  body.toc-right .toc-pane { left: auto; right: 0; }
 }
 .source-pane { display: flex; flex: 0 0 var(--split, 50%); }
 .source-pane[hidden] { display: none; }
@@ -362,14 +410,15 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 
 .document {
   font-family: "Latin Modern Roman", "Computer Modern Serif", "CMU Serif", Charter, "Iowan Old Style", Georgia, serif;
-  font-size: 18px;
+  /* --zoom is the viewer's zoom level (src/zoom.js); everything inside is in em. */
+  font-size: calc(18px * var(--zoom, 1));
   line-height: 1.6;
   hyphens: auto;
   overflow-wrap: break-word;
 }
 
 #preview {
-  max-width: 760px;
+  max-width: calc(760px * var(--zoom, 1));
   margin: 0 auto;
   padding: 40px 16px 24px;
 }
@@ -452,7 +501,7 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
   position: fixed;
   z-index: 10;
   padding: 8px 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--zoom, 1));
 }
 .ref-popover[hidden] { display: none; }
 .ref-popover-body {
@@ -765,7 +814,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   }
 
   /* Everything but the document. */
-  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .add-block-row,
+  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .add-block-row, .zoom-float,
   .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 

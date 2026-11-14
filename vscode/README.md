@@ -28,6 +28,13 @@ is needed, and the preview updates as you type, without saving.
   half-moon button switches the preview between **light and dark**
   (**TeXglass: Toggle Light/Dark Preview**; the `texglass.previewTheme` setting
   can also be set back to `auto`, which follows VS Code's theme).
+- **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
+  mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**
+  in the preview's `…` menu. The level shows at the bottom left (click it to
+  go back to 100%) and is remembered for the workspace.
+- The **contents** can sit on the left or the right of the document: the
+  button beside the word *Contents* switches sides, as does the
+  `texglass.contentsPosition` setting.
 - Hover over a reference or citation to see what it points to; click it to go
   there. Links to web pages open in your browser.
 - **Find in the preview** (Ctrl+F or the search button in the title bar, with
@@ -98,7 +105,7 @@ worker), not in a separate thread.
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texglass-0.7.1.vsix`.
+`code --install-extension texglass-0.8.0.vsix`.
 
 Upgrading from TeXdown Preview (0.2.0 and earlier): the extension was
 renamed, so VS Code sees TeXglass Preview as a new extension. Uninstall
@@ -127,7 +134,7 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texglass-0.7.1.vsix
+npx vsce package      # makes texglass-0.8.0.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after
