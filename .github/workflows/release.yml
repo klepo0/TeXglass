@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # Marketplace trusted publishing (OIDC)
 
 jobs:
   release:
@@ -71,16 +72,12 @@ jobs:
               $files
           fi
 
+      # Trusted publishing: no token. The klepo1 publisher's "Trusted
+      # Publishing" tab on marketplace.visualstudio.com/manage must list this
+      # repository and workflow (release.yml).
       - name: Publish to the VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "::warning::VSCE_PAT secret not set; skipping the VS Code Marketplace"
-            exit 0
-          fi
-          cd vscode
-          npx vsce publish --skip-duplicate --packagePath ../texglass-*.vsix
+        working-directory: vscode
+        run: npx --yes @vscode/vsce@4.1.0 publish --oidc --skip-duplicate --packagePath ../texglass-*.vsix
 
       - name: Publish to Open VSX
         env:
