@@ -98,7 +98,7 @@ worker), not in a separate thread.
 
 From a release `.vsix` file: in VS Code, open the Extensions view, click the
 `…` menu, choose **Install from VSIX…**, and pick the file. Or run
-`code --install-extension texglass-0.3.1.vsix`.
+`code --install-extension texglass-0.7.1.vsix`.
 
 Upgrading from TeXdown Preview (0.2.0 and earlier): the extension was
 renamed, so VS Code sees TeXglass Preview as a new extension. Uninstall
@@ -107,6 +107,14 @@ Your `texdown.scrollSync` and `texdown.previewTheme` settings are copied to
 `texglass.scrollSync` and `texglass.previewTheme` the first time it runs, and
 the old entries can then be deleted from settings.json. The commands are now
 `texglass.*`, so update any keybindings that name `texdown.*` commands.
+
+Upgrading from 0.7.0 and earlier: from 0.7.1 the publisher is `klepo1`, the
+same as on the VS Code Marketplace, so the extension ID changed from
+`klepo0.texglass` to `klepo1.texglass` and VS Code sees it as a new
+extension. Install 0.7.1, then uninstall the old one (it shows the same name,
+TeXglass Preview; check the ID in its details page), or both previews will
+open on Ctrl+K V. Settings, commands and keybindings are unchanged: they use
+the `texglass.*` names, which do not depend on the publisher.
 
 ## Build
 
@@ -119,7 +127,7 @@ cd vscode
 npm install
 npm run copy-shared   # also runs automatically before packaging
 npm test
-npx vsce package      # makes texglass-0.3.1.vsix
+npx vsce package      # makes texglass-0.7.1.vsix
 ```
 
 To try changes, open this folder in VS Code and press F5 (after
@@ -141,12 +149,12 @@ makes the extension installable from the Extensions view, in github.dev and
 vscode.dev as well as on the desktop. Once:
 
 1. Sign in at https://marketplace.visualstudio.com/manage with a Microsoft
-   account and create the publisher `klepo0` (the `publisher` in
+   account and create the publisher `klepo1` (the `publisher` in
    `package.json`).
 2. In Azure DevOps (https://dev.azure.com), create a personal access token
    with the **Marketplace → Manage** scope and **All accessible
    organizations**.
-3. `npx vsce login klepo0` and paste the token.
+3. `npx vsce login klepo1` and paste the token.
 
 Then, for each release, raise `version` in `package.json` and run
 `npx vsce publish`.

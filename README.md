@@ -126,7 +126,9 @@ file there, and commit your edits.
 
 Built `.vsix` files are attached to each
 [release](https://github.com/klepo0/TeXglass/releases): in VS Code, run
-**Extensions: Install from VSIX…** and pick the file.
+**Extensions: Install from VSIX…** and pick the file. The extension ID is
+`klepo1.texglass` from 0.7.1 (it was `klepo0.texglass`), so after upgrading
+from 0.7.0 or earlier, uninstall the old copy.
 
 ## Open arXiv papers from the browser
 
