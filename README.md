@@ -203,3 +203,7 @@ git tag v0.5.0 && git push origin v0.5.0
 The [Release workflow](.github/workflows/release.yml) runs the tests, builds
 the `.vsix` and the browser zips, and publishes a GitHub Release with them and
 notes listing the pull requests merged since the previous tag.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
