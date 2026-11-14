@@ -202,7 +202,10 @@ git tag v0.5.0 && git push origin v0.5.0
 
 The [Release workflow](.github/workflows/release.yml) runs the tests, builds
 the `.vsix` and the browser zips, and publishes a GitHub Release with them and
-notes listing the pull requests merged since the previous tag.
+notes listing the pull requests merged since the previous tag. It also
+publishes the extension to the VS Code Marketplace and Open VSX when the
+repository secrets `VSCE_PAT` and `OVSX_PAT` are set (each is skipped
+otherwise).
 
 ## License
 
