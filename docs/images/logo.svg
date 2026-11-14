@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<title>TeXglass</title>
+<defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a63c4"/><stop offset="1" stop-color="#1d3478"/></linearGradient></defs>
+<rect x="4" y="4" width="120" height="120" rx="28" fill="url(#tg)"/>
+<line x1="78" y1="78" x2="101" y2="101" stroke="#f5b83d" stroke-width="15" stroke-linecap="round"/>
+<circle cx="56" cy="56" r="32" fill="#ffffff" fill-opacity=".16" stroke="#ffffff" stroke-width="9"/>
+<path d="M36 46 A22 22 0 0 1 48 34" fill="none" stroke="#ffffff" stroke-opacity=".55" stroke-width="4" stroke-linecap="round"/>
+<path d="M167 -741Q167 -784 114 -798Q116 -801 120 -804Q139 -824 165 -824Q178 -825 192 -812Q243 -761 296 -511Q324 -381 367 -133Q457 397 591 934Q613 1018 624.5 1059.0Q636 1100 659.0 1166.5Q682 1233 707.5 1273.5Q733 1314 764 1336Q797 1360 828 1360Q879 1360 910.0 1327.0Q941 1294 944 1245Q944 1217 929.0 1200.0Q914 1183 887 1183Q864 1183 848.0 1199.0Q832 1215 832 1239Q832 1282 885 1296L882 1300Q879 1303 874.0 1307.0Q869 1311 866 1313Q851 1323 833 1323Q828 1323 826 1322Q794 1313 761 1222Q728 1132 688 929Q658 783 633 628Q537 79 409 -435Q377 -562 355 -629Q318 -741 274 -799Q229 -862 165 -862Q120 -862 88.5 -828.0Q57 -794 55 -746Q55 -718 70.0 -701.5Q85 -685 112 -685Q135 -685 151.0 -701.0Q167 -717 167 -741Z" transform="translate(56.00 56.00) scale(0.01980 -0.01980) translate(-499.5 -249.0)" fill="#ffffff" stroke="#ffffff" stroke-width="80"/>
+</svg>

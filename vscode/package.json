@@ -4,6 +4,11 @@
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
   "version": "0.7.1",
   "publisher": "klepo1",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1d3478",
+    "theme": "dark"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

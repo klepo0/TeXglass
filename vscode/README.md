@@ -6,6 +6,18 @@ theorem-like environments numbered the way LaTeX would number them, with
 `\ref`, `\eqref` and `\cref` resolving to those numbers. No TeX installation
 is needed, and the preview updates as you type, without saving.
 
+![The TeXglass preview beside a .tex file: numbered theorems and equations, scrolled to the same place as the editor](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/vscode-dark.png)
+
+Hover a reference to see what it points to, and jump to a theorem by its number:
+
+![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)
+
+![Go to lists lemmas by their numbers](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/goto.png)
+
+Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
+
+![tikz-cd and xymatrix diagrams in the preview](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/diagrams.png)
+
 ## Use
 
 - Open a `.tex` file and click the preview icon in the editor title bar, or run
