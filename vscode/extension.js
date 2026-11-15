@@ -567,19 +567,35 @@ class Preview {
 
   /** Put the cursor at `line` of source file number `file`, opening it if needed. */
   async reveal(file, line, col) {
-    const name = this.project ? this.project.files[file] : null;
-    const uri = !name ? this.uri : this.uriOf(name);
+    // The preview stays where it was clicked: moving the editor here must not
+    // scroll it (back to the top, for a file that was just opened).
+    this.holdPreview();
     let ed = this.editor(file);
-    if (!ed) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const other = this.editor();
-      ed = await vscode.window.showTextDocument(doc, { viewColumn: other ? other.viewColumn : vscode.ViewColumn.One });
-    } else {
-      ed = await vscode.window.showTextDocument(ed.document, ed.viewColumn);
-    }
+    if (!ed) ed = await this.openFile(file, false);
+    else ed = await vscode.window.showTextDocument(ed.document, ed.viewColumn);
+    if (!ed) return;
     const pos = ed.document.validatePosition(new vscode.Position(Math.max(0, line), col || 0));
     ed.selection = new vscode.Selection(pos, pos);
     ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    this.holdPreview();
+  }
+
+  /** Show source file number `file` where the document's editor is (or beside the preview). */
+  async openFile(file, preserveFocus) {
+    const name = this.project ? this.project.files[file] : null;
+    const uri = !name ? this.uri : this.uriOf(name);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const other = this.editor();
+    const viewColumn = other ? other.viewColumn : this.panel.viewColumn === vscode.ViewColumn.One ? vscode.ViewColumn.Two : vscode.ViewColumn.One;
+    const options = { viewColumn, preserveFocus };
+    // Opened by scrolling: a preview tab, so a long document does not leave a tab per file.
+    if (preserveFocus) options.preview = true;
+    return vscode.window.showTextDocument(doc, options);
+  }
+
+  /** Keep the editor from scrolling the preview for a moment. */
+  holdPreview(ms = 400) {
+    this.holdUntil = Math.max(this.holdUntil || 0, Date.now() + ms);
   }
 
   syncEnabled() {
@@ -587,16 +603,36 @@ class Preview {
   }
 
   syncFromEditor(ed) {
-    if (!this.syncEnabled() || Date.now() - this.lastPreviewScroll < 300) return;
+    if (!this.syncEnabled() || Date.now() - this.lastPreviewScroll < 300 || Date.now() < (this.holdUntil || 0)) return;
     const file = this.fileIndex(ed.document.uri);
     if (file < 0 || !ed.visibleRanges.length) return;
     this.lastEditorScroll = Date.now();
     this.post({ type: 'scroll-to', line: ed.visibleRanges[0].start.line, file });
   }
 
-  syncFromPreview(line, file) {
+  async syncFromPreview(line, file) {
     if (!this.syncEnabled() || Date.now() - this.lastEditorScroll < 300) return;
-    const ed = this.editor(file);
+    this.lastPreviewScroll = Date.now();
+    this.pendingScroll = { line, file };
+    if (this.opening) return; // the file being opened takes the latest line once it shows
+    let ed = this.editor(file);
+    if (!ed && this.editor()) {
+      // The preview has scrolled into a file pulled in with \input: show it in
+      // place of the one the editor had, keeping the focus on the preview.
+      this.opening = true;
+      this.holdPreview(800);
+      try {
+        ed = await this.openFile(file, true);
+      } catch (err) {
+        ed = null;
+      } finally {
+        this.opening = false;
+      }
+      this.holdPreview();
+      if (!ed || this.disposed) return;
+      ({ line, file } = this.pendingScroll);
+      if (this.fileIndex(ed.document.uri) !== file) return this.syncFromPreview(line, file);
+    }
     if (!ed) return;
     this.lastPreviewScroll = Date.now();
     const l = Math.max(0, Math.min(Math.floor(line), ed.document.lineCount - 1));

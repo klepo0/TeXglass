@@ -378,7 +378,10 @@
     let lo = 0;
     let hi = anchors.length - 1;
     if (line < anchors[0].line) {
-      pane.scrollTop = 0;
+      // Above the first block: the top of the document for the main file, but
+      // the start of its part for a file pulled in with \input (an editor that
+      // has just opened one is at its first line).
+      pane.scrollTop = file ? Math.max(0, topOf(anchors[0].el) - 8) : 0;
     } else {
       while (lo < hi) {
         const mid = (lo + hi + 1) >> 1;
