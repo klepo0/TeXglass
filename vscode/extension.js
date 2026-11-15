@@ -425,6 +425,7 @@ class Preview {
         this.project = project;
         this.renderedText = text;
         this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings) });
+        this.flushLine();
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
     } finally {
@@ -506,6 +507,7 @@ class Preview {
         this.post({ type: 'click-to-copy', on: clickToCopy() });
         this.renderedText = null;
         this.render().then(() => {
+          if (this.pendingLine) return this.flushLine();
           const ed = this.editor();
           if (ed && ed.visibleRanges.length) this.syncFromEditor(ed);
         });
@@ -603,6 +605,25 @@ class Preview {
     // Opened by scrolling: a preview tab, so a long document does not leave a tab per file.
     if (preserveFocus) options.preview = true;
     return vscode.window.showTextDocument(doc, options);
+  }
+
+  /**
+   * Forward sync: show line `line` of the file at `uri` in the middle of the
+   * preview, marked. Waits for the preview to be ready if it has just opened.
+   */
+  showLine(uri, line) {
+    this.pendingLine = { uri: uri.toString(), line };
+    this.flushLine();
+  }
+
+  flushLine() {
+    const p = this.pendingLine;
+    if (!p || !this.ready || !this.project || this.renderedText == null) return;
+    this.pendingLine = null;
+    const file = this.fileIndex(vscode.Uri.parse(p.uri));
+    if (file < 0) return;
+    this.holdPreview(1000); // the editor's own scroll sync must not undo it
+    this.post({ type: 'show-line', line: p.line, file });
   }
 
   /** Keep the editor from scrolling the preview for a moment. */
@@ -850,6 +871,22 @@ function activate(context) {
     attach(new Preview(context, converter, panel, uri));
   }
 
+  // Forward sync: the preview jumps to where the cursor is. It opens the
+  // preview first if needed; in a file pulled in with \input it shows the
+  // whole document, at that file's line.
+  async function showCursor() {
+    const ed = vscode.window.activeTextEditor;
+    if (!ed || !isTex(ed.document)) {
+      vscode.window.showInformationMessage('Put the cursor in a .tex file to show that spot in the TeXglass preview.');
+      return;
+    }
+    const { uri } = ed.document;
+    const line = ed.selection.active.line;
+    if (preview && preview.hasFile(uri)) preview.panel.reveal(preview.panel.viewColumn, true);
+    else await open(uri, preview ? preview.panel.viewColumn || vscode.ViewColumn.Beside : vscode.ViewColumn.Beside);
+    if (preview) preview.showLine(uri, line);
+  }
+
   function setScrollSync(on) {
     const config = vscode.workspace.getConfiguration('texglass');
     // Change it where it is set now: the workspace if it overrides it there, else for the user.
@@ -866,6 +903,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texglass.openPreviewToSide', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Beside)),
     vscode.commands.registerCommand('texglass.openPreview', (uri) => open(uri instanceof vscode.Uri ? uri : null, vscode.ViewColumn.Active)),
+    vscode.commands.registerCommand('texglass.showCursor', showCursor),
     // The button in the preview's title bar turns scrolling in step on or off.
     vscode.commands.registerCommand('texglass.enableScrollSync', () => setScrollSync(true)),
     vscode.commands.registerCommand('texglass.disableScrollSync', () => setScrollSync(false)),

@@ -408,6 +408,61 @@
 
   const allVisible = () => anchors;
 
+  // --- jumping to the cursor (forward sync) -----------------------------------------
+
+  let syncMark = null;
+
+  /** Bring line `line` of source file number `file` to the middle of the preview and light it up. */
+  function showLine(line, file) {
+    const own = allAnchors.filter((a) => a.file === (file || 0));
+    if (!own.length) return;
+    let lo = 0;
+    let hi = own.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (own[mid].line <= line) lo = mid;
+      else hi = mid - 1;
+    }
+    let a = own[lo];
+    // On a blank line or a comment between two blocks: whichever is nearer.
+    const next = own[lo + 1];
+    if (line > a.end && next && next.line - line < line - a.end) a = next;
+    // Unfold a section or proof that hides it.
+    reveal(a.el);
+    const proof = a.el.querySelector('.proof.folded');
+    if (proof) reveal(proof);
+    if (syncMark) syncMark.remove();
+    // A band at that line's share of the block (the whole block when it is
+    // short). Sizes are in % so they hold while the block gets its real height.
+    const mark = document.createElement('div');
+    mark.className = 'sync-mark';
+    const n = a.end - a.line + 1;
+    if (n > 3) {
+      const t = Math.max(0, Math.min(1, (line - a.line + 0.5) / n));
+      mark.style.top = `calc(${(t * 100).toFixed(2)}% - 0.8em)`;
+      mark.style.height = '1.6em';
+    }
+    a.el.appendChild(mark);
+    syncMark = mark;
+    setTimeout(() => {
+      if (syncMark === mark) syncMark = null;
+      mark.remove();
+    }, 5000);
+    // Glide when it is near; far away, a glide would cross blocks whose
+    // heights are only estimates and keep re-aiming, so go straight there.
+    const far = Math.abs(mark.getBoundingClientRect().top - pane.getBoundingClientRect().top) > 2 * pane.clientHeight;
+    TeXglassScroll.to(pane, mark, {
+      align: 'center',
+      smooth: !far,
+      done() {
+        if (syncMark === mark) ignoreScrollUntil = Date.now() + 150;
+      },
+    });
+    // The editor stays where it is: this scroll is not one to follow. (Set
+    // after starting it, as starting it ends a jump that was under way.)
+    ignoreScrollUntil = Infinity;
+  }
+
   /** The source file and line at the top of the preview. */
   function lineAtTop() {
     if (!anchors.length) return { line: 0, file: 0 };
@@ -718,6 +773,9 @@
         break;
       case 'scroll-to':
         scrollToLine(m.line, m.file);
+        break;
+      case 'show-line':
+        showLine(m.line, m.file);
         break;
       default:
     }

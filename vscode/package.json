@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -50,6 +50,12 @@
         "command": "texglass.openPreview",
         "title": "Open Preview",
         "category": "TeXglass"
+      },
+      {
+        "command": "texglass.showCursor",
+        "title": "Jump Preview to Cursor",
+        "category": "TeXglass",
+        "icon": "$(target)"
       },
       {
         "command": "texglass.disableScrollSync",
@@ -278,6 +284,17 @@
         {
           "command": "texglass.toggleContentsPosition",
           "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.showCursor",
+          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "texglass.showCursor",
+          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex",
+          "group": "navigation@90"
         }
       ]
     },
@@ -287,6 +304,12 @@
         "key": "ctrl+k v",
         "mac": "cmd+k v",
         "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex"
+      },
+      {
+        "command": "texglass.showCursor",
+        "key": "ctrl+k j",
+        "mac": "cmd+k j",
+        "when": "editorTextFocus && (editorLangId == latex || editorLangId == tex || resourceExtname == .tex)"
       },
       {
         "command": "texglass.find",
