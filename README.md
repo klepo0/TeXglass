@@ -34,6 +34,8 @@ Install **TeXglass** from the
   `texglass.scrollSync` setting to turn it off.
 - **Jump to source**: Ctrl+click or double-click in the preview puts the
   cursor on that word.
+- **Copy a formula's LaTeX** by clicking it (`texglass.clickToCopyMath` to
+  turn it off).
 - **Table of contents** sidebar that highlights the section you are reading,
   on the left or right (`texglass.contentsPosition`).
 - **Search** the preview (Ctrl+F, F3 / Shift+F3 for next and previous).
@@ -91,6 +93,8 @@ drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
 - **Search** the document (Ctrl+F, Enter / Shift+Enter or F3 / Shift+F3).
 - **Go to** a theorem, equation, section, figure or table by number (Ctrl+G).
 - **Hover previews** of references; click to jump there.
+- **Click a formula** to copy its LaTeX (in Preview and Split; in Edit a click
+  opens the block). Works in the arXiv extension too.
 - **Light and dark themes**, following your system until you pick one.
 - **Fold** sections and proofs; **Hide proofs** folds them all at once.
 - **Zoom** the document (toolbar, Ctrl +/−/0, Ctrl + mouse wheel).

@@ -27,6 +27,12 @@
   // Small helpers
   // ---------------------------------------------------------------------------
 
+  /** A data-tex attribute holding a formula's LaTeX as written, for copying it from the page. */
+  const texAttr = (tex) => {
+    const t = String(tex).replace(/\\label\s*\{[^}]*\}/g, '').replace(/\\(nonumber|notag)\b[ \t]*/g, '').replace(/[ \t]+$/gm, '').trim();
+    return t ? ` data-tex="${escapeHtml(t)}"` : '';
+  };
+
   const escapeHtml = (s) =>
     String(s)
       .replace(/&/g, '&amp;')
@@ -912,8 +918,9 @@
     }
 
     inlineMath(tex) {
-      if (DIAGRAM_RE.test(tex) && tikz()) return `<span class="math math-inline">${this.mathWithDiagrams(tex)}</span>`;
-      return `<span class="math math-inline">${this.renderMath(tex, false)}</span>`;
+      const src = texAttr(tex);
+      if (DIAGRAM_RE.test(tex) && tikz()) return `<span class="math math-inline"${src}>${this.mathWithDiagrams(tex)}</span>`;
+      return `<span class="math math-inline"${src}>${this.renderMath(tex, false)}</span>`;
     }
 
     /** Commands made of a backslash and one non-letter. */
@@ -1693,12 +1700,15 @@
       const starred = name.endsWith('*') || name === 'displaymath';
       const base = name.replace(/\*$/, '');
       const id = this.newId('eq');
+      // The source to copy: the formula as written, with the environment kept
+      // where its rows need it (align, gather, ...).
+      const src = texAttr(/^(align|gather|flalign|alignat|eqnarray|multline)$/.test(base) ? `\\begin{${name}}${body}\\end{${name}}` : body);
       if (DIAGRAM_RE.test(body) && tikz()) {
         // A diagram (with maybe some math around it and an equation number).
         const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
         const t = /\\tag(\*?)\{(.*)\}$/.exec(r.tag);
         const tag = t ? `<span class="diagram-tag">${this.renderMath(t[1] ? t[2] : `(${t[2]})`, false)}</span>` : '';
-        return `<div class="math math-display diagram-display" id="${id}"><span class="diagram-row">${this.mathWithDiagrams(r.tex)}</span>${tag}</div>`;
+        return `<div class="math math-display diagram-display" id="${id}"${src}><span class="diagram-row">${this.mathWithDiagrams(r.tex)}</span>${tag}</div>`;
       }
       const multiRow = /^(align|gather|flalign|alignat|eqnarray)$/.test(base);
       let tex;
@@ -1745,13 +1755,13 @@
             .map((g) =>
               g.text !== undefined
                 ? `<p class="intertext">${this.flow(g.text, true)}</p>`
-                : `<div class="math math-display" id="${g.id}">${this.renderMath(`\\begin{${env}}${lead}${g.rows.join(' \\\\ ')}\\end{${env}}`, true)}</div>`
+                : `<div class="math math-display" id="${g.id}"${src}>${this.renderMath(`\\begin{${env}}${lead}${g.rows.join(' \\\\ ')}\\end{${env}}`, true)}</div>`
             )
             .join('');
         }
         tex = `\\begin{${env}}${lead}${(parts[0] ? parts[0].rows : []).join(' \\\\ ')}\\end{${env}}`;
       }
-      return `<div class="math math-display" id="${id}">${this.renderMath(tex, true)}</div>`;
+      return `<div class="math math-display" id="${id}"${src}>${this.renderMath(tex, true)}</div>`;
     }
 
     /** Math that contains tikzcd, xymatrix or tikzpicture: diagrams between pieces of KaTeX. */

@@ -528,6 +528,26 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 }
 .ref-popover .theorem, .ref-popover .math-display { margin: 0; }
 
+/* Click a formula to copy its LaTeX (src/copytex.js). */
+.math-copyable .math[data-tex] { cursor: copy; border-radius: 4px; transition: background-color 0.15s; }
+.math-copyable .math[data-tex]:hover { background: var(--accent-soft); }
+.math-copyable .math[data-tex].copied { animation: flash 0.7s ease-out; }
+.copy-toast {
+  position: fixed;
+  z-index: 30;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 12px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.copy-toast.show { opacity: 1; }
+.copy-toast.failed { background: var(--missing); color: #fff; }
+.copy-toast[hidden] { display: none; }
+
 /* Lists */
 .list { list-style: none; padding: 0; margin: 0 0 0.9em; }
 .list .item { display: flex; gap: 0.6em; margin: 0.25em 0; }
@@ -827,7 +847,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   /* Everything but the document. */
   .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .add-block-row, .zoom-float,
   .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
-  .texglass-status, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
+  .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
   /* One long page that the printer cuts, not a window with scrolling panes. */
   html, body { height: auto !important; overflow: visible !important; }

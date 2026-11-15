@@ -31,6 +31,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
 - **Ctrl+click** (Cmd+click on a Mac) anywhere in the preview, or
   double-click, to put the cursor at that spot in the source: on the word you
   clicked, or at the start of the formula.
+- **Click a formula** to copy its LaTeX source, as written in your file
+  (labels left out). "Copied LaTeX" shows by the pointer. The
+  `texglass.clickToCopyMath` setting turns this off.
 - **Fold** sections and proofs with the arrow beside them, or by clicking a
   section heading or a folded proof. Folds are remembered.
 - The buttons in the preview's title bar: **Contents** shows a sidebar of the
