@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {

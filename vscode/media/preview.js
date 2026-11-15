@@ -219,11 +219,13 @@
 
   function updateToc(items) {
     items = items.slice();
-    // The bibliography gets an entry too, after the sections.
+    // The bibliography gets an entry too, where it is in the document (before any appendix).
     const bib = preview.querySelector('.bibliography > h2');
     if (bib && items.length) {
       bib.id = bib.id || 'references';
-      items.push({ level: Math.min(...items.map((t) => t.level)), num: '', title: escapeHtml(bib.textContent), id: bib.id });
+      const entry = { level: Math.min(...items.map((t) => t.level)), num: '', title: escapeHtml(bib.textContent), id: bib.id };
+      const after = items.findIndex((t) => { const h = document.getElementById(t.id); return h && bib.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING; });
+      items.splice(after < 0 ? items.length : after, 0, entry);
     }
     toc = items;
     const key = JSON.stringify(items);
@@ -281,8 +283,7 @@
     const target = document.getElementById(a.dataset.id);
     if (!target) return;
     reveal(target);
-    const y = target.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 16;
-    pane.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    TeXglassScroll.to(pane, target);
     markToc(a);
     tocJump = Date.now() + 1000;
     if (narrow.matches) {
@@ -507,7 +508,7 @@
   function jumpTo(target) {
     hidePopover();
     reveal(target);
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    TeXglassScroll.to(pane, target, { align: 'center' });
     target.classList.remove('flash');
     void target.offsetWidth;
     target.classList.add('flash');
