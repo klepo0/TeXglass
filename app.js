@@ -11,6 +11,8 @@
   const fileName = $('file-name');
   const popover = $('ref-popover');
   const inFrame = window.self !== window.top;
+  // Click a formula to copy its LaTeX; off in Edit mode, where a click opens the block.
+  const copier = window.TeXglassCopyTex ? window.TeXglassCopyTex.attach({ roots: [preview, popover] }) : null;
 
   let doc = ''; // the LaTeX source being shown, with \n line endings
   let mode = 'preview'; // 'preview' or 'edit'
@@ -614,8 +616,9 @@
   // Registered before the Edit-mode click handler, so toggles never open the editor.
   preview.addEventListener('click', (e) => {
     const btn = e.target.closest('.fold-toggle');
-    const foldedProof = !btn && mode !== 'edit' && e.target.closest('.proof.folded');
-    const heading = !btn && mode !== 'edit' && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const onFormula = !!e.target.closest('.math-copyable .math[data-tex]'); // that click copies it
+    const foldedProof = !btn && !onFormula && mode !== 'edit' && e.target.closest('.proof.folded');
+    const heading = !btn && !onFormula && mode !== 'edit' && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
     const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
     if (!target) return;
     e.preventDefault();
@@ -638,6 +641,7 @@
     mode = m;
     document.body.classList.toggle('mode-edit', m === 'edit');
     document.body.classList.toggle('editing', m === 'split');
+    if (copier) copier.setEnabled(m !== 'edit');
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
     store.set('texglass:mode', m);
     if (m !== 'edit') closeEditor(true);

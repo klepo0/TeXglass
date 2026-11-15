@@ -193,8 +193,9 @@
   preview.addEventListener('click', (e) => {
     if (e.ctrlKey || e.metaKey) return; // that is a jump to the source
     const btn = e.target.closest('.fold-toggle');
-    const foldedProof = !btn && e.target.closest('.proof.folded');
-    const heading = !btn && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const onFormula = !!e.target.closest('.math-copyable .math[data-tex]'); // that click copies it
+    const foldedProof = !btn && !onFormula && e.target.closest('.proof.folded');
+    const heading = !btn && !onFormula && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
     const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
     if (!target) return;
     e.preventDefault();
@@ -533,6 +534,16 @@
     return true;
   }
 
+  // A single click on a formula copies its LaTeX. It waits out the double-click
+  // time, so a double-click (jump to the source) does not copy.
+  const copier = window.TeXglassCopyTex
+    ? window.TeXglassCopyTex.attach({
+      roots: [preview, popover],
+      delay: 300,
+      write: (text) => vscode.postMessage({ type: 'copy-tex', text }),
+    })
+    : null;
+
   preview.addEventListener('dblclick', (e) => {
     if (e.target.closest('a')) return;
     goToSource(e);
@@ -735,6 +746,9 @@
         break;
       case 'fold-proofs':
         foldAllProofs(m.fold);
+        break;
+      case 'click-to-copy':
+        if (copier) copier.setEnabled(m.on);
         break;
       case 'theme':
         forcedTheme = m.value;
