@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -366,6 +366,11 @@
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
+        },
+        "texglass.clickToCopyMath": {
+          "type": "boolean",
+          "default": true,
+          "description": "Click a formula in the preview to copy its LaTeX source. Double-click and Ctrl/Cmd+click still jump to the source."
         },
         "texglass.previewTheme": {
           "type": "string",

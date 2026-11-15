@@ -118,7 +118,7 @@ test('tikzpicture: paths, nodes, styles from \\tikzset and \\foreach', () => {
   assert.equal(f.anchor, 'south');
   assert.equal(f.on.t, 0.5);
   assert.equal(m.paths.filter((p) => p.fill === 'currentColor').length, 3);
-  assert.match(html, /<span class="tikz-node" data-k="0"><span class="math math-inline">\[I:x\]<\/span>/);
+  assert.match(html, /<span class="tikz-node" data-k="0"><span class="math math-inline" data-tex="x">\[I:x\]<\/span>/);
   assert.doesNotMatch(html, /tikz-note/);
 });
 
@@ -173,7 +173,7 @@ test('expressions and \\foreach lists', () => {
 
 test('a diagram wrapped in an array or \\fbox keeps the math around it balanced', () => {
   const { html } = plain(String.raw`\[\begin{array}{c}\xymatrix{A \ar[r] & B}\end{array}\qquad \fbox{\xymatrix{C}}\]`);
-  assert.doesNotMatch(html, /\\begin\{array\}|\\fbox/);
+  assert.doesNotMatch(html.replace(/ data-tex="[^"]*"/g, ''), /\\begin\{array\}|\\fbox/); // rendered, not as source
   assert.equal(models(html, 'data-cd').length, 2);
 });
 

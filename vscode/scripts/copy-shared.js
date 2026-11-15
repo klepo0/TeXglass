@@ -17,6 +17,7 @@ for (const [from, to] of [
   ['src/find.js', 'find.js'],
   ['src/zoom.js', 'zoom.js'],
   ['src/scroll.js', 'scroll.js'],
+  ['src/copytex.js', 'copytex.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));

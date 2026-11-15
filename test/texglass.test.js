@@ -313,3 +313,29 @@ See \hyperref[ass.sewing.R]{(R)}, \hyperref[nope]{X}, \hyperlink{t}{go}, \hypert
   assert.match(html, /<a class="href" href="http:\/\/a\.b\/c#sec\.2">ext<\/a>/);
   assert.deepEqual(warnings, ['Undefined reference "nope".']);
 });
+
+test('each formula carries its LaTeX as written, for click-to-copy', () => {
+  const { html } = plain(String.raw`\newcommand{\R}{\mathbb{R}}
+\begin{document}
+Let $x \in \R$ and \(a<b\).
+\begin{equation}\label{eq:one} e^{i\pi} + 1 = 0 \end{equation}
+\begin{align}
+  a &= b \label{eq:a} \\
+  c &= d \nonumber
+\end{align}
+\[ f(x) = "q" \]
+See \eqref{eq:one}.
+\end{document}`);
+  const tex = Array.from(html.matchAll(/class="math [^"]*"(?: id="[^"]*")? data-tex="([^"]*)"/g), (m) =>
+    m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
+  assert.deepEqual(tex, [
+    String.raw`x \in \R`,
+    'a<b',
+    String.raw`e^{i\pi} + 1 = 0`,
+    String.raw`\begin{align}
+  a &= b  \\
+  c &= d
+\end{align}`,
+    'f(x) = "q"',
+  ]);
+});

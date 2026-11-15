@@ -132,6 +132,11 @@ function findInBlock(text, m) {
 }
 
 /** Set a context key that decides which buttons the preview's title bar shows. */
+/** Whether a click on a formula in the preview copies its LaTeX. */
+function clickToCopy() {
+  return vscode.workspace.getConfiguration('texglass').get('clickToCopyMath', true) !== false;
+}
+
 /** Where the contents go: 'left' or 'right' of the document. */
 function contentsPosition() {
   return vscode.workspace.getConfiguration('texglass').get('contentsPosition', 'left') === 'right' ? 'right' : 'left';
@@ -366,6 +371,7 @@ class Preview {
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -497,6 +503,7 @@ class Preview {
         this.post({ type: 'zoom', level: this.context.workspaceState.get('texglass.zoom', 1) });
         this.post({ type: 'toc-side', value: contentsPosition() });
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
+        this.post({ type: 'click-to-copy', on: clickToCopy() });
         this.renderedText = null;
         this.render().then(() => {
           const ed = this.editor();
@@ -536,6 +543,10 @@ class Preview {
         break;
       case 'shown':
         this.shown = m; // what the webview shows, for the tests
+        break;
+      case 'copy-tex':
+        // The extension host's clipboard works wherever the webview's may not.
+        if (typeof m.text === 'string') vscode.env.clipboard.writeText(m.text);
         break;
       case 'open-link':
         if (/^https?:|^mailto:/.test(m.href)) vscode.env.openExternal(vscode.Uri.parse(m.href));
@@ -913,6 +924,9 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
         preview.post({ type: 'toc-side', value: contentsPosition() });
+      }
+      if (preview && e.affectsConfiguration('texglass.clickToCopyMath')) {
+        preview.post({ type: 'click-to-copy', on: clickToCopy() });
       }
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
         preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
