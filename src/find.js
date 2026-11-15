@@ -575,6 +575,16 @@
         select(selected + (e.key === 'ArrowDown' ? 1 : -1));
       }
     });
+    // Esc closes the bar from anywhere in the page, not only from its input
+    // (after clicking a match, a button or the document, say), unless an
+    // editor or another box has the focus and wants Esc for itself.
+    win.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || bar.hidden || e.defaultPrevented) return;
+      const t = e.target;
+      if (t && t.closest && !bar.contains(t) && t.matches('textarea, input, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      close();
+    });
     bar.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-mode]');
       if (tab) {
