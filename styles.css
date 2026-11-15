@@ -486,6 +486,17 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 /* Math */
 .math-display { margin: 0.8em 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
 .math-display .katex-display { margin: 0; }
+/* KaTeX puts an equation number at the right edge of the box (position:
+   absolute), so in a box narrower than the formula, such as the hover popover
+   or a narrow pane, it is drawn over the formula. Lay the number out beside the
+   formula instead: centred while there is room, and scrolled with it when not. */
+.math-display .katex-display > .katex > .katex-html:has(> .tag) { display: flex; align-items: baseline; }
+.math-display .katex-display > .katex > .katex-html:has(> .tag)::before { content: ''; flex: 1 1 0; }
+.math-display .katex-display > .katex > .katex-html:has(> .tag) > .base { flex: none; }
+.math-display .katex-display > .katex > .katex-html > .tag {
+  position: static; flex: 1 0 0; min-width: max-content; padding-left: 1em; text-align: right;
+}
+.math-display .katex-display.leqno > .katex > .katex-html > .tag { order: -1; padding: 0 1em 0 0; text-align: left; }
 .math-error, .math-src { color: var(--missing); font-family: ui-monospace, monospace; font-size: 0.85em; }
 
 /* References */
@@ -556,7 +567,9 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .cd-label.cd-desc { padding: 0.08em 0.16em; }
 .diagram-display { display: flex; align-items: center; justify-content: center; gap: 0.3em; position: relative; }
 .diagram-row { display: inline-flex; align-items: center; gap: 0.25em; max-width: 100%; }
-.diagram-tag { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+.diagram-display::before { content: ''; flex: 1 1 0; }
+.diagram-row { flex: none; }
+.diagram-tag { flex: 1 0 0; min-width: max-content; padding-left: 1em; text-align: right; }
 .tikz-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
 .tikz-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .tikz-node { position: absolute; left: 0; top: 0; white-space: nowrap; line-height: 1.2; visibility: hidden; }
