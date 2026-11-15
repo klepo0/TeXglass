@@ -555,8 +555,18 @@
     popover.replaceChildren(body);
     popover.hidden = false;
     const r = a.getBoundingClientRect();
-    const width = Math.min(560, window.innerWidth - 32);
+    let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
+    // Widen it, up to the window, for a display that is wider than that, so the
+    // formula and its equation number fit without scrolling.
+    let extra = 0;
+    body.querySelectorAll('.math-display, .tg-diagram').forEach((el) => {
+      extra = Math.max(extra, el.scrollWidth - el.clientWidth);
+    });
+    if (extra > 0) {
+      width = Math.min(width + extra + 2, window.innerWidth - 32);
+      popover.style.width = width + 'px';
+    }
     popover.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
     // The popover's own 8px padding is the gap to the link (the hover bridge).
     const h = popover.offsetHeight;
