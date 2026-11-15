@@ -365,6 +365,7 @@ class Preview {
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;

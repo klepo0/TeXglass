@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'node_modules', 'katex', 'dist');
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 const KATEX_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/';
 
