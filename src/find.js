@@ -586,7 +586,8 @@
       close();
     });
     bar.addEventListener('click', (e) => {
-      const tab = e.target.closest('[data-mode]');
+      // Not just [data-mode]: the bar itself carries data-mode, so that would catch every click.
+      const tab = e.target.closest('button[role="tab"][data-mode]');
       if (tab) {
         setMode(tab.dataset.mode);
         input.focus();
