@@ -28,6 +28,12 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   the editor (and the editor with the preview). The link button in the
   preview's title bar turns that off and on again (or **TeXglass: Toggle
   Scrolling with the Editor**, or the `texglass.scrollSync` setting).
+- **Jump to the cursor**: press **Ctrl+K J** (Cmd+K J on a Mac) in a `.tex`
+  file, or right-click and choose **TeXglass: Jump Preview to Cursor**, to
+  bring the spot you are editing to the middle of the preview, highlighted
+  for a moment. It opens the preview if needed, and works in files pulled in
+  with `\input` or `\include`. To use another key, search for
+  `texglass.showCursor` in Keyboard Shortcuts (Ctrl+K Ctrl+S).
 - **Ctrl+click** (Cmd+click on a Mac) anywhere in the preview, or
   double-click, to put the cursor at that spot in the source: on the word you
   clicked, or at the start of the formula.

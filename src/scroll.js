@@ -6,7 +6,9 @@
  * the way. This keeps aiming at the element while the scroll runs and puts it
  * in place once it stops, until the page holds still or the reader scrolls.
  *
- *   TeXglassScroll.to(pane, el, { align: 'start' | 'center', offset: 16, smooth: true });
+ *   TeXglassScroll.to(pane, el, { align: 'start' | 'center', offset: 16, smooth: true, done() {} });
+ *
+ * `done` runs once the scroll has finished, or the reader has taken over.
  */
 (function (root) {
   'use strict';
@@ -33,10 +35,14 @@
     let lastTop = pane.scrollTop;
     let still = 0;
     let frame = 0;
+    let stopped = false;
     const stop = () => {
+      if (stopped) return;
+      stopped = true;
       cancelAnimationFrame(frame);
       ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach((t) => pane.removeEventListener(t, stop));
       if (running.get(pane) === stop) running.delete(pane);
+      if (o.done) o.done();
     };
     // The reader takes over as soon as they scroll themselves.
     ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach((t) => pane.addEventListener(t, stop, { passive: true }));

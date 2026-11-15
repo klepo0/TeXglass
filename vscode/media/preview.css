@@ -15,3 +15,20 @@
 
 /* VS Code adds its own padding to the webview body. */
 body { padding: 0; }
+
+/* The line the editor's cursor is on, after Jump Preview to Cursor (Ctrl+K J).
+   Blocks are containing blocks already (content-visibility in styles.css). */
+.sync-mark {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--flash) 60%, transparent);
+  opacity: 0;
+  animation: sync-mark 2.4s ease-out;
+}
+@keyframes sync-mark {
+  0%, 45% { opacity: 1; }
+  100% { opacity: 0; }
+}
