@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -489,7 +489,7 @@
         "texglass.notes.realisticInk": {
           "type": "boolean",
           "default": true,
-          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink."
+          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink. Printing and PDFs always use flat ink."
         },
         "texglass.contentsPosition": {
           "type": "string",
