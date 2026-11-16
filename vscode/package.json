@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -470,6 +470,26 @@
           "type": "boolean",
           "default": true,
           "description": "In the handwritten notes look, write the letters, digits and brackets in formulas by hand too. Symbols without a handwritten form (Greek letters, integrals, sums) keep KaTeX shapes in the same ink."
+        },
+        "texglass.notes.ink": {
+          "type": "string",
+          "enum": [
+            "ballpoint",
+            "fountain",
+            "black"
+          ],
+          "enumDescriptions": [
+            "Blue ballpoint.",
+            "Royal-blue fountain pen: wetter ink that pools and soaks into the paper.",
+            "Black ink."
+          ],
+          "default": "ballpoint",
+          "description": "The pen of the handwritten notes look. In dark mode the notes are always chalk."
+        },
+        "texglass.notes.realisticInk": {
+          "type": "boolean",
+          "default": true,
+          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink."
         },
         "texglass.contentsPosition": {
           "type": "string",

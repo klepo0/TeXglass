@@ -760,6 +760,8 @@
         root.paper = m.paper;
         root.hand = m.hand;
         root.handMath = m.handMath;
+        root.ink = m.ink;
+        root.inkTexture = m.inkTexture;
         break;
       }
       case 'print':

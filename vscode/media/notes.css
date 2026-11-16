@@ -209,3 +209,21 @@
 :root[data-look="notes"] .document .math-display .tag { color: var(--pencil); }
 /* Handwritten brackets lean out further than KaTeX's: room so they are not clipped. */
 :root[data-look="notes"] .document .math-display { padding: 0.2em 0.35em 0.3em 0.2em; }
+
+/* --- ink ------------------------------------------------------------------
+   <html> data-ink picks the pen (ballpoint | fountain | black) and
+   data-ink-texture (on | off) whether strokes get real ink: ragged edges,
+   ink that pools and thins along a line, and a little bleed into the paper.
+   The SVG filters (#tg-ink-*) are inline in the preview's page. Each block
+   is filtered on its own so long documents stay quick to paint. */
+
+:root[data-look="notes"][data-ink="fountain"] { --ink: #1f3fa3; --pen-red: #b52a2a; }
+:root[data-look="notes"][data-ink="black"] { --ink: #23211e; --pen-red: #b8332a; }
+:root[data-look="notes"][data-theme="dark"] { --ink: #eeece2; --pen-red: #ffb39e; }
+
+:root[data-look="notes"][data-ink-texture="on"] #preview.document > * { filter: url(#tg-ink-ballpoint); }
+:root[data-look="notes"][data-ink-texture="on"][data-ink="fountain"] #preview.document > * { filter: url(#tg-ink-fountain); }
+:root[data-look="notes"][data-ink-texture="on"][data-theme="dark"] #preview.document > * { filter: url(#tg-ink-chalk); }
+@media print {
+  :root[data-look="notes"] #preview.document > * { filter: none !important; }
+}

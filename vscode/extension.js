@@ -24,6 +24,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+const INK_FILTERS = require('./ink.js');
 
 const VIEW_TYPE = 'texglass.preview';
 
@@ -148,6 +149,8 @@ function previewLook() {
     paper: pick(config.get('notes.paper', 'grid'), ['grid', 'lined', 'plain'], 'grid'),
     hand: pick(config.get('notes.handwriting', 'kalam'), ['kalam', 'caveat', 'patrick-hand', 'architects-daughter'], 'kalam'),
     handMath: config.get('notes.handwrittenMath', true) === false ? 'off' : 'on',
+    ink: pick(config.get('notes.ink', 'ballpoint'), ['ballpoint', 'fountain', 'black'], 'ballpoint'),
+    inkTexture: config.get('notes.realisticInk', true) === false ? 'off' : 'on',
   };
 }
 
@@ -367,7 +370,7 @@ class Preview {
     ].join('; ');
     const look = previewLook();
     return `<!doctype html>
-<html lang="en" data-look="${look.look}" data-paper="${look.paper}" data-hand="${look.hand}" data-hand-math="${look.handMath}">
+<html lang="en" data-look="${look.look}" data-paper="${look.paper}" data-hand="${look.hand}" data-hand-math="${look.handMath}" data-ink="${look.ink}" data-ink-texture="${look.inkTexture}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -378,6 +381,7 @@ class Preview {
 <link rel="stylesheet" href="${res('media', 'notes.css')}">
 </head>
 <body>
+${INK_FILTERS}
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div><button id="toc-side" class="toc-side" type="button" aria-label="Move the contents to the right" title="Move the contents to the right"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg></button></div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
