@@ -225,13 +225,16 @@
 :root[data-look="notes"][data-ink-texture="on"][data-ink="fountain"] #preview.document > * { filter: url(#tg-ink-fountain); }
 :root[data-look="notes"][data-ink-texture="on"][data-theme="dark"] #preview.document > * { filter: url(#tg-ink-chalk); }
 /* --- printing and PDF -----------------------------------------------------
-   Printed notes keep their paper, hand and ink. The paper fills every page:
-   it is the page's own background, which browsers repeat on each sheet and
-   print even with background graphics off (print-color-adjust). Always the
-   light paper, even from a dark preview. The ink filters print too (as fine
+   Printed notes keep their paper, hand and ink. The sheet colour fills each
+   page (@page), and the grid or lines are the page's own background, which
+   the browser repeats on every sheet within the margins and prints even with
+   background graphics off (print-color-adjust). Always the light paper, even
+   from a dark preview. The ink filters print too (as fine
    images), unless realistic ink is off. */
 @media print {
   @page { margin: 14mm 13mm 16mm; }
+  /* Chromium paints an @page background over the whole sheet, margins too. */
+  @page { background-color: #fffdf5; }
   :root[data-look="notes"], :root[data-look="notes"][data-theme="dark"] {
     --desk: #fffdf5 !important;
     --sheet: #fffdf5 !important;
@@ -267,7 +270,7 @@
     background-size: var(--sq) var(--sq);
   }
   :root[data-look="notes"][data-paper="lined"] {
-    background-image: linear-gradient(transparent calc(var(--sq) - 1px), var(--grid) calc(var(--sq) - 1px));
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px);
     background-size: 100% var(--sq);
   }
   :root[data-look="notes"] #preview.document,
