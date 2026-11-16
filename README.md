@@ -170,4 +170,18 @@ TeXglass was called TeXdown until November 2026; settings carry over.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+TeXglass is licensed under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).
+See [LICENSE](LICENSE). You can use, change and share it for any
+noncommercial purpose: personal use, research, teaching, and use by
+universities, charities and other noncommercial organisations.
+
+Commercial use needs a separate license. To ask about one, contact the
+author, [@klepo0](https://github.com/klepo0), on GitHub or through an
+[issue](https://github.com/klepo0/TeXglass/issues).
+
+The license changed from MIT to PolyForm Noncommercial in November 2026,
+from the release after 0.8.8. Versions up to and including 0.8.8 stay
+under the MIT license for anyone who got a copy of them.
+
+Bundled third-party code, such as KaTeX, keeps its own license.

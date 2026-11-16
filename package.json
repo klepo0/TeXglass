@@ -2,7 +2,7 @@
   "name": "texglass",
   "version": "0.1.0",
   "description": "View LaTeX files like a Markdown preview: math, sections, and numbered theorems with working references.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "src/texglass.js",
   "bin": { "texglass": "bin/texglass.js" },
   "files": ["src", "bin", "styles.css"],
