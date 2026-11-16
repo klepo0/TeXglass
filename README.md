@@ -85,6 +85,9 @@ drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
 - **GitHub import**: paste a link to a file, folder or repo of a public
   repository; the main file, included files, `.bbl` and figures are found for
   you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
+- **OpenAI math preprints**: the **Preprints** button lists the manuscripts in
+  [openai/math](https://github.com/openai/math), searchable and filtered by
+  discipline; click one to read its LaTeX source. Also `?preprint=<folder>`.
 - **Three modes**: **Preview**, **Edit** (click any paragraph, theorem or
   equation to edit its LaTeX in place, Ctrl+E) and **Split** (source beside
   preview, scrolling together, resizable divider, Ctrl+Shift+E).

@@ -101,7 +101,7 @@ function build(target) {
 
   // The viewer.
   fs.writeFileSync(path.join(out, 'index.html'), viewerHtml());
-  for (const f of ['app.js', 'styles.css', 'examples/sample.tex', 'LICENSE']) {
+  for (const f of ['app.js', 'styles.css', 'LICENSE']) {
     if (fs.existsSync(path.join(ROOT, f))) copy(path.join(ROOT, f), path.join(out, f));
   }
   copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js'));
