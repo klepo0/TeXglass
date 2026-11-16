@@ -229,8 +229,8 @@
    page (@page), and the grid or lines are the page's own background, which
    the browser repeats on every sheet within the margins and prints even with
    background graphics off (print-color-adjust). Always the light paper, even
-   from a dark preview. The ink filters print too (as fine
-   images), unless realistic ink is off. */
+   from a dark preview. Ink always prints flat: the filters
+   would turn the text into large images that cannot be selected. */
 @media print {
   @page { margin: 14mm 13mm 16mm; }
   /* Chromium paints an @page background over the whole sheet, margins too. */
@@ -283,6 +283,5 @@
     border-radius: 0;
     text-align: left;
   }
-  :root[data-look="notes"][data-theme="dark"][data-ink-texture="on"] #preview.document > * { filter: url(#tg-ink-ballpoint); }
-  :root[data-look="notes"][data-theme="dark"][data-ink-texture="on"][data-ink="fountain"] #preview.document > * { filter: url(#tg-ink-fountain); }
+  :root[data-look="notes"] #preview.document > * { filter: none !important; }
 }

@@ -744,9 +744,9 @@ function figureUrlFrom(outDir, file) {
 /**
  * With the handwritten notes look on, what an exported or printed page needs
  * to keep it: the <html> attributes, notes.css with its fonts inside it, and
- * the ink filters. Null with the standard look, or if the fonts cannot be read.
+ * the ink filters (not for printing). Null with the standard look, or if the fonts cannot be read.
  */
-async function notesForExport(context) {
+async function notesForExport(context, print) {
   const look = previewLook();
   if (look.look !== 'notes') return null;
   try {
@@ -759,7 +759,8 @@ async function notesForExport(context) {
     return {
       rootAttrs: { 'data-look': 'notes', 'data-paper': look.paper, 'data-hand': look.hand, 'data-hand-math': look.handMath, 'data-ink': look.ink, 'data-ink-texture': look.inkTexture },
       extraCss: css,
-      bodyStart: look.inkTexture === 'on' ? INK_FILTERS : '',
+      // Printed ink is always flat (see notes.css), so a page made to print needs no filters.
+      bodyStart: look.inkTexture === 'on' && !print ? INK_FILTERS : '',
     };
   } catch (e) {
     return null;
@@ -823,7 +824,7 @@ async function exportHtml(context, converter, uri, out, print) {
     if (/class="tg-diagram/.test(m.result.html)) {
       try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
     }
-    const notes = await notesForExport(context);
+    const notes = await notesForExport(context, !!print);
     const html = TeXglassExport.page({
       body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print,
       ...(notes || {}),

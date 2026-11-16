@@ -60,9 +60,8 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   fountain pen or black) with `texglass.notes.ink`, or turn the effect off with
   `texglass.notes.realisticInk`. **Export to HTML** and **Print** (and so
   Save as PDF) keep the look while it is on: the paper fills every printed
-  page, always light, with the same hand and ink. Realistic ink prints as fine
-  images, so such a PDF is a few MB and its text cannot be selected; turn
-  realistic ink off for a small PDF with real text. The fonts are bundled (SIL
+  page, always light, with the same hand and pen. Printed ink is always flat,
+  so a PDF stays small and its text can be selected. The fonts are bundled (SIL
   Open Font License), so it works offline.
 - **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
   mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**

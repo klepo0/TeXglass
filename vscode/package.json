@@ -489,7 +489,7 @@
         "texglass.notes.realisticInk": {
           "type": "boolean",
           "default": true,
-          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink."
+          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink. Printing and PDFs always use flat ink."
         },
         "texglass.contentsPosition": {
           "type": "string",
