@@ -138,6 +138,19 @@ function clickToCopy() {
 }
 
 /** Where the contents go: 'left' or 'right' of the document. */
+/** The preview's look (standard or handwritten notes) and the notes' paper,
+ *  handwriting and handwritten-math settings, as <html> data attributes. */
+function previewLook() {
+  const config = vscode.workspace.getConfiguration('texglass');
+  const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+  return {
+    look: config.get('previewStyle', 'standard') === 'handwritten' ? 'notes' : 'standard',
+    paper: pick(config.get('notes.paper', 'grid'), ['grid', 'lined', 'plain'], 'grid'),
+    hand: pick(config.get('notes.handwriting', 'kalam'), ['kalam', 'caveat', 'patrick-hand', 'architects-daughter'], 'kalam'),
+    handMath: config.get('notes.handwrittenMath', true) === false ? 'off' : 'on',
+  };
+}
+
 function contentsPosition() {
   return vscode.workspace.getConfiguration('texglass').get('contentsPosition', 'left') === 'right' ? 'right' : 'left';
 }
@@ -352,8 +365,9 @@ class Preview {
       `font-src ${webview.cspSource}`,
       `script-src 'nonce-${nonce}'`,
     ].join('; ');
+    const look = previewLook();
     return `<!doctype html>
-<html lang="en">
+<html lang="en" data-look="${look.look}" data-paper="${look.paper}" data-hand="${look.hand}" data-hand-math="${look.handMath}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -361,6 +375,7 @@ class Preview {
 <link rel="stylesheet" href="${res('node_modules', 'katex', 'dist', 'katex.min.css')}">
 <link rel="stylesheet" href="${res('shared', 'styles.css')}">
 <link rel="stylesheet" href="${res('media', 'preview.css')}">
+<link rel="stylesheet" href="${res('media', 'notes.css')}">
 </head>
 <body>
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div><button id="toc-side" class="toc-side" type="button" aria-label="Move the contents to the right" title="Move the contents to the right"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg></button></div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
@@ -921,6 +936,8 @@ function activate(context) {
       setConfig('contentsPosition', contentsPosition() === 'right' ? 'left' : 'right')),
     vscode.commands.registerCommand('texglass.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
     vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
+    vscode.commands.registerCommand('texglass.toggleHandwriting', () =>
+      setConfig('previewStyle', previewLook().look === 'notes' ? 'standard' : 'handwritten')),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
@@ -965,6 +982,9 @@ function activate(context) {
       }
       if (preview && e.affectsConfiguration('texglass.clickToCopyMath')) {
         preview.post({ type: 'click-to-copy', on: clickToCopy() });
+      }
+      if (preview && (e.affectsConfiguration('texglass.previewStyle') || e.affectsConfiguration('texglass.notes'))) {
+        preview.post({ type: 'look', ...previewLook() });
       }
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
         preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });

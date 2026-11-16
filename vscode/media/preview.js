@@ -754,6 +754,14 @@
         forcedTheme = m.value;
         applyTheme();
         break;
+      case 'look': {
+        const root = document.documentElement.dataset;
+        root.look = m.look;
+        root.paper = m.paper;
+        root.hand = m.hand;
+        root.handMath = m.handMath;
+        break;
+      }
       case 'print':
         window.print();
         break;
