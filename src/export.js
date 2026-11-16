@@ -135,8 +135,11 @@ body { display: block; }
    *   diagramsJs src/diagrams.js, which draws the arrows of tikzcd/xymatrix and
    *              the tikzpicture paths; put inside the page when it has diagrams
    *   print      open the print dialog as soon as the page has loaded
+   *   rootAttrs  more attributes for <html>, e.g. { 'data-look': 'notes' }
+   *   extraCss   a stylesheet to put after the viewer's (e.g. a look's)
+   *   bodyStart  markup to put first in <body> (e.g. SVG filters the look uses)
    */
-  function page({ body, title, css, katexCss, theme, diagramsJs, print }) {
+  function page({ body, title, css, katexCss, theme, diagramsJs, print, rootAttrs, extraCss, bodyStart }) {
     const diagrams = diagramsJs && /class="tg-diagram/.test(body || '')
       ? `\n<script>${diagramsJs.replace(/<\/script/gi, '<\\/script')}</script>`
       : '';
@@ -144,8 +147,13 @@ body { display: block; }
       ? `<style>${katexCss.replace(/<\/style/gi, '<\\/style')}</style>`
       : `<link rel="stylesheet" href="${KATEX_CDN}katex.min.css" crossorigin="anonymous">`;
     const themeAttr = theme === 'light' || theme === 'dark' ? ` data-theme="${theme}"` : '';
+    const moreAttrs = Object.entries(rootAttrs || {})
+      .filter(([k]) => /^data-[a-z-]+$/.test(k))
+      .map(([k, v]) => ` ${k}="${escapeHtml(v)}"`)
+      .join('');
+    const more = extraCss ? `\n<style>${extraCss.replace(/<\/style/gi, '<\\/style')}</style>` : '';
     return `<!doctype html>
-<html lang="en"${themeAttr}>
+<html lang="en"${themeAttr}${moreAttrs}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -153,10 +161,10 @@ body { display: block; }
 <title>${escapeHtml(title || 'Document')}</title>
 ${katex}
 <style>${(css || '').replace(/<\/style/gi, '<\\/style')}
-${PAGE_CSS}</style>
+${PAGE_CSS}</style>${more}
 </head>
 <body>
-<button id="theme-toggle" class="theme-toggle" type="button" title="Switch between light and dark" aria-label="Switch between light and dark" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+${bodyStart ? bodyStart + '\n' : ''}<button id="theme-toggle" class="theme-toggle" type="button" title="Switch between light and dark" aria-label="Switch between light and dark" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
 <main class="panes"><section class="pane"><article id="preview" class="document">
 ${body}
 </article></section></main>

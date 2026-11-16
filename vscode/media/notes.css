@@ -224,6 +224,62 @@
 :root[data-look="notes"][data-ink-texture="on"] #preview.document > * { filter: url(#tg-ink-ballpoint); }
 :root[data-look="notes"][data-ink-texture="on"][data-ink="fountain"] #preview.document > * { filter: url(#tg-ink-fountain); }
 :root[data-look="notes"][data-ink-texture="on"][data-theme="dark"] #preview.document > * { filter: url(#tg-ink-chalk); }
+/* --- printing and PDF -----------------------------------------------------
+   Printed notes keep their paper, hand and ink. The paper fills every page:
+   it is the page's own background, which browsers repeat on each sheet and
+   print even with background graphics off (print-color-adjust). Always the
+   light paper, even from a dark preview. The ink filters print too (as fine
+   images), unless realistic ink is off. */
 @media print {
-  :root[data-look="notes"] #preview.document > * { filter: none !important; }
+  @page { margin: 14mm 13mm 16mm; }
+  :root[data-look="notes"], :root[data-look="notes"][data-theme="dark"] {
+    --desk: #fffdf5 !important;
+    --sheet: #fffdf5 !important;
+    --ink: #1f3170 !important;
+    --pen-red: #c2362b !important;
+    --pencil: #6d6a63 !important;
+    --grid: #d5e3f0 !important;
+    --margin-line: #eba5a0 !important;
+    --marker: rgba(255, 226, 92, 0.32) !important;
+    --paper: #fffdf5 !important;
+    --bg: #fffdf5 !important;
+    --accent: #1f3170 !important;
+    --muted: #6d6a63 !important;
+    --rule: #cfc9ba !important;
+    --thm-border: #1f3170 !important;
+    --def-border: #1f3170 !important;
+    color-scheme: light !important;
+  }
+  :root[data-look="notes"][data-ink="fountain"] { --ink: #1f3fa3 !important; --accent: #1f3fa3 !important; --thm-border: #1f3fa3 !important; --def-border: #1f3fa3 !important; --pen-red: #b52a2a !important; }
+  :root[data-look="notes"][data-ink="black"] { --ink: #23211e !important; --accent: #23211e !important; --thm-border: #23211e !important; --def-border: #23211e !important; --pen-red: #b8332a !important; }
+
+  :root[data-look="notes"] {
+    --sq: 6.5mm;
+    background-color: var(--sheet);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  :root[data-look="notes"] body, :root[data-look="notes"] .panes, :root[data-look="notes"] .pane, :root[data-look="notes"] #preview-pane { background: transparent !important; }
+  :root[data-look="notes"][data-paper="grid"] {
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: var(--sq) var(--sq);
+  }
+  :root[data-look="notes"][data-paper="lined"] {
+    background-image: linear-gradient(transparent calc(var(--sq) - 1px), var(--grid) calc(var(--sq) - 1px));
+    background-size: 100% var(--sq);
+  }
+  :root[data-look="notes"] #preview.document,
+  :root[data-look="notes"][data-paper] #preview.document {
+    --fs: calc(16px * var(--hand-scale));
+    background: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+    text-align: left;
+  }
+  :root[data-look="notes"][data-theme="dark"][data-ink-texture="on"] #preview.document > * { filter: url(#tg-ink-ballpoint); }
+  :root[data-look="notes"][data-theme="dark"][data-ink-texture="on"][data-ink="fountain"] #preview.document > * { filter: url(#tg-ink-fountain); }
 }

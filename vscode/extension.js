@@ -741,6 +741,31 @@ function figureUrlFrom(outDir, file) {
  * lay it out like a paper, and "Save as PDF" there makes the PDF. (VS Code's
  * own webviews cannot print.)
  */
+/**
+ * With the handwritten notes look on, what an exported or printed page needs
+ * to keep it: the <html> attributes, notes.css with its fonts inside it, and
+ * the ink filters. Null with the standard look, or if the fonts cannot be read.
+ */
+async function notesForExport(context) {
+  const look = previewLook();
+  if (look.look !== 'notes') return null;
+  try {
+    const decode = (b) => new TextDecoder().decode(b);
+    let css = decode(await readExtensionFile(context, 'media', 'notes.css'));
+    const fonts = new Map();
+    for (const [, name] of css.matchAll(/url\(fonts\/([\w-]+\.woff2)\)/g)) fonts.set(name, null);
+    await Promise.all(Array.from(fonts.keys(), async (n) => fonts.set(n, base64(await readExtensionFile(context, 'media', 'fonts', n)))));
+    css = css.replace(/url\(fonts\/([\w-]+\.woff2)\)/g, (_, n) => `url(data:font/woff2;base64,${fonts.get(n)})`);
+    return {
+      rootAttrs: { 'data-look': 'notes', 'data-paper': look.paper, 'data-hand': look.hand, 'data-hand-math': look.handMath, 'data-ink': look.ink, 'data-ink-texture': look.inkTexture },
+      extraCss: css,
+      bodyStart: look.inkTexture === 'on' ? INK_FILTERS : '',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function exportHtml(context, converter, uri, out, print) {
   const project = await assembleDocument(uri, new Map());
   if (!project || project.error) {
@@ -798,7 +823,13 @@ async function exportHtml(context, converter, uri, out, print) {
     if (/class="tg-diagram/.test(m.result.html)) {
       try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
     }
-    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print });
+    const notes = await notesForExport(context);
+    const html = TeXglassExport.page({
+      body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print,
+      ...(notes || {}),
+      // Paper prints light; on screen an exported page follows the reader's system.
+      theme: notes && print ? 'light' : undefined,
+    });
     await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
     if (print) {
       if (!(await vscode.env.openExternal(out))) vscode.window.showErrorMessage(`TeXglass could not open ${out.fsPath} in a browser.`);

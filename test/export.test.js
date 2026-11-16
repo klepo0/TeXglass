@@ -72,6 +72,19 @@ test('a page made for printing opens the print dialog once loaded; others do not
   assert.ok(!TeXglassExport.page({ body: '<p>Hi</p>', title: 't', css: '' }).includes('window.print()'));
 });
 
+test('a page can carry a look: attributes on <html>, its stylesheet and markup first in <body>', () => {
+  const html = TeXglassExport.page({
+    body: '<p>Hi</p>', css: '',
+    rootAttrs: { 'data-look': 'notes', 'data-ink': 'a"b', onload: 'x' },
+    extraCss: '.a{}</style>', bodyStart: '<svg id="f"></svg>',
+  });
+  assert.ok(html.includes('<html lang="en" data-look="notes" data-ink="a&quot;b">'));
+  assert.ok(!html.includes('onload'));
+  assert.ok(html.includes('<style>.a{}<\\/style></style>'));
+  assert.ok(/<body>\n<svg id="f"><\/svg>\n<button/.test(html));
+  assert.ok(!TeXglassExport.page({ body: '' }).includes('<body>\n\n'));
+});
+
 test('the stylesheet prints like a paper', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
   const print = css.slice(css.lastIndexOf('@media print'));
