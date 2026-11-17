@@ -56,6 +56,11 @@ Install **TeXglass** from the
 - **Bibliographies** from your `.bib` files (BibTeX and biblatex), or an
   existing `.bbl`.
 - **Figures** in PNG, JPEG, SVG, GIF or WebP, with `\graphicspath`.
+- **Handwritten notes look** (optional): **TeXglass: Toggle Handwritten
+  Notes Look** shows the document in ink on squared, lined or plain paper, or
+  as chalk on a board in dark mode. Pick the hand, the pen (ballpoint,
+  fountain pen or black) and whether formulas are handwritten too in the
+  `texglass.notes.*` settings. Print and HTML export keep the look.
 - **Export to HTML**: one standalone page that works offline
   (`texglass.exportEmbedFonts`).
 - **Print / Save as PDF**, laid out like a paper.
@@ -69,7 +74,8 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 ## Web viewer
 
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
-drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
+drop a `.tex` file, paste an arXiv or GitHub link, or browse OpenAI's math
+preprints. Nothing to install.
 
 <table>
   <tr>
