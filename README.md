@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/tour.gif" width="820" alt="Scrolling a paper in TeXglass: hovering a reference previews Lemma 1.3, Go to jumps to the Snake lemma, and the page switches to dark">
+  <img src="docs/images/tour.gif" width="820" alt="Scrolling a paper in the TeXglass web viewer: hovering a reference previews Lemma 1.3, Go to jumps to the Snake lemma, and the page switches to dark. Then VS Code: the preview switches to the handwritten notes look, ink on squared paper, and to chalk on a board in dark mode">
 </p>
 
 ## Key features
