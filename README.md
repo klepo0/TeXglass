@@ -16,8 +16,24 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/tour.gif" width="820" alt="Scrolling a paper in TeXglass: hovering a reference previews Lemma 1.3, Go to jumps to the Snake lemma, and the page switches to dark">
+  <img src="docs/images/tour.gif" width="820" alt="Scrolling a paper in the TeXglass web viewer: hovering a reference previews Lemma 1.3, Go to jumps to the Snake lemma, and the page switches to dark. Then VS Code: the preview switches to the handwritten notes look, ink on squared paper, and to chalk on a board in dark mode">
 </p>
+
+## Key features
+
+The same reader runs in the VS Code extension, the web viewer and the arXiv
+browser extension:
+
+- **Reads like the paper**: KaTeX math, numbered theorems, equations and
+  sections, working `\ref`/`\eqref`/`\cref`, citations and bibliographies.
+- **Hover previews** of references and citations; click to jump there.
+- **Go to** any theorem, equation or section by number (Ctrl+G).
+- **Click a formula** to copy its LaTeX.
+- **Contents sidebar** that follows where you are; **fold** sections and
+  proofs, or **Hide proofs** all at once.
+- **Diagrams drawn**: `tikz-cd`, `xymatrix` and simple TikZ.
+- **Search** (Ctrl+F), **zoom**, and **light and dark themes**.
+- **No TeX install, no compile step**, and fast on long papers.
 
 ## VS Code extension
 
@@ -33,29 +49,21 @@ Install **TeXglass** from the
 - **Scroll sync** both ways, with a title-bar button and the
   `texglass.scrollSync` setting to turn it off.
 - **Jump to source**: Ctrl+click or double-click in the preview puts the
-  cursor on that word.
-- **Copy a formula's LaTeX** by clicking it (`texglass.clickToCopyMath` to
-  turn it off).
-- **Table of contents** sidebar that highlights the section you are reading,
-  on the left or right (`texglass.contentsPosition`).
-- **Search** the preview (Ctrl+F, F3 / Shift+F3 for next and previous).
-- **Go to** a theorem, equation or section by number (Ctrl+G).
-- **Hover previews** of references and citations; click to jump there.
-- **Light and dark themes**, toggled from the title bar, or following VS Code
-  (`texglass.previewTheme`).
-- **Fold** sections and proofs; **Hide proofs** folds them all at once.
-- **Zoom** with Ctrl +/−/0 or Ctrl + mouse wheel, remembered per workspace.
+  cursor on that word; **Ctrl+K J** jumps the preview to the cursor.
 - **Multi-file documents**: `\input`, `\include`, `\subfile`, `\import`
   and `\includeonly`, live across files. Previewing a chapter shows the whole
   document (`% !TEX root`, subfiles, or the file that includes it).
 - **Bibliographies** from your `.bib` files (BibTeX and biblatex), or an
   existing `.bbl`.
 - **Figures** in PNG, JPEG, SVG, GIF or WebP, with `\graphicspath`.
-- **Diagrams**: `tikz-cd`, `xymatrix` and simple TikZ, drawn.
+- **Handwritten notes look** (optional): **TeXglass: Toggle Handwritten
+  Notes Look** shows the document in ink on squared, lined or plain paper, or
+  as chalk on a board in dark mode. Pick the hand, the pen (ballpoint,
+  fountain pen or black) and whether formulas are handwritten too in the
+  `texglass.notes.*` settings. Print and HTML export keep the look.
 - **Export to HTML**: one standalone page that works offline
   (`texglass.exportEmbedFonts`).
 - **Print / Save as PDF**, laid out like a paper.
-- **Fast on long papers**: conversion runs in a background thread.
 - Works in **github.dev and vscode.dev**: press `.` on any GitHub repo,
   preview, edit, commit.
 
@@ -66,7 +74,8 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 ## Web viewer
 
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
-drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
+drop a `.tex` file, paste an arXiv or GitHub link, or browse OpenAI's math
+preprints. Nothing to install.
 
 <table>
   <tr>
@@ -91,16 +100,6 @@ drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
 - **Three modes**: **Preview**, **Edit** (click any paragraph, theorem or
   equation to edit its LaTeX in place, Ctrl+E) and **Split** (source beside
   preview, scrolling together, resizable divider, Ctrl+Shift+E).
-- **Table of contents** sidebar that highlights the section you are reading,
-  on either side, or as a drawer on a phone.
-- **Search** the document (Ctrl+F, Enter / Shift+Enter or F3 / Shift+F3).
-- **Go to** a theorem, equation, section, figure or table by number (Ctrl+G).
-- **Hover previews** of references; click to jump there.
-- **Click a formula** to copy its LaTeX (in Preview and Split; in Edit a click
-  opens the block). Works in the arXiv extension too.
-- **Light and dark themes**, following your system until you pick one.
-- **Fold** sections and proofs; **Hide proofs** folds them all at once.
-- **Zoom** the document (toolbar, Ctrl +/−/0, Ctrl + mouse wheel).
 - **Editor**: LaTeX syntax colouring, autocomplete for commands, snippets,
   environments (your `\newtheorem`s too) and labels with their numbers,
   auto-closing math delimiters, and Tab to step out of brackets.
@@ -109,7 +108,6 @@ drop a `.tex` file, or paste an arXiv or GitHub link. Nothing to install.
 - **Export** a standalone offline `.html` page.
 - **Print** (Ctrl+P) as a clean paper-style PDF.
 - **Status** counts undefined references and duplicate labels.
-- **Fast on long papers**: conversion runs in a background worker.
 
 Run it locally with `npm start` (http://localhost:8000). It is a static page
 with no build step.
@@ -125,6 +123,8 @@ For **Chrome, Edge and Firefox**.
   link in listings, and a floating button on HTML papers.
 - **Self-contained**: papers open in a viewer bundled with the extension, so
   only arxiv.org needs to be reachable. The options can switch to the website.
+- **Everything above**: hover previews, Go to, contents, click to copy and
+  themes work on every paper.
 
 Grab the zips from the latest
 [release](https://github.com/klepo0/TeXglass/releases/latest); install steps
