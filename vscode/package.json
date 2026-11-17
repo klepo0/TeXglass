@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.8.8",
+  "version": "0.9.2",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -97,6 +97,12 @@
         "title": "Toggle Light/Dark Preview",
         "category": "TeXglass",
         "icon": "$(color-mode)"
+      },
+      {
+        "command": "texglass.toggleHandwriting",
+        "title": "Toggle Handwritten Notes Look",
+        "category": "TeXglass",
+        "icon": "$(edit)"
       },
       {
         "command": "texglass.find",
@@ -225,6 +231,11 @@
           "command": "texglass.toggleContentsPosition",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "0_zoom@4"
+        },
+        {
+          "command": "texglass.toggleHandwriting",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_look@1"
         }
       ],
       "explorer/context": [
@@ -409,6 +420,76 @@
           ],
           "default": "auto",
           "description": "Colours of the preview. The button in the preview's title bar switches between light and dark."
+        },
+        "texglass.previewStyle": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "handwritten"
+          ],
+          "enumDescriptions": [
+            "Typeset like a paper.",
+            "Handwritten notes on a sheet of paper (chalk on a board in dark mode)."
+          ],
+          "default": "standard",
+          "description": "How the preview looks. \"TeXglass: Toggle Handwritten Notes Look\" switches between the two."
+        },
+        "texglass.notes.paper": {
+          "type": "string",
+          "enum": [
+            "grid",
+            "lined",
+            "plain"
+          ],
+          "enumDescriptions": [
+            "Squared paper, like a maths exercise book.",
+            "Ruled lines with a red margin.",
+            "Blank paper."
+          ],
+          "default": "grid",
+          "description": "The paper of the handwritten notes look."
+        },
+        "texglass.notes.handwriting": {
+          "type": "string",
+          "enum": [
+            "kalam",
+            "caveat",
+            "patrick-hand",
+            "architects-daughter"
+          ],
+          "enumDescriptions": [
+            "Kalam: neat, rounded handwriting.",
+            "Caveat: quick, slanted script.",
+            "Patrick Hand: upright print.",
+            "Architects Daughter: blocky draftsman lettering."
+          ],
+          "default": "kalam",
+          "description": "The handwriting of the handwritten notes look, for text and for the letters and digits in formulas."
+        },
+        "texglass.notes.handwrittenMath": {
+          "type": "boolean",
+          "default": true,
+          "description": "In the handwritten notes look, write the letters, digits and brackets in formulas by hand too. Symbols without a handwritten form (Greek letters, integrals, sums) keep KaTeX shapes in the same ink."
+        },
+        "texglass.notes.ink": {
+          "type": "string",
+          "enum": [
+            "ballpoint",
+            "fountain",
+            "black"
+          ],
+          "enumDescriptions": [
+            "Blue ballpoint.",
+            "Royal-blue fountain pen: wetter ink that pools and soaks into the paper.",
+            "Black ink."
+          ],
+          "default": "ballpoint",
+          "description": "The pen of the handwritten notes look. In dark mode the notes are always chalk."
+        },
+        "texglass.notes.realisticInk": {
+          "type": "boolean",
+          "default": true,
+          "description": "In the handwritten notes look, give strokes real ink: slightly ragged edges, ink that thins and pools along a line, and a little bleed into the paper (dusty chalk in dark mode). Turn off for flat, crisp ink. Printing and PDFs always use flat ink."
         },
         "texglass.contentsPosition": {
           "type": "string",

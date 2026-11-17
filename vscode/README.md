@@ -49,6 +49,20 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   half-moon button switches the preview between **light and dark**
   (**TeXglass: Toggle Light/Dark Preview**; the `texglass.previewTheme` setting
   can also be set back to `auto`, which follows VS Code's theme).
+- **Handwritten notes look**: **TeXglass: Toggle Handwritten Notes Look** (also
+  in the preview's `…` menu) shows the document as notes in blue ink on squared
+  paper, and as chalk on a board in dark mode. Choose the paper (`grid`, `lined`
+  or `plain`) with `texglass.notes.paper`, the hand (Kalam, Caveat, Patrick
+  Hand or Architects Daughter) with `texglass.notes.handwriting`, and whether
+  formulas are handwritten too with `texglass.notes.handwrittenMath`. The ink
+  looks real, with slightly ragged strokes that thin and pool along a line and
+  bleed a little into the paper; pick the pen (blue ballpoint, royal-blue
+  fountain pen or black) with `texglass.notes.ink`, or turn the effect off with
+  `texglass.notes.realisticInk`. **Export to HTML** and **Print** (and so
+  Save as PDF) keep the look while it is on: the paper fills every printed
+  page, always light, with the same hand and pen. Printed ink is always flat,
+  so a PDF stays small and its text can be selected. The fonts are bundled (SIL
+  Open Font License), so it works offline.
 - **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
   mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**
   in the preview's `…` menu. The level shows at the bottom left (click it to

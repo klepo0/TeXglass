@@ -24,6 +24,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+const INK_FILTERS = require('./ink.js');
 
 const VIEW_TYPE = 'texglass.preview';
 
@@ -138,6 +139,21 @@ function clickToCopy() {
 }
 
 /** Where the contents go: 'left' or 'right' of the document. */
+/** The preview's look (standard or handwritten notes) and the notes' paper,
+ *  handwriting and handwritten-math settings, as <html> data attributes. */
+function previewLook() {
+  const config = vscode.workspace.getConfiguration('texglass');
+  const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+  return {
+    look: config.get('previewStyle', 'standard') === 'handwritten' ? 'notes' : 'standard',
+    paper: pick(config.get('notes.paper', 'grid'), ['grid', 'lined', 'plain'], 'grid'),
+    hand: pick(config.get('notes.handwriting', 'kalam'), ['kalam', 'caveat', 'patrick-hand', 'architects-daughter'], 'kalam'),
+    handMath: config.get('notes.handwrittenMath', true) === false ? 'off' : 'on',
+    ink: pick(config.get('notes.ink', 'ballpoint'), ['ballpoint', 'fountain', 'black'], 'ballpoint'),
+    inkTexture: config.get('notes.realisticInk', true) === false ? 'off' : 'on',
+  };
+}
+
 function contentsPosition() {
   return vscode.workspace.getConfiguration('texglass').get('contentsPosition', 'left') === 'right' ? 'right' : 'left';
 }
@@ -352,8 +368,9 @@ class Preview {
       `font-src ${webview.cspSource}`,
       `script-src 'nonce-${nonce}'`,
     ].join('; ');
+    const look = previewLook();
     return `<!doctype html>
-<html lang="en">
+<html lang="en" data-look="${look.look}" data-paper="${look.paper}" data-hand="${look.hand}" data-hand-math="${look.handMath}" data-ink="${look.ink}" data-ink-texture="${look.inkTexture}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
@@ -361,8 +378,10 @@ class Preview {
 <link rel="stylesheet" href="${res('node_modules', 'katex', 'dist', 'katex.min.css')}">
 <link rel="stylesheet" href="${res('shared', 'styles.css')}">
 <link rel="stylesheet" href="${res('media', 'preview.css')}">
+<link rel="stylesheet" href="${res('media', 'notes.css')}">
 </head>
 <body>
+${INK_FILTERS}
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div><button id="toc-side" class="toc-side" type="button" aria-label="Move the contents to the right" title="Move the contents to the right"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg></button></div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
@@ -722,6 +741,32 @@ function figureUrlFrom(outDir, file) {
  * lay it out like a paper, and "Save as PDF" there makes the PDF. (VS Code's
  * own webviews cannot print.)
  */
+/**
+ * With the handwritten notes look on, what an exported or printed page needs
+ * to keep it: the <html> attributes, notes.css with its fonts inside it, and
+ * the ink filters (not for printing). Null with the standard look, or if the fonts cannot be read.
+ */
+async function notesForExport(context, print) {
+  const look = previewLook();
+  if (look.look !== 'notes') return null;
+  try {
+    const decode = (b) => new TextDecoder().decode(b);
+    let css = decode(await readExtensionFile(context, 'media', 'notes.css'));
+    const fonts = new Map();
+    for (const [, name] of css.matchAll(/url\(fonts\/([\w-]+\.woff2)\)/g)) fonts.set(name, null);
+    await Promise.all(Array.from(fonts.keys(), async (n) => fonts.set(n, base64(await readExtensionFile(context, 'media', 'fonts', n)))));
+    css = css.replace(/url\(fonts\/([\w-]+\.woff2)\)/g, (_, n) => `url(data:font/woff2;base64,${fonts.get(n)})`);
+    return {
+      rootAttrs: { 'data-look': 'notes', 'data-paper': look.paper, 'data-hand': look.hand, 'data-hand-math': look.handMath, 'data-ink': look.ink, 'data-ink-texture': look.inkTexture },
+      extraCss: css,
+      // Printed ink is always flat (see notes.css), so a page made to print needs no filters.
+      bodyStart: look.inkTexture === 'on' && !print ? INK_FILTERS : '',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function exportHtml(context, converter, uri, out, print) {
   const project = await assembleDocument(uri, new Map());
   if (!project || project.error) {
@@ -779,7 +824,13 @@ async function exportHtml(context, converter, uri, out, print) {
     if (/class="tg-diagram/.test(m.result.html)) {
       try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
     }
-    const html = TeXglassExport.page({ body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print });
+    const notes = await notesForExport(context, !!print);
+    const html = TeXglassExport.page({
+      body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print,
+      ...(notes || {}),
+      // Paper prints light; on screen an exported page follows the reader's system.
+      theme: notes && print ? 'light' : undefined,
+    });
     await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
     if (print) {
       if (!(await vscode.env.openExternal(out))) vscode.window.showErrorMessage(`TeXglass could not open ${out.fsPath} in a browser.`);
@@ -921,6 +972,8 @@ function activate(context) {
       setConfig('contentsPosition', contentsPosition() === 'right' ? 'left' : 'right')),
     vscode.commands.registerCommand('texglass.hideProofs', () => preview && preview.post({ type: 'fold-proofs', fold: true })),
     vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
+    vscode.commands.registerCommand('texglass.toggleHandwriting', () =>
+      setConfig('previewStyle', previewLook().look === 'notes' ? 'standard' : 'handwritten')),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
@@ -965,6 +1018,9 @@ function activate(context) {
       }
       if (preview && e.affectsConfiguration('texglass.clickToCopyMath')) {
         preview.post({ type: 'click-to-copy', on: clickToCopy() });
+      }
+      if (preview && (e.affectsConfiguration('texglass.previewStyle') || e.affectsConfiguration('texglass.notes'))) {
+        preview.post({ type: 'look', ...previewLook() });
       }
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
         preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });

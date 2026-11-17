@@ -1566,19 +1566,226 @@
     importGitHub(ghInput.value);
   });
 
-  async function loadSample() {
-    fileHandle = null;
-    try {
-      const res = await fetch('examples/sample.tex');
-      if (!res.ok) throw new Error(res.statusText);
-      load(await res.text(), 'sample.tex');
-    } catch (e) {
-      load(
-        '\\section*{Welcome to TeXglass}\nOpen a \\texttt{.tex} file with the button above, or drop one on this page.\n\n' +
-          'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
-        'welcome.tex'
-      );
+  // --- browsing OpenAI's math preprints -------------------------------------
+
+  const ppDialog = $('preprints-dialog');
+  const ppList = $('preprints-list');
+  const ppSearch = $('preprints-search');
+  const ppDiscipline = $('preprints-discipline');
+  const ppMessage = $('preprints-message');
+  const PP_PAGE = 40; // families shown before "Show more"
+  let ppCatalogue = null; // { families, disciplines } once loaded
+  let ppLoading = null;
+  let ppShown = PP_PAGE;
+  let ppBusy = false;
+
+  function ppSay(text, warn) {
+    ppMessage.textContent = text;
+    ppMessage.classList.toggle('warn', !!warn);
+  }
+
+  /** The catalogue's text as HTML: GitHub math ($`…`$) through KaTeX, and only <i>, <b>, <sub>, <sup> kept. */
+  function richText(text) {
+    const esc = (t) => t.replace(/&(?![a-z]+;|#\d+;)/gi, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/&lt;(\/?)(i|b|em|sub|sup)&gt;/g, '<$1$2>');
+    return String(text || '').split(/\$`([\s\S]*?)`\$/).map((part, i) => {
+      if (i % 2 === 0) return esc(part);
+      if (window.katex) {
+        try { return katex.renderToString(part, { throwOnError: false, output: 'html' }); } catch (e) { /* fall through */ }
+      }
+      return '<code>' + esc(part) + '</code>';
+    }).join('');
+  }
+
+  const plain = (t) => String(t || '').replace(/<[^>]+>/g, '').replace(/\$`|`\$/g, '').toLowerCase();
+
+  function ppMatches() {
+    if (!ppCatalogue) return [];
+    const words = ppSearch.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const disc = ppDiscipline.value;
+    const out = [];
+    for (const f of ppCatalogue.families) {
+      if (disc && f.discipline !== disc) continue;
+      if (!words.length) {
+        out.push({ family: f, manuscripts: f.manuscripts });
+        continue;
+      }
+      const head = f._head || (f._head = plain(`${f.number} ${f.title} ${f.description}`));
+      const headHit = words.every((w) => head.includes(w));
+      const ms = f.manuscripts.filter((m) => {
+        const t = m._text || (m._text = plain(`${m.title} ${m.abstract} ${m.folder}`) + ' ' + head);
+        return words.every((w) => t.includes(w));
+      });
+      if (headHit || ms.length) out.push({ family: f, manuscripts: headHit ? f.manuscripts : ms });
     }
+    return out;
+  }
+
+  function renderPreprints() {
+    const matches = ppMatches();
+    ppList.textContent = '';
+    const frag = document.createDocumentFragment();
+    for (const { family: f, manuscripts } of matches.slice(0, ppShown)) {
+      const li = document.createElement('li');
+      li.className = 'preprint-family';
+      li.innerHTML = `<div class="preprint-family-head"><span class="preprint-family-num">${f.number}</span>` +
+        `<span class="preprint-family-title">${richText(f.title)}</span>` +
+        (f.discipline ? `<span class="preprint-discipline">${richText(f.discipline)}</span>` : '') + '</div>' +
+        `<p class="preprint-family-desc">${richText(f.description)}</p>`;
+      const ul = document.createElement('ul');
+      ul.className = 'preprint-manuscripts';
+      for (const m of manuscripts) {
+        const item = document.createElement('li');
+        item.className = 'preprint';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'preprint-open';
+        btn.title = 'Open the LaTeX source in TeXglass';
+        btn.innerHTML = `<span class="preprint-title">${richText(m.title)}</span>` +
+          (m.note ? ` <span class="preprint-note">${richText(m.note)}</span>` : '') +
+          `<span class="preprint-abstract">${richText(m.abstract)}</span>`;
+        btn.addEventListener('click', () => openPreprint(m, btn));
+        const pdf = document.createElement('a');
+        pdf.className = 'preprint-pdf';
+        pdf.href = TeXglassOpenAIMath.links(m).pdf;
+        pdf.target = '_blank';
+        pdf.rel = 'noopener';
+        pdf.textContent = 'PDF';
+        pdf.title = 'The PDF on GitHub';
+        item.append(btn, pdf);
+        ul.appendChild(item);
+      }
+      li.appendChild(ul);
+      frag.appendChild(li);
+    }
+    ppList.appendChild(frag);
+    if (matches.length > ppShown) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'preprints-more';
+      more.textContent = `Show more (${matches.length - ppShown} more results)`;
+      more.addEventListener('click', () => {
+        ppShown += PP_PAGE * 2;
+        const top = ppList.scrollTop;
+        renderPreprints();
+        ppList.scrollTop = top;
+      });
+      const li = document.createElement('li');
+      li.appendChild(more);
+      ppList.appendChild(li);
+    }
+    const papers = matches.reduce((n, x) => n + x.manuscripts.length, 0);
+    if (!ppBusy) {
+      ppSay(matches.length
+        ? `${papers} manuscript${papers === 1 ? '' : 's'} in ${matches.length} result famil${matches.length === 1 ? 'y' : 'ies'}. Click one to open its LaTeX source.`
+        : 'Nothing matches that search.');
+    }
+  }
+
+  function loadPreprints() {
+    if (ppCatalogue) return Promise.resolve(ppCatalogue);
+    if (!ppLoading) {
+      ppSay('Loading the catalogue from github.com/openai/math…');
+      ppLoading = TeXglassOpenAIMath.loadCatalogue().then((cat) => {
+        ppCatalogue = cat;
+        for (const d of cat.disciplines.slice().sort()) {
+          const o = document.createElement('option');
+          o.value = o.textContent = d;
+          ppDiscipline.appendChild(o);
+        }
+        return cat;
+      }).finally(() => { ppLoading = null; });
+    }
+    return ppLoading;
+  }
+
+  async function openPreprintsDialog() {
+    if (!window.TeXglassOpenAIMath) return;
+    if (!ppDialog.open) {
+      if (ppDialog.showModal) ppDialog.showModal();
+      else ppDialog.setAttribute('open', '');
+    }
+    ppSearch.focus();
+    try {
+      await loadPreprints();
+      renderPreprints();
+    } catch (e) {
+      ppSay(e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message, true);
+    }
+  }
+
+  async function openPreprint(m, btn) {
+    if (ppBusy) return false;
+    ppBusy = true;
+    if (btn) btn.disabled = true;
+    ppSay(`Downloading “${m.title}” from GitHub…`);
+    showStatus('Opening from GitHub…');
+    let failed = null;
+    try {
+      const file = await TeXglassOpenAIMath.openManuscript(m);
+      fileHandle = null;
+      load(file.source, `${m.folder}.tex`, file.images, { links: file.links, path: `openai/math/${file.path}` });
+      fileName.title = m.title;
+      if (ppDialog.open) ppDialog.close();
+      const more = file.files.length > 1 ? ` with ${file.files.length - 1} included file${file.files.length > 2 ? 's' : ''}` : '';
+      flashStatus(`Opened ${file.path.split('/').pop()} from openai/math${more}`);
+    } catch (e) {
+      failed = e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message;
+      showStatus(warningsText);
+    } finally {
+      ppBusy = false;
+      if (btn) btn.disabled = false;
+    }
+    if (failed) {
+      // Show why in the list, opening it if the paper was asked for by link.
+      if (!ppDialog.open) await openPreprintsDialog();
+      ppSay(failed, true);
+    }
+    return !failed;
+  }
+
+  /** ?preprint=<folder>: open that manuscript straight away. */
+  async function openPreprintByFolder(folder) {
+    try {
+      const cat = await loadPreprints();
+      const m = TeXglassOpenAIMath.byFolder(cat.families, folder);
+      if (m) return openPreprint(m);
+      showStatus(`There is no preprint ${folder} in openai/math.`, true);
+    } catch (e) {
+      showStatus(e.message, true);
+    }
+    return false;
+  }
+
+  let ppTimer = null;
+  ppSearch.addEventListener('input', () => {
+    clearTimeout(ppTimer);
+    ppTimer = setTimeout(() => {
+      ppShown = PP_PAGE;
+      if (ppCatalogue) renderPreprints();
+      ppList.scrollTop = 0;
+    }, 120);
+  });
+  ppDiscipline.addEventListener('change', () => {
+    ppShown = PP_PAGE;
+    if (ppCatalogue) renderPreprints();
+    ppList.scrollTop = 0;
+  });
+  $('preprints').addEventListener('click', openPreprintsDialog);
+  $('preprints-close').addEventListener('click', () => ppDialog.close());
+  ppDialog.addEventListener('click', (e) => { if (e.target === ppDialog) ppDialog.close(); });
+  if (!window.TeXglassOpenAIMath) $('preprints').hidden = true;
+
+  function loadWelcome() {
+    fileHandle = null;
+    load(
+      '\\section*{Welcome to TeXglass}\n' +
+        'Open a \\texttt{.tex} file with the \\textbf{Open} button above, or drop one on this page. ' +
+        'You can also import a paper from \\textbf{arXiv}, open a file from \\textbf{GitHub}, ' +
+        'or browse OpenAI\'s mathematical \\textbf{Preprints} and read one here.\n\n' +
+        'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
+      'welcome.tex'
+    );
   }
 
   function start() {
@@ -1588,7 +1795,8 @@
     try { lastGh = JSON.parse(store.get('texglass:last-gh') || 'null'); } catch (e) { /* ignore */ }
     const loadLast = () => load(last, store.get('texglass:last-name'), null, lastGh);
     const last = store.get('texglass:last');
-    // ?arxiv=2301.00001 opens that paper; ?gh=<GitHub link> opens that file.
+    // ?arxiv=2301.00001 opens that paper; ?gh=<GitHub link> opens that file;
+    // ?preprint=<folder> opens that manuscript from github.com/openai/math.
     const params = new URLSearchParams(location.search);
     const arxiv = params.get('arxiv');
     const gh = params.get('gh') || params.get('github');
@@ -1600,8 +1808,14 @@
       if (last) loadLast();
       return importGitHub(gh);
     }
+    const preprint = params.get('preprint');
+    if (preprint && window.TeXglassOpenAIMath) {
+      if (last) loadLast();
+      else loadWelcome();
+      return openPreprintByFolder(preprint);
+    }
     if (last) return loadLast();
-    return loadSample();
+    return loadWelcome();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
