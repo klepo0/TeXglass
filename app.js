@@ -5,6 +5,8 @@
   const $ = (id) => document.getElementById(id);
   const preview = $('preview');
   const previewPane = $('preview-pane');
+  // \marginpar and \todo notes go in a margin column beside the text (src/margin.js).
+  const margin = window.TeXglassMargin ? window.TeXglassMargin.attach({ pane: previewPane, doc: preview, study: false }) : null;
   const source = $('source');
   const sourcePane = $('source-pane');
   const status = $('status');
@@ -171,6 +173,7 @@
     patchPreview(blocks);
     applyFolds();
     updateToc();
+    if (margin) margin.refresh();
     if (insight) insight.invalidate(); // read the page again when next needed
   }
 

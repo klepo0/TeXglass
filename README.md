@@ -41,6 +41,8 @@ browser extension:
 - **Contents sidebar** that follows where you are; **fold** sections and
   proofs, or **Hide proofs** all at once.
 - **Diagrams drawn**: `tikz-cd`, `xymatrix` and simple TikZ.
+- **Margin notes**: `\marginpar` and `\todo` sit in a margin column beside
+  their line.
 - **Search** (Ctrl+F), **zoom**, and **light and dark themes**.
 - **No TeX install, no compile step**, and fast on long papers.
 
@@ -66,6 +68,10 @@ Install **TeXglass** from the
   existing `.bbl`, or amsrefs records (`\begin{bibdiv}…\bib{key}{article}{…}`)
   in the document itself.
 - **Figures** in PNG, JPEG, SVG, GIF or WebP, with `\graphicspath`.
+- **Highlighter and margin notes** of your own: select text to highlight it
+  or write a note on it, or drag the note pad onto a line. They are saved
+  beside the `.tex` in `name.texglass.json`, anchored to the text so they
+  survive edits, and the `.tex` is never changed.
 - **Handwritten notes look** (optional): **TeXglass: Toggle Handwritten
   Notes Look** shows the document in ink on squared, lined or plain paper, or
   as chalk on a board in dark mode. Pick the hand, the pen (ballpoint,

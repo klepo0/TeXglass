@@ -474,7 +474,21 @@ test('\\long\\def, \\cites and \\todo', () => {
 \end{document}`);
   const t = text(html);
   assert.match(t, /Hi as in \[alpha, beta\]\. fix Done\./);
-  assert.match(html, /class="todo"/);
+  assert.match(html, /class="mnote mnote-todo" style="--note-c:red"/);
+  assert.equal(unknownCommands.length, 0);
+});
+
+test('\\marginpar, \\marginnote and \\todo go to the margin; \\todo[inline] stays in the line', () => {
+  const { html, unknownCommands } = plain(String.raw`\begin{document}
+Text.\marginpar[left]{A note with $x$.} More\marginnote{Side}[2cm] and \todo{Fix} \todo[inline, color=blue]{Here} \todo[disable]{Gone} \reversemarginpar end.
+\end{document}`);
+  assert.equal((html.match(/class="mnote mnote-par"/g) || []).length, 2);
+  assert.match(html, /<span class="mnote mnote-par"><span class="mnote-body">A note with <span class="math/);
+  assert.doesNotMatch(html, /left/);
+  assert.doesNotMatch(html, /2cm/);
+  assert.match(html, /<span class="mnote mnote-todo"><span class="mnote-body">Fix<\/span><\/span>/);
+  assert.match(html, /<span class="todo" style="--note-c:blue">Here<\/span>/);
+  assert.doesNotMatch(html, /Gone/);
   assert.equal(unknownCommands.length, 0);
 });
 

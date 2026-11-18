@@ -134,6 +134,28 @@ function findInBlock(text, m) {
 
 /** Set a context key that decides which buttons the preview's title bar shows. */
 /** Whether a click on a formula in the preview copies its LaTeX. */
+function studyTools() {
+  return vscode.workspace.getConfiguration('texglass').get('studyTools', true) !== false;
+}
+
+/** The file next to a .tex that keeps the reader's highlights and notes: paper.tex -> paper.texglass.json. */
+function notesUri(uri) {
+  const p = uri.path;
+  const base = /\.(tex|ltx|latex)$/i.test(p) ? p.replace(/\.(tex|ltx|latex)$/i, '') : p;
+  return uri.with({ path: base + '.texglass.json' });
+}
+
+/** The notes in a sidecar file's text, or [] if it has none. */
+function parseNotes(text) {
+  try {
+    const data = JSON.parse(text);
+    const list = Array.isArray(data) ? data : data && Array.isArray(data.notes) ? data.notes : [];
+    return list.filter((a) => a && typeof a.id === 'string' && a.anchor && typeof a.anchor === 'object');
+  } catch (e) {
+    return [];
+  }
+}
+
 function notationHover() {
   return vscode.workspace.getConfiguration('texglass').get('notationHover', true) !== false;
 }
@@ -350,7 +372,76 @@ class Preview {
     this.ready = false;
     this.renderedText = null;
     this.cache = new Map();
+    this.watchNotes();
     panel.webview.html = this.html();
+  }
+
+  // --- the reader's highlights and notes, in paper.texglass.json next to the .tex ---
+
+  watchNotes() {
+    if (this.notesWatcher) this.notesWatcher.dispose();
+    this.notesWatcher = null;
+    this.notesText = undefined;
+    try {
+      const file = notesUri(this.uri);
+      const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.joinPath(file, '..'), path.posix.basename(file.path)));
+      const reload = () => this.loadNotes();
+      w.onDidChange(reload);
+      w.onDidCreate(reload);
+      w.onDidDelete(reload);
+      this.notesWatcher = w;
+    } catch (e) {
+      // No watching here (some virtual file systems): read it when the preview opens.
+    }
+  }
+
+  async loadNotes() {
+    let text = '';
+    try {
+      text = new TextDecoder().decode(await vscode.workspace.fs.readFile(notesUri(this.uri)));
+    } catch (e) {
+      text = '';
+    }
+    if (this.disposed || text === this.notesText) return; // our own write coming back
+    this.notesText = text;
+    this.post({ type: 'annotations', list: parseNotes(text) });
+  }
+
+  async saveNotes(list) {
+    const file = notesUri(this.uri);
+    const notes = Array.isArray(list) ? list : [];
+    try {
+      if (!notes.length) {
+        // No notes left: no file either (if there was one).
+        if (this.notesText) await vscode.workspace.fs.delete(file);
+        this.notesText = '';
+        return;
+      }
+      const text = JSON.stringify({
+        about: 'Highlights and notes made in the TeXglass preview, anchored to the text of ' + path.posix.basename(this.uri.path) + '.',
+        version: 1,
+        notes,
+      }, null, 2) + '\n';
+      this.notesText = text;
+      await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(text));
+    } catch (e) {
+      vscode.window.showWarningMessage(`TeXglass could not save the notes to ${path.posix.basename(file.path)}: ${e.message || e}`);
+    }
+  }
+
+  /** A note's text as HTML, with its maths, using the document's own macros. */
+  async renderNote(id, text) {
+    let html = null;
+    try {
+      const doc = this.project ? this.project.text : '';
+      const at = doc.indexOf('\\begin{document}');
+      const preamble = at >= 0 ? doc.slice(0, at) : '';
+      const m = await this.converter.render({ text: `${preamble}\\begin{document}\n${String(text)}\n\\end{document}`, plain: true });
+      if (m.result) html = m.result.html;
+    } catch (e) {
+      html = null;
+    }
+    this.post({ type: 'note-html', id, html });
   }
 
   /** Show another document in this panel. */
@@ -395,6 +486,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
@@ -448,12 +540,19 @@ ${INK_FILTERS}
         });
         this.project = project;
         this.renderedText = text;
+        // The source files by number, as the notes name them: relative to the main file's folder.
+        const slash = (f) => String(f || '').replace(/\\/g, '/');
+        const mainDir = path.posix.dirname(slash(project.files[0]));
+        const files = project.files.map((f) => {
+          const p = slash(f);
+          return mainDir && p.startsWith(mainDir + '/') ? p.slice(mainDir.length + 1) : path.posix.basename(p);
+        });
         // The paper's macros, for notation on hover and the notation index; sent again only when they change.
         const defsJson = JSON.stringify(r.defs || null);
         const defs = defsJson !== this.defsJson ? r.defs || null : undefined;
         this.defsJson = defsJson;
         this.defs = r.defs || null;
-        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs });
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs, files });
         this.flushLine();
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
@@ -534,6 +633,9 @@ ${INK_FILTERS}
         this.post({ type: 'toc-side', value: contentsPosition() });
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
         this.post({ type: 'click-to-copy', on: clickToCopy() });
+        this.post({ type: 'study', on: studyTools() });
+        this.notesText = undefined;
+        this.loadNotes();
         this.post({ type: 'notation-hover', on: notationHover() });
         this.renderedText = null;
         this.defsJson = null;
@@ -580,6 +682,12 @@ ${INK_FILTERS}
       case 'copy-tex':
         // The extension host's clipboard works wherever the webview's may not.
         if (typeof m.text === 'string') vscode.env.clipboard.writeText(m.text);
+        break;
+      case 'annotations':
+        this.saveNotes(m.list);
+        break;
+      case 'render-note':
+        this.renderNote(m.id, m.text);
         break;
       case 'render-tex':
         // Symbols for the notation index, drawn with the document's macros.
@@ -719,6 +827,7 @@ ${INK_FILTERS}
     this.disposed = true;
     clearTimeout(this.timer);
     this.disposables.forEach((d) => d.dispose());
+    if (this.notesWatcher) this.notesWatcher.dispose();
     if (this.onDispose) this.onDispose();
   }
 }
@@ -999,6 +1108,7 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.showProofs', () => preview && preview.post({ type: 'fold-proofs', fold: false })),
     vscode.commands.registerCommand('texglass.toggleHandwriting', () =>
       setConfig('previewStyle', previewLook().look === 'notes' ? 'standard' : 'handwritten')),
+    vscode.commands.registerCommand('texglass.toggleStudyTools', () => setConfig('studyTools', !studyTools())),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
@@ -1040,6 +1150,9 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
         preview.post({ type: 'toc-side', value: contentsPosition() });
+      }
+      if (preview && e.affectsConfiguration('texglass.studyTools')) {
+        preview.post({ type: 'study', on: studyTools() });
       }
       if (preview && e.affectsConfiguration('texglass.notationHover')) {
         preview.post({ type: 'notation-hover', on: notationHover() });
