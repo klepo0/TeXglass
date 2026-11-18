@@ -25,19 +25,25 @@ test('typing words in the arXiv dialog searches, and a result opens the paper', 
       if (p === 'sw.js' || !fs.existsSync(file)) return route.fulfill({ status: 404, body: '' });
       route.fulfill({ body: fs.readFileSync(file), contentType: TYPES[path.extname(p)] || 'application/octet-stream' });
     });
-    await page.route('https://api.openalex.org/**', (route) => {
+    // Only DataCite answers, as when OpenAlex pauses keyless search and Semantic Scholar rate-limits.
+    await page.route(/api\.(openalex|semanticscholar)\.org/, (route) => route.fulfill({ status: 503, body: '' }));
+    await page.route('https://api.datacite.org/**', (route) => {
       searches.push(route.request().url());
       route.fulfill({
-        contentType: 'application/json',
+        contentType: 'application/vnd.api+json',
         headers: { 'access-control-allow-origin': '*' },
         body: JSON.stringify({
-          meta: { count: 1 },
-          results: [{
-            display_name: 'Signatures of $p$-variation paths',
-            publication_year: 2024,
-            authorships: [{ author: { display_name: 'Ada Lovelace' } }],
-            abstract_inverted_index: { We: [0], study: [1], '$L^2$': [2] },
-            locations: [{ landing_page_url: 'https://arxiv.org/abs/2401.00001' }],
+          meta: { total: 1 },
+          data: [{
+            id: '10.48550/arxiv.2401.00001',
+            attributes: {
+              doi: '10.48550/arxiv.2401.00001',
+              identifiers: [{ identifier: '2401.00001', identifierType: 'arXiv' }],
+              titles: [{ title: 'Signatures of $p$-variation paths' }],
+              creators: [{ name: 'Lovelace, Ada', givenName: 'Ada', familyName: 'Lovelace' }],
+              publicationYear: 2024,
+              descriptions: [{ description: 'We study $L^2$', descriptionType: 'Abstract' }],
+            },
           }],
         }),
       });
@@ -53,7 +59,7 @@ test('typing words in the arXiv dialog searches, and a result opens the paper', 
     await page.press('#arxiv-input', 'Enter');
     await page.waitForSelector('#arxiv-results .preprint-open');
     assert.equal(searches.length, 1);
-    assert.match(searches[0], /search=p-variation%20signatures/);
+    assert.match(searches[0], /query=p-variation%20signatures/);
     assert.equal(await page.isVisible('#arxiv-results'), true);
     assert.equal(await page.locator('#arxiv-results .preprint-title .katex').count(), 1, 'maths in the title is rendered');
     assert.match(await page.textContent('#arxiv-results .arxiv-result-meta'), /Ada Lovelace · 2024 · arXiv:2401\.00001/);

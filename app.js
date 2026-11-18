@@ -1463,7 +1463,7 @@
     arxivInput.select();
   }
 
-  // --- searching arXiv (through OpenAlex; arXiv's own API blocks web pages) ---
+  // --- searching arXiv (through DataCite and fallbacks; arXiv's own API blocks web pages) ---
 
   let searchRun = 0; // newer searches win over slower older ones
   let searchState = null; // { query, page, results, total, more }
