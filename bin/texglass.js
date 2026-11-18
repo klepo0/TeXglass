@@ -37,6 +37,8 @@ const output = o >= 0 ? args[o + 1] : input.replace(/\.[^.\/]+$/, '') + '.html';
     title: result.title || path.basename(input),
     css: fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'),
     katexCss,
+    // draws tikzcd arrows, TikZ pictures and tree symbols once the page is open
+    diagramsJs: fs.readFileSync(path.join(__dirname, '..', 'src', 'diagrams.js'), 'utf8'),
   });
   fs.writeFileSync(output, html);
   for (const w of result.warnings) console.error('warning: ' + w);

@@ -413,7 +413,7 @@
   function border(b, d) {
     const u = unit(d);
     if (!b.w && !b.h) return [b.cx, b.cy];
-    if (b.shape === 'circle' || b.shape === 'ellipse') {
+    if (b.shape === 'circle' || b.shape === 'ellipse' || b.shape === 'poly' || b.shape === 'diamond') {
       const rx = b.w / 2; const ry = b.h / 2;
       const k = 1 / Math.sqrt((u[0] * u[0]) / (rx * rx) + (u[1] * u[1]) / (ry * ry));
       return [b.cx + u[0] * k, b.cy + u[1] * k];
@@ -464,7 +464,7 @@
       let w = 0; let h = 0;
       if (n.shape !== 'coord') {
         w = tw + 2 * is; h = th + 2 * is;
-        if (n.shape === 'circle') { const d = Math.max(Math.hypot(tw, th) + 2 * is, (n.mw || 0) * S, (n.mh || 0) * S); w = h = d; }
+        if (n.shape === 'circle' || n.shape === 'poly') { const d = Math.max(Math.hypot(tw, th) + 2 * is, (n.mw || 0) * S, (n.mh || 0) * S); w = h = d; }
         else if (n.shape === 'ellipse') { w = tw * 1.4142 + 2 * is; h = th * 1.4142 + 2 * is; }
         w = Math.max(w, (n.mw || 0) * S); h = Math.max(h, (n.mh || 0) * S);
         const os = (n.os || 0) * S;
@@ -611,13 +611,25 @@
       const w = (b.n.lw || 0.4) * pt;
       let style = `stroke:${b.n.draw || 'none'};fill:${b.n.fill || 'none'};stroke-width:${f2(w)}px`;
       if (b.n.dash) style += `;stroke-dasharray:${b.n.dash.map((x) => f2(Math.max(x * pt, 0.001))).join(' ')}`;
-      if (b.shape === 'circle' || b.shape === 'ellipse') svg.appendChild(el('ellipse', { cx: f2(b.cx), cy: f2(b.cy), rx: f2(b.w / 2), ry: f2(b.h / 2), style }));
+      if (b.shape === 'poly' || b.shape === 'diamond') {
+        // regular polygon (one corner up, inside the circle of the node's size) or diamond
+        const k = b.shape === 'diamond' ? 4 : b.n.sides || 5;
+        const pts = [];
+        for (let j = 0; j < k; j++) {
+          const a = -Math.PI / 2 + (2 * Math.PI * j) / k;
+          pts.push(`${f2(b.cx + (Math.cos(a) * b.w) / 2)},${f2(b.cy + (Math.sin(a) * b.h) / 2)}`);
+        }
+        svg.appendChild(el('polygon', { points: pts.join(' '), style }));
+      } else if (b.shape === 'circle' || b.shape === 'ellipse') svg.appendChild(el('ellipse', { cx: f2(b.cx), cy: f2(b.cy), rx: f2(b.w / 2), ry: f2(b.h / 2), style }));
       else svg.appendChild(el('rect', { x: f2(b.cx - b.w / 2), y: f2(b.cy - b.h / 2), width: f2(b.w), height: f2(b.h), rx: b.n.rc ? f2(b.n.rc * em) : null, style }));
     }
     const old = wrap.querySelector(':scope > .tikz-svg');
     if (old) old.replaceWith(svg); else wrap.insertBefore(svg, wrap.firstChild);
     wrap.style.width = `${f2(W)}px`;
     wrap.style.height = `${f2(H)}px`;
+    // An inline picture with a baseline (tree symbols in formulas): its bottom
+    // edge goes that far below the text baseline.
+    if (typeof data.baseline === 'number') wrap.style.verticalAlign = `${f2(-(y1 + data.baseline * S))}px`;
     for (const b of boxes) {
       if (!b.e) continue;
       if (!b.ok) { b.e.style.visibility = 'hidden'; continue; }

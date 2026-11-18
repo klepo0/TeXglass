@@ -710,7 +710,8 @@
     renderMath(tex, display) {
       tex = this.mathRefs(tex).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
       try {
-        return this.renderMathFn(tex, display, this.katexMacros(tex));
+        const html = this.renderMathFn(tex, display, this.katexMacros(tex));
+        return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>`;
       }
@@ -724,6 +725,10 @@
           m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
         }
         for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name]);
+        m['\\texglassTree'] = (ctx) => {
+          const name = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('').trim();
+          return this.treeMarker(name);
+        };
         this._katexMacros = m;
       }
       // KaTeX only writes to the macros object for global definitions, so the
@@ -1173,10 +1178,10 @@
           const mac = { nargs: parts.length - 1, def: null, body: body.content };
           if (parts.some((p) => p.trim())) mac.delims = parts.map((p) => p.trim());
           // Tree symbols in the style of regularity structures papers:
-          // \DeclareSymbol{name}{…}{TikZ} with \def\<#1>{\csname …#1\endcsname}.
-          // KaTeX has no \csname, so show \<b0> as ⟨b0⟩ and let the rest of
-          // the formula render.
-          if (nm.content === '\\<' && /\\csname/.test(mac.body)) mac.body = '{\\scriptstyle\\langle\\mathtt{#1}\\rangle}';
+          // \DeclareSymbol{name}{baseline}{TikZ} with \def\<#1>{\csname …#1\endcsname}.
+          // KaTeX has no \csname, so \<b0> goes through \texglassTree, which
+          // draws the symbol (see treeMarker).
+          if (nm.content === '\\<' && /\\csname/.test(mac.body)) mac.body = '\\texglassTree{#1}';
           this.macros[nm.content.replace(/^\\/, '')] = mac;
           this._katexMacros = null;
           return res('', body.end);
@@ -1187,6 +1192,18 @@
           this.macros[m[1]] = { nargs: 0, def: null, body: m[2] };
           this._katexMacros = null;
           return res('', i + m[0].length);
+        }
+        case 'DeclareSymbol': {
+          // \DeclareSymbol{b0}{-3}{\node[bxi]{};}: a tree symbol, used as \<b0>.
+          const nm = readArg(src, i);
+          const bl = readArg(src, nm.end);
+          const body = readArg(src, bl.end);
+          (this.treeSymbols || (this.treeSymbols = Object.create(null)))[nm.content.trim()] = { baseline: bl.content.trim(), body: body.content };
+          return res('', body.end);
+        }
+        case 'texglassTree': {
+          const a = readArg(src, i);
+          return res(this.inlineMath(`\\texglassTree{${a.content}}`), a.end);
         }
         case 'definealphabet': {
           // \definealphabet{mc}{\mathcal}{A}{Z} defines \mcA ... \mcZ (a common
@@ -1808,6 +1825,65 @@
         tex = `\\begin{${env}}${lead}${(parts[0] ? parts[0].rows : []).join(' \\\\ ')}\\end{${env}}`;
       }
       return `<div class="math math-display" id="${id}"${src}>${this.renderMath(tex, true)}</div>`;
+    }
+
+    /**
+     * KaTeX source for the tree symbol \<name>: a rule of the picture's size,
+     * tinted with a colour that names it, so putTrees can swap the drawing in.
+     * Unknown symbols, or ones the TikZ reader cannot draw, show as ⟨name⟩.
+     */
+    treeMarker(name) {
+      const fallback = `{\\scriptstyle\\langle\\mathtt{${name.replace(/[\\{}$&#^_%~]/g, '')}}\\rangle}`;
+      const syms = this.treeSymbols || {};
+      // \<b0s> and \<b0ss> are the same symbol made smaller for sub- and superscripts.
+      const key = syms[name] ? name : syms[name.replace(/s$/, '')] ? name.replace(/s$/, '') : syms[name.replace(/ss$/, '')] ? name.replace(/ss$/, '') : null;
+      if (!key || !tikz()) return fallback;
+      this.trees = this.trees || { byName: Object.create(null), list: [] };
+      let t = this.trees.byName[key];
+      if (t === undefined) {
+        t = this.trees.byName[key] = this.treePicture(syms[key]);
+        if (t) {
+          t.color = `#a5${this.trees.list.length.toString(16).padStart(4, '0')}`;
+          this.trees.list.push(t);
+        }
+      }
+      if (!t) return fallback;
+      return `\\textcolor{${t.color}}{\\rule[${t.raise}em]{${t.width}em}{${t.height}em}}`;
+    }
+
+    /** Draw one \DeclareSymbol with the options of the document's own \DeclareSymbol, if it has one. */
+    treePicture(sym) {
+      let opts = 'baseline=#2,scale=0.15,draw=symbols,line join=round,line cap=round';
+      const own = this.macros.DeclareSymbol && /\\tikz\s*\[([^\]]*#2[^\]]*)\]/.exec(this.macros.DeclareSymbol.body);
+      if (own) opts = own[1];
+      const baseline = /^[+-]?[\d.]+$/.test(sym.baseline) ? `${sym.baseline}pt` : sym.baseline;
+      const html = this.tikzpicture(`[${opts.replace(/#2/g, baseline)}]${sym.body}`);
+      const m = /data-tikz="([^"]*)"/.exec(html);
+      if (!m || /tikz-fallback|tikz-note/.test(html)) return null;
+      let data;
+      try {
+        data = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+      } catch (e) {
+        return null;
+      }
+      const S = 2.8453; // em per cm
+      const [x0, y0, x1, y1] = data.bbox;
+      const base = typeof data.baseline === 'number' ? data.baseline : y0;
+      const r = (x) => Math.round(x * 1000) / 1000;
+      return {
+        html: html.replace('class="tg-diagram tg-tikz"', 'class="tg-diagram tg-tikz tg-tree"'),
+        width: r((x1 - x0) * S + 0.1),
+        height: r((y1 - y0) * S + 0.1),
+        raise: r((y0 - base) * S - 0.05),
+      };
+    }
+
+    /** Put the drawings of tree symbols where treeMarker left their rules in KaTeX's output. */
+    putTrees(html) {
+      return html.replace(/<span class="mord rule( mtight)?" style="color:(#a5[0-9a-f]{4});[^"]*"><\/span>/g, (m, tight, color) => {
+        const t = this.trees.list[parseInt(color.slice(3), 16)];
+        return t ? `<span class="mord${tight || ''}">${t.html}</span>` : m;
+      });
     }
 
     /**
