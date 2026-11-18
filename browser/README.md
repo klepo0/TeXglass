@@ -43,9 +43,13 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   - **follows the editor**: the preview scrolls to what is at the top of the
     editor (turn *Follow* off to read on your own);
   - **marks** the paragraph that holds the cursor;
-  - **moves the cursor** to what you click in the preview: a formula, a
-    word, or the start of a paragraph;
-  - has a **table of contents** (*Contents*), **Find** (Ctrl+F) and **Go to**
+  - **moves the cursor** to what you click in the preview: a word or the
+    start of a paragraph, or a formula with Ctrl/Cmd+click or a double-click;
+  - as in the VS Code preview: a plain **click on a formula copies its
+    LaTeX**, **hovering a reference or citation previews** what it points to,
+    and **sections and proofs fold** (click a heading or the arrow; *Proofs*
+    folds or unfolds every proof);
+  - has a **table of contents** (*Contents*, on the left or the right), **Find** (Ctrl+F) and **Go to**
     (Ctrl+G: "Lemma 4.1", "(3.2)", "§2"), and a **light or dark theme** (the
     moon button; it follows your system until you choose). Scrolling the
     preview yourself or jumping with these holds it in place until the editor
