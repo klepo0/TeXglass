@@ -76,6 +76,21 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   page, always light, with the same hand and pen. Printed ink is always flat,
   so a PDF stays small and its text can be selected. The fonts are bundled (SIL
   Open Font License), so it works offline.
+- **Margin notes**: `\marginpar`, `\marginnote` and `\todo` (todonotes, with
+  its `color=`) show in a column to the right of the text, level with the line
+  they were written on, as on paper. `\todo[inline]` stays in the line.
+- **Highlighter and notes of your own** (study tools): select text and pick a
+  colour from the small bar that appears, or the note button to write a note
+  on it. Drag the note pad at the bottom right onto any line for a note there,
+  and drag a note in the margin to move it to another line. Notes take LaTeX
+  maths (`$…$`) with the document's own macros. Click a highlight to recolour
+  or remove it; hover a note for edit and delete. Everything is saved next to
+  the `.tex` file in `name.texglass.json` (commit it, or add it to
+  `.gitignore`); the `.tex` itself is never touched. Notes are anchored to the
+  text they mark, not to line numbers, so they stay put while you edit; a note
+  whose text has gone shows as "Text not found" near where it was. Hide them
+  all with **TeXglass: Show or Hide Highlights and Notes** (or
+  `texglass.studyTools`).
 - **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
   mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**
   in the preview's `…` menu. The level shows at the bottom left (click it to

@@ -729,6 +729,19 @@
     qed: '<span class="qed">∎</span>', checkmark: '✓', hfill: ' ', hfil: ' ', dotfill: ' ',
   };
 
+  /** xcolor names a \todo colour may use that CSS knows by the same name. */
+  const NOTE_COLORS = new Set(['red', 'green', 'blue', 'cyan', 'magenta', 'yellow', 'orange', 'purple', 'violet',
+    'pink', 'brown', 'gray', 'olive', 'teal', 'lime']);
+
+  /**
+   * A note for the margin (\marginpar, \todo). It sits in the text where it was
+   * written; the viewers lift it into the margin column (src/margin.js), and
+   * without them (export, print) it floats to the right of the text.
+   */
+  function marginNote(body, kind, style) {
+    return `<span class="mnote mnote-${kind}"${style}><span class="mnote-body">${body}</span></span>`;
+  }
+
   const NOOPS = new Set([
     'noindent', 'indent', 'centering', 'raggedright', 'raggedleft', 'vfill', 'null', 'relax', 'protect',
     'clearpage', 'cleardoublepage', 'newpage', 'pagebreak', 'nopagebreak', 'smallskip', 'medskip', 'bigskip',
@@ -736,7 +749,7 @@
     'makeatletter', 'makeatother', 'normalsize', 'selectfont', 'onecolumn', 'twocolumn', 'mainmatter',
     'frontmatter', 'backmatter', 'printbibliography', 'listoffigures', 'listoftables', 'qedhere', 'xspace',
     'ignorespaces', 'unskip', 'allowbreak', 'break', 'nolinebreak', 'leavevmode', 'displaybreak',
-    'long', 'outer', 'listoftodos',
+    'long', 'outer', 'listoftodos', 'reversemarginpar', 'normalmarginpar',
   ]);
 
   /** Commands whose arguments are dropped entirely. */
@@ -1326,10 +1339,28 @@
           return res(this.citeHtml(keys.join(','), keys.length === 1 ? note : undefined), j);
         }
         case 'todo': {
-          // todonotes: show the note inline, small (\todo[inline,color=…]{text}).
+          // todonotes: \todo{text} goes in the margin, \todo[inline]{text} in the line.
           const o = readOpt(src, i);
           const a = readArg(src, o ? o.end : i);
-          return res(`<span class="todo">${this.flow(a.content, true)}</span>`, a.end);
+          const opts = o ? o.content : '';
+          if (/(^|,)\s*disable\s*(,|$)/.test(opts)) return res('', a.end);
+          const body = this.flow(a.content, true);
+          const c = /(?:^|,)\s*(?:background)?colou?r\s*=\s*\{?([A-Za-z]+)/.exec(opts);
+          const color = c && NOTE_COLORS.has(c[1].toLowerCase()) ? ` style="--note-c:${c[1].toLowerCase()}"` : '';
+          if (/(^|,)\s*inline\s*(,|$)/.test(opts)) return res(`<span class="todo"${color}>${body}</span>`, a.end);
+          return res(marginNote(body, 'todo', color), a.end);
+        }
+        case 'marginpar': {
+          // \marginpar[left text]{right text}: the margin column is on the right.
+          const o = readOpt(src, i);
+          const a = readArg(src, o ? o.end : i);
+          return res(marginNote(this.flow(a.content, true), 'par', ''), a.end);
+        }
+        case 'marginnote': {
+          // marginnote package: \marginnote{text}[vertical offset].
+          const a = readArg(src, i);
+          const o = readOpt(src, a.end);
+          return res(marginNote(this.flow(a.content, true), 'par', ''), o ? o.end : a.end);
         }
         case 'missingfigure': {
           const o = readOpt(src, i);

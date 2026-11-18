@@ -1069,6 +1069,13 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
+  /* The margin column is laid out for the screen: notes float beside the text instead. */
+  .tg-margin, .tg-hlbar, .tg-note-pad, .tg-drop-line { display: none !important; }
+  #preview.tg-with-margin { max-width: none !important; padding: 0 !important; }
+  .tg-with-margin .mnote > .mnote-body { display: block !important; }
+  .tg-with-margin .mnote::before { content: none !important; }
+  ::highlight(tg-hl-focus) { background-color: transparent; }
+
   /* One long page that the printer cuts, not a window with scrolling panes. */
   html, body { height: auto !important; overflow: visible !important; }
   body { display: block; background: #fff; color: #000; }
@@ -1152,3 +1159,210 @@ u.uwave { text-decoration-style: wavy; text-decoration-skip-ink: none; }
 u.dashuline { text-decoration-style: dashed; }
 u.dotuline { text-decoration-style: dotted; }
 s.xout { text-decoration-thickness: 0.15em; }
+
+/* --- the margin: \marginpar, \todo and the reader's notes (src/margin.js) --- */
+
+:root {
+  --tg-hl-yellow: rgba(255, 210, 0, 0.4);
+  --tg-hl-green: rgba(70, 200, 110, 0.34);
+  --tg-hl-pink: rgba(255, 95, 170, 0.3);
+  --tg-hl-blue: rgba(70, 150, 255, 0.3);
+}
+::highlight(tg-hl-yellow) { background-color: rgba(255, 210, 0, 0.4); }
+::highlight(tg-hl-green) { background-color: rgba(70, 200, 110, 0.34); }
+::highlight(tg-hl-pink) { background-color: rgba(255, 95, 170, 0.3); }
+::highlight(tg-hl-blue) { background-color: rgba(70, 150, 255, 0.3); }
+::highlight(tg-hl-focus) { background-color: rgba(255, 140, 0, 0.45); }
+
+/* Without the viewer's script (exported HTML, print): notes float right of the text. */
+.mnote-body {
+  float: right;
+  clear: right;
+  width: 30%;
+  margin: 0.15em 0 0.5em 1em;
+  font-size: 0.78em;
+  line-height: 1.4;
+  text-align: left;
+  font-style: normal;
+  font-weight: normal;
+  text-indent: 0;
+}
+.mnote-todo > .mnote-body {
+  padding: 0.25em 0.45em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--note-c, orange) 28%, var(--paper));
+  border-left: 3px solid var(--note-c, orange);
+}
+
+/* With it, the text makes room for a margin column and the notes go there. */
+#preview.tg-with-margin {
+  max-width: calc(760px * var(--zoom, 1) + var(--tg-margin-w, 200px) + 28px);
+  padding-right: calc(16px + var(--tg-margin-w, 200px) + 28px);
+}
+.tg-with-margin .mnote > .mnote-body { display: none; }
+.tg-with-margin .mnote::before { content: "\200b"; }
+.tg-with-margin .mnote-todo::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin: 0 0.1em;
+  border-radius: 50%;
+  vertical-align: 0.4em;
+  background: var(--note-c, orange);
+}
+
+.tg-margin {
+  position: absolute;
+  top: 0;
+  height: 0;
+  z-index: 2;
+}
+.tg-margin[hidden] { display: none; }
+.tg-mcard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  font-size: 0.74em;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.tg-mcard[hidden] { display: none; }
+.tg-mcard .katex { font-size: 1.05em; }
+.tg-mcard-par { color: var(--muted); }
+.tg-mcard-todo {
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--note-c, orange) 26%, var(--paper));
+  border-left: 3px solid var(--note-c, orange);
+}
+.tg-mcard-user {
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid color-mix(in srgb, var(--note-c) 100%, var(--ink) 25%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: grab;
+  touch-action: none;
+}
+.tg-mcard-user.tg-mcard-editing { cursor: auto; }
+.tg-mcard-dragging { opacity: 0.35; }
+.tg-mcard-ghost {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
+}
+.tg-mcard-tag { font: 10px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--warn); }
+.tg-mcard-lost { border-style: dashed; }
+.tg-mcard-tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 1px;
+  border-radius: 4px;
+  background: var(--paper);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.tg-mcard-editing .tg-mcard-tools { display: none; }
+.tg-mcard p { margin: 0 0 0.3em; }
+.tg-mcard p:last-child { margin-bottom: 0; }
+.tg-mcard-user:hover .tg-mcard-tools, .tg-mcard-user:focus-within .tg-mcard-tools { opacity: 1; }
+.tg-mcard-tools button, .tg-hlbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tg-mcard-tools button { width: 18px; height: 18px; border-radius: 3px; }
+.tg-mcard-tools button:hover, .tg-hlbar button:hover { color: var(--ink); background: var(--accent-soft); }
+.tg-mcard-tools svg { width: 13px; height: 13px; }
+.tg-mcard-empty { color: var(--muted); font-style: italic; }
+.tg-mcard-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.6em;
+  margin: 0;
+  padding: 2px 4px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  outline: none;
+}
+
+/* The bar over a selection: highlight in a colour, add a note, remove. */
+.tg-hlbar {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+.tg-hlbar[hidden] { display: none; }
+.tg-hlbar .tg-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.tg-hlbar .tg-swatch:hover { background: var(--sw); transform: scale(1.15); }
+.tg-hlbar-note, .tg-hlbar-del { width: 24px; height: 24px; border-radius: 4px; }
+.tg-hlbar svg { width: 16px; height: 16px; }
+.tg-hlbar-del { display: none !important; }
+.tg-hlbar-existing .tg-hlbar-del { display: inline-flex !important; }
+
+/* The note pad: drag it onto a line to write a note there. */
+.tg-note-pad {
+  position: fixed;
+  right: 14px;
+  bottom: 40px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tg-hl-yellow) 60%, var(--paper));
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  cursor: grab;
+  touch-action: none;
+  opacity: 0.85;
+}
+.tg-note-pad:hover { opacity: 1; }
+.tg-note-pad[hidden] { display: none; }
+.tg-note-pad svg { width: 18px; height: 18px; }
+.tg-drop-line {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.tg-drop-line[hidden] { display: none; }

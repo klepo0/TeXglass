@@ -105,6 +105,11 @@
         "icon": "$(edit)"
       },
       {
+        "command": "texglass.toggleStudyTools",
+        "title": "Show or Hide Highlights and Notes",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.find",
         "title": "Find in Preview",
         "category": "TeXglass",
@@ -256,6 +261,11 @@
           "command": "texglass.toggleContentsPosition",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "0_zoom@4"
+        },
+        {
+          "command": "texglass.toggleStudyTools",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_look@1"
         }
       ],
       "explorer/context": [
@@ -428,6 +438,11 @@
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
+        },
+        "texglass.studyTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed."
         },
         "texglass.notationHover": {
           "type": "boolean",
