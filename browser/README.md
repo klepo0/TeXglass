@@ -1,8 +1,8 @@
 # TeXglass for arXiv
 
 A browser extension (Manifest V3) for Chrome, Edge and Firefox that opens
-arXiv papers in TeXglass, which renders their LaTeX source as a readable page:
-math, numbered theorems and equations, working references.
+arXiv papers in TeXglass (also from alphaXiv, HAL and ResearchGate), which
+renders their LaTeX source as a readable page: math, numbered theorems and equations, working references.
 
 - **Toolbar button**: on an arXiv page (`arxiv.org/abs/…`, `/pdf/…` or
   `/html/…`) it opens that paper. Anywhere else it opens the viewer.
@@ -11,6 +11,23 @@ math, numbered theorems and equations, working references.
 - **Links on arxiv.org**: *View in TeXglass* under "Access Paper" on abstract
   pages, a *texglass* link beside pdf/html/other on listing pages, and a
   floating button on HTML papers.
+- **Other sites**: a floating *View in TeXglass* button on paper pages of
+  - **alphaXiv** (`alphaxiv.org/abs/…`, `/overview/…`), whose addresses carry
+    the arXiv id;
+  - **HAL** (`hal.science` and its portals such as `inria.hal.science`,
+    `theses.hal.science`, `hal.archives-ouvertes.fr`, `hal.inrae.fr`): the
+    extension asks the HAL API (`api.archives-ouvertes.fr`) for the arXiv id
+    that HAL records for deposits that are also on arXiv;
+  - **ResearchGate** (`researchgate.net/publication/…`): an arXiv DOI
+    (`10.48550/arXiv.…`) in the page's metadata, or else a paper on arXiv
+    with exactly the same title, found with arXiv's search API.
+
+  When a HAL deposit has no arXiv id, its title is searched on arXiv too. The
+  button appears only when the paper is found on arXiv, since TeXglass renders
+  the LaTeX source that arXiv keeps. On these pages the toolbar button and the right-click
+  menu open the same paper, or say on the page that none was found. A title
+  search sends the page's title to arXiv and nothing else; titles shorter
+  than three words are not searched.
 
 The viewer downloads the source from `arxiv.org/src/<id>` (a gzipped tar
 archive or a single gzipped `.tex` file), picks the main file, inlines its

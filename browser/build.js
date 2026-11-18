@@ -22,7 +22,14 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.1.1';
+const VERSION = '0.2.0';
+
+/** Other sites with arXiv papers, where sites.js adds a "View in TeXglass" button. */
+const SITE_MATCHES = [
+  'https://alphaxiv.org/*', 'https://*.alphaxiv.org/*',
+  'https://hal.science/*', 'https://*.hal.science/*', 'https://*.archives-ouvertes.fr/*', 'https://hal.inrae.fr/*',
+  'https://www.researchgate.net/publication/*',
+];
 
 function manifest(target) {
   const m = {
@@ -30,18 +37,25 @@ function manifest(target) {
     name: 'TeXglass for arXiv',
     short_name: 'TeXglass',
     version: VERSION,
-    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references.',
+    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references. Also on alphaXiv, HAL and ResearchGate.',
     icons: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
     action: {
       default_title: 'View this arXiv paper in TeXglass',
       default_icon: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
     },
     permissions: ['activeTab', 'contextMenus', 'storage'],
-    host_permissions: ['https://arxiv.org/*', 'https://*.arxiv.org/*'],
+    // arXiv for the papers and its search API; the HAL API to find the arXiv id of HAL deposits.
+    host_permissions: ['https://arxiv.org/*', 'https://*.arxiv.org/*', 'https://api.archives-ouvertes.fr/*'],
     content_scripts: [
       {
         matches: ['https://arxiv.org/*', 'https://*.arxiv.org/*'],
         js: ['content.js'],
+        css: ['content.css'],
+        run_at: 'document_end',
+      },
+      {
+        matches: SITE_MATCHES,
+        js: ['sites.js'],
         css: ['content.css'],
         run_at: 'document_end',
       },
@@ -191,4 +205,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, manifest, viewerHtml, VERSION };
+module.exports = { build, manifest, viewerHtml, VERSION, SITE_MATCHES };

@@ -125,6 +125,9 @@ For **Chrome, Edge and Firefox**.
 - **Right-click menu**: open any link to an arXiv paper, on any site.
 - **Links on arxiv.org**: *View in TeXglass* on abstract pages, a *texglass*
   link in listings, and a floating button on HTML papers.
+- **alphaXiv, HAL and ResearchGate**: a *View in TeXglass* button on paper
+  pages whose paper is also on arXiv (HAL's own records, or an exact title
+  match on arXiv).
 - **Self-contained**: papers open in a viewer bundled with the extension, so
   only arxiv.org needs to be reachable. The options can switch to the website.
 - **Everything above**: hover previews, Go to, contents, click to copy and
