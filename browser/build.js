@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 /** The default keyboard shortcut for the toolbar button; people can change it in the browser. */
 const SHORTCUT = 'Alt+Shift+K';
@@ -34,13 +34,16 @@ const SITE_MATCHES = [
   'https://www.researchgate.net/publication/*',
 ];
 
+/** Overleaf project pages, where overleaf.js adds a live preview of the open file. */
+const OVERLEAF_MATCHES = ['https://overleaf.com/project/*', 'https://*.overleaf.com/project/*'];
+
 function manifest(target) {
   const m = {
     manifest_version: 3,
     name: 'TeXglass for arXiv',
     short_name: 'TeXglass',
     version: VERSION,
-    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references. Also on alphaXiv, HAL and ResearchGate.',
+    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references. Also on alphaXiv, HAL and ResearchGate, and a live preview beside the editor on Overleaf.',
     icons: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
     action: {
       default_title: 'View this arXiv paper in TeXglass',
@@ -71,7 +74,23 @@ function manifest(target) {
         css: ['content.css'],
         run_at: 'document_end',
       },
+      // On Overleaf, overleaf-page.js runs in the page itself to read the
+      // editor (CodeMirror), and overleaf.js adds the preview panel.
+      {
+        matches: OVERLEAF_MATCHES,
+        js: ['overleaf-page.js'],
+        run_at: 'document_start',
+        world: 'MAIN',
+      },
+      {
+        matches: OVERLEAF_MATCHES,
+        js: ['overleaf.js'],
+        css: ['overleaf.css'],
+        run_at: 'document_idle',
+      },
     ],
+    // The preview panel is the extension's overleaf.html, framed in Overleaf's page.
+    web_accessible_resources: [{ resources: ['overleaf.html'], matches: ['https://overleaf.com/*', 'https://*.overleaf.com/*'] }],
     options_ui: { page: 'options.html', open_in_tab: false },
     homepage_url: 'https://github.com/klepo0/TeXglass',
   };
@@ -79,14 +98,15 @@ function manifest(target) {
     m.background = { scripts: ['src/arxiv.js', 'background.js'] };
     m.browser_specific_settings = { gecko: {
         id: 'texglass-arxiv@klepo0.github.io',
-        strict_min_version: '115.0',
+        // 128 runs content scripts in the page's world ("world": "MAIN"), for Overleaf.
+        strict_min_version: '128.0',
         // addons.mozilla.org asks every new extension to declare what it collects: nothing here.
         data_collection_permissions: { required: ['none'] },
       },
     };
   } else {
     m.background = { service_worker: 'background.js' };
-    m.minimum_chrome_version = '102';
+    m.minimum_chrome_version = '111'; // "world": "MAIN" content scripts, for Overleaf
   }
   return m;
 }
@@ -217,4 +237,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, manifest, viewerHtml, VERSION, SITE_MATCHES, SHORTCUT };
+module.exports = { build, manifest, viewerHtml, zipDir, VERSION, SITE_MATCHES, OVERLEAF_MATCHES, SHORTCUT };

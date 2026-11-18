@@ -35,6 +35,36 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   search sends the page's title to arXiv and nothing else; titles shorter
   than three words are not searched.
 
+- **Overleaf**: on a project page (`overleaf.com/project/…`) a *TeXglass* tab
+  on the right edge, the toolbar button or **Alt+Shift+K** opens a live
+  preview panel beside the editor. It shows the file open in Overleaf's
+  editor and re-renders it as you type, including your collaborators' edits
+  and when you switch files. It
+  - **follows the editor**: the preview scrolls to what is at the top of the
+    editor (turn *Follow* off to read on your own);
+  - **marks** the paragraph that holds the cursor;
+  - **moves the cursor** to what you click in the preview: a formula, a
+    word, or the start of a paragraph;
+  - with **Project files**, downloads the project's zip from Overleaf (its own
+    *Download as zip*, with your login) and pulls in the files the open file
+    `\input`s, the main file's preamble when the open file is a chapter (for
+    its macros), references from the project's `.bib` files, and PNG, JPEG
+    and SVG figures. The open file is always live; the other files are a
+    snapshot, refreshed with *Reload files*.
+
+  The panel only reads the project: the one thing it does to the editor is
+  move the cursor when you click. Overleaf's PDF stays the final version.
+  Drag the panel's left edge to resize it; the page narrows to make room.
+
+  How it reads the editor: `overleaf-page.js` runs in the page itself (a
+  `"world": "MAIN"` content script, hence Chrome 111 and Firefox 128 or
+  later) and finds Overleaf's CodeMirror 6 editor through CodeMirror's own
+  handle on its DOM (`.cm-content`), or through the
+  `UNSTABLE_editor:extensions` event Overleaf sends for extensions, rather
+  than through Overleaf's page layout. It sends the text to the panel
+  (`overleaf.html`, in a frame) with `postMessage`. Self-hosted Overleaf
+  servers are not covered: the extension asks for `overleaf.com` only.
+
 The viewer downloads the source from `arxiv.org/src/<id>` (a gzipped tar
 archive or a single gzipped `.tex` file), picks the main file, inlines its
 `\input`/`\include` files and the `.bbl` bibliography, and shows PNG/JPEG

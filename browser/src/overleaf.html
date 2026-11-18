@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TeXglass preview</title>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="overleaf-panel.css">
+  <script defer src="vendor/katex/katex.min.js"></script>
+  <script defer src="src/tikz.js"></script>
+  <script defer src="src/bib.js"></script>
+  <script defer src="src/texglass.js"></script>
+  <script defer src="src/diagrams.js"></script>
+  <script defer src="src/arxiv.js"></script>
+  <script defer src="src/zoom.js"></script>
+  <script defer src="src/scroll.js"></script>
+  <script defer src="overleaf-project.js"></script>
+  <script defer src="overleaf-panel.js"></script>
+</head>
+<body>
+  <header class="toolbar ol-toolbar">
+    <div class="brand" title="TeXglass: a live preview of the file open in Overleaf">T<sub>e</sub>Xglass</div>
+    <span id="file-name" class="file-name"></span>
+    <span id="status" class="status" role="status"></span>
+    <span class="ol-spacer"></span>
+    <button id="files" type="button" title="Download this project's other files from Overleaf (its zip), to include \input files, the main file's macros, .bib references and figures">Project files</button>
+    <button id="follow" type="button" aria-pressed="true" title="Scroll along with the editor">Follow</button>
+    <div class="zoom-group" role="group" aria-label="Zoom">
+      <button id="zoom-out" type="button" aria-label="Zoom out" title="Smaller">−</button>
+      <button id="zoom-in" type="button" aria-label="Zoom in" title="Larger">+</button>
+    </div>
+    <button id="close" class="icon-button" type="button" aria-label="Close the preview" title="Close the preview (Alt+Shift+K opens it again)">×</button>
+  </header>
+  <p id="note" class="ol-note" hidden></p>
+  <main class="panes">
+    <section class="pane preview-pane" id="preview-pane">
+      <article id="preview" class="document"></article>
+    </section>
+  </main>
+</body>
+</html>

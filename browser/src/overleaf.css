@@ -1,0 +1,102 @@
+/* TeXglass for Overleaf: the preview panel on Overleaf's project pages (see overleaf.js). */
+
+/* Make room for the panel: narrow the page, and make <body> the box that
+   Overleaf's full-window layout (position: fixed or absolute) is laid out in. */
+html.texglass-ol-open > body {
+  width: calc(100% - var(--texglass-ol-w, 480px)) !important;
+  min-width: 0 !important;
+  transform: translateZ(0);
+}
+
+#texglass-overleaf-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--texglass-ol-w, 480px);
+  z-index: 2147482000;
+  display: flex;
+  background: #fbfaf7;
+  border-left: 1px solid #c9c6bf;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+}
+
+#texglass-overleaf-panel[hidden] {
+  display: none;
+}
+
+#texglass-overleaf-panel > iframe {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+}
+
+.texglass-ol-grip {
+  flex: 0 0 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.texglass-ol-grip:hover {
+  background: rgba(47, 95, 179, 0.25);
+}
+
+/* While resizing, the frame must not swallow the pointer. */
+html.texglass-ol-resizing,
+html.texglass-ol-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+html.texglass-ol-resizing #texglass-overleaf-panel > iframe {
+  pointer-events: none;
+}
+
+#texglass-overleaf-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  z-index: 2147482000;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  padding: 10px 5px;
+  border: 0;
+  border-radius: 6px 0 0 6px;
+  background: #3b5ba9;
+  color: #fff;
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+#texglass-overleaf-tab:hover,
+#texglass-overleaf-tab:focus-visible {
+  opacity: 1;
+}
+
+#texglass-overleaf-tab[hidden] {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  #texglass-overleaf-panel {
+    background: #17181b;
+    border-left-color: #34353b;
+  }
+}
+
+@media print {
+  #texglass-overleaf-panel,
+  #texglass-overleaf-tab {
+    display: none !important;
+  }
+  html.texglass-ol-open > body {
+    width: auto !important;
+    transform: none;
+  }
+}

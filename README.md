@@ -121,7 +121,7 @@ with no build step.
 
 ## arXiv browser extension
 
-For **Chrome, Edge and Firefox**.
+For **Chrome, Edge and Firefox** (Chrome/Edge 111 or later, Firefox 128 or later).
 
 - **Toolbar button**, or **Alt+Shift+K**: on an arXiv abstract, PDF or HTML
   page, opens that paper in TeXglass; anywhere else, TeXglass with its arXiv
@@ -132,6 +132,10 @@ For **Chrome, Edge and Firefox**.
 - **alphaXiv, HAL and ResearchGate**: a *View in TeXglass* button on paper
   pages whose paper is also on arXiv (HAL's own records, or an exact title
   match on arXiv).
+- **Live preview on Overleaf**: a TeXglass panel beside Overleaf's editor
+  that re-renders the open file as you (or your collaborators) type, scrolls
+  along with the editor, and moves the cursor to whatever you click. It only
+  reads the document; Overleaf's PDF stays the final version.
 - **Self-contained**: papers open in a viewer bundled with the extension, so
   only arxiv.org needs to be reachable. The options can switch to the website.
 - **Everything above**: hover previews, Go to, contents, click to copy and
