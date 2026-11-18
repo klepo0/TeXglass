@@ -1561,10 +1561,21 @@
     }
   }
 
-  $('arxiv').addEventListener('click', () => {
-    if (!searchState) arxivSay('Search arXiv, or paste a link to download the source; figures in PNG or JPEG are shown too.');
+  function showArxivDialog() {
+    if (!searchState && !arxivBusy) arxivSay('Search arXiv, or paste a link to download the source; figures in PNG or JPEG are shown too.');
     openArxivDialog();
     updateArxivButton();
+  }
+  $('arxiv').addEventListener('click', showArxivDialog);
+  // Ctrl+K (Cmd+K on a Mac), the usual search shortcut, opens the arXiv dialog
+  // from anywhere in the page, the editor included. Browsers let pages take it
+  // over; it is left alone while another dialog is open.
+  window.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'k') return;
+    const other = document.querySelector('dialog[open]');
+    if (other && other !== arxivDialog) return;
+    e.preventDefault();
+    showArxivDialog();
   });
   $('arxiv-cancel').addEventListener('click', () => arxivDialog.close());
   arxivInput.addEventListener('input', updateArxivButton);
@@ -1899,7 +1910,7 @@
     try { lastGh = JSON.parse(store.get('texglass:last-gh') || 'null'); } catch (e) { /* ignore */ }
     const loadLast = () => load(last, store.get('texglass:last-name'), null, lastGh);
     const last = store.get('texglass:last');
-    // ?arxiv=2301.00001 opens that paper; ?gh=<GitHub link> opens that file;
+    // ?arxiv=2301.00001 opens that paper (a bare ?arxiv, the arXiv dialog); ?gh=<GitHub link> opens that file;
     // ?preprint=<folder> opens that manuscript from github.com/openai/math.
     const params = new URLSearchParams(location.search);
     const arxiv = params.get('arxiv');
@@ -1907,6 +1918,13 @@
     if (arxiv && window.TeXglassArxiv) {
       if (last) loadLast();
       return importArxiv(arxiv);
+    }
+    // A bare ?arxiv (the browser extension's toolbar button away from a paper)
+    // opens the arXiv dialog over the last document.
+    if (params.has('arxiv') && window.TeXglassArxiv) {
+      const done = last ? loadLast() : loadWelcome();
+      showArxivDialog();
+      return done;
     }
     if (gh && window.TeXglassGitHub) {
       if (last) loadLast();

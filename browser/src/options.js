@@ -37,4 +37,16 @@
     save();
   });
   load();
+
+  // The shortcut as the browser has it now: people can change or remove it.
+  async function showShortcut() {
+    if (!api.commands || !api.commands.getAll) return;
+    try {
+      const cmd = (await api.commands.getAll()).find((c) => c.name === '_execute_action');
+      if (cmd) document.getElementById('shortcut-key').textContent = cmd.shortcut || 'not set';
+    } catch (e) {
+      // keep the default from the page
+    }
+  }
+  showShortcut();
 })();

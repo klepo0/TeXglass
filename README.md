@@ -94,7 +94,8 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 - **arXiv search and import**: type words, a title or an author in the arXiv
   dialog to search arXiv (through [OpenAlex](https://openalex.org), since
   arXiv's own search API can't be called from a web page), then click a result
-  to open it. Or paste `2301.00001` or any arXiv link. Included files, the
+  to open it. Or paste `2301.00001` or any arXiv link. **Ctrl+K** (Cmd+K on a
+  Mac) opens the dialog. Included files, the
   bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
   files) and figures come along. Also `?arxiv=2301.00001`.
 - **GitHub import**: paste a link to a file, folder or repo of a public
@@ -122,8 +123,9 @@ with no build step.
 
 For **Chrome, Edge and Firefox**.
 
-- **Toolbar button**: on an arXiv abstract, PDF or HTML page, opens that paper
-  in TeXglass.
+- **Toolbar button**, or **Alt+Shift+K**: on an arXiv abstract, PDF or HTML
+  page, opens that paper in TeXglass; anywhere else, TeXglass with its arXiv
+  search.
 - **Right-click menu**: open any link to an arXiv paper, on any site.
 - **Links on arxiv.org**: *View in TeXglass* on abstract pages, a *texglass*
   link in listings, and a floating button on HTML papers.

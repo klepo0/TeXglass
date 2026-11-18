@@ -2,8 +2,10 @@
  * TeXglass for arXiv: background script.
  *
  * Opens arXiv papers in the TeXglass viewer from three places:
- *   - the toolbar button, on an arXiv or alphaXiv paper page, or on a HAL or
- *     ResearchGate page of a paper that is also on arXiv;
+ *   - the toolbar button or its keyboard shortcut (Alt+Shift+K by default,
+ *     the manifest's _execute_action command), on an arXiv or alphaXiv paper
+ *     page, or on a HAL or ResearchGate page of a paper that is also on arXiv;
+ *     anywhere else it opens the viewer with its arXiv search;
  *   - the right-click menu, on a link to an arXiv or alphaXiv paper or on
  *     one of those pages;
  *   - the "View in TeXglass" links that content.js adds to arXiv pages and
@@ -192,10 +194,13 @@ async function settings() {
   }
 }
 
-/** The viewer URL that opens paper `id` (or the viewer alone when id is null). */
+/**
+ * The viewer URL that opens paper `id`. When id is null it opens the viewer
+ * with its arXiv dialog showing (a bare ?arxiv), ready to search.
+ */
 async function viewerUrl(id) {
   const s = await settings();
-  const query = id ? `?arxiv=${encodeURIComponent(id)}` : '';
+  const query = id ? `?arxiv=${encodeURIComponent(id)}` : '?arxiv';
   if (s.viewer === 'web' && /^https?:\/\//i.test(s.webUrl)) {
     const base = new URL(s.webUrl);
     base.search = query;
