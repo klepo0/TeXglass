@@ -168,3 +168,59 @@ test('styleOf reads \\bibliographystyle and biblatex options', () => {
   assert.equal(B.styleOf(''), '');
   assert.deepEqual(B.bibResources('\\addbibresource[location=local]{a.bib}\\bibliography{b, c}% \\bibliography{d}'), ['b', 'c', 'a.bib']);
 });
+
+// amsrefs, as in arXiv 1810.10500: the records sit in the .tex itself.
+const AMSREFS = `\\documentclass{amsart}
+\\usepackage[abbrev,msc-links,alphabetic]{amsrefs}
+\\begin{document}
+See \\cite{MR1964949} and \\cite{incoll}.
+\\begin{bibdiv}
+\\begin{biblist}
+\\bib{MR1964949}{article}{
+      author={Bass, Richard~F.},
+      author={Chen, Zhen-Qing},
+       title={Brownian motion with singular drift},
+        date={2003},
+     journal={Ann. Probab.},
+      volume={31},
+      number={2},
+       pages={791\\ndash 817},
+      review={\\MR{1964949}},
+}
+\\bib{incoll}{article}{
+      author={Gubinelli, M.},
+       title={Controlling rough paths},
+        book={
+          title={Rough Paths Volume},
+          editor={Lyons, T.},
+          publisher={Springer},
+        },
+        date={2004-05},
+       pages={1\\ndash 20},
+}
+\\end{biblist}
+\\end{bibdiv}
+\\end{document}`;
+
+test('amsrefs records become a bibliography that citations link to', () => {
+  const e = B.parseAmsrefs(AMSREFS);
+  assert.deepEqual(Object.keys(e), ['MR1964949', 'incoll']);
+  assert.equal(e.MR1964949.fields.author, 'Bass, Richard~F. and Chen, Zhen-Qing');
+  assert.equal(e.MR1964949.fields.pages, '791--817');
+  assert.equal(e.MR1964949.fields.year, '2003');
+  assert.ok(!('review' in e.MR1964949.fields));
+  assert.equal(e.incoll.type, 'inproceedings');
+  assert.equal(e.incoll.fields.booktitle, 'Rough Paths Volume');
+  assert.equal(e.incoll.fields.publisher, 'Springer');
+  assert.equal(e.incoll.fields.editor, 'Lyons, T.');
+  assert.equal(e.incoll.fields.year, '2004');
+
+  const r = TeXglass.render(AMSREFS);
+  assert.doesNotMatch(r.html, /cite-key/, 'every citation resolves');
+  assert.match(r.html, /<section class="bibliography">/);
+  assert.match(r.html, /\[<a href="#bib-\d+">BC03<\/a>\]/, 'alphabetic labels');
+  assert.doesNotMatch(r.html, /review|MR\{/);
+  // Without the alphabetic option, amsrefs numbers the entries.
+  const numbered = TeXglass.render(AMSREFS.replace('abbrev,msc-links,alphabetic', 'abbrev'));
+  assert.match(numbered.html, /\[<a href="#bib-\d+">1<\/a>\]/);
+});

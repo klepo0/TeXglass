@@ -53,8 +53,9 @@ Install **TeXglass** from the
 - **Multi-file documents**: `\input`, `\include`, `\subfile`, `\import`
   and `\includeonly`, live across files. Previewing a chapter shows the whole
   document (`% !TEX root`, subfiles, or the file that includes it).
-- **Bibliographies** from your `.bib` files (BibTeX and biblatex), or an
-  existing `.bbl`.
+- **Bibliographies** from your `.bib` files (BibTeX and biblatex), an
+  existing `.bbl`, or amsrefs records (`\begin{bibdiv}…\bib{key}{article}{…}`)
+  in the document itself.
 - **Figures** in PNG, JPEG, SVG, GIF or WebP, with `\graphicspath`.
 - **Handwritten notes look** (optional): **TeXglass: Toggle Handwritten
   Notes Look** shows the document in ink on squared, lined or plain paper, or
