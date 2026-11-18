@@ -114,6 +114,15 @@
   border-radius: 2px;
   -webkit-font-smoothing: antialiased;
 }
+/* Margin notes (\marginpar, \todo, the reader's own) go in a margin on the sheet. */
+:root[data-look="notes"] #preview.document.tg-with-margin {
+  padding-right: calc(44px * var(--zoom, 1) + var(--tg-margin-w, 200px) + 20px);
+}
+:root[data-look="notes"] .tg-margin { font-family: var(--hand), "Segoe Print", "Comic Sans MS", cursive; font-size: calc(19px * var(--zoom, 1) * var(--hand-scale, 1)); color: var(--ink); }
+@media (max-width: 640px) {
+  :root[data-look="notes"] #preview.document.tg-with-margin { padding-right: calc(var(--tg-margin-w, 200px) + 36px); }
+}
+
 :root[data-look="notes"][data-paper="grid"] #preview.document {
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),

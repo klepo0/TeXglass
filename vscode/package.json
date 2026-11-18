@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.9.6",
+  "version": "0.10.0",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -103,6 +103,11 @@
         "title": "Toggle Handwritten Notes Look",
         "category": "TeXglass",
         "icon": "$(edit)"
+      },
+      {
+        "command": "texglass.toggleStudyTools",
+        "title": "Show or Hide Highlights and Notes",
+        "category": "TeXglass"
       },
       {
         "command": "texglass.find",
@@ -236,6 +241,11 @@
           "command": "texglass.toggleHandwriting",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "0_look@1"
+        },
+        {
+          "command": "texglass.toggleStudyTools",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "0_look@2"
         }
       ],
       "explorer/context": [
@@ -400,6 +410,11 @@
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
+        },
+        "texglass.studyTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed."
         },
         "texglass.clickToCopyMath": {
           "type": "boolean",

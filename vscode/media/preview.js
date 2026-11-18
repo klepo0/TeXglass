@@ -73,7 +73,31 @@
     // Blocks with a source range, for scrolling in step with the editor.
     allAnchors = shown.filter((e) => e.range && e.nodes[0] && e.nodes[0].nodeType === 1).map((e) => ({ el: e.nodes[0], line: e.range[0], end: e.range[1], file: e.range[2] || 0 }));
     applyFolds();
+    if (margin) margin.refresh();
   }
+
+  // --- the margin: \marginpar and \todo, and the reader's highlights and notes ---------
+
+  // The reader's notes live in a file next to the .tex (paper.texglass.json),
+  // which the extension reads and writes; they are anchored by their text.
+  let sourceFiles = [];
+  let noteSeq = 0;
+  const noteWaiting = new Map();
+  const margin = window.TeXglassMargin
+    ? window.TeXglassMargin.attach({
+      pane,
+      doc: preview,
+      blocks: () => allAnchors,
+      files: () => sourceFiles,
+      save: (list) => vscode.postMessage({ type: 'annotations', list }),
+      renderNote: (text) => new Promise((resolve) => {
+        const id = ++noteSeq;
+        noteWaiting.set(id, resolve);
+        vscode.postMessage({ type: 'render-note', id, text });
+      }),
+      study: false,
+    })
+    : null;
 
   // --- folding sections and proofs (as in the web viewer) ---------------------------
 
@@ -699,6 +723,7 @@
         vscode.setState({ uri: m.uri });
         break;
       case 'render': {
+        sourceFiles = m.files || [];
         show(m.blocks, m.lines);
         updateToc(m.toc || []);
         const n = m.warnings.length;
@@ -714,6 +739,7 @@
         preview.replaceChildren();
         preview.insertAdjacentHTML('beforeend', '<pre class="render-error"></pre>');
         preview.firstChild.textContent = m.text;
+        if (margin) margin.refresh();
         setStatus('Render failed');
         break;
       case 'prefs':
@@ -781,6 +807,18 @@
         if (finder && finder.isOpen()) finder[m.dir < 0 ? 'prev' : 'next']();
         else if (finder) finder.open('find');
         break;
+      case 'annotations':
+        if (margin) margin.setAnnotations(m.list);
+        break;
+      case 'study':
+        if (margin) margin.setStudy(m.on);
+        break;
+      case 'note-html': {
+        const done = noteWaiting.get(m.id);
+        noteWaiting.delete(m.id);
+        if (done) done(m.html);
+        break;
+      }
       case 'scroll-to':
         scrollToLine(m.line, m.file);
         break;
