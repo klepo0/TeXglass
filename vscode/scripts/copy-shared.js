@@ -19,6 +19,7 @@ for (const [from, to] of [
   ['src/scroll.js', 'scroll.js'],
   ['src/copytex.js', 'copytex.js'],
   ['src/margin.js', 'margin.js'],
+  ['src/insight.js', 'insight.js'],
   ['src/bib.js', 'bib.js'],
 ]) {
   const src = path.join(root, from);

@@ -40,6 +40,17 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
 - **Click a formula** to copy its LaTeX source, as written in your file
   (labels left out). "Copied LaTeX" shows by the pointer. The
   `texglass.clickToCopyMath` setting turns this off.
+- **Notation on hover**: rest the pointer on a formula to see where its
+  notation is defined: the document's own macros (with their definition and
+  first use) and symbols defined with `:=`. The `texglass.notationHover`
+  setting turns it off.
+- **TeXglass: Show Notation Index** lists the document's macros and defined
+  symbols with their first uses; **TeXglass: Show Dependency Map of the
+  Results** draws which lemmas each theorem uses, from the `\ref`s in its
+  statement and proof (both also in the preview's `…` menu). Hovering a
+  reference to a result also says what it uses and where it is used. These are
+  worked out from the preview only when asked for, so rendering is as fast as
+  before.
 - **Fold** sections and proofs with the arrow beside them, or by clicking a
   section heading or a folded proof. Folds are remembered.
 - The buttons in the preview's title bar: **Contents** shows a sidebar of the
