@@ -6,7 +6,15 @@
   const preview = $('preview');
   const previewPane = $('preview-pane');
   // \marginpar and \todo notes go in a margin column beside the text (src/margin.js).
-  const margin = window.TeXglassMargin ? window.TeXglassMargin.attach({ pane: previewPane, doc: preview, study: false }) : null;
+  const margin = window.TeXglassMargin
+    ? window.TeXglassMargin.attach({
+      pane: previewPane,
+      doc: preview,
+      study: false,
+      // the margin's width, once its divider was dragged (stored below)
+      onWidth: (w) => store.set('texglass:margin-width', w == null ? '' : String(w)),
+    })
+    : null;
   const source = $('source');
   const sourcePane = $('source-pane');
   const status = $('status');
@@ -44,6 +52,8 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
   };
+  if (margin) margin.setWidth(parseFloat(store.get('texglass:margin-width')));
+
   // Until November 2026 the viewer was called TeXdown and kept its state under
   // texdown:* keys. Carry those over once, so the last document, folds, theme
   // and layout survive the rename.

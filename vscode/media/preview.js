@@ -96,6 +96,7 @@
         vscode.postMessage({ type: 'render-note', id, text });
       }),
       study: false,
+      onWidth: (w) => vscode.postMessage({ type: 'side-pref', key: 'texglass:margin-width', value: w }),
     })
     : null;
 
@@ -750,6 +751,7 @@
         folded.clear();
         (m.folds || []).forEach((k) => folded.add(k));
         if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
+        if (margin && m.marginWidth) margin.setWidth(m.marginWidth);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);

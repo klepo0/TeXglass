@@ -888,6 +888,15 @@
     const view = o.insight ? o.insight.mount(body, { onJump: o.onJump }) : null;
     if (!view) tabs.querySelectorAll('[data-side-tab="notation"], [data-side-tab="deps"]').forEach((b) => b.remove());
 
+    // Stack the tabs when one row does not fit the panel.
+    function fitTabs() {
+      tabs.classList.remove('side-tabs-stacked');
+      if (tabs.scrollWidth > tabs.clientWidth + 1) tabs.classList.add('side-tabs-stacked');
+    }
+    const win = doc.defaultView || window;
+    if (typeof win.ResizeObserver === 'function') new win.ResizeObserver(fitTabs).observe(o.head);
+    else win.addEventListener('resize', fitTabs);
+
     let tab = 'toc';
     function show(t, quiet) {
       tab = view && (t === 'notation' || t === 'deps') ? t : 'toc';
@@ -927,6 +936,7 @@
       w = Math.round(Math.min(maxWidth(), Math.max(MIN, w)));
       doc.body.style.setProperty('--side-width', w + 'px');
       grip.setAttribute('aria-valuenow', String(w));
+      fitTabs();
       if (save && o.store) o.store.set('texglass:side-width', String(w));
     };
     const right = () => doc.body.classList.contains('toc-right');

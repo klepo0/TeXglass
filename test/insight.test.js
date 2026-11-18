@@ -205,8 +205,20 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
     await page.focus('.side-resizer');
     await page.keyboard.press('ArrowLeft');
     assert.ok(Math.abs((await width()) - 400) <= 2);
+    // Narrow, the tabs stack instead of being cut off.
+    const tabsAt = () => page.evaluate(() => Array.from(document.querySelectorAll('.side-tabs button')).map((b) => {
+      const r = b.getBoundingClientRect();
+      const pane = document.getElementById('toc-pane').getBoundingClientRect();
+      return { top: Math.round(r.top), inside: r.right <= pane.right + 0.5 };
+    }));
+    let tabs = await tabsAt();
+    assert.equal(new Set(tabs.map((b) => b.top)).size, 1, 'wide: one row');
+    await page.evaluate(() => window.side.setWidth(180));
+    tabs = await tabsAt();
+    assert.equal(new Set(tabs.map((b) => b.top)).size, 3, 'narrow: stacked');
+    assert.ok(tabs.every((b) => b.inside), 'every tab is inside the panel');
     await page.dblclick('.side-resizer');
-    assert.equal(await width(), 260);
+    assert.equal(await width(), 280);
   } finally {
     await browser.close();
   }

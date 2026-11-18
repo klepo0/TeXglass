@@ -632,6 +632,7 @@ ${INK_FILTERS}
           toc: this.context.globalState.get('texglass.toc', true),
           sideTab: this.context.globalState.get('texglass.sideTab', 'toc'),
           sideWidth: this.context.globalState.get('texglass.sideWidth', null),
+          marginWidth: this.context.globalState.get('texglass.marginWidth', null),
         });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
@@ -707,6 +708,7 @@ ${INK_FILTERS}
         // the side panel's tab and width, kept for every preview
         if (m.key === 'texglass:side-tab') this.context.globalState.update('texglass.sideTab', String(m.value));
         if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
+        if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
         break;
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);
