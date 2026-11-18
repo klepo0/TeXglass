@@ -259,5 +259,113 @@
     };
   }
 
-  return { parseId, untar, pickMain, flatten, includeOnly, includeName, importPaper, imageResolver };
+
+  // --- searching arXiv ---------------------------------------------------------
+  //
+  // arXiv's own search API (export.arxiv.org/api) sends no CORS header, so a web
+  // page cannot call it. OpenAlex indexes every arXiv paper and allows browser
+  // requests without a key; Semantic Scholar is the fallback when OpenAlex is
+  // down or out of its free daily budget.
+
+  const OPENALEX_ARXIV = 'S4306400194'; // OpenAlex's id for the arXiv repository
+  const SEARCH_PAGE = 25;
+
+  /** An abstract from OpenAlex's inverted index { word: [positions] }. */
+  function abstractFromIndex(index) {
+    if (!index || typeof index !== 'object') return '';
+    const words = [];
+    for (const [w, positions] of Object.entries(index)) for (const p of positions) words[p] = w;
+    return words.filter((w) => w != null).join(' ');
+  }
+
+  /** The arXiv id of an OpenAlex work, from its arXiv landing page, PDF link or arXiv DOI. */
+  function openAlexArxivId(work) {
+    const urls = [];
+    for (const l of work.locations || []) urls.push(l.landing_page_url, l.pdf_url);
+    if (work.primary_location) urls.push(work.primary_location.landing_page_url, work.primary_location.pdf_url);
+    for (const u of urls) {
+      if (u && /arxiv\.org\/(abs|pdf)\//i.test(u)) {
+        const id = parseId(u.replace(/v\d+(\.pdf)?$/i, ''));
+        if (id) return id;
+      }
+    }
+    const doi = String((work.ids && work.ids.doi) || work.doi || '');
+    const m = /10\.48550\/arxiv\.(.+)$/i.exec(doi);
+    return m ? parseId(m[1]) : null;
+  }
+
+  function fromOpenAlex(json) {
+    const results = [];
+    for (const w of json.results || []) {
+      const id = openAlexArxivId(w);
+      if (!id) continue;
+      results.push({
+        id,
+        title: w.display_name || w.title || id,
+        authors: (w.authorships || []).map((a) => a.author && a.author.display_name).filter(Boolean),
+        year: w.publication_year || null,
+        abstract: abstractFromIndex(w.abstract_inverted_index),
+      });
+    }
+    return { total: (json.meta && json.meta.count) || results.length, results };
+  }
+
+  function fromSemanticScholar(json) {
+    const results = [];
+    for (const p of json.data || []) {
+      const id = p.externalIds && p.externalIds.ArXiv ? parseId(p.externalIds.ArXiv) : null;
+      if (!id) continue;
+      results.push({
+        id,
+        title: p.title || id,
+        authors: (p.authors || []).map((a) => a.name).filter(Boolean),
+        year: p.year || null,
+        abstract: p.abstract || '',
+      });
+    }
+    return { total: json.total || results.length, results };
+  }
+
+  /** The request URLs for one page of a search, OpenAlex first. */
+  function searchUrls(query, page) {
+    const q = encodeURIComponent(String(query).trim());
+    const p = Math.max(1, page | 0);
+    return {
+      openalex: `https://api.openalex.org/works?search=${q}&filter=locations.source.id:${OPENALEX_ARXIV}` +
+        `&per_page=${SEARCH_PAGE}&page=${p}` +
+        '&select=id,display_name,publication_year,authorships,abstract_inverted_index,locations,primary_location,ids',
+      semanticscholar: `https://api.semanticscholar.org/graph/v1/paper/search?query=${q}` +
+        `&offset=${(p - 1) * SEARCH_PAGE}&limit=${SEARCH_PAGE}&fields=title,authors,year,abstract,externalIds`,
+    };
+  }
+
+  /**
+   * Search arXiv papers by keywords, title or author.
+   * Resolves to { total, results: [{ id, title, authors, year, abstract }], source, page, more }.
+   * OpenAlex results are filtered to arXiv; Semantic Scholar results to papers with an arXiv id.
+   */
+  async function search(query, options) {
+    const opts = options || {};
+    const doFetch = opts.fetch || fetch;
+    const page = Math.max(1, opts.page | 0);
+    if (!String(query || '').trim()) return { total: 0, results: [], source: null, page, more: false };
+    const urls = searchUrls(query, page);
+    const sources = opts.source ? [opts.source] : ['openalex', 'semanticscholar'];
+    let lastError = null;
+    for (const source of sources) {
+      try {
+        const res = await doFetch(urls[source], { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error(`${source === 'openalex' ? 'OpenAlex' : 'Semantic Scholar'} answered ${res.status}.`);
+        const json = await res.json();
+        const out = source === 'openalex' ? fromOpenAlex(json) : fromSemanticScholar(json);
+        const fetched = source === 'openalex' ? (json.results || []).length : (json.data || []).length;
+        return Object.assign(out, { source, page, more: fetched === SEARCH_PAGE && page * SEARCH_PAGE < out.total });
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError || new Error('Search failed.');
+  }
+
+  return { parseId, untar, pickMain, flatten, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex };
 });

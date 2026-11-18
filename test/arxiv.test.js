@@ -96,3 +96,95 @@ test('flatten honours \\includeonly, keeps only a subfile\'s body and reports wh
   assert.equal(out.slice(starts['b.tex'], starts['b.tex'] + 3), 'BBB');
   assert.ok(!('a.tex' in starts));
 });
+
+// --- search -------------------------------------------------------------------
+
+const openAlexPage = {
+  meta: { count: 2 },
+  results: [
+    {
+      id: 'https://openalex.org/W1',
+      display_name: 'Rough paths and $\\alpha$-signatures',
+      publication_year: 2023,
+      authorships: [{ author: { display_name: 'Ada Lovelace' } }, { author: { display_name: 'Alan Turing' } }],
+      abstract_inverted_index: { We: [0], study: [1], paths: [3], rough: [2] },
+      locations: [{ landing_page_url: 'https://doi.org/10.1/x' }, { landing_page_url: 'https://arxiv.org/abs/2301.00001v2', pdf_url: 'https://arxiv.org/pdf/2301.00001v2' }],
+      ids: { doi: 'https://doi.org/10.1/x' },
+    },
+    {
+      id: 'https://openalex.org/W2',
+      display_name: 'An old one',
+      publication_year: 2002,
+      authorships: [],
+      locations: [],
+      ids: { doi: 'https://doi.org/10.48550/arXiv.math/0211159' },
+    },
+    { id: 'https://openalex.org/W3', display_name: 'No arXiv link', locations: [{ landing_page_url: 'https://example.com' }] },
+  ],
+};
+
+function fakeFetch(routes) {
+  const calls = [];
+  const f = async (url) => {
+    calls.push(url);
+    for (const [prefix, answer] of routes) {
+      if (url.startsWith(prefix)) {
+        if (answer instanceof Error) throw answer;
+        return { ok: answer.status ? answer.status < 400 : true, status: answer.status || 200, json: async () => answer.body };
+      }
+    }
+    throw new TypeError('Failed to fetch');
+  };
+  f.calls = calls;
+  return f;
+}
+
+test('abstractFromIndex rebuilds the text in order', () => {
+  assert.equal(A.abstractFromIndex({ b: [1], a: [0, 2] }), 'a b a');
+  assert.equal(A.abstractFromIndex(null), '');
+});
+
+test('search asks OpenAlex for arXiv papers and keeps those with an arXiv id', async () => {
+  const f = fakeFetch([['https://api.openalex.org/', { body: openAlexPage }]]);
+  const res = await A.search('rough paths', { fetch: f });
+  assert.equal(res.source, 'openalex');
+  assert.equal(res.total, 2);
+  assert.equal(res.more, false);
+  assert.deepEqual(res.results.map((r) => r.id), ['2301.00001', 'math/0211159']);
+  assert.equal(res.results[0].abstract, 'We study rough paths');
+  assert.deepEqual(res.results[0].authors, ['Ada Lovelace', 'Alan Turing']);
+  assert.equal(res.results[0].year, 2023);
+  assert.match(f.calls[0], /search=rough%20paths/);
+  assert.match(f.calls[0], /filter=locations\.source\.id:S4306400194/);
+  assert.match(f.calls[0], /page=1/);
+});
+
+test('search falls back to Semantic Scholar when OpenAlex refuses', async () => {
+  const f = fakeFetch([
+    ['https://api.openalex.org/', { status: 429, body: {} }],
+    ['https://api.semanticscholar.org/', { body: { total: 60, data: [
+      { title: 'With arXiv', year: 2020, authors: [{ name: 'E. Noether' }], abstract: 'Hi', externalIds: { ArXiv: '2001.01234' } },
+      { title: 'Without', externalIds: { DOI: '10.1/y' } },
+    ] } }],
+  ]);
+  const res = await A.search('noether', { fetch: f, page: 2 });
+  assert.equal(res.source, 'semanticscholar');
+  assert.deepEqual(res.results.map((r) => r.id), ['2001.01234']);
+  assert.match(f.calls[1], /offset=25/);
+});
+
+test('search reports the last error when every source fails, and skips empty queries', async () => {
+  await assert.rejects(A.search('x', { fetch: fakeFetch([]) }), /Failed to fetch/);
+  const f = fakeFetch([]);
+  assert.deepEqual((await A.search('   ', { fetch: f })).results, []);
+  assert.equal(f.calls.length, 0);
+});
+
+test('search says there is more when a full page came back', async () => {
+  const results = Array.from({ length: 25 }, (_, i) => ({
+    display_name: 'P' + i, locations: [{ landing_page_url: `https://arxiv.org/abs/2301.${String(10000 + i)}` }],
+  }));
+  const res = await A.search('p', { fetch: fakeFetch([['https://api.openalex.org/', { body: { meta: { count: 80 }, results } }]]) });
+  assert.equal(res.results.length, 25);
+  assert.equal(res.more, true);
+});

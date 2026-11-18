@@ -74,7 +74,7 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 ## Web viewer
 
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
-drop a `.tex` file, paste an arXiv or GitHub link, or browse OpenAI's math
+drop a `.tex` file, search arXiv, paste an arXiv or GitHub link, or browse OpenAI's math
 preprints. Nothing to install, and after your first visit it opens and renders
 offline too (arXiv, GitHub and Preprints still need a connection).
 
@@ -90,7 +90,10 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 </table>
 
 - **Open** a file (Ctrl+O) or drag it onto the page.
-- **arXiv import**: paste `2301.00001` or any arXiv link. Included files, the
+- **arXiv search and import**: type words, a title or an author in the arXiv
+  dialog to search arXiv (through [OpenAlex](https://openalex.org), since
+  arXiv's own search API can't be called from a web page), then click a result
+  to open it. Or paste `2301.00001` or any arXiv link. Included files, the
   `.bbl` and figures come along. Also `?arxiv=2301.00001`.
 - **GitHub import**: paste a link to a file, folder or repo of a public
   repository; the main file, included files, `.bbl` and figures are found for

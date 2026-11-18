@@ -168,6 +168,15 @@ body {
   cursor: grab;
 }
 .gh-link { font-size: 13px; color: var(--accent); white-space: nowrap; }
+/* arXiv search results in the arXiv dialog */
+.arxiv-dialog.has-results { width: min(760px, calc(100vw - 32px)); }
+.arxiv-dialog.has-results[open] { display: flex; flex-direction: column; max-height: calc(100vh - 64px); }
+.arxiv-dialog.has-results form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.arxiv-dialog .arxiv-results { padding: 0; margin: 4px 0 12px; max-height: 60vh; }
+.arxiv-results .preprint { margin: 0; border-top: 1px solid var(--rule); border-radius: 0; padding: 8px; }
+.arxiv-results .preprint:first-child { border-top: 0; }
+.arxiv-result-meta { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.arxiv-results .preprints-more { margin: 10px auto 0; }
 .arxiv-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .arxiv-actions button {
   font: inherit;
