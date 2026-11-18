@@ -21,10 +21,8 @@ const zlib = require('zlib');
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
-const KATEX = path.join(ROOT, 'node_modules', 'katex', 'dist');
+const KATEX = path.join(ROOT, 'vendor', 'katex');
 const VERSION = '0.1.1';
-
-const KATEX_CDN = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/';
 
 function manifest(target) {
   const m = {
@@ -81,10 +79,9 @@ function copyDir(from, to, filter = () => true) {
   }
 }
 
-/** The web viewer's index.html, with KaTeX loaded from the extension instead of the CDN. */
+/** The web viewer's index.html, which loads KaTeX from vendor/katex (bundled below), never a CDN. */
 function viewerHtml() {
-  let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  html = html.split(KATEX_CDN).join('vendor/katex/').replace(/ crossorigin="anonymous"/g, '');
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   if (html.includes('cdn.jsdelivr.net')) throw new Error('index.html still loads something from a CDN');
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) throw new Error('index.html has an inline script, which extension pages refuse');
   return html;
@@ -105,11 +102,7 @@ function build(target) {
     if (fs.existsSync(path.join(ROOT, f))) copy(path.join(ROOT, f), path.join(out, f));
   }
   copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js'));
-  if (!fs.existsSync(KATEX)) throw new Error('KaTeX not found: run npm install first');
-  copy(path.join(KATEX, 'katex.min.js'), path.join(out, 'vendor/katex/katex.min.js'));
-  copy(path.join(KATEX, 'katex.min.css'), path.join(out, 'vendor/katex/katex.min.css'));
-  copy(path.join(ROOT, 'node_modules/katex/LICENSE'), path.join(out, 'vendor/katex/LICENSE'));
-  copyDir(path.join(KATEX, 'fonts'), path.join(out, 'vendor/katex/fonts'), (name) => name.endsWith('.woff2'));
+  copyDir(KATEX, path.join(out, 'vendor/katex'));
 
   const zip = path.join(DIST, `texglass-arxiv-${target}-${VERSION}.zip`);
   fs.writeFileSync(zip, zipDir(out));

@@ -7,7 +7,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const port = Number(process.env.PORT) || 8000;
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.tex': 'text/plain', '.json': 'application/json' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.tex': 'text/plain', '.json': 'application/json', '.woff2': 'font/woff2' };
 
 http
   .createServer((req, res) => {
@@ -19,7 +19,8 @@ http
     }
     fs.readFile(file, (err, data) => {
       if (err) return res.writeHead(404).end('Not found');
-      res.writeHead(200, { 'Content-Type': (types[path.extname(file)] || 'application/octet-stream') + '; charset=utf-8' });
+      const type = types[path.extname(file)] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': type.startsWith('font/') ? type : type + '; charset=utf-8' });
       res.end(data);
     });
   })

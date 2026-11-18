@@ -1820,4 +1820,13 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
+
+  // Keep the viewer's files and KaTeX in the browser's cache (sw.js), so the
+  // site opens and renders offline after one visit. Only on a web page: the
+  // arXiv extension bundles the viewer and is offline already.
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
 })();
