@@ -331,7 +331,7 @@
   }
 
   function spyToc() {
-    if (tocPane.hidden || !tocLinks.length || Date.now() < tocJump) return;
+    if (tocPane.hidden || tocList.hidden || !tocLinks.length || Date.now() < tocJump) return;
     const limit = previewPane.getBoundingClientRect().top + 48;
     let current = null;
     for (const a of tocLinks) {
@@ -1329,8 +1329,18 @@
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
     })
     : null;
-  if (insight) $('insight').addEventListener('click', () => insight.open());
-  else $('insight').hidden = true;
+  // The side panel's tabs (Contents, Notation, Map) and its draggable divider.
+  if (window.TeXglassInsight) {
+    TeXglassInsight.sidePanel({
+      pane: tocPane,
+      head: tocPane.querySelector('.toc-pane-head'),
+      list: tocList,
+      insight,
+      store,
+      onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
+      onTab: (tab) => { if (tab === 'toc') spyToc(); },
+    });
+  }
 
   // --- resizable split ------------------------------------------------------------
 
@@ -1426,6 +1436,24 @@
     new MutationObserver(updateThemeButton).observe(rootEl, { attributes: true, attributeFilter: ['data-theme'] });
     updateThemeButton();
   }
+
+  // --- handwritten notes look ---------------------------------------------------
+
+  // Notes on squared paper, or chalk on a board in the dark theme (vscode/media/notes.css,
+  // shared with the VS Code extension). The ink filters go in on first use.
+  const handButton = $('hand-toggle');
+  function setHandwritten(on, save) {
+    if (on && window.TeXglassInk && !document.querySelector('.tg-ink-filters')) document.body.insertAdjacentHTML('afterbegin', window.TeXglassInk);
+    if (on) rootEl.dataset.look = 'notes';
+    else delete rootEl.dataset.look;
+    handButton.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Show as a typeset page' : 'Show as handwritten notes';
+    handButton.setAttribute('aria-label', label);
+    handButton.title = on ? label : 'Show as handwritten notes (chalk on a board in the dark theme)';
+    if (save) store.set('texglass:look', on ? 'notes' : 'standard');
+  }
+  handButton.addEventListener('click', () => setHandwritten(rootEl.dataset.look !== 'notes', true));
+  setHandwritten(store.get('texglass:look') === 'notes', false);
 
   // --- start -----------------------------------------------------------------
 

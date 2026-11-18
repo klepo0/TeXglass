@@ -301,7 +301,7 @@ img.graphic { max-width: 100%; height: auto; }
 
 /* Table of contents sidebar (Preview and Edit) */
 .toc-pane {
-  flex: 0 0 260px;
+  flex: 0 0 var(--side-width, 260px);
   position: relative;
   overflow: auto;
   padding: 20px 10px 32px 16px;
@@ -315,6 +315,25 @@ img.graphic { max-width: 100%; height: auto; }
 /* The contents can sit on the right of the document instead. */
 body.toc-right .toc-pane { order: 2; border-right: 0; border-left: 1px solid var(--rule); padding: 20px 16px 32px 10px; }
 .toc-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px 8px; }
+/* The side panel's tabs: Contents, Notation, Map (src/insight.js sidePanel). */
+.side-tabs { display: flex; gap: 2px; min-width: 0; }
+.side-tabs button {
+  font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 7px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer;
+}
+.side-tabs button:hover { color: var(--ink); }
+.side-tabs button[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
+.toc-list[hidden], .side-insight[hidden] { display: none; }
+.side-insight { padding: 0 2px 0 8px; font-size: 13px; }
+/* The divider that resizes it: drag, arrow keys, double-click to reset. */
+.side-resizer { flex: 0 0 7px; margin: 0 -4px 0 -3px; position: relative; z-index: 3; cursor: col-resize; touch-action: none; }
+.side-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background 0.15s; }
+.side-resizer:hover::after, .side-resizer:focus-visible::after, body.side-resizing .side-resizer::after { background: var(--accent); width: 2px; }
+.side-resizer:focus { outline: none; }
+body.toc-right .side-resizer { order: 1; margin: 0 -3px 0 -4px; }
+.toc-pane[hidden] + .side-resizer { display: none; }
+body.side-resizing { cursor: col-resize; user-select: none; }
+body.side-resizing iframe { pointer-events: none; }
 .toc-pane-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .toc-pane-head .toc-pane-title { margin: 0; }
 .toc-side {
@@ -392,6 +411,7 @@ body.toc-right .toc-side svg { transform: scaleX(-1); }
     box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
   }
   body.toc-right .toc-pane { left: auto; right: 0; }
+  .side-resizer { display: none; }
 }
 .source-pane { display: flex; flex: 0 0 var(--split, 50%); }
 .source-pane[hidden] { display: none; }
@@ -704,7 +724,25 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .dep-detail p { margin: 4px 0; }
 .dep-detail-head { font-size: 15px; }
 .dep-go { margin-left: 10px; font-size: 13px; }
-.insight-dialog a, .insight-pop-body a, .insight-usedby a { color: var(--accent); }
+.insight-dialog a, .insight-pop-body a, .insight-usedby a, .side-insight a { color: var(--accent); }
+/* In the side panel the index stacks: symbol and command, then its definition and first use. */
+.insight-side h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+.insight-side .insight-filter { width: 100%; font-size: 13px; padding: 5px 8px; }
+.insight-side .insight-table, .insight-side .insight-table tbody { display: block; }
+.insight-side .insight-table tr { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; padding: 6px 0; border-top: 1px solid var(--rule); }
+.insight-side .insight-table tr[hidden] { display: none; }
+.insight-side .insight-table td { padding: 0; border: 0; }
+.insight-side .insight-sym-cell { min-width: 1.6em; font-size: 15px; text-align: left; }
+.insight-side .insight-def, .insight-side .insight-first { grid-column: 1 / -1; max-width: none; }
+.insight-side .insight-first a { white-space: normal; }
+.insight-side .insight-uses { display: inline; margin-left: 6px; }
+.insight-side .insight-symbols li { grid-template-columns: 1fr; gap: 2px; }
+.insight-side .insight-symbols li > .insight-sym { display: none; }
+.insight-side .insight-hover { margin: 14px 0 0; font-size: 12px; }
+.insight-side .insight-lead { font-size: 12px; margin: 0 0 8px; }
+.insight-side .dep-wrap { max-height: 55vh; }
+.insight-side .dep-detail { font-size: 13px; }
+.insight-side .dep-detail-head { font-size: 14px; }
 
 /* Click a formula to copy its LaTeX (src/copytex.js). */
 .math-copyable .math[data-tex] { cursor: copy; border-radius: 4px; transition: background-color 0.15s; }

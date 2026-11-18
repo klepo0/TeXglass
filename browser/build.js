@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 /** The default keyboard shortcut for the toolbar button; people can change it in the browser. */
 const SHORTCUT = 'Alt+Shift+K';
@@ -148,6 +148,10 @@ function build(target) {
     if (fs.existsSync(path.join(ROOT, f))) copy(path.join(ROOT, f), path.join(out, f));
   }
   copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js'));
+  // The handwritten-notes look, shared with the VS Code extension; the viewer writes in Kalam.
+  copy(path.join(ROOT, 'vscode/media/notes.css'), path.join(out, 'vscode/media/notes.css'));
+  copy(path.join(ROOT, 'vscode/ink.js'), path.join(out, 'vscode/ink.js'));
+  copyDir(path.join(ROOT, 'vscode/media/fonts'), path.join(out, 'vscode/media/fonts'), (name) => /^kalam-|OFL-kalam/.test(name));
   copyDir(KATEX, path.join(out, 'vendor/katex'));
 
   const zip = path.join(DIST, `texglass-arxiv-${target}-${VERSION}.zip`);

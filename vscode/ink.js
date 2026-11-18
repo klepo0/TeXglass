@@ -1,7 +1,11 @@
 // The SVG filters that give the handwritten notes look real ink (see the ink
 // section of media/notes.css): ragged edges, ink that pools and thins along a
-// stroke, and a little bleed into the paper. Inlined into the preview page.
-module.exports = "<svg class=\"tg-ink-filters\" width=\"0\" height=\"0\" aria-hidden=\"true\" focusable=\"false\" style=\"position:absolute;width:0;height:0;overflow:hidden\">\n" +
+// stroke, and a little bleed into the paper. Inlined into the preview page;
+// the web viewer loads this file too (window.TeXglassInk).
+(function (root, svg) {
+  if (typeof module === 'object' && module.exports) module.exports = svg;
+  else root.TeXglassInk = svg;
+})(typeof self !== 'undefined' ? self : this, "<svg class=\"tg-ink-filters\" width=\"0\" height=\"0\" aria-hidden=\"true\" focusable=\"false\" style=\"position:absolute;width:0;height:0;overflow:hidden\">\n" +
   "<defs>\n" +
   "<!-- Ballpoint: fine grain at the edges, ink thinning along the stroke, a hair of bleed. -->\n" +
   "<filter id=\"tg-ink-ballpoint\" x=\"-1%\" y=\"-5%\" width=\"102%\" height=\"110%\" color-interpolation-filters=\"sRGB\">\n" +
@@ -39,4 +43,4 @@ module.exports = "<svg class=\"tg-ink-filters\" width=\"0\" height=\"0\" aria-hi
   "<feMerge><feMergeNode in=\"haze\"/><feMergeNode in=\"chalked\"/></feMerge>\n" +
   "</filter>\n" +
   "</defs>\n" +
-  "</svg>";
+  "</svg>");

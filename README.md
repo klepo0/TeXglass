@@ -32,10 +32,13 @@ browser extension:
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined
   with `:=`, with a link to the first use or the definition.
-- **Notation index** of the paper's macros and defined symbols, and a
-  **dependency map** of which lemmas each theorem uses, read from the `\ref`s
-  in statements and proofs; a reference preview also says where a result is
-  used. All of it is worked out when you first ask for it, so rendering is
+- **Side panel** with three tabs: **Contents**, a **Notation** index of the
+  paper's macros and defined symbols, and a **Map** of which lemmas each
+  theorem uses, read from the `\ref`s in statements and proofs (a reference
+  preview also says where a result is used). Drag its edge to make it wider;
+  the width is remembered.
+- **Handwritten notes look**, beside the light/dark button: notes on squared
+  paper, or chalk on a board in the dark theme. All of it is worked out when you first ask for it, so rendering is
   not slowed down.
 - **Click a formula** to copy its LaTeX.
 - **Contents sidebar** that follows where you are; **fold** sections and
@@ -100,8 +103,9 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 </table>
 
 - **Open** a file (Ctrl+O) or drag it onto the page.
-- **Index** opens the notation index and the dependency map; its checkbox turns
-  notation on hover off and on.
+- The **Contents** button shows the side panel; its **Notation** tab has a
+  checkbox that turns notation on hover off and on. The pen button beside the
+  light/dark button switches to the handwritten notes look.
 - **arXiv search and import**: type words, a title or an author in the arXiv
   dialog to search arXiv (through [DataCite](https://datacite.org), which holds
   every arXiv DOI, with OpenAlex and Semantic Scholar as fallbacks, since

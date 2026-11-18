@@ -527,7 +527,13 @@ ${INK_FILTERS}
       case 'ready': {
         this.ready = true;
         this.post({ type: 'doc', uri: this.uri.toString() });
-        this.post({ type: 'prefs', folds: this.context.globalState.get('texglass.folds', []), toc: this.context.globalState.get('texglass.toc', true) });
+        this.post({
+          type: 'prefs',
+          folds: this.context.globalState.get('texglass.folds', []),
+          toc: this.context.globalState.get('texglass.toc', true),
+          sideTab: this.context.globalState.get('texglass.sideTab', 'toc'),
+          sideWidth: this.context.globalState.get('texglass.sideWidth', null),
+        });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
         this.post({ type: 'zoom', level: this.context.workspaceState.get('texglass.zoom', 1) });
@@ -588,6 +594,11 @@ ${INK_FILTERS}
             this.post({ type: 'tex-rendered', id: m.id, html: r.result ? r.result.html : null });
           });
         }
+        break;
+      case 'side-pref':
+        // the side panel's tab and width, kept for every preview
+        if (m.key === 'texglass:side-tab') this.context.globalState.update('texglass.sideTab', String(m.value));
+        if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
         break;
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);
