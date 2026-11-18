@@ -25,7 +25,8 @@ The same reader runs in the VS Code extension, the web viewer and the arXiv
 browser extension:
 
 - **Reads like the paper**: KaTeX math, numbered theorems, equations and
-  sections, working `\ref`/`\eqref`/`\cref`, citations and bibliographies.
+  sections, working `\ref`/`\eqref`/`\cref`, citations and bibliographies
+  (BibTeX, biblatex and amsrefs).
 - **Hover previews** of references and citations; click to jump there.
 - **Go to** any theorem, equation or section by number (Ctrl+G).
 - **Click a formula** to copy its LaTeX.
@@ -95,7 +96,7 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   dialog to search arXiv (through [OpenAlex](https://openalex.org), since
   arXiv's own search API can't be called from a web page), then click a result
   to open it. Or paste `2301.00001` or any arXiv link. **Ctrl+K** (Cmd+K on a
-  Mac) opens the dialog. Included files, the
+  Mac) opens the dialog. Included files, the authors' own `.sty` macros, the
   bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
   files) and figures come along. Also `?arxiv=2301.00001`.
 - **GitHub import**: paste a link to a file, folder or repo of a public
@@ -157,17 +158,23 @@ from a CDN instead of embedding them (~350 KB).
 ## What it understands
 
 - **Math**: `$…$`, `\(…\)`, `\[…\]`, `equation`, `align`, `gather`,
-  `multline`, `alignat`, `eqnarray`, with `\tag`, `\nonumber`, `\notag`.
+  `multline`, `alignat`, `eqnarray`, mhequ's `equ` and `equs`, with `\tag`,
+  `\nonumber`, `\notag`.
 - **Macros**: `\newcommand`, `\renewcommand`, `\def` (delimited parameters
-  too), `\let`, `\DeclareMathOperator`, in math and text.
+  too), `\let`, `\DeclareMathOperator`, in math and text, and those in a
+  paper's own `.sty` files when imported from arXiv.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
   enumerate labels, figures, tables; `\ref`, `\eqref`, `\cref`, `\Cref`,
   `\autoref`, `\nameref`.
-- **Structure**: `\maketitle`, abstract, lists, footnotes, `thebibliography`
-  and `.bbl`, `tabular`, `verbatim`, links.
+- **Structure**: `\maketitle`, abstract, lists, footnotes, `tabular`,
+  `verbatim`, links.
+- **Bibliographies**: `thebibliography`, `.bbl` (BibTeX or biber), `.bib`
+  files (BibTeX and biblatex) and amsrefs records.
 - **Diagrams**: `tikzcd` and `\xymatrix` (bends, shifts, 2-cells, arrow
-  styles) and simple `tikzpicture`s. Heavier TikZ shows its source.
+  styles) and simple `tikzpicture`s. Tree symbols declared with
+  `\DeclareSymbol` (as in regularity structures papers) are drawn inside
+  formulas. Heavier TikZ shows its source.
 
 Anything unknown is skipped gracefully.
 
