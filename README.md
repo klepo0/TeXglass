@@ -75,7 +75,8 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
 drop a `.tex` file, paste an arXiv or GitHub link, or browse OpenAI's math
-preprints. Nothing to install.
+preprints. Nothing to install, and after your first visit it opens and renders
+offline too (arXiv, GitHub and Preprints still need a connection).
 
 <table>
   <tr>
