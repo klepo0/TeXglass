@@ -8,8 +8,11 @@
  *   - follows the editor: the preview scrolls to the part of the file that
  *     is at the top of the editor;
  *   - marks the block that holds the editor's cursor;
- *   - moves the editor's cursor to what you click: a formula, a word, or the
- *     start of a block;
+ *   - moves the editor's cursor to what you click: a word or the start of a
+ *     block; a formula with Ctrl/Cmd+click or a double-click, since a plain
+ *     click on a formula copies its LaTeX, as in the VS Code preview;
+ *   - folds sections and proofs (click a heading or the arrow; "Proofs" folds
+ *     them all) and previews references and citations on hover;
  *   - has the web viewer's reading aids: a table of contents, Find (Ctrl+F)
  *     and Go to (Ctrl+G, "Lemma 4.1", "(3.2)", "§2"), and a light or dark
  *     theme. Moving around the preview with them, or scrolling it, holds it
@@ -35,6 +38,7 @@
   const note = $('note');
   const followButton = $('follow');
   const filesButton = $('files');
+  const popover = $('ref-popover');
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -148,6 +152,7 @@
         say(n ? `${n} warning${n > 1 ? 's' : ''}` : '', n > 0);
         status.title = result.warnings.join('\n');
         patch(result.blocks.length ? result.blocks : ['<p class="empty-doc">This file is empty.</p>']);
+        applyFolds();
         lastToc = result.toc || [];
         updateToc();
         explain(c);
@@ -233,6 +238,123 @@
     fresh.forEach((e) => e.nodes.forEach((n) => preview.insertBefore(n, ref)));
     shown = old.slice(0, p).concat(fresh, tail);
   }
+
+  // --- folding sections and proofs (as in the web viewer and VS Code) -------------------
+
+  // Folds are remembered by their text, so they survive re-renders and edits elsewhere.
+  const folded = new Set();
+  try { JSON.parse(store.get('texglass:overleaf-folds') || '[]').forEach((k) => folded.add(k)); } catch (e) { /* ignore */ }
+  const saveFolds = () => store.set('texglass:overleaf-folds', JSON.stringify(Array.from(folded).slice(-500)));
+  const foldProofs = $('fold-proofs');
+
+  const HEADING = ':scope > h1.part, :scope > h1.chapter, :scope > h2.section, :scope > h3.subsection, :scope > h4.subsubsection';
+
+  function levelOf(block) {
+    if (block.classList.contains('footnotes')) return 1;
+    if (!block.classList.contains('src-block')) return 0;
+    const h = block.querySelector(HEADING);
+    if (h) return Number(h.tagName[1]) + (h.classList.contains('chapter') ? 0.5 : 0);
+    return block.querySelector(':scope > .bibliography') ? 2 : 0;
+  }
+
+  function toggleButton(key, label) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fold-toggle';
+    b.dataset.key = key;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    return b;
+  }
+
+  function applyFolds() {
+    let hideAt = 0;
+    for (const block of Array.from(preview.children)) {
+      const lvl = levelOf(block);
+      if (hideAt && lvl && lvl <= hideAt) hideAt = 0;
+      block.classList.toggle('fold-hidden', !!hideAt);
+      const h = lvl && block.querySelector(HEADING);
+      if (!h) continue;
+      let btn = h.querySelector(':scope > .fold-toggle');
+      if (!btn) {
+        btn = toggleButton('h:' + h.textContent.trim(), 'Fold or unfold this section');
+        h.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      h.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+      if (isFolded && !hideAt) hideAt = lvl;
+    }
+    for (const proof of preview.querySelectorAll('.proof')) {
+      let btn = proof.querySelector(':scope > p:first-child > .fold-toggle');
+      if (!btn) {
+        const first = proof.firstElementChild;
+        if (!first) continue;
+        btn = toggleButton('p:' + proof.textContent.trim().slice(0, 80), 'Fold or unfold this proof');
+        first.prepend(btn);
+      }
+      const isFolded = folded.has(btn.dataset.key);
+      proof.classList.toggle('folded', isFolded);
+      btn.setAttribute('aria-expanded', String(!isFolded));
+    }
+    const proofs = preview.querySelectorAll('.proof').length;
+    const allFolded = proofs > 0 && preview.querySelectorAll('.proof.folded').length === proofs;
+    foldProofs.setAttribute('aria-pressed', String(allFolded));
+    foldProofs.title = proofs === 0 ? 'This file has no proofs' : allFolded ? 'Unfold every proof' : 'Fold every proof';
+    foldProofs.disabled = proofs === 0;
+  }
+
+  function setFold(key, on) {
+    if (on) folded.add(key);
+    else folded.delete(key);
+    saveFolds();
+  }
+
+  /** Unfold whatever hides `el`, so it can be shown. */
+  function reveal(el) {
+    let changed = false;
+    const proof = el.closest('.proof.folded');
+    if (proof) {
+      setFold(proof.querySelector('.fold-toggle').dataset.key, false);
+      changed = true;
+    }
+    const block = el.closest('#preview > *');
+    if (block && block.classList.contains('fold-hidden')) {
+      let need = Infinity;
+      for (let b = block.previousElementSibling; b; b = b.previousElementSibling) {
+        const lvl = levelOf(b);
+        if (lvl && lvl < need) {
+          const btn = b.querySelector('.fold-toggle');
+          if (btn) setFold(btn.dataset.key, false);
+          need = lvl;
+        }
+      }
+      changed = true;
+    }
+    if (changed) applyFolds();
+  }
+
+  // Before the click that moves the editor's cursor: toggles, headings and folded proofs fold instead.
+  preview.addEventListener('click', (e) => {
+    const btn = e.target.closest('.fold-toggle');
+    const onFormula = !!e.target.closest('.math[data-tex]');
+    const mod = e.ctrlKey || e.metaKey;
+    const foldedProof = !btn && !onFormula && !mod && e.target.closest('.proof.folded');
+    const heading = !btn && !onFormula && !mod && !e.target.closest('a') && e.target.closest('#preview > .src-block > h1, #preview > .src-block > h2, #preview > .src-block > h3, #preview > .src-block > h4');
+    const target = btn || (foldedProof && foldedProof.querySelector('.fold-toggle')) || (heading && heading.querySelector(':scope > .fold-toggle'));
+    if (!target) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    setFold(target.dataset.key, !folded.has(target.dataset.key));
+    applyFolds();
+  });
+
+  foldProofs.addEventListener('click', () => {
+    const toggles = Array.from(preview.querySelectorAll('.proof > p:first-child > .fold-toggle'));
+    const fold = !toggles.every((t) => folded.has(t.dataset.key));
+    toggles.forEach((t) => setFold(t.dataset.key, fold));
+    applyFolds();
+  });
 
   // --- following the editor ------------------------------------------------------
 
@@ -353,25 +475,129 @@
       if (href.startsWith('#')) {
         e.preventDefault();
         const t = document.getElementById(decodeURIComponent(href.slice(1)));
-        if (t) {
-          hold();
-          TeXglassScroll.to(pane, t, { align: 'center' });
-          t.classList.remove('flash');
-          void t.offsetWidth;
-          t.classList.add('flash');
-        }
+        if (t) jumpTo(t);
       } else {
         a.target = '_blank';
         a.rel = 'noopener';
       }
       return;
     }
-    if (String(window.getSelection())) return;
+    // A plain click on a formula copies it (copytex.js); Ctrl/Cmd+click or a double-click goes to its source.
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod && e.target.closest('.math[data-tex]')) return;
+    if (!mod && String(window.getSelection())) return;
+    jumpToSource(e);
+  });
+  preview.addEventListener('dblclick', (e) => {
+    if (!composed || e.target.closest('a, .fold-toggle')) return;
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges(); // the double-click selected a word
+    jumpToSource(e);
+  });
+
+  function jumpToSource(e) {
     const block = e.target.closest('.src-block');
     if (!block || block.parentElement !== preview) return;
-    const at = composed.toOpen(offsetOf(block, e.target, e.clientX, e.clientY));
-    post({ type: 'jump', at });
+    // Text pulled in from another file (\input, or a chapter's main file) goes to that file.
+    const c = offsetOf(block, e.target, e.clientX, e.clientY);
+    const src = composed.sourceAt(c);
+    if (src.file && src.file !== composed.path) post({ type: 'jump', at: src.at, file: src.file });
+    else post({ type: 'jump', at: composed.toOpen(c) });
+  }
+
+  /** Go to `target` in the preview (a reference, the contents, Go to), unfolding what hides it. */
+  function jumpTo(target) {
+    hidePopover();
+    reveal(target);
+    hold();
+    TeXglassScroll.to(pane, target, { align: 'center' });
+    target.classList.remove('flash');
+    void target.offsetWidth;
+    target.classList.add('flash');
+  }
+
+  // Click a formula to copy its LaTeX; the delay lets a double-click (go to the source) cancel it.
+  if (window.TeXglassCopyTex) TeXglassCopyTex.attach({ roots: [preview, popover], delay: 250 });
+
+  // --- reference previews (as in the web viewer and VS Code) --------------------------
+
+  const HIDE_DELAY = 250;
+  let hideTimer = null;
+  let popoverLink = null;
+  function hidePopover() {
+    clearTimeout(hideTimer);
+    popover.hidden = true;
+    popoverLink = null;
+  }
+  function hidePopoverSoon() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hidePopover, HIDE_DELAY);
+  }
+  function showPopover(a, target) {
+    clearTimeout(hideTimer);
+    if (popoverLink === a && !popover.hidden) return;
+    popoverLink = a;
+    const body = document.createElement('div');
+    body.className = 'ref-popover-body';
+    let node = target;
+    if (node.classList.contains('caption') && node.parentElement.tagName === 'FIGURE') node = node.parentElement;
+    if (/^H[1-6]$/.test(node.tagName)) {
+      const h = node.cloneNode(true);
+      h.querySelectorAll('.fold-toggle').forEach((b) => b.remove());
+      body.innerHTML = `<p><strong>${h.innerHTML}</strong></p>`;
+    } else {
+      const clone = node.cloneNode(true);
+      clone.removeAttribute('id');
+      clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+      clone.querySelectorAll('.fold-toggle').forEach((b) => b.remove());
+      clone.classList.remove('folded');
+      clone.querySelectorAll('.folded').forEach((el) => el.classList.remove('folded'));
+      body.appendChild(clone);
+    }
+    popover.replaceChildren(body);
+    popover.hidden = false;
+    const r = a.getBoundingClientRect();
+    let width = Math.min(560, window.innerWidth - 32);
+    popover.style.width = width + 'px';
+    let extra = 0;
+    body.querySelectorAll('.math-display, .tg-diagram').forEach((el) => {
+      extra = Math.max(extra, el.scrollWidth - el.clientWidth);
+    });
+    if (extra > 0) {
+      width = Math.min(width + extra + 2, window.innerWidth - 32);
+      popover.style.width = width + 'px';
+    }
+    popover.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
+    const h = popover.offsetHeight;
+    popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+  }
+  preview.addEventListener('mouseover', (e) => {
+    const a = e.target.closest('a.ref, .cite a');
+    if (!a) return;
+    const target = document.getElementById((a.getAttribute('href') || '').slice(1));
+    if (!target || target.contains(a)) return;
+    showPopover(a, target);
   });
+  preview.addEventListener('mouseout', (e) => {
+    const a = e.target.closest('a.ref, .cite a');
+    if (!a || popover.hidden || a.contains(e.relatedTarget)) return;
+    if (popover.contains(e.relatedTarget)) return;
+    hidePopoverSoon();
+  });
+  popover.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  popover.addEventListener('mouseleave', (e) => {
+    if (popoverLink && popoverLink.contains(e.relatedTarget)) return;
+    hidePopoverSoon();
+  });
+  popover.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    const target = document.getElementById(a.getAttribute('href').slice(1));
+    if (target) jumpTo(target);
+  });
+  pane.addEventListener('scroll', () => { if (!popover.hidden) hidePopover(); }, { passive: true });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !popover.hidden) hidePopover(); });
 
   // --- project files -------------------------------------------------------------
 
@@ -481,6 +707,7 @@
     e.preventDefault();
     const target = document.getElementById(a.dataset.id);
     if (!target) return;
+    reveal(target);
     hold();
     TeXglassScroll.to(pane, target);
     tocLinks.forEach((l) => l.classList.toggle('active', l === a));
@@ -502,11 +729,26 @@
   });
   window.addEventListener('resize', showToc);
 
+  // The contents go on the left of the document, or on the right.
+  const tocSide = $('toc-side');
+  function setTocSide(right) {
+    document.body.classList.toggle('toc-right', right);
+    const label = right ? 'Move the contents to the left' : 'Move the contents to the right';
+    tocSide.setAttribute('aria-label', label);
+    tocSide.title = label;
+  }
+  setTocSide(store.get('texglass:overleaf-toc-side') === 'right');
+  tocSide.addEventListener('click', () => {
+    const right = !document.body.classList.contains('toc-right');
+    store.set('texglass:overleaf-toc-side', right ? 'right' : 'left');
+    setTocSide(right);
+  });
+
   // --- find and go to ----------------------------------------------------------------
 
   // Ctrl+F searches the preview; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2" (src/find.js).
   if (window.TeXglassFind) {
-    const finder = TeXglassFind.attach({ root: preview, scroller: pane, onJump: hold });
+    const finder = TeXglassFind.attach({ root: preview, scroller: pane, reveal, onJump: () => { hold(); hidePopover(); } });
     TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));
   } else {
@@ -589,6 +831,8 @@
       markCursor();
     } else if (d.type === 'files' && d.zip) {
       gotFiles(d.zip);
+    } else if (d.type === 'jump-failed') {
+      say(`Could not open ${d.file} in Overleaf's editor`, true);
     } else if (d.type === 'files-error') {
       filesButton.disabled = false;
       say(d.message || 'Could not download the project.', true);

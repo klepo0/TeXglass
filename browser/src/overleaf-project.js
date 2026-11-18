@@ -152,11 +152,13 @@
   function compose(open, project) {
     const src = String(open.text || '');
     const files = project && project.texts ? Object.assign({}, project.texts) : null;
-    const pieces = []; // { c: offset in result, len, o: offset in open file, oEnd, copy: true if text from the open file }
+    // { c: offset in result, len, o: offset in open file, oEnd, copy: true if text from the open file,
+    //   file, fo: for text from another project file, that file and the offset in it }
+    const pieces = [];
     let out = '';
-    const add = (text, o, oEnd, copy) => {
-      if (!text.length && copy) return;
-      pieces.push({ c: out.length, len: text.length, o, oEnd, copy });
+    const add = (text, o, oEnd, copy, file, fo) => {
+      if (!text.length && (copy || file)) return;
+      pieces.push({ c: out.length, len: text.length, o, oEnd, copy, file, fo });
       out += text;
     };
     const result = { path: null, main: null, inlined: [], missing: [] };
@@ -174,6 +176,51 @@
       const mainOk = main && /\\documentclass/.test(stripComments(files[main] || ''));
       result.main = mainOk ? main : null;
       const dirs = [dirOf(result.main || path), dirOf(path), ''];
+
+      /**
+       * Pull in project file `file` (named by a command at [anchor, anchorEnd)
+       * of the open file), and the files it pulls in, remembering where each
+       * piece of text came from so a click in the preview can go there.
+       */
+      const inline = (file, cmd, anchor, anchorEnd, depth, seen) => {
+        const text = files[file];
+        if (!result.inlined.includes(file)) result.inlined.push(file);
+        let from = 0;
+        let to = text.length;
+        if (cmd === 'subfile') {
+          const b = /\\begin\s*\{document\}/.exec(text);
+          if (b) {
+            from = b.index + b[0].length;
+            const e = /\\end\s*\{document\}/.exec(text.slice(from));
+            if (e) to = from + e.index;
+          }
+        }
+        const lead = cmd === 'include' || cmd === 'subfile' ? '\n' : '';
+        if (lead) add(lead, anchor, anchorEnd, false);
+        const re = new RegExp(INPUT.source, 'gm');
+        re.lastIndex = from;
+        let last = from;
+        let mm;
+        while ((mm = re.exec(text)) && mm.index < to) {
+          if (mm[2] !== undefined || !mm[0].trim()) continue;
+          const at = mm.index + (mm[1] ? mm[1].length : 0);
+          const whole = mm[0].slice(mm[1] ? mm[1].length : 0);
+          if (/^\\(bibliography|printbibliography)/.test(whole) || at + whole.length > to) continue;
+          const name = mm[4] !== undefined ? mm[4] : mm[5] !== undefined ? mm[5].replace(/\/?$/, '/') + mm[6] : mm[7];
+          const found = resolvePath(files, dirs, name, ['', '.tex', '.ltx']);
+          if (!found || seen.has(found) || depth > 20) {
+            if (!found) result.missing.push(name.trim());
+            continue;
+          }
+          add(text.slice(last, at), anchor, anchorEnd, false, file, last);
+          seen.add(found);
+          inline(found, mm[3] || 'input', anchor, anchorEnd, depth + 1, seen);
+          seen.delete(found);
+          last = at + whole.length;
+        }
+        add(text.slice(last, to), anchor, anchorEnd, false, file, last);
+        if (lead) add(lead, anchor, anchorEnd, false);
+      };
 
       // A part of a larger document: put the main file's preamble before it, for its macros.
       let preamble = '';
@@ -209,12 +256,8 @@
           if (!found) result.missing.push(name.trim());
           continue;
         }
-        let body = Arxiv.flatten(found, files);
-        if (cmd === 'subfile') body = subfileBody(body);
-        if (cmd === 'include' || cmd === 'subfile') body = '\n' + body + '\n';
         add(src.slice(last, at), last, at, true);
-        add(body, at, at + whole.length, false);
-        result.inlined.push(found);
+        inline(found, cmd, at, at + whole.length, 1, new Set([path, found]));
         last = at + whole.length;
       }
       add(src.slice(last), last, src.length, true);
@@ -255,6 +298,16 @@
         }
       }
       return 0;
+    };
+    /**
+     * Where offset `c` of the result comes from: { file: null, at } for the open
+     * file, or { file: path, at } for text pulled in from another project file.
+     */
+    result.sourceAt = (c) => {
+      for (const p of pieces) {
+        if (p.file && c >= p.c && c < p.c + p.len) return { file: p.file, at: p.fo + (c - p.c) };
+      }
+      return { file: null, at: result.toOpen(c) };
     };
     result.fromOpen = (o) => {
       for (const p of pieces) {

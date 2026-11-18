@@ -50,6 +50,7 @@
     frame = document.createElement('iframe');
     frame.id = FRAME_ID;
     frame.title = 'TeXglass preview';
+    frame.allow = 'clipboard-write'; // click a formula to copy its LaTeX
     frame.src = api.runtime.getURL('overleaf.html');
     frame.dataset.open = '0';
 
