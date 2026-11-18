@@ -28,6 +28,7 @@
   let lastToc = [];
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
   let imageMap = null; // { path: object URL } for those figures
+  let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -153,6 +154,7 @@
   }
 
   function showResult(result, source) {
+    if (insight) insight.setDefinitions(result.defs);
     lastLabels = result.labels;
     lastToc = result.toc;
     document.title = result.title ? `${result.title} — TeXglass` : 'TeXglass';
@@ -169,6 +171,7 @@
     patchPreview(blocks);
     applyFolds();
     updateToc();
+    if (insight) insight.invalidate(); // read the page again when next needed
   }
 
   const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
@@ -1228,6 +1231,8 @@
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
       body.appendChild(clone);
     }
+    const used = insight && insight.usedByNote(target);
+    if (used) body.appendChild(used);
     popover.replaceChildren(body);
     popover.hidden = false;
     const r = a.getBoundingClientRect();
@@ -1309,6 +1314,23 @@
   } else {
     $('find').hidden = true;
   }
+
+  // --- notation and dependencies -------------------------------------------------
+
+  // Resting on a formula shows where its notation comes from; the Index button
+  // opens the notation index and the map of which results use which. All of
+  // it is read from the page when first needed, never while rendering.
+  insight = window.TeXglassInsight
+    ? window.TeXglassInsight.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
+      hover: store.get('texglass:notationHover') !== 'off',
+      onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
+    })
+    : null;
+  if (insight) $('insight').addEventListener('click', () => insight.open());
+  else $('insight').hidden = true;
 
   // --- resizable split ------------------------------------------------------------
 

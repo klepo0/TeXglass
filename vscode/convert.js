@@ -9,6 +9,8 @@
  * With job.plain set (Export to HTML) the result is one piece of HTML in
  * result.html, without the source ranges the preview needs; base may then be
  * a relative path ('.' for the same folder).
+ * job: { snippets: [tex], defs } renders small formulas with a document's
+ * macros (render(...).defs) into result.html, one piece per formula.
  */
 'use strict';
 const katex = require('katex');
@@ -33,11 +35,15 @@ function resolverFor(job) {
   );
 }
 
+const renderMath = (tex, displayMode, macros) =>
+  katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' });
+
 function convert(job) {
+  // Small formulas with the document's macros, for the notation index (job.snippets, job.defs).
+  if (job.snippets) return { html: TeXglass.renderSnippets(job.defs, job.snippets, { renderMath }) };
   const result = TeXglass.render(job.text, {
     sourceMap: !job.plain,
-    renderMath: (tex, displayMode, macros) =>
-      katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' }),
+    renderMath,
     resolveImage: resolverFor(job),
   });
   if (job.plain) return { html: result.html, title: result.title, warnings: result.warnings };

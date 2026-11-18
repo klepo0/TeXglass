@@ -2472,10 +2472,26 @@
       title: second.meta.title ? stripTags(second.flow(second.meta.title, true)).trim() : null,
       labels: second.labels,
       toc: second.toc,
+      // The paper's own macros, for the notation index (src/insight.js) and renderSnippets.
+      defs: { macros: second.macros, paired: second.paired, triple: second.triple },
       warnings,
       unknownCommands: Array.from(new Set(first.warnings.filter((w) => /^Unknown command/.test(w)).map((w) => w.slice(16, -1)))),
     };
   }
 
-  return { render, stripComments, escapeHtml };
+  /**
+   * Render small formulas with a document's macros (render(...).defs), such
+   * as the symbols of its notation index. Returns one piece of HTML per formula.
+   */
+  function renderSnippets(defs, texs, options) {
+    const r = new Renderer(options || {}, { labels: Object.create(null), toc: [], cites: Object.create(null) });
+    if (defs) {
+      Object.assign(r.macros, defs.macros || {});
+      Object.assign(r.paired, defs.paired || {});
+      if (defs.triple) r.triple = defs.triple.slice();
+    }
+    return texs.map((t) => r.renderMath(String(t), false));
+  }
+
+  return { render, renderSnippets, stripComments, escapeHtml };
 });
