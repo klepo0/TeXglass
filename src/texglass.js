@@ -325,6 +325,10 @@
   /** KaTeX macros for commands from common packages that KaTeX lacks. */
   const MATH_MACROS = {
     '\\hdots': '\\ldots',
+    // \ensuremath{…} is just its argument once in math (user macros like
+    // \newcommand{\R}{\ensuremath{\mathbb R}} used inside $…$); \xspace adds nothing there.
+    '\\ensuremath': '#1',
+    '\\xspace': '',
     '\\MoveEqLeft': '',
     '\\intertext': '\\text{#1}',
     '\\shortintertext': '\\text{#1}',
@@ -346,6 +350,46 @@
     },
   };
   MATH_MACROS['\\mathbbmss'] = MATH_MACROS['\\mathbbm'];
+  // graphicx boxes around math, as in \[ \resizebox{\linewidth}{!}{$\displaystyle …$} \]:
+  // the content at its own size (a formula too wide for the page scrolls instead).
+  const boxedMath = (n) => (ctx) => {
+    const args = ctx.consumeArgs(n);
+    // tokens come last-first; leave out the $ that switched the box to math
+    return { tokens: args[n - 1].filter((t) => t.text !== '$'), numArgs: 0 };
+  };
+  MATH_MACROS['\\resizebox'] = boxedMath(3);
+  MATH_MACROS['\\scalebox'] = boxedMath(2);
+
+  /**
+   * KaTeX's array takes only l, c, r and | columns: drop @{…}, !{…}, >{…}, <{…}
+   * from the column spec (\begin{array}{l@{}l} becomes {ll}) and read p{…} as l.
+   */
+  function arraySpecs(tex) {
+    const re = /\\begin\s*\{d?array\}\s*(?:\[[^\]]*\]\s*)?\{/g;
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = re.exec(tex))) {
+      const open = m.index + m[0].length - 1;
+      let depth = 0;
+      let k = open;
+      for (; k < tex.length; k++) {
+        if (tex[k] === '{') depth++;
+        else if (tex[k] === '}' && --depth === 0) break;
+      }
+      if (k >= tex.length) break;
+      let spec = tex.slice(open + 1, k);
+      for (let guard = 0; guard < 10 && /[@!<>]\s*\{/.test(spec); guard++) {
+        spec = spec.replace(/[@!<>]\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
+      }
+      spec = spec.replace(/[pmbw]\s*\{[^{}]*\}/g, 'l');
+      out += tex.slice(last, open + 1) + spec + '}';
+      last = k + 1;
+      re.lastIndex = last;
+    }
+    return out + tex.slice(last);
+  }
+
 
   /**
    * A KaTeX macro for a mathtools \DeclarePairedDelimiter: \cmd{x} puts plain
@@ -708,7 +752,7 @@
     }
 
     renderMath(tex, display) {
-      tex = this.mathRefs(tex).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
+      tex = arraySpecs(this.mathRefs(tex)).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
       try {
         const html = this.renderMathFn(tex, display, this.katexMacros(tex));
         return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
@@ -994,6 +1038,25 @@
         const html = `<${tagName}${cls ? ` class="${cls}"` : ''}>${body}</${tagName}>`;
         return res(html, src.length, { block: !inline });
       }
+      // graphicx: \resizebox{\linewidth}{!}{…} around a picture fits it to the column
+      // (the viewer scales the drawing, see diagrams.js); other sizes keep the content as it is.
+      if (name === 'resizebox' || name === 'scalebox') {
+        let j = readStar(src, i).end;
+        let fit = null;
+        if (name === 'resizebox') {
+          const w = readArg(src, j);
+          j = readArg(src, w.end).end;
+          const m = /^\s*([\d.]*)\s*\\(linewidth|textwidth|columnwidth|hsize)\s*$/.exec(w.content);
+          if (m) fit = parseFloat(m[1] || '1') || 1;
+        } else {
+          j = readArg(src, j).end;
+          const o = readOpt(src, j);
+          if (o) j = o.end;
+        }
+        const a = readArg(src, j);
+        const body = this.flow(a.content, true);
+        return res(fit !== null ? `<span class="tg-resize" data-fit="${fit}">${body}</span>` : body, a.end);
+      }
       if (name === 'textcolor' || name === 'colorbox') {
         const col = readArg(src, readOpt(src, i) ? readOpt(src, i).end : i);
         const a = readArg(src, col.end);
@@ -1132,7 +1195,10 @@
           // width=0.5\textwidth (or \linewidth, \columnwidth) becomes a percentage.
           const w = o && /(?:^|,)\s*width\s*=\s*([\d.]*)\s*\\(?:textwidth|linewidth|columnwidth|hsize)/.exec(o.content);
           const pct = w ? Math.min(100, Math.round(parseFloat(w[1] || '1') * 100)) : null;
-          const style = pct ? ` style="width:${pct}%"` : '';
+          // width=4.85cm (or height=3cm): an absolute size, in em of a 10pt font
+          const abs = !pct && o && /(?:^|,)\s*(width|height)\s*=\s*([\d.]+)\s*(cm|mm|in|pt|bp|em)\s*(?:,|$)/.exec(o.content);
+          const absEm = abs ? Math.round((parseFloat(abs[2]) * { cm: 28.4528, mm: 2.84528, in: 72.27, pt: 1, bp: 1.00375, em: 10 }[abs[3]]) / 10 * 1000) / 1000 : 0;
+          const style = pct ? ` style="width:${pct}%"` : absEm ? ` style="${abs[1]}:${absEm}em"` : '';
           const html = resolved
             ? `<img class="graphic" src="${escapeHtml(resolved)}" alt="${escapeHtml(a.content)}"${style}>`
             : `<span class="graphic-placeholder">[image: ${escapeHtml(a.content.trim())}]</span>`;
@@ -1957,6 +2023,7 @@
           text: (t) => this.flow(t, true),
           styles: this.tikzStyles || '',
           colors: this.tikzColors || null,
+          macros: this.macros,
         });
       }
       return `<span class="graphic-placeholder">[tikzpicture diagram]</span>`;

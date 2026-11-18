@@ -173,7 +173,9 @@ from a CDN instead of embedding them (~350 KB).
 - **Bibliographies**: `thebibliography`, `.bbl` (BibTeX or biber), `.bib`
   files (BibTeX and biblatex) and amsrefs records.
 - **Diagrams**: `tikzcd` and `\xymatrix` (bends, shifts, 2-cells, arrow
-  styles) and simple `tikzpicture`s. Tree symbols declared with
+  styles) and `tikzpicture`s, including `\clip`, hatching patterns, braces,
+  pictures inside nodes, macros that hold paths, and `\resizebox` to the
+  column width (pictures wider than the column shrink to fit). Tree symbols declared with
   `\DeclareSymbol` (as in regularity structures papers) are drawn inside
   formulas. Heavier TikZ shows its source.
 

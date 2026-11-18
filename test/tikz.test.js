@@ -184,3 +184,66 @@ test('an exported page carries the diagram script only when it has diagrams', ()
   assert.match(withD, /<script>window\.X = "<\\\/script>";<\/script>/);
   assert.doesNotMatch(Export.page({ body: '<p>x</p>', diagramsJs: js }), /window\.X/);
 });
+
+test('tikzpicture: macros with arguments, and path macros defined before the picture', () => {
+  const { html } = plain(String.raw`\begin{document}
+\def\edge{(0,0) -- (1,2)}
+\begin{tikzpicture}
+\def\branches#1{\draw[#1] (0,0) -- (3,0);\draw[#1] (0,1) -- (3,1);}
+\newcommand{\dot}[1]{\fill (#1) circle (1pt);}
+\branches{red}
+\dot{2,2}
+\draw \edge;
+\foreach \e in {\edge} \draw[blue] \e;
+\end{tikzpicture}
+\end{document}`);
+  const [m] = models(html, 'data-tikz');
+  assert.doesNotMatch(html, /tikz-note/);
+  assert.equal(m.paths.filter((p) => p.draw === '#e53935').length, 2);
+  assert.deepEqual(m.paths[0].segs, [['M', [0, 0]], ['L', [3, 0]]]);
+  assert.deepEqual(m.paths.find((p) => p.draw === '#2f6fdd').segs, [['M', [0, 0]], ['L', [1, 2]]]);
+  assert.deepEqual(m.bbox, [0, 0, 3, 2.035]);
+});
+
+test('tikzpicture: \\clip cuts later paths and pictures in its scope; overlay nodes take no room', () => {
+  const { html } = plain(String.raw`\begin{document}\begin{tikzpicture}
+\path (0,0) rectangle (4,3);
+\begin{scope}
+  \clip (0,0) rectangle (2,2);
+  \node[overlay,anchor=south west] at (0,0) {\includegraphics[width=10cm]{a.png}};
+  \begin{scope}[shift={(1,0)},x=0.01cm,y=-0.01cm]
+    \clip (0,-100) rectangle (50,0);
+    \draw (0,0) -- (500,-500);
+  \end{scope}
+\end{scope}
+\draw (0,0) -- (1,1);
+\end{tikzpicture}\end{document}`);
+  const [m] = models(html, 'data-tikz');
+  assert.equal(m.clips.length, 2);
+  assert.equal(m.clips[1].parent, 0);
+  const cut = m.paths.find((p) => p.clip === 1);
+  assert.deepEqual(cut.segs[1], ['L', [6, 5]]);
+  assert.equal(m.nodes[0].ov, 1);
+  assert.equal(m.nodes[0].clip, 0);
+  assert.deepEqual(m.bbox, [0, 0, 4, 3]); // not the 10cm picture, nor the clipped line
+});
+
+test('tikzpicture: font sizes, hatching patterns and braces', () => {
+  const { html } = plain(String.raw`\begin{document}\begin{tikzpicture}[every node/.style={font=\fontsize{8}{10}\selectfont}]
+\node at (0,0) {a};
+\node[font=\small] at (1,0) {\tiny{$0$}};
+\draw[pattern=north west lines, pattern color=blue, opacity=0.2] (0,0) rectangle (1,1);
+\draw[decorate,decoration={brace,amplitude=4pt,mirror}] (0,0) -- (2,0);
+\end{tikzpicture}\end{document}`);
+  const [m] = models(html, 'data-tikz');
+  assert.doesNotMatch(html, /tikz-note/);
+  assert.equal(m.nodes[0].scale, 0.8);
+  assert.equal(m.nodes[1].scale, 0.45);
+  assert.match(html, /data-k="1"><span[^>]*>\[I:0\]/); // the size command is gone
+  assert.deepEqual(m.paths[0].pat, { c: '#2f6fdd', k: 'north west lines' });
+  const brace = m.paths[1].segs;
+  assert.equal(brace.length, 8);
+  assert.deepEqual(brace[0], ['M', [0, 0]]);
+  assert.deepEqual(brace[3][3], [1, -0.141]); // the tip, 4pt below the middle (mirrored)
+  assert.deepEqual(brace[7][3], [2, 0]);
+});

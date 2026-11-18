@@ -438,6 +438,15 @@
     return [b.cx, b.cy];
   }
 
+  /** The width of the block a picture sits in (its figure or paragraph), without padding. */
+  function columnWidth(e) {
+    let p = e.parentElement;
+    while (p && /^inline/.test(getComputedStyle(p).display)) p = p.parentElement;
+    if (!p) return 0;
+    const cs = getComputedStyle(p);
+    return p.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  }
+
   function layoutTikz(wrap) {
     let data;
     try { data = JSON.parse(wrap.getAttribute('data-tikz')); } catch (e) { return; }
@@ -454,6 +463,14 @@
       let tw = 0; let th = 0;
       if (e) {
         e.style.fontSize = n.scale && n.scale !== 1 ? `${n.scale}em` : '';
+        // pictures in nodes: their size does not follow the node's font, they go
+        // under the drawing, and the layout runs again once they have loaded
+        for (const img of e.querySelectorAll('img')) {
+          const sz = /^(width|height):([\d.]+)em$/.exec((img.getAttribute('style') || '').trim().replace(/;$/, ''));
+          if (sz) img.style[sz[1]] = `${f2(parseFloat(sz[2]) * em)}px`;
+          e.classList.add('tikz-under');
+          if (!img.complete) img.addEventListener('load', () => { seen.delete(wrap); layout(wrap); }, { once: true });
+        }
         if (n.tw) { e.style.width = `${n.tw * S}px`; e.classList.add('tikz-multi'); } else if (n.multi) e.classList.add('tikz-multi');
         if (n.col) e.style.color = n.col;
         tw = e.offsetWidth; th = e.offsetHeight;
@@ -572,23 +589,66 @@
     // bounding box
     let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
     const grow = (p, r) => { r = r || 0; x0 = Math.min(x0, p[0] - r); y0 = Math.min(y0, p[1] - r); x1 = Math.max(x1, p[0] + r); y1 = Math.max(y1, p[1] + r); };
+    // \clip regions, in page pixels: an SVG path each, and a box for the size of the picture
+    const clips = (data.clips || []).map((c) => {
+      let d = '';
+      const pts = [];
+      for (const g of c.segs) {
+        const q = g.slice(1).map(center);
+        pts.push(...q);
+        if (g[0] === 'M') d += `M${pt2(q[0])}`;
+        else if (g[0] === 'L') d += `L${pt2(q[0])}`;
+        else if (g[0] === 'C') d += `C${pt2(q[0])} ${pt2(q[1])} ${pt2(q[2])}`;
+        else if (g[0] === 'Z') d += 'Z';
+      }
+      const box = pts.length ? [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))] : null;
+      return { d, box, parent: c.parent };
+    });
+    const clipBox = (k) => {
+      const c = clips[k];
+      if (!c) return null;
+      if (c.full === undefined) {
+        const o = clipBox(c.parent);
+        c.full = c.box && o ? [Math.max(c.box[0], o[0]), Math.max(c.box[1], o[1]), Math.min(c.box[2], o[2]), Math.min(c.box[3], o[3])] : c.box || o;
+      }
+      return c.full;
+    };
     resolved.forEach((segs, pi) => {
+      const cb = data.paths[pi].clip !== undefined ? clipBox(data.paths[pi].clip) : null;
+      if (cb) {
+        if (cb[0] > cb[2] || cb[1] > cb[3]) return;
+        const inner = grow;
+        const clamp = (p, r) => inner([Math.min(Math.max(p[0], cb[0] + (r || 0)), cb[2] - (r || 0)), Math.min(Math.max(p[1], cb[1] + (r || 0)), cb[3] - (r || 0))], r);
+        for (const r of segs) if (r) {
+          if (r.length === 4) for (let k = 0; k <= 8; k++) clamp(bez(r, k / 8));
+          else for (const p of r) clamp(p);
+        }
+        return;
+      }
       const lw = ((data.paths[pi].lw || 0.4) * pt) / 2 + (data.paths[pi].head !== 'none' || data.paths[pi].tail !== 'none' ? 0.25 * em : 0);
       for (const r of segs) if (r) {
         if (r.length === 4) for (let k = 0; k <= 8; k++) grow(bez(r, k / 8), lw);
         else for (const p of r) grow(p, lw);
       }
     });
-    for (const b of boxes) if (b.ok && b.shape !== 'coord') { grow([b.cx - b.w / 2, b.cy - b.h / 2]); grow([b.cx + b.w / 2, b.cy + b.h / 2]); }
+    for (const b of boxes) if (b.ok && b.shape !== 'coord' && !b.n.ov) { grow([b.cx - b.w / 2, b.cy - b.h / 2]); grow([b.cx + b.w / 2, b.cy + b.h / 2]); }
     if (x0 === Infinity) { x0 = y0 = 0; x1 = y1 = 1; }
     const m = 1;
     x0 -= m; y0 -= m; x1 += m; y1 += m;
     const W = x1 - x0; const H = y1 - y0;
 
     const svg = el('svg', { class: 'tikz-svg', 'aria-hidden': 'true', width: f2(W), height: f2(H), viewBox: `${f2(x0)} ${f2(y0)} ${f2(W)} ${f2(H)}` });
+    const uid = `tgt${++pictures}`;
+    let defs = null;
+    const def = (node) => { if (!defs) defs = svg.appendChild(el('defs', {})); defs.appendChild(node); return node; };
+    clips.forEach((c, k) => {
+      const cp = def(el('clipPath', { id: `${uid}c${k}`, 'clip-path': c.parent !== undefined && clips[c.parent] ? `url(#${uid}c${c.parent})` : null }));
+      cp.appendChild(el('path', { d: c.d }));
+    });
+    let patterns = 0;
     for (const p of drawn) {
       const P = p.path;
-      if (!P.draw && !P.fill) continue;
+      if (!P.draw && !P.fill && !P.pat) continue;
       const w = (P.lw || 0.4) * pt;
       let style = `stroke-width:${f2(w)}px;stroke-linejoin:round`;
       style += `;stroke:${P.draw || 'none'};fill:${P.fill || 'none'}`;
@@ -598,7 +658,24 @@
         style += `;stroke-dasharray:${P.dash.map((x) => f2(Math.max(x * pt, 0.001))).join(' ')}`;
         if (P.dash.includes(0)) style += ';stroke-linecap:round';
       }
-      svg.appendChild(el('path', { d: p.d, style }));
+      const clip = P.clip !== undefined && clips[P.clip] ? `url(#${uid}c${P.clip})` : null;
+      if (P.pat) {
+        // hatching from the patterns library, about 3pt apart
+        const id = `${uid}p${patterns++}`;
+        const g = 3 * pt;
+        const kind = P.pat.k || 'north east lines';
+        const pat = def(el('pattern', { id, patternUnits: 'userSpaceOnUse', width: f2(g), height: f2(g),
+          patternTransform: /north east/.test(kind) ? 'rotate(-45)' : /north west/.test(kind) ? 'rotate(45)' : /crosshatch/.test(kind) ? 'rotate(45)' : null }));
+        const ls = `stroke:${P.pat.c || 'currentColor'};stroke-width:${f2(0.4 * pt)}px`;
+        if (/dots/.test(kind)) pat.appendChild(el('circle', { cx: f2(g / 2), cy: f2(g / 2), r: f2(0.5 * pt), style: `fill:${P.pat.c || 'currentColor'}` }));
+        else {
+          if (!/vertical/.test(kind)) pat.appendChild(el('line', { x1: 0, y1: f2(g / 2), x2: f2(g), y2: f2(g / 2), style: ls }));
+          if (/vertical|grid|crosshatch/.test(kind)) pat.appendChild(el('line', { x1: f2(g / 2), y1: 0, x2: f2(g / 2), y2: f2(g), style: ls }));
+        }
+        svg.appendChild(el('path', { d: p.d, style: `stroke:none;fill:url(#${id})${P.op ? `;opacity:${P.op}` : ''}`, 'clip-path': clip }));
+        if (!P.draw && !P.fill) continue;
+      }
+      svg.appendChild(el('path', { d: p.d, style, 'clip-path': clip }));
       if (P.draw && p.last) {
         const ts = `stroke:${P.draw};stroke-width:${f2(w)}px;stroke-linecap:round;stroke-linejoin:round`;
         const big = Math.max(1, (P.lw || 0.4) / 0.4) * em * 0.85;
@@ -627,15 +704,37 @@
     if (old) old.replaceWith(svg); else wrap.insertBefore(svg, wrap.firstChild);
     wrap.style.width = `${f2(W)}px`;
     wrap.style.height = `${f2(H)}px`;
+    // A picture wider than the column is scaled down to fit, like an image;
+    // inside \resizebox{\linewidth}{!}{…} it is scaled to the column either way.
+    let z = 1;
+    if (typeof data.baseline !== 'number') {
+      const fit = wrap.closest('[data-fit]');
+      const avail = columnWidth(wrap);
+      if (avail > 0) {
+        if (fit) z = Math.min(20, ((parseFloat(fit.getAttribute('data-fit')) || 1) * avail) / W);
+        else if (W > avail) z = avail / W;
+      }
+    }
+    z = Math.round(z * 1000) / 1000;
+    wrap.style.transform = z !== 1 ? `scale(${z})` : '';
+    wrap.style.marginRight = z !== 1 ? `${f2(W * (z - 1))}px` : '';
+    wrap.style.marginBottom = z !== 1 ? `${f2(H * (z - 1))}px` : '';
     // An inline picture with a baseline (tree symbols in formulas): its bottom
     // edge goes that far below the text baseline.
     if (typeof data.baseline === 'number') wrap.style.verticalAlign = `${f2(-(y1 + data.baseline * S))}px`;
     for (const b of boxes) {
       if (!b.e) continue;
       if (!b.ok) { b.e.style.visibility = 'hidden'; continue; }
-      b.e.style.left = `${f2(b.cx - b.tw / 2 - x0)}px`;
-      b.e.style.top = `${f2(b.cy - b.e.offsetHeight / 2 - y0)}px`;
+      const left = b.cx - b.tw / 2;
+      const top = b.cy - b.e.offsetHeight / 2;
+      b.e.style.left = `${f2(left - x0)}px`;
+      b.e.style.top = `${f2(top - y0)}px`;
       b.e.style.visibility = 'visible';
+      // a node inside \clip (a picture cut to its panel): cut it to the clip's box
+      const cb = b.n.clip !== undefined ? clipBox(b.n.clip) : null;
+      b.e.style.clipPath = cb
+        ? `inset(${f2(Math.max(0, cb[1] - top))}px ${f2(Math.max(0, left + b.e.offsetWidth - cb[2]))}px ${f2(Math.max(0, top + b.e.offsetHeight - cb[3]))}px ${f2(Math.max(0, cb[0] - left))}px)`
+        : '';
     }
   }
 
@@ -643,6 +742,7 @@
   // Watching the page
   // ---------------------------------------------------------------------------
 
+  let pictures = 0; // for ids of clip paths and patterns
   const LAYOUT = { 'data-cd': layoutCd, 'data-tikz': layoutTikz };
   const sel = Object.keys(LAYOUT).map((a) => `[${a}]`).join(',');
   const seen = new WeakMap(); // element -> last layout key
@@ -683,6 +783,12 @@
     if (printing && printing.addEventListener) printing.addEventListener('change', redraw);
     window.addEventListener('beforeprint', redraw);
     window.addEventListener('afterprint', redraw);
+    // Pictures fitted to the column follow its width.
+    let resizing = 0;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizing);
+      resizing = setTimeout(() => { for (const e of document.querySelectorAll('[data-tikz]')) { seen.delete(e); layout(e); } }, 150);
+    });
   }
 
   const api = { observe, refresh: () => { for (const e of document.querySelectorAll(sel)) { seen.delete(e); layout(e); } }, _: { drawArrow, bez, bezTan, bezSlice, clipCurve, labelCenter, backgroundOf, el, tip, f2, LINE } };

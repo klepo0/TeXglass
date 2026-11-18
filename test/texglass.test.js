@@ -156,6 +156,34 @@ const MACRO_PREAMBLE = String.raw`
 \newcommand{\name}[1][World]{Hello #1}
 `;
 
+test('\\ensuremath in user macros works inside math, and graphicx boxes and @{} columns reach KaTeX cleanly', () => {
+  const pre = String.raw`\newcommand{\X}{\ensuremath{\mathbb{X}}\xspace}\def\Y{\ensuremath\alpha}`;
+  const cases = [
+    [String.raw`\X^2`, String.raw`\mathbb{X}^2`],
+    [String.raw`\Y_1`, String.raw`\alpha_1`],
+    [String.raw`\resizebox{\linewidth}{!}{$\displaystyle \frac{a}{b}=1$}`, String.raw`\displaystyle \frac{a}{b}=1`],
+    [String.raw`\scalebox{0.5}{$x$}`, 'x'],
+    [String.raw`\begin{array}{l@{}l} a & b\end{array}`, String.raw`\begin{array}{ll} a & b\end{array}`],
+    [String.raw`\begin{array}{>{\displaystyle}c|p{2cm}} a & b\end{array}`, String.raw`\begin{array}{c|l} a & b\end{array}`],
+  ];
+  for (const [use, hand] of cases) {
+    const { html } = realMath(pre + `\\begin{document}$${use}$\\end{document}`);
+    assert.ok(html.includes(handMath(hand)), `${use} should render as ${hand}`);
+  }
+  // in text, \ensuremath still makes math
+  assert.match(plain(pre + String.raw`\begin{document}a \X b\end{document}`).html, /\[I:\\mathbb\{X\}\]/);
+});
+
+test('\\includegraphics with an absolute width, and \\resizebox around a picture', () => {
+  const r = TeXglass.render(String.raw`\begin{document}\includegraphics[width=4.85cm]{a.png} \includegraphics[height=2in]{b.png}
+\resizebox{0.96\linewidth}{!}{\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}}
+\resizebox{3cm}{!}{text}\end{document}`, { renderMath: (t) => t, resolveImage: (p) => p });
+  assert.ok(r.html.includes('style="width:13.8em"'), 'width=4.85cm is 13.8em at 10pt');
+  assert.ok(r.html.includes('style="height:14.454em"'));
+  assert.match(r.html, /<span class="tg-resize" data-fit="0\.96"><span class="tg-diagram tg-tikz">/);
+  assert.doesNotMatch(text(r.html), /!|linewidth|3cm/);
+});
+
 test('user macros in math: arguments, defaults, \\def and operators', () => {
   const cases = [
     [String.raw`\pair{y}`, String.raw`\langle x, y\rangle`],
