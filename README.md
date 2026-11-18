@@ -99,7 +99,8 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   to open it. Or paste `2301.00001` or any arXiv link. **Ctrl+K** (Cmd+K on a
   Mac) opens the dialog. Included files, the authors' own `.sty` macros, the
   bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
-  files) and figures come along. Also `?arxiv=2301.00001`.
+  files) and figures come along. `.eps` figures (common in older papers) are
+  drawn as SVG by a small PostScript interpreter. Also `?arxiv=2301.00001`.
 - **GitHub import**: paste a link to a file, folder or repo of a public
   repository; the main file, included files, `.bbl` or `.bib` and figures are found for
   you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
