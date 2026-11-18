@@ -129,9 +129,8 @@ above works there too, including `\input` files, `.bib` bibliographies and
 figures read straight from the repository. Edit, then commit from the Source
 Control view: nothing to install on your computer and no TeX needed.
 
-github.dev installs extensions from the VS Code Marketplace, so the extension
-has to be published there first (see **Publish** below). Then search for
-"TeXglass" in the Extensions view of github.dev and click **Install**.
+To install it there, search for "TeXglass" in the Extensions view of
+github.dev and click **Install**.
 
 In the browser the conversion runs in the extension host (a background web
 worker), not in a separate thread.
@@ -183,20 +182,3 @@ for the Web, with the folder `test/fixtures/web` as a virtual workspace:
 npm run build-web
 npm run test-web      # opens VS Code in Chromium with the extension loaded
 ```
-
-## Publish
-
-Publishing on the [VS Code Marketplace](https://marketplace.visualstudio.com)
-makes the extension installable from the Extensions view, in github.dev and
-vscode.dev as well as on the desktop. Once:
-
-1. Sign in at https://marketplace.visualstudio.com/manage with a Microsoft
-   account and create the publisher `klepo1` (the `publisher` in
-   `package.json`).
-2. In Azure DevOps (https://dev.azure.com), create a personal access token
-   with the **Marketplace → Manage** scope and **All accessible
-   organizations**.
-3. `npx vsce login klepo1` and paste the token.
-
-Then, for each release, raise `version` in `package.json` and run
-`npx vsce publish`.
