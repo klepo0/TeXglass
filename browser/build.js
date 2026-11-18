@@ -130,7 +130,8 @@ function viewerHtml() {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   if (html.includes('cdn.jsdelivr.net')) throw new Error('index.html still loads something from a CDN');
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) throw new Error('index.html has an inline script, which extension pages refuse');
-  return html;
+  // The web site's visitor counter stays out of the extension.
+  return html.replace(/[ \t]*<script[^>]*src="src\/stats\.js"[^>]*><\/script>\n?/, '');
 }
 
 function build(target) {
@@ -147,7 +148,7 @@ function build(target) {
   for (const f of ['app.js', 'styles.css', 'LICENSE']) {
     if (fs.existsSync(path.join(ROOT, f))) copy(path.join(ROOT, f), path.join(out, f));
   }
-  copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js'));
+  copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js') && name !== 'stats.js');
   // The handwritten-notes look, shared with the VS Code extension; the viewer writes in Kalam.
   copy(path.join(ROOT, 'vscode/media/notes.css'), path.join(out, 'vscode/media/notes.css'));
   copy(path.join(ROOT, 'vscode/ink.js'), path.join(out, 'vscode/ink.js'));

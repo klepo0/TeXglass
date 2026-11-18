@@ -143,6 +143,14 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 Run it locally with `npm start` (http://localhost:8000). It is a static page
 with no build step.
 
+**Privacy.** Your files and the papers you open never leave your browser.
+The public site counts visits with [GoatCounter](https://www.goatcounter.com),
+a cookieless counter: one request per visit with the site's path, the
+referring site and the screen width, never a paper, file name or arXiv id.
+It sets no cookies, stores nothing on your device, and is skipped when your
+browser sends Do Not Track or Global Privacy Control. Local copies, the arXiv
+browser extension, the VS Code extension and the command line count nothing.
+
 ## arXiv browser extension
 
 For **Chrome, Edge and Firefox** (Chrome/Edge 111 or later, Firefox 128 or later).
