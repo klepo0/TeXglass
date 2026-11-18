@@ -419,6 +419,138 @@
   MATH_MACROS['\\resizebox'] = boxedMath(3);
   MATH_MACROS['\\scalebox'] = boxedMath(2);
 
+  // physics package: \abs, \norm, \qty, \dd, \dv, \pdv, \expval, … (a user's own
+  // definition, e.g. with \DeclarePairedDelimiter, takes precedence over these).
+  // Token helpers: KaTeX hands arguments over last-first.
+  const tokText = (toks) =>
+    toks
+      .slice()
+      .reverse()
+      .map((t) => (/^\\[A-Za-z@]+$/.test(t.text) ? t.text + ' ' : t.text))
+      .join('');
+  const peekText = (ctx) => {
+    ctx.consumeSpaces();
+    return ctx.future().text;
+  };
+  const optStar = (ctx) => {
+    if (peekText(ctx) !== '*') return false;
+    ctx.popToken();
+    return true;
+  };
+  const optBracket = (ctx) => (peekText(ctx) === '[' ? (ctx.popToken(), tokText(ctx.consumeArg([']']).tokens)) : null);
+  const group = (ctx) => tokText(ctx.consumeArgs(1)[0]);
+  const optGroup = (ctx) => (peekText(ctx) === '{' ? group(ctx) : null);
+  /** Read up to the matching `close` (for \qty(…), \qty|…|), nesting on `open`. */
+  const until = (ctx, open, close) => {
+    const out = [];
+    for (let depth = 0; ;) {
+      const t = ctx.popToken();
+      if (t.text === 'EOF') break;
+      if (t.text === close && depth === 0) break;
+      if (t.text === open && open !== close) depth++;
+      else if (t.text === close) depth--;
+      out.push(t);
+    }
+    return tokText(out.reverse());
+  };
+  const SIZES = /^\\(big|Big|bigg|Bigg)$/;
+  /** Delimiters round `body`: auto-sized, plain with a star, or \big-sized. */
+  const delimited = (open, close, body, star, size) => {
+    if (star) return `\\mathopen{${open}}${body}\\mathclose{${close}}`;
+    if (size) return `\\mathopen{${size}l${open}}${body}\\mathclose{${size}r${close}}`;
+    return `\\left${open} ${body} \\right${close}`;
+  };
+  const physDelim = (open, close) => (ctx) => {
+    const star = optStar(ctx);
+    const size = SIZES.test(peekText(ctx)) ? ctx.popToken().text : '';
+    return delimited(open, close, group(ctx), star, size);
+  };
+  MATH_MACROS['\\abs'] = physDelim('\\lvert', '\\rvert');
+  MATH_MACROS['\\absolutevalue'] = MATH_MACROS['\\abs'];
+  MATH_MACROS['\\norm'] = physDelim('\\lVert', '\\rVert');
+  MATH_MACROS['\\pqty'] = physDelim('(', ')');
+  MATH_MACROS['\\bqty'] = physDelim('[', ']');
+  MATH_MACROS['\\vqty'] = physDelim('\\lvert', '\\rvert');
+  MATH_MACROS['\\Bqty'] = physDelim('\\{', '\\}');
+  MATH_MACROS['\\qty'] = (ctx) => {
+    const star = optStar(ctx);
+    const size = SIZES.test(peekText(ctx)) ? ctx.popToken().text : '';
+    const t = peekText(ctx);
+    const pairs = { '(': ')', '[': ']', '|': '|' };
+    if (pairs[t]) {
+      ctx.popToken();
+      const open = t === '|' ? '\\lvert' : t;
+      const close = t === '|' ? '\\rvert' : pairs[t];
+      return delimited(open, close, until(ctx, t, pairs[t]), star, size);
+    }
+    return delimited('\\{', '\\}', group(ctx), star, size);
+  };
+  MATH_MACROS['\\order'] = (ctx) => `\\mathcal{O}${MATH_MACROS['\\qty'](ctx)}`;
+  MATH_MACROS['\\eval'] = (ctx) => {
+    const t = peekText(ctx);
+    if (t === '(' || t === '[') {
+      ctx.popToken();
+      return `\\left${t} ${until(ctx, t, '|')} \\right\\rvert`;
+    }
+    return `\\left. ${group(ctx)} \\right\\rvert`;
+  };
+  // derivatives: \dd x, \dd[n]{x}, \dv{f}{x}, \dv[n]{f}{x}, \dv{x}, \pdv{f}{x}{y}
+  const D = '\\mathrm{d}';
+  MATH_MACROS['\\dd'] = (ctx) => {
+    const n = optBracket(ctx);
+    const x = optGroup(ctx);
+    return `\\mathop{}\\!${D}${n ? `^{${n}}` : ''}${x !== null ? `{${x}}` : ''}`;
+  };
+  const derivative = (d) => (ctx) => {
+    const star = optStar(ctx);
+    const n = optBracket(ctx);
+    const pow = n ? `^{${n}}` : '';
+    const a = group(ctx);
+    const b = optGroup(ctx);
+    if (b === null) return star ? `${d}${pow}/${d}{${a}}${pow}` : `\\frac{${d}${pow}}{${d}{${a}}${pow}}`;
+    const c = d === '\\partial' ? optGroup(ctx) : null;
+    if (c !== null) return `\\frac{${d}^{2} {${a}}}{${d}{${b}}\\,${d}{${c}}}`;
+    return star ? `${d}${pow}{${a}}/${d}{${b}}${pow}` : `\\frac{${d}${pow}{${a}}}{${d}{${b}}${pow}}`;
+  };
+  MATH_MACROS['\\dv'] = derivative(D);
+  MATH_MACROS['\\derivative'] = MATH_MACROS['\\dv'];
+  MATH_MACROS['\\pdv'] = derivative('\\partial');
+  MATH_MACROS['\\partialderivative'] = MATH_MACROS['\\pdv'];
+  // quantum notation (\bra, \ket and \braket are KaTeX's own)
+  MATH_MACROS['\\expval'] = (ctx) => {
+    const a = group(ctx);
+    const b = optGroup(ctx);
+    return b === null ? `\\left\\langle ${a} \\right\\rangle` : `\\left\\langle ${b} \\middle\\vert ${a} \\middle\\vert ${b} \\right\\rangle`;
+  };
+  MATH_MACROS['\\ev'] = MATH_MACROS['\\expval'];
+  MATH_MACROS['\\mel'] = '\\left\\langle #1 \\middle\\vert #2 \\middle\\vert #3 \\right\\rangle';
+  MATH_MACROS['\\matrixel'] = MATH_MACROS['\\mel'];
+  MATH_MACROS['\\comm'] = '\\left[ #1 , #2 \\right]';
+  MATH_MACROS['\\commutator'] = MATH_MACROS['\\comm'];
+  MATH_MACROS['\\acomm'] = '\\left\\{ #1 , #2 \\right\\}';
+  MATH_MACROS['\\anticommutator'] = MATH_MACROS['\\acomm'];
+  MATH_MACROS['\\tr'] = '\\operatorname{tr}';
+  MATH_MACROS['\\Tr'] = '\\operatorname{Tr}';
+  MATH_MACROS['\\rank'] = '\\operatorname{rank}';
+  // vectors: \vb{x} upright bold (\vb*{x} italic bold), \vu{x} a unit vector
+  MATH_MACROS['\\vb'] = (ctx) => (optStar(ctx) ? `\\boldsymbol{${group(ctx)}}` : `\\mathbf{${group(ctx)}}`);
+  MATH_MACROS['\\vu'] = (ctx) => (optStar(ctx) ? `\\hat{\\boldsymbol{${group(ctx)}}}` : `\\hat{\\mathbf{${group(ctx)}}}`);
+  MATH_MACROS['\\grad'] = '\\nabla';
+  MATH_MACROS['\\curl'] = '\\nabla\\times';
+  MATH_MACROS['\\divergence'] = '\\nabla\\cdot';
+  MATH_MACROS['\\laplacian'] = '\\nabla^2';
+  MATH_MACROS['\\cross'] = '\\times';
+  MATH_MACROS['\\vdot'] = '\\cdot';
+  MATH_MACROS['\\qq'] = '\\quad\\text{#1}\\quad';
+  MATH_MACROS['\\qc'] = ',\\quad';
+  // ulem inside formulas (as in \text{\uline{…}}); KaTeX has \underline and \sout
+  MATH_MACROS['\\uline'] = '\\underline{#1}';
+  MATH_MACROS['\\uuline'] = '\\underline{\\underline{#1}}';
+  MATH_MACROS['\\uwave'] = '\\underline{#1}';
+  MATH_MACROS['\\dashuline'] = '\\underline{#1}';
+  MATH_MACROS['\\dotuline'] = '\\underline{#1}';
+  MATH_MACROS['\\xout'] = '\\sout{#1}';
+
   /**
    * KaTeX's array takes only l, c, r and | columns: drop @{…}, !{…}, >{…}, <{…}
    * from the column spec (\begin{array}{l@{}l} becomes {ll}) and read p{…} as l.
@@ -629,6 +761,9 @@
     textup: ['span'], textnormal: ['span'], textmd: ['span'], mbox: ['span'], hbox: ['span'], text: ['span'],
     textsuperscript: ['sup'], textsubscript: ['sub'], textcolor_: ['span'], fbox: ['span', 'fbox'],
     framebox: ['span', 'fbox'], makebox: ['span'], textup_: ['span'], sout: ['s'], st: ['s'],
+    // ulem (and soul's \ul)
+    uuline: ['u', 'uuline'], uwave: ['u', 'uwave'], dashuline: ['u', 'dashuline'], dotuline: ['u', 'dotuline'],
+    xout: ['s', 'xout'], ul: ['u'],
   };
 
   const DECLARATIONS = {
@@ -862,6 +997,7 @@
         if (e >= 0) body = body.slice(0, e);
       }
       this.preamble = pre;
+      this.ulemEmph = /\\usepackage\s*(?:\[(?![^\]]*\bnormalem\b)[^\]]*\])?\s*\{[^}]*\bulem\b[^}]*\}/.test(pre);
       if (/\\chapter\b/.test(src)) {
         this.topLevel = 'chapter';
         this.counters.section.parent = 'chapter';
@@ -1094,11 +1230,12 @@
       if (name in TEXT_STYLES) {
         if (name === 'textcolor' || name === 'colorbox') readArg(src, i);
         const a = readArg(src, i);
-        const [tag, cls] = TEXT_STYLES[name];
+        // ulem without [normalem] underlines \emph instead of slanting it
+        const [tag, cls] = name === 'emph' && this.ulemEmph ? ['u'] : TEXT_STYLES[name];
         return res(`<${tag}${cls ? ` class="${cls}"` : ''}>${this.flow(a.content, true)}</${tag}>`, a.end);
       }
       if (name in DECLARATIONS) {
-        const [tag, cls] = DECLARATIONS[name];
+        const [tag, cls] = name === 'em' && this.ulemEmph ? ['u'] : DECLARATIONS[name];
         const tagName = inline || tag !== 'span' ? tag : 'div';
         const body = this.flow(src.slice(i), inline);
         const html = `<${tagName}${cls ? ` class="${cls}"` : ''}>${body}</${tagName}>`;

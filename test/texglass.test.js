@@ -477,3 +477,47 @@ test('\\long\\def, \\cites and \\todo', () => {
   assert.match(html, /class="todo"/);
   assert.equal(unknownCommands.length, 0);
 });
+
+test('physics-package commands render like their written-out forms', () => {
+  const cases = [
+    [String.raw`\abs{x}`, String.raw`\left\lvert x \right\rvert`],
+    [String.raw`\abs*{x}`, String.raw`\mathopen{\lvert}x\mathclose{\rvert}`],
+    [String.raw`\abs\big{x}`, String.raw`\mathopen{\bigl\lvert}x\mathclose{\bigr\rvert}`],
+    [String.raw`\norm{\frac{u}{2}}`, String.raw`\left\lVert \frac{u}{2} \right\rVert`],
+    [String.raw`\qty(\frac ab)`, String.raw`\left( \frac ab \right)`],
+    [String.raw`\qty[x]+\qty|y|+\qty{z}`, String.raw`\left[ x \right]+\left\lvert y \right\rvert+\left\{ z \right\}`],
+    [String.raw`\order{h^2}`, String.raw`\mathcal{O}\left\{ h^2 \right\}`],
+    [String.raw`\dv{f}{x}+\dv[2]{f}{t}+\dv{s}`, String.raw`\frac{\mathrm{d}{f}}{\mathrm{d}{x}}+\frac{\mathrm{d}^{2}{f}}{\mathrm{d}{t}^{2}}+\frac{\mathrm{d}}{\mathrm{d}{s}}`],
+    [String.raw`\pdv{f}{x}{y}`, String.raw`\frac{\partial^{2} {f}}{\partial{x}\,\partial{y}}`],
+    [String.raw`\int g\dd{x}`, String.raw`\int g\mathop{}\!\mathrm{d}{x}`],
+    [String.raw`\expval{A}{\psi}`, String.raw`\left\langle \psi \middle\vert A \middle\vert \psi \right\rangle`],
+    [String.raw`\mel{m}{B}{n}+\comm{P}{Q}`, String.raw`\left\langle m \middle\vert B \middle\vert n \right\rangle+\left[ P , Q \right]`],
+    [String.raw`\eval{x^2}_0^1`, String.raw`\left. x^2 \right\rvert_0^1`],
+    [String.raw`\tr\rho+\vb{v}+\vu{e}`, String.raw`\operatorname{tr}\rho+\mathbf{v}+\hat{\mathbf{e}}`],
+  ];
+  for (const [src, hand] of cases) {
+    const r = realMath(String.raw`\begin{document}$` + src + String.raw`$\end{document}`);
+    assert.doesNotMatch(r.html, /math-error|katex-error/, src);
+    assert.ok(r.html.includes(handMath(hand)), src);
+  }
+});
+
+test("a document's own \\abs and \\norm win over the physics-package ones", () => {
+  const r = realMath(String.raw`\usepackage{mathtools}
+\DeclarePairedDelimiter\norm{\lVert}{\rVert}
+\newcommand{\abs}[1]{|#1|}
+\begin{document}$\abs{x}+\norm{y}$\end{document}`);
+  assert.ok(r.html.includes(handMath(String.raw`|x|+\mathopen{\lVert} y \mathclose{\rVert}`)));
+});
+
+test('ulem underlines, strike-outs and underlined \\emph', () => {
+  const r = TeXglass.render(String.raw`\usepackage{ulem}
+\begin{document}\uline{a} \uuline{b} \uwave{c} \sout{d} \xout{e} \dashuline{f} \dotuline{g} \emph{h} {\em i}\end{document}`);
+  assert.match(r.html, /<u>a<\/u> <u class="uuline">b<\/u> <u class="uwave">c<\/u> <s>d<\/s> <s class="xout">e<\/s>/);
+  assert.match(r.html, /<u class="dashuline">f<\/u> <u class="dotuline">g<\/u> <u>h<\/u> <u>i<\/u>/);
+  const n = TeXglass.render(String.raw`\usepackage[normalem]{ulem}
+\begin{document}\emph{h}\end{document}`);
+  assert.match(n.html, /<em>h<\/em>/);
+  const m = realMath(String.raw`\begin{document}$\text{\uline{a} and \uwave{b}}$\end{document}`);
+  assert.doesNotMatch(m.html, /math-error|katex-error/);
+});
