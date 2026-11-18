@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
-  "version": "0.9.6",
+  "version": "0.11.0",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -116,6 +116,16 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.showNotation",
+        "title": "Show Notation Index",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.showDependencies",
+        "title": "Show Dependency Map of the Results",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.findNext",
         "title": "Find Next in Preview",
         "category": "TeXglass"
@@ -171,6 +181,16 @@
           "command": "texglass.find",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "navigation@0"
+        },
+        {
+          "command": "texglass.showNotation",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "4_insight@1"
+        },
+        {
+          "command": "texglass.showDependencies",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "4_insight@2"
         },
         {
           "command": "texglass.toggleContents",
@@ -270,6 +290,14 @@
         },
         {
           "command": "texglass.goTo",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.showNotation",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.showDependencies",
           "when": "activeWebviewPanelId == 'texglass.preview'"
         },
         {
@@ -400,6 +428,11 @@
           "type": "boolean",
           "default": true,
           "description": "Scroll the preview along with the editor, and the editor along with the preview."
+        },
+        "texglass.notationHover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rest the pointer on a formula in the preview to see where its notation is defined: the paper's own macros, and symbols defined with := ."
         },
         "texglass.clickToCopyMath": {
           "type": "boolean",

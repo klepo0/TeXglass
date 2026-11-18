@@ -134,6 +134,10 @@ function findInBlock(text, m) {
 
 /** Set a context key that decides which buttons the preview's title bar shows. */
 /** Whether a click on a formula in the preview copies its LaTeX. */
+function notationHover() {
+  return vscode.workspace.getConfiguration('texglass').get('notationHover', true) !== false;
+}
+
 function clickToCopy() {
   return vscode.workspace.getConfiguration('texglass').get('clickToCopyMath', true) !== false;
 }
@@ -391,6 +395,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -443,7 +448,12 @@ ${INK_FILTERS}
         });
         this.project = project;
         this.renderedText = text;
-        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings) });
+        // The paper's macros, for notation on hover and the notation index; sent again only when they change.
+        const defsJson = JSON.stringify(r.defs || null);
+        const defs = defsJson !== this.defsJson ? r.defs || null : undefined;
+        this.defsJson = defsJson;
+        this.defs = r.defs || null;
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs });
         this.flushLine();
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
@@ -524,7 +534,9 @@ ${INK_FILTERS}
         this.post({ type: 'toc-side', value: contentsPosition() });
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
         this.post({ type: 'click-to-copy', on: clickToCopy() });
+        this.post({ type: 'notation-hover', on: notationHover() });
         this.renderedText = null;
+        this.defsJson = null;
         this.render().then(() => {
           if (this.pendingLine) return this.flushLine();
           const ed = this.editor();
@@ -568,6 +580,17 @@ ${INK_FILTERS}
       case 'copy-tex':
         // The extension host's clipboard works wherever the webview's may not.
         if (typeof m.text === 'string') vscode.env.clipboard.writeText(m.text);
+        break;
+      case 'render-tex':
+        // Symbols for the notation index, drawn with the document's macros.
+        if (Array.isArray(m.texs)) {
+          this.converter.render({ snippets: m.texs.slice(0, 500).map(String), defs: this.defs }).then((r) => {
+            this.post({ type: 'tex-rendered', id: m.id, html: r.result ? r.result.html : null });
+          });
+        }
+        break;
+      case 'set-notation-hover':
+        setConfig('notationHover', !!m.on);
         break;
       case 'open-link':
         if (/^https?:|^mailto:/.test(m.href)) vscode.env.openExternal(vscode.Uri.parse(m.href));
@@ -963,6 +986,8 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
     vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
+    vscode.commands.registerCommand('texglass.showNotation', () => preview && preview.post({ type: 'insight', tab: 'notation' })),
+    vscode.commands.registerCommand('texglass.showDependencies', () => preview && preview.post({ type: 'insight', tab: 'deps' })),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
     // Zoom the document in the preview (Ctrl/Cmd +, - and 0 while it has focus).
     vscode.commands.registerCommand('texglass.zoomIn', () => preview && preview.post({ type: 'zoom-step', dir: 1 })),
@@ -1015,6 +1040,9 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
         preview.post({ type: 'toc-side', value: contentsPosition() });
+      }
+      if (preview && e.affectsConfiguration('texglass.notationHover')) {
+        preview.post({ type: 'notation-hover', on: notationHover() });
       }
       if (preview && e.affectsConfiguration('texglass.clickToCopyMath')) {
         preview.post({ type: 'click-to-copy', on: clickToCopy() });

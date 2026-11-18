@@ -619,6 +619,8 @@
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
       body.appendChild(clone);
     }
+    const used = insight && insight.usedByNote(target);
+    if (used) body.appendChild(used);
     popover.replaceChildren(body);
     popover.hidden = false;
     const r = a.getBoundingClientRect();
@@ -699,7 +701,9 @@
         vscode.setState({ uri: m.uri });
         break;
       case 'render': {
+        if (insight && m.defs !== undefined) insight.setDefinitions(m.defs);
         show(m.blocks, m.lines);
+        if (insight) insight.invalidate();
         updateToc(m.toc || []);
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
@@ -774,6 +778,18 @@
       case 'status':
         setStatus(m.text);
         break;
+      case 'insight':
+        if (insight) insight.open(m.tab);
+        break;
+      case 'notation-hover':
+        if (insight) insight.setHover(m.on);
+        break;
+      case 'tex-rendered': {
+        const done = texWaiting.get(m.id);
+        texWaiting.delete(m.id);
+        if (done) done(m.html);
+        break;
+      }
       case 'find':
         if (finder) finder.open(m.mode, m.mode === 'find' ? selectedText() : null);
         break;
@@ -790,6 +806,27 @@
       default:
     }
   });
+
+  // --- notation and dependencies -------------------------------------------------------
+
+  // Resting on a formula shows where its notation comes from; the commands
+  // TeXglass: Show Notation Index and Show Dependency Map open the panel. All of
+  // it is read from the page when first needed, never while rendering. The
+  // extension draws the index's symbols with the document's macros.
+  const texWaiting = new Map();
+  let texId = 0;
+  const insight = window.TeXglassInsight
+    ? window.TeXglassInsight.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      renderTex: (texs) => new Promise((resolve) => {
+        const id = ++texId;
+        texWaiting.set(id, resolve);
+        vscode.postMessage({ type: 'render-tex', id, texs });
+      }),
+      onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+    })
+    : null;
 
   vscode.postMessage({ type: 'ready' });
 })();
