@@ -12,9 +12,9 @@
  * Works in browsers and in Node 18+ (fetch and DecompressionStream).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./bib.js'));
-  else root.TeXglassArxiv = factory(root.TeXglassBib);
-})(typeof self !== 'undefined' ? self : this, function (Bib) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./bib.js'), require('./eps.js'));
+  else root.TeXglassArxiv = factory(root.TeXglassBib, root.TeXglassEps);
+})(typeof self !== 'undefined' ? self : this, function (Bib, Eps) {
   'use strict';
 
   /**
@@ -248,6 +248,13 @@
     return text;
   }
 
+  /** Bytes as a string of the same character codes (PostScript is 8-bit text). */
+  function latin1(bytes) {
+    let s = '';
+    for (let k = 0; k < bytes.length; k += 8192) s += String.fromCharCode.apply(null, bytes.subarray(k, k + 8192));
+    return s;
+  }
+
   const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp' };
 
   /**
@@ -283,6 +290,18 @@
       if (/^(tex|ltx|latex|bbl|bib|sty|cls|def)$/.test(ext) || !path.includes('.')) texFiles[path] = decodeText(data);
       else if (IMAGE_TYPES[ext]) images[path] = new Blob([data], { type: IMAGE_TYPES[ext] });
     }
+    // .eps figures, which browsers cannot show, drawn as SVG (unless the authors
+    // also uploaded the figure as a picture browsers can show)
+    if (Eps) {
+      for (const [path, data] of Object.entries(raw)) {
+        if (!/\.(eps|ps|epsi)$/i.test(path)) continue;
+        const stem = path.replace(/\.[^.]+$/, '');
+        if (['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'].some((e) => images[stem + e])) continue;
+        let r = null;
+        try { r = Eps.toSvg(latin1(data)); } catch (e) { r = null; }
+        if (r) images[path] = new Blob([r.svg], { type: 'image/svg+xml' });
+      }
+    }
     const candidates = {};
     for (const n of Object.keys(texFiles)) if (/\.(tex|ltx|latex)$/i.test(n) || !n.includes('.')) candidates[n] = texFiles[n];
     const main = pickMain(candidates);
@@ -298,7 +317,7 @@
     const dirs = [''];
     const gp = /\\graphicspath\s*\{((?:\s*\{[^}]*\})+)\s*\}/.exec(source || '');
     if (gp) for (const m of gp[1].matchAll(/\{([^}]*)\}/g)) dirs.push(m[1].replace(/\/?$/, '/'));
-    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'];
+    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.ps'];
     return (name) => {
       const clean = name.trim().replace(/^\.\//, '');
       for (const d of dirs) {
@@ -462,5 +481,5 @@
     throw lastError || new Error('Search failed.');
   }
 
-  return { parseId, untar, pickMain, flatten, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex };
+  return { parseId, untar, pickMain, flatten, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex, latin1 };
 });

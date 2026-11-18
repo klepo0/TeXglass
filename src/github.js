@@ -15,9 +15,9 @@
  * Works in browsers and in Node 18+ (fetch).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./arxiv.js'), require('./bib.js'));
-  else root.TeXglassGitHub = factory(root.TeXglassArxiv, root.TeXglassBib);
-})(typeof self !== 'undefined' ? self : this, function (Arxiv, Bib) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./arxiv.js'), require('./bib.js'), require('./eps.js'));
+  else root.TeXglassGitHub = factory(root.TeXglassArxiv, root.TeXglassBib, root.TeXglassEps);
+})(typeof self !== 'undefined' ? self : this, function (Arxiv, Bib, Eps) {
   'use strict';
 
   const RAW = 'https://raw.githubusercontent.com';
@@ -287,6 +287,16 @@
               images[p] = type && blob.type !== type ? new Blob([blob], { type }) : blob;
               break search;
             }
+          }
+        }
+        // an .eps figure, drawn as SVG
+        const isEps = /\.(eps|ps)$/i.test(rel);
+        if (Eps && (isEps || !/\.[a-z]+$/i.test(rel))) {
+          for (const p of isEps ? [rel] : [rel + '.eps']) {
+            const blob = await get(rawUrl(ref, full(p)), 'blob');
+            if (!blob) continue;
+            const r = Eps.toSvg(Arxiv.latin1(new Uint8Array(await blob.arrayBuffer())));
+            if (r) { images[p] = new Blob([r.svg], { type: 'image/svg+xml' }); break search; }
           }
         }
       }
