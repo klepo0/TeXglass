@@ -158,3 +158,56 @@ test('the dependency map, the notation index and notation on hover read the rend
     await browser.close();
   }
 });
+
+test('the side panel has Contents, Notation and Map tabs and a divider that resizes it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const r = TeXglass.render(DOC, { renderMath, sourceMap: true });
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+    await page.setContent(
+      `<style>${fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8')}</style>` +
+      '<main class="panes"><nav class="toc-pane" id="toc-pane"><div class="toc-pane-head"><div class="toc-pane-title">Contents</div></div><ol id="toc-list" class="toc-list"><li><a href="#">1 Setting</a></li></ol></nav>' +
+      `<section class="pane" id="preview-pane"><article id="preview" class="document">${r.blocks.join('\n')}</article></section></main>`
+    );
+    await page.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+    await page.evaluate((defs) => {
+      window.saved = { 'texglass:side-tab': 'notation', 'texglass:side-width': '300' };
+      const store = { get: (k) => window.saved[k] || null, set: (k, v) => { window.saved[k] = v; } };
+      const insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {} });
+      insight.setDefinitions(defs);
+      window.side = TeXglassInsight.sidePanel({
+        pane: document.getElementById('toc-pane'),
+        head: document.querySelector('.toc-pane-head'),
+        list: document.getElementById('toc-list'),
+        insight,
+        store,
+      });
+    }, r.defs);
+    const width = () => page.evaluate(() => Math.round(document.getElementById('toc-pane').getBoundingClientRect().width));
+    // The saved tab and width come back, without being saved again.
+    assert.equal(await width(), 300);
+    assert.equal(await page.locator('#toc-list').isHidden(), true);
+    assert.equal(await page.locator('.side-insight .insight-table tr').count(), 2);
+    await page.click('[data-side-tab="deps"]');
+    assert.equal(await page.locator('.side-insight .dep-node').count(), 5);
+    assert.equal(await page.evaluate(() => window.saved['texglass:side-tab']), 'deps');
+    await page.click('[data-side-tab="toc"]');
+    assert.equal(await page.locator('#toc-list').isVisible(), true);
+    // Drag the divider; the width is kept.
+    const box = await page.locator('.side-resizer').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 120, box.y + 100, { steps: 5 });
+    await page.mouse.up();
+    assert.ok(Math.abs((await width()) - 420) <= 2, String(await width()));
+    assert.equal(await page.evaluate(() => window.saved['texglass:side-width']), String(await width()));
+    await page.focus('.side-resizer');
+    await page.keyboard.press('ArrowLeft');
+    assert.ok(Math.abs((await width()) - 400) <= 2);
+    await page.dblclick('.side-resizer');
+    assert.equal(await width(), 260);
+  } finally {
+    await browser.close();
+  }
+});

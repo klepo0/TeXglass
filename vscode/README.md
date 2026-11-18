@@ -44,10 +44,12 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   notation is defined: the document's own macros (with their definition and
   first use) and symbols defined with `:=`. The `texglass.notationHover`
   setting turns it off.
-- **TeXglass: Show Notation Index** lists the document's macros and defined
-  symbols with their first uses; **TeXglass: Show Dependency Map of the
-  Results** draws which lemmas each theorem uses, from the `\ref`s in its
-  statement and proof (both also in the preview's `…` menu). Hovering a
+- The contents sidebar has three tabs: **Contents**, **Notation** (the
+  document's macros and defined symbols with their first uses) and **Map**
+  (which lemmas each theorem uses, from the `\ref`s in its statement and
+  proof). **TeXglass: Show Notation Index** and **TeXglass: Show Dependency Map
+  of the Results** open those tabs. Drag the sidebar's edge to resize it; the
+  width and tab are remembered. Hovering a
   reference to a result also says what it uses and where it is used. These are
   worked out from the preview only when asked for, so rendering is as fast as
   before.
@@ -60,8 +62,8 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   half-moon button switches the preview between **light and dark**
   (**TeXglass: Toggle Light/Dark Preview**; the `texglass.previewTheme` setting
   can also be set back to `auto`, which follows VS Code's theme).
-- **Handwritten notes look**: **TeXglass: Toggle Handwritten Notes Look** (also
-  in the preview's `…` menu) shows the document as notes in blue ink on squared
+- **Handwritten notes look**: the pen button in the preview's title bar, next
+  to the light/dark one, or **TeXglass: Toggle Handwritten Notes Look**, shows the document as notes in blue ink on squared
   paper, and as chalk on a board in dark mode. Choose the paper (`grid`, `lined`
   or `plain`) with `texglass.notes.paper`, the hand (Kalam, Caveat, Patrick
   Hand or Architects Daughter) with `texglass.notes.handwriting`, and whether

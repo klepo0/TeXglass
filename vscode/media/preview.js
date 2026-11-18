@@ -282,7 +282,7 @@
 
   /** Highlight the section at the top of the preview. */
   function spyToc() {
-    if (tocPane.hidden || !tocLinks.length || Date.now() < tocJump) return;
+    if (tocPane.hidden || tocList.hidden || !tocLinks.length || Date.now() < tocJump) return;
     const limit = pane.getBoundingClientRect().top + 48;
     let current = null;
     for (const a of tocLinks) {
@@ -750,6 +750,10 @@
         folded.clear();
         (m.folds || []).forEach((k) => folded.add(k));
         if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
+        if (side) {
+          if (m.sideWidth) side.setWidth(m.sideWidth);
+          if (m.sideTab) side.show(m.sideTab);
+        }
         applyFolds();
         showToc();
         break;
@@ -805,7 +809,13 @@
         setStatus(m.text);
         break;
       case 'insight':
-        if (insight) insight.open(m.tab);
+        // Show Notation Index / Show Dependency Map: that tab of the side panel
+        if (side) {
+          tocWanted = true;
+          showToc();
+          side.show(m.tab);
+          vscode.postMessage({ type: 'toc', on: true });
+        } else if (insight) insight.open(m.tab);
         break;
       case 'notation-hover':
         if (insight) insight.setHover(m.on);
@@ -863,6 +873,23 @@
         vscode.postMessage({ type: 'render-tex', id, texs });
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+    })
+    : null;
+
+  // The side panel's tabs (Contents, Notation, Map) and its draggable divider;
+  // the extension keeps the tab and the width (prefs: sideTab, sideWidth).
+  const side = window.TeXglassInsight
+    ? window.TeXglassInsight.sidePanel({
+      pane: tocPane,
+      head: tocPane.querySelector('.toc-pane-head'),
+      list: tocList,
+      insight,
+      store: {
+        get: () => null,
+        set: (key, value) => vscode.postMessage({ type: 'side-pref', key, value }),
+      },
+      onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
+      onTab: (tab) => { if (tab === 'toc') spyToc(); },
     })
     : null;
 

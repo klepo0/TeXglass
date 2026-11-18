@@ -24,6 +24,11 @@ const PRECACHE = [
   'index.html',
   'app.js',
   'styles.css',
+  // the handwritten-notes look, shared with the VS Code extension (Kalam is the web viewer's hand)
+  'vscode/media/notes.css',
+  'vscode/ink.js',
+  ...['kalam-latin-400-normal', 'kalam-latin-ext-400-normal', 'kalam-latin-700-normal', 'kalam-latin-ext-700-normal']
+    .map((f) => `vscode/media/fonts/${f}.woff2`),
   'vendor/katex/katex.min.js',
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,

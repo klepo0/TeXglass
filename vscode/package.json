@@ -213,6 +213,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "texglass.toggleHandwriting",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "navigation@3"
+        },
+        {
           "command": "texglass.toggleTheme",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "navigation@3"
@@ -258,14 +263,9 @@
           "group": "0_zoom@4"
         },
         {
-          "command": "texglass.toggleHandwriting",
-          "when": "activeWebviewPanelId == 'texglass.preview'",
-          "group": "0_look@1"
-        },
-        {
           "command": "texglass.toggleStudyTools",
           "when": "activeWebviewPanelId == 'texglass.preview'",
-          "group": "0_look@2"
+          "group": "0_look@1"
         }
       ],
       "explorer/context": [
