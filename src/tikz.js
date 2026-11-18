@@ -805,7 +805,7 @@
     above: 90, below: 270, right: 0, left: 180, 'above right': 45, 'above left': 135, 'below right': 315, 'below left': 225,
   };
   const OPPOSITE = { above: 'south', below: 'north', left: 'east', right: 'west', 'above left': 'south east', 'above right': 'south west', 'below left': 'north east', 'below right': 'north west' };
-  const UNSUPPORTED = /\\(matrix|pic|graph|shade|shadedraw|datavisualization|pgfplot|addplot|tdplot\w*|spy)\b|\\begin\s*\{(axis|semilogyaxis|semilogxaxis|loglogaxis|polaraxis|groupplot)\}|\bchild\s*[{[]|decorate\b|\bpath picture\b/;
+  const UNSUPPORTED = /\\(matrix|pic|graph|shade|shadedraw|datavisualization|pgfplot|addplot|tdplot\w*|spy)\b|\\begin\s*\{(axis|semilogyaxis|semilogxaxis|loglogaxis|polaraxis|groupplot)\}|\bchild\s*[{[]|\bpath picture\b/;
 
   // --- expressions (pgfmath subset) -------------------------------------------
 
@@ -939,6 +939,7 @@
     this.styles = Object.create(null);
     this.colors = Object.create(null);
     this.partial = false;
+    this.clips = []; // \clip regions: { segs, parent }
     this.budget = 20000; // statements, against runaway \foreach
     if (cb.colors) {
       for (const k in cb.colors) {
@@ -1028,6 +1029,23 @@
       if (k === 'rounded corners') { st.round = v ? toEm(v, 'pt') || 0.4 : 0.4; continue; }
       if (k === 'sharp corners') { st.round = 0; continue; }
       if (k === 'font') { st.font = fontScale(v); continue; }
+      // patterns library: hatching drawn in the pattern colour
+      if (k === 'pattern') { st.pattern = Object.assign({ c: 'currentColor' }, st.pattern, { k: (v || '').trim() }); continue; }
+      if (k === 'pattern color') { st.pattern = Object.assign({ k: 'north east lines' }, st.pattern, { c: this.color(v) }); continue; }
+      // decorations: only the brace of decorations.pathreplacing is drawn
+      if (k === 'decorate') { st.decorate = true; continue; }
+      if (k === 'decoration') {
+        const d = {};
+        for (const x of splitTop(unbrace(v || ''), ',')) {
+          const [dk, dv] = keyVal(x);
+          if (dk === 'amplitude' || dk === 'raise') d[dk] = toEm(dv, 'pt') / 2.8453;
+          else if (dk === 'mirror') d.mirror = true;
+          else if (!dv && dk) d.name = dk;
+          else if (dk === 'name') d.name = dv;
+        }
+        st.decoration = d;
+        continue;
+      }
       if (/^[<>|]*-[<>|]*$/.test(k) || /^(\{.*\}|[A-Za-z<>|]*)-(\{.*\}|[A-Za-z<>|]*)$/.test(k)) {
         const t = arrowSpec(k);
         if (t) {
@@ -1046,6 +1064,9 @@
   };
 
   function fontScale(v) {
+    // \fontsize{8}{10}\selectfont: 8pt against the 10pt the picture is set in
+    const f = /\\fontsize\s*\{\s*([\d.]+)\s*(pt)?\s*\}/.exec(v || '');
+    if (f && parseFloat(f[1]) > 0) return round(parseFloat(f[1]) / 10);
     const m = /\\(tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\b/.exec(v || '');
     return m ? FONT_SCALE[m[1]] : 1;
   }
@@ -1255,6 +1276,15 @@
         i = e.end;
         continue;
       }
+      // a macro the picture defined, used as a statement (\def\branches#1{\draw[#1] …;} … \branches{red})
+      const mac = !STATEMENTS.has(cmd) && this.macro(cmd);
+      if (mac) {
+        const c = callMacro(mac, s, j);
+        if (--this.budget < 0) { this.partial = true; return; }
+        this.run(c.text, st);
+        i = c.end;
+        continue;
+      }
       if (NO_SEMI.has(cmd)) {
         // not ended by ';'
         this.skipTo = j;
@@ -1277,6 +1307,8 @@
   const NO_SEMI = new Set(['foreach', 'def', 'pgfmathsetmacro', 'pgfmathtruncatemacro', 'tikzset', 'newcommand', 'renewcommand',
     'usetikzlibrary', 'pgfsetlinewidth', 'pgfdeclarelayer', 'pgfsetlayers', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large',
     'normalsize', 'centering', 'noindent']);
+
+  const STATEMENTS = new Set(['draw', 'fill', 'filldraw', 'path', 'useasboundingbox', 'clip', 'node', 'coordinate', 'tikzstyle', 'begin', 'end']);
 
   function cloneState(st) {
     return Object.assign({}, st, { every: { node: st.every.node.slice(), label: st.every.label.slice() } });
@@ -1313,7 +1345,17 @@
       case 'fill': return this.path(stmt, st, { fill: true });
       case 'filldraw': return this.path(stmt, st, { draw: true, fill: true });
       case 'path': case 'useasboundingbox': return this.path(stmt, st, {});
-      case 'clip': return undefined;
+      case 'clip': {
+        // later paths in this scope are cut to this region (nested clips intersect)
+        const before = this.paths.length;
+        this.path(stmt, st, {});
+        const added = this.paths.splice(before);
+        if (added.length) {
+          this.clips.push({ segs: added[0].segs, parent: st.clip });
+          st.clip = this.clips.length - 1;
+        }
+        return undefined;
+      }
       case 'node': return this.path('node ' + stmt, st, {});
       case 'coordinate': return this.path('coordinate ' + stmt, st, {});
       case 'foreach': return this.foreach(whole, at, st);
@@ -1359,7 +1401,16 @@
       name = m[0];
       i = skipWs(whole, i + m[0].length);
     }
-    if (whole[i] === '[') i = skipWs(whole, matchGroup(whole, i));
+    // arguments: \newcommand{\f}[2]{…} or \def\f#1#2{…}
+    let nargs = 0;
+    if (whole[i] === '[') {
+      const oe = matchGroup(whole, i);
+      nargs = parseInt(whole.slice(i + 1, oe - 1), 10) || 0;
+      i = skipWs(whole, oe);
+      if (whole[i] === '[') i = skipWs(whole, matchGroup(whole, i)); // default for #1: ignored
+    }
+    const params = /^(?:#\d)+/.exec(whole.slice(i));
+    if (params) { nargs = params[0].length / 2; i = skipWs(whole, i + params[0].length); }
     if (whole[i] !== '{') { this.skipTo = i; return; }
     const e = matchGroup(whole, i);
     let val = whole.slice(i + 1, e - 1);
@@ -1368,15 +1419,72 @@
       if (cmd === 'pgfmathtruncatemacro') val = String(Math.trunc(parseFloat(val)));
     }
     this.macros = this.macros || [];
-    this.macros.push([name.replace(/^\\/, ''), val]);
+    this.macros.push([name.replace(/^\\/, ''), val, nargs]);
     this.skipTo = e;
   };
 
+  /** The macro called name, as [name, body, nargs], or undefined. */
+  TikzParser.prototype.macro = function (name) {
+    if (this.macros) for (let k = this.macros.length - 1; k >= 0; k--) if (this.macros[k][0] === name) return this.macros[k];
+    return this.docMacro(name);
+  };
+
+  /**
+   * A macro the document defined before the picture (\def\edge{(0,0) -- (1,1)}
+   * outside the tikzpicture), as [name, body, nargs], when its body is TikZ:
+   * path coordinates or drawing commands. Other document macros stay for KaTeX.
+   */
+  TikzParser.prototype.docMacro = function (name) {
+    const d = this.cb.macros && Object.prototype.hasOwnProperty.call(this.cb.macros, name) ? this.cb.macros[name] : null;
+    if (!d || d.delims || typeof d.body !== 'string') return undefined;
+    const b = d.body.trim();
+    if (!/^(\(|\\(draw|fill|filldraw|path|node|coordinate|foreach|clip)\b)/.test(b)) return undefined;
+    return [name, d.body, d.nargs || 0];
+  };
+
+  /** The body of macro mac called at text[i] (just after its name), with its arguments put in: { text, end }. */
+  function callMacro(mac, text, i) {
+    let body = mac[1];
+    let j = i;
+    for (let a = 1; a <= mac[2]; a++) {
+      j = skipWs(text, j);
+      let arg;
+      if (text[j] === '{') { const e = matchGroup(text, j); arg = text.slice(j + 1, e - 1); j = e; }
+      else if (text[j] === '\\') { const m = /^\\(?:[A-Za-z]+|.)/.exec(text.slice(j)); arg = m[0]; j += m[0].length; }
+      else { arg = text[j] || ''; j++; }
+      body = body.replace(new RegExp('#' + a, 'g'), () => arg);
+    }
+    return { text: body, end: j };
+  }
+
   TikzParser.prototype.subst = function (text) {
+    if (this.cb.macros) {
+      // document macros holding coordinates or paths
+      const re = /\\([A-Za-z]+)\s?/g;
+      let m;
+      let guard = 0;
+      while ((m = re.exec(text)) && guard++ < 500) {
+        if (this.macros && this.macros.some((x) => x[0] === m[1])) continue;
+        const mac = this.docMacro(m[1]);
+        if (!mac) continue;
+        const c = callMacro(mac, text, m.index + m[0].length);
+        text = text.slice(0, m.index) + c.text + text.slice(c.end);
+        re.lastIndex = m.index;
+      }
+    }
     if (!this.macros) return text;
     for (let k = this.macros.length - 1; k >= 0; k--) {
-      const [n, v] = this.macros[k];
-      text = text.replace(new RegExp('\\\\' + n + '(?![A-Za-z])\\s?', 'g'), () => v);
+      const mac = this.macros[k];
+      const [n, v, nargs] = mac;
+      const re = new RegExp('\\\\' + n + '(?![A-Za-z])\\s?', 'g');
+      if (!nargs) { text = text.replace(re, () => v); continue; }
+      let m;
+      let guard = 0;
+      while ((m = re.exec(text)) && guard++ < 200) {
+        const c = callMacro(mac, text, m.index + m[0].length);
+        text = text.slice(0, m.index) + c.text + text.slice(c.end);
+        re.lastIndex = m.index + c.text.length;
+      }
     }
     return text;
   };
@@ -1484,6 +1592,38 @@
       out.push(['C', [p0[0] + d0[0] * k, p0[1] + d0[1] * k], [p1[0] - d1[0] * k, p1[1] - d1[1] * k], p1]);
     }
     return out;
+  }
+
+  /**
+   * A curly brace (decorations.pathreplacing) in place of a straight path from its
+   * first to its last point. It bulges to the left of the path, or the right when mirrored.
+   */
+  function braceSegs(segs, d) {
+    const pts = [];
+    for (const g of segs) if (g.length > 1 && Array.isArray(g[g.length - 1])) pts.push(g[g.length - 1]);
+    if (pts.length < 2) return segs;
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!L) return segs;
+    const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+    const sgn = d.mirror ? -1 : 1;
+    const nrm = [-u[1] * sgn, u[0] * sgn];
+    const h = d.amplitude > 0 ? d.amplitude : 5 / 28.4528; // 5pt
+    const r = d.raise || 0;
+    const q = Math.min(h / 2, L / 4);
+    const P = (s, t) => [round(a[0] + u[0] * s + nrm[0] * (t + r)), round(a[1] + u[1] * s + nrm[1] * (t + r))];
+    const m = L / 2;
+    return [
+      ['M', P(0, 0)],
+      ['C', P(0, h / 4), P(0, h / 2), P(q, h / 2)],
+      ['L', P(m - q, h / 2)],
+      ['C', P(m, h / 2), P(m, h / 2), P(m, h)],
+      ['M', P(m, h)],
+      ['C', P(m, h / 2), P(m, h / 2), P(m + q, h / 2)],
+      ['L', P(L - q, h / 2)],
+      ['C', P(L, h / 2), P(L, h / 4), P(L, 0)],
+    ];
   }
 
   TikzParser.prototype.path = function (text, st0, kind) {
@@ -1769,12 +1909,16 @@
       i++;
     }
 
+    if (st.decorate) {
+      if (st.decoration && st.decoration.name === 'brace') segs.splice(0, segs.length, ...braceSegs(segs, st.decoration));
+      else this.partial = true;
+    }
     if (segs.length) {
-      this.paths.push({ segs, draw: st.draw, fill: st.fill, lw: st.lw, dash: st.dash, head: st.head, tail: st.tail, op: st.opacity !== 1 ? st.opacity : undefined, rc: st.round || undefined });
+      this.paths.push({ segs, draw: st.draw, fill: st.fill, lw: st.lw, dash: st.dash, head: st.head, tail: st.tail, op: st.opacity !== 1 ? st.opacity : undefined, rc: st.round || undefined, clip: st.clip, pat: st.pattern || undefined });
     }
     for (const sp of subpaths) {
       const e = sp.st;
-      this.paths.push({ segs: sp.e.segs, draw: e.draw, fill: null, lw: e.lw, dash: e.dash, head: e.head, tail: e.tail });
+      this.paths.push({ segs: sp.e.segs, draw: e.draw, fill: null, lw: e.lw, dash: e.dash, head: e.head, tail: e.tail, clip: st.clip });
       const at = this.paths.length - 1;
       for (const n of sp.nodes) this.nodes[n].on = { path: at, seg: 1, t: this.nodes[n].on.t };
     }
@@ -1836,6 +1980,7 @@
       else if (k === 'anchor') n.anchor = v;
       else if (k === 'text' || k === 'color' || k === 'text color') n.col = this.color(v);
       else if (k === 'font') n.scale = fontScale(v);
+      else if (k === 'overlay') n.ov = 1;
       else if (k === 'scale') { /* node scale ignored */ }
       else if (k === 'rounded corners') n.rc = v ? toEm(v, 'pt') || 0.4 : 0.4;
       else if (k === 'line width') n.lw = (toEm(v, 'pt') || 0.04) * 10;
@@ -1877,6 +2022,14 @@
       else if (this.isColor(k)) n.col = this.color(k);
       else if (k === 'name') name = v;
     }
+    // a size command around the whole text: {\tiny{$0$}} or {\small label}
+    const sz = /^\s*\\(tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![A-Za-z])\s*/.exec(text);
+    if (sz) {
+      let rest = text.slice(sz[0].length);
+      if (rest[0] === '{' && matchGroup(rest, 0) === rest.trimEnd().length) rest = rest.trimEnd().slice(1, -1);
+      text = rest;
+      n.scale = round((n.scale || 1) * FONT_SCALE[sz[1]]);
+    }
     if (n.shape !== 'coord' && text.trim()) {
       n.k = this.labels.length;
       this.labels.push(this.cb.text(text));
@@ -1886,7 +2039,11 @@
     }
     // a rough size estimate (cm), for layout decisions made before the page measures
     const plain = text.replace(/\\[A-Za-z]+|[{}$^_]/g, '');
-    n.est = [Math.max(n.mw / 2, plain.length * 0.09 + n.is), Math.max(n.mh / 2, (text.trim() ? 0.2 : 0) + n.is)];
+    n.est = [Math.max(n.mw / 2, plain.length * 0.09 * (n.scale || 1) + n.is), Math.max(n.mh / 2, (text.trim() ? 0.2 * (n.scale || 1) : 0) + n.is)];
+    // \includegraphics[width=4.85cm]{…}: its width is known
+    const gw = /\\includegraphics\s*\[[^\]]*\bwidth\s*=\s*([\d.]+\s*(?:cm|mm|in|pt|bp|em))/.exec(text);
+    if (gw) { try { const r = evaluate(gw[1]); n.est = [r.v / 2 + n.is, r.v / 2 + n.is]; } catch (e) { /* keep the guess */ } }
+    if (st.clip !== undefined) n.clip = st.clip;
     const k = this.nodes.length;
     this.nodes.push(n);
     if (at) n.at = at;
@@ -1939,8 +2096,29 @@
       x0 = Math.min(x0, p[0] - (r ? r[0] : 0)); x1 = Math.max(x1, p[0] + (r ? r[0] : 0));
       y0 = Math.min(y0, p[1] - (r ? r[1] : 0)); y1 = Math.max(y1, p[1] + (r ? r[1] : 0));
     };
-    for (const p of this.paths) for (const g of p.segs) for (const q of g.slice(1)) grow(this.toXY(q));
-    for (const n of this.nodes) if (n.at) grow(n.at, n.est);
+    const clipBox = (k) => {
+      if (k === undefined || k === null || !this.clips[k]) return null;
+      const c = this.clips[k];
+      if (!c.box) {
+        const b = [Infinity, Infinity, -Infinity, -Infinity];
+        for (const g of c.segs) for (const q of g.slice(1)) {
+          const p = this.toXY(q);
+          b[0] = Math.min(b[0], p[0]); b[1] = Math.min(b[1], p[1]); b[2] = Math.max(b[2], p[0]); b[3] = Math.max(b[3], p[1]);
+        }
+        const o = clipBox(c.parent);
+        c.box = o ? [Math.max(b[0], o[0]), Math.max(b[1], o[1]), Math.min(b[2], o[2]), Math.min(b[3], o[3])] : b;
+      }
+      return c.box;
+    };
+    for (const p of this.paths) {
+      const cb = clipBox(p.clip);
+      for (const g of p.segs) for (const q of g.slice(1)) {
+        const xy = this.toXY(q);
+        if (cb) { if (cb[0] > cb[2] || cb[1] > cb[3]) continue; grow([Math.min(Math.max(xy[0], cb[0]), cb[2]), Math.min(Math.max(xy[1], cb[1]), cb[3])]); }
+        else grow(xy);
+      }
+    }
+    for (const n of this.nodes) if (n.at && !n.ov) grow(n.at, n.est);
     if (x0 === Infinity) return [0, 0, 0, 0];
     return [x0, y0, x1, y1].map(round);
   };
@@ -1990,6 +2168,7 @@
     if (!p.paths.length && !p.nodes.length) return fallback('this picture uses TikZ features that are not supported yet');
     const bb = p.bbox();
     const model = { paths: p.paths, nodes: p.nodes.map((n) => { const c = Object.assign({}, n); return c; }), bbox: bb };
+    if (p.clips.length) model.clips = p.clips.map((c) => ({ segs: c.segs, parent: c.parent }));
     if (baseline !== null) model.baseline = baseline;
     const json = JSON.stringify(roundDeep(model));
     const S = 2.8453; // em per cm

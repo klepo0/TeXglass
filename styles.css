@@ -692,10 +692,12 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .diagram-display::before { content: ''; flex: 1 1 0; }
 .diagram-row { flex: none; }
 .diagram-tag { flex: 1 0 0; min-width: max-content; padding-left: 1em; text-align: right; }
-.tikz-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
+.tikz-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; isolation: isolate; transform-origin: 0 0; }
 .tikz-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .tikz-node { position: absolute; left: 0; top: 0; white-space: nowrap; line-height: 1.2; visibility: hidden; }
 .tikz-node.tikz-multi { white-space: normal; text-align: center; }
+.tikz-node.tikz-under { z-index: -1; line-height: 0; }
+.tikz-node img.graphic { max-width: none; }
 .tikz-note { display: block; font-size: 0.75em; color: var(--muted); margin-top: 0.3em; }
 .tikz-fallback { text-align: left; display: inline-block; max-width: 100%; }
 .tikz-fallback pre { font-size: 0.8em; max-height: 16em; overflow: auto; margin: 0.4em 0 0; }
