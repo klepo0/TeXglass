@@ -328,6 +328,9 @@
     '\\MoveEqLeft': '',
     '\\intertext': '\\text{#1}',
     '\\shortintertext': '\\text{#1}',
+    // esint: the averaged integral ⨏
+    '\\fint': '\\mathop{\\rlap{\\hspace{0.32em}\\raisebox{0.05em}{\\text{-}}}{\\int}}\\nolimits',
+    '\\dashint': '\\fint',
     // a \label that reaches KaTeX through a user macro: drop it
     '\\label': (ctx) => { ctx.consumeArgs(1); return ''; },
     // bbm: \mathbbm{1} is the indicator 𝟙; KaTeX's \mathbb has no digits or small letters.
@@ -871,7 +874,7 @@
             const at = i;
             const display = d === '$';
             const start = i + (display ? 2 : 1);
-            const end = findUnescaped(src, display ? '$$' : '$', start);
+            const end = findMathEnd(src, display ? '$$' : '$', start);
             const tex = src.slice(start, end);
             i = end + (display ? 2 : 1);
             if (display) emit({ block: true, html: this.displayMath('displaymath', tex), end: i }, at);
@@ -1169,6 +1172,11 @@
           const body = readArg(src, k);
           const mac = { nargs: parts.length - 1, def: null, body: body.content };
           if (parts.some((p) => p.trim())) mac.delims = parts.map((p) => p.trim());
+          // Tree symbols in the style of regularity structures papers:
+          // \DeclareSymbol{name}{…}{TikZ} with \def\<#1>{\csname …#1\endcsname}.
+          // KaTeX has no \csname, so show \<b0> as ⟨b0⟩ and let the rest of
+          // the formula render.
+          if (nm.content === '\\<' && /\\csname/.test(mac.body)) mac.body = '{\\scriptstyle\\langle\\mathtt{#1}\\rangle}';
           this.macros[nm.content.replace(/^\\/, '')] = mac;
           this._katexMacros = null;
           return res('', body.end);
@@ -1179,6 +1187,25 @@
           this.macros[m[1]] = { nargs: 0, def: null, body: m[2] };
           this._katexMacros = null;
           return res('', i + m[0].length);
+        }
+        case 'definealphabet': {
+          // \definealphabet{mc}{\mathcal}{A}{Z} defines \mcA ... \mcZ (a common
+          // expl3 helper in authors' own .sty files).
+          const pre = readArg(src, i);
+          const cmd = readArg(src, pre.end);
+          const from = readArg(src, cmd.end);
+          const to = readArg(src, from.end);
+          const a = from.content.trim().codePointAt(0);
+          const b = to.content.trim().codePointAt(0);
+          if (/^[A-Za-z@]+$/.test(pre.content.trim()) && a && b && b - a < 64) {
+            for (let c = a; c <= b; c++) {
+              const ch = String.fromCodePoint(c);
+              if (!/[A-Za-z]/.test(ch)) continue;
+              this.macros[pre.content.trim() + ch] = { nargs: 0, def: null, body: `${cmd.content.trim()}{${ch}}` };
+            }
+            this._katexMacros = null;
+          }
+          return res('', to.end);
         }
         case 'DeclareMathOperator': {
           const s = readStar(src, i);
@@ -1489,6 +1516,7 @@
       }
       if (name === 'math') return this.inlineMath(body);
       if (MATH_ENVS.has(name)) return this.displayMath(name, body);
+      if ((name === 'equ' || name === 'equs') && !this.envs[name]) return this.mhequ(name, body);
 
       if (name === 'proof') {
         const o = readOpt(body, 0);
@@ -1782,6 +1810,35 @@
       return `<div class="math math-display" id="${id}"${src}>${this.renderMath(tex, true)}</div>`;
     }
 
+    /**
+     * Martin Hairer's mhequ package: \begin{equ}[label] and \begin{equs}[n][label].
+     * An equation gets a number only when it has a label; in equs a [label]
+     * numbers the whole block once, otherwise each row with a \label is numbered.
+     */
+    mhequ(name, body) {
+      let label = null;
+      for (let k = 0; k < (name === 'equs' ? 2 : 1); k++) {
+        const o = readOpt(body, 0);
+        if (!o) break;
+        const c = o.content.trim();
+        if (!(name === 'equs' && /^\d+$/.test(c))) label = c;
+        body = body.slice(o.end);
+      }
+      body = body.replace(/\\(?:minilab|setlabtype)\s*\{[^}]*\}/g, '').replace(/\\multicol\s*\{\d+\}/g, '');
+      const lab = label ? `\\label{${label}}` : '';
+      if (name === 'equ') {
+        return this.displayMath(label || /\\(label|tag)\s*\{/.test(body) ? 'equation' : 'equation*', body + lab);
+      }
+      if (label) {
+        // One number for the block: the rows go in an aligned inside an equation.
+        const tags = [];
+        body = body.replace(/\\(?:nonumber|notag)\b/g, '').replace(/\\tag\*?\s*\{[^}]*\}/g, (t) => { tags.push(t); return ''; });
+        return this.displayMath('equation', `\\begin{aligned}${body}\\end{aligned}${lab}${tags.slice(0, 1).join('')}`);
+      }
+      const rows = splitTop(body, rowSep).map((r) => (!r.trim() || /\\(label|tag)\s*\{/.test(r) ? r : `${r} \\nonumber`));
+      return this.displayMath('align', rows.join(' \\\\ '));
+    }
+
     /** Math that contains tikzcd, xymatrix or tikzpicture: diagrams between pieces of KaTeX. */
     mathWithDiagrams(tex) {
       const T = tikz();
@@ -1890,6 +1947,24 @@
     // Put a run-in heading ("Theorem 1.2.") inside the first paragraph.
     if (content.startsWith('<p>')) return '<p>' + head + content.slice(3);
     return `<p class="thm-head-only">${head}</p>${content}`;
+  }
+
+  /**
+   * Where $…$ (or $$…$$) that starts at `from` ends: the first unescaped
+   * token outside braces, so $x^{\text{$a$}}$ stays one formula. Unbalanced
+   * braces fall back to the first unescaped token.
+   */
+  function findMathEnd(src, token, from) {
+    let depth = 0;
+    for (let i = from; i < src.length; i++) {
+      const c = src[i];
+      if (c === '\\') { i++; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') { if (--depth < 0) break; }
+      else if (depth === 0 && src.startsWith(token, i)) return i;
+      else if (c === '\n' && /^\n[ \t]*\n/.test(src.slice(i, i + 40))) break;
+    }
+    return findUnescaped(src, token, from);
   }
 
   function findUnescaped(src, token, from) {

@@ -188,3 +188,15 @@ test('search says there is more when a full page came back', async () => {
   assert.equal(res.results.length, 25);
   assert.equal(res.more, true);
 });
+
+test('flatten puts the authors\' own .sty files where they are loaded, but not packages TeXglass knows', () => {
+  const files = {
+    'p.tex': '\\documentclass{article}\n\\usepackage{amsmath,mymacros}\n\\usepackage{mhequ}\n\\begin{document}x\\end{document}',
+    'mymacros.sty': '\\ProvidesPackage{mymacros}\n\\newcommand{\\R}{\\mathbb{R}} % reals',
+    'mhequ.sty': '\\def\\tag{oops}',
+  };
+  const out = A.flatten('p.tex', files);
+  assert.match(out, /\\usepackage\{amsmath\}\n\\makeatletter\n\\ProvidesPackage\{mymacros\}\n\\newcommand\{\\R\}\{\\mathbb\{R\}\}/);
+  assert.match(out, /\\usepackage\{mhequ\}/);
+  assert.doesNotMatch(out, /oops/);
+});

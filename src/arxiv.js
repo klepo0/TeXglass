@@ -179,6 +179,9 @@
    * If opts.starts is an object, it is filled with { path: offset } of where
    * each pulled-in file's text begins in the result.
    */
+  /** Packages whose environments TeXglass understands without reading their .sty. */
+  const NATIVE_PACKAGES = new Set(['mhequ']);
+
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;
     const mark = (p) => (starts ? `\u0000${p}\u0000` : '');
@@ -190,9 +193,10 @@
       if (depth > 20 || seen.has(path)) return '';
       seen.add(path);
       const text = texFiles[path];
-      const out = text.replace(/(^|[^\\])(%.*$)|\\(input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\]+)/gm,
-        (m, pre, comment, cmd, arg, impDir, impFile, bare) => {
+      const out = text.replace(/(^|[^\\])(%.*$)|\\(input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\]+)|\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/gm,
+        (m, pre, comment, cmd, arg, impDir, impFile, bare, pkgs) => {
           if (comment !== undefined) return m;
+          if (pkgs !== undefined) return localPackages(m, pkgs, (found) => expand(found, depth + 1));
           const name = arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare;
           if (cmd === 'include' && only && !only.has(includeName(name))) return '\n';
           const found = resolvePath(texFiles, mainDir, name, ['', '.tex', '.ltx']);
@@ -204,6 +208,21 @@
           return (cmd === 'include' ? '\n' : '') + body + (cmd === 'include' ? '\n' : '');
         });
       return out;
+    };
+    // The authors' own packages (macros.sty next to the paper) hold macro
+    // definitions the paper needs: put them where they are loaded. Packages
+    // TeXglass implements itself stay out, since their internals would
+    // redefine \tag, \label and the like.
+    const localPackages = (m, pkgs, load) => {
+      const kept = [];
+      let inlined = '';
+      for (const name of pkgs.split(',').map((n) => n.trim()).filter(Boolean)) {
+        const found = !NATIVE_PACKAGES.has(name) && resolvePath(texFiles, mainDir, name, ['.sty']);
+        if (found && !seen.has(found)) inlined += `\n\\makeatletter\n${load(found)}\n\\makeatother\n`;
+        else if (!found) kept.push(name);
+      }
+      if (!inlined) return m;
+      return (kept.length ? m.replace(/\{[^}]*\}$/, `{${kept.join(',')}}`) : '') + inlined;
     };
     let text = expand(mainPath, 0);
     const bib = bibliographyFor(mainPath, texFiles, text);
