@@ -429,3 +429,51 @@ test('a $ inside \\text{…} does not end inline math', () => {
   const { html } = plain(String.raw`\begin{document}Norm $|x|_s^{\text{\tiny $\wedge$}}$ here.\end{document}`);
   assert.match(text(html), /\[I:\|x\|_s\^\{\\text\{\\tiny \$\\wedge\$\}\}\] here\./);
 });
+
+const realKatex = (src) => TeXglass.render(src, {
+  renderMath: (t, d, m) => katex.renderToString(t, { displayMode: d, macros: m, throwOnError: true, strict: 'ignore' }),
+});
+
+test('nicefrac, slashed, \\adjustlimits and \\mathpalette macros render', () => {
+  const r = realKatex(String.raw`
+\makeatletter
+\newcommand*\tinydot{{\mathpalette\tinydot@{.5}}}
+\newcommand*\tinydot@[2]{\mathbin{\vcenter{\hbox{\scalebox{#2}{$\m@th#1\bullet$}}}}}
+\makeatother
+\begin{document}
+$s\in(\nicefrac12,1]$, $\sfrac{3}{4}$, $\nicefrac[\mathrm]{a}{b}$, $\slashed{\partial}\phi=\slashed A$,
+$x_\tinydot$ and $f\tinydot g$.
+\[ \adjustlimits\lim_{n\to\infty}\sup_{m\ge n} c_{m} \]
+\end{document}`);
+  assert.doesNotMatch(r.html, /math-error|katex-error/);
+  assert.match(r.html, /∙/);
+});
+
+test('a triple-bar delimiter from \\DeclareMathDelimiter works in paired delimiters and \\left', () => {
+  const r = realKatex(String.raw`
+\DeclareFontEncoding{FMS}{}{}
+\DeclareSymbolFont{fouriersymbols}{FMS}{fxyz}{m}{n}
+\DeclareMathDelimiter{\tribar}{\mathord}{fouriersymbols}{152}{fourierlargesymbols}{147}
+\DeclarePairedDelimiter{\tn}{\tribar}{\tribar}
+\begin{document}
+$\tn{u} + \tn*{\frac ab} + \tn[\Big]{v} + \left\tribar w \right\tribar + \tribar z\tribar + \vvvert y \vvvert$
+\end{document}`);
+  assert.doesNotMatch(r.html, /math-error|katex-error/);
+  assert.equal(r.unknownCommands.length, 0);
+  // KaTeX's MathML for \mathopen{a\mkern…b} nests <mspace/> in <mo>, which
+  // the HTML parser does not close: it would swallow the rest of the page.
+  assert.doesNotMatch(r.html, /<mo[^>]*>(?:(?!<\/mo>).)*<mspace/);
+  assert.equal(plain(String.raw`\DeclareMathDelimiter{\tribar}{\mathord}{fouriersymbols}{152}{fourierlargesymbols}{147}\begin{document}$\left\tribar x\right\tribar$\end{document}`).html.match(/\\left\\vert/g).length, 3);
+});
+
+test('\\long\\def, \\cites and \\todo', () => {
+  const { html, unknownCommands } = plain(String.raw`
+\long\def\remark#1{\textbf{#1}}
+\begin{document}
+\remark{Hi} as in \cites{alpha,beta}. \todo[color=red]{fix} Done.
+\end{document}`);
+  const t = text(html);
+  assert.match(t, /Hi as in \[alpha, beta\]\. fix Done\./);
+  assert.match(html, /class="todo"/);
+  assert.equal(unknownCommands.length, 0);
+});
