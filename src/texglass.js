@@ -1836,7 +1836,8 @@
         // A diagram (with maybe some math around it and an equation number).
         const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
         const t = /\\tag(\*?)\{(.*)\}$/.exec(r.tag);
-        const tag = t ? `<span class="diagram-tag">${this.renderMath(t[1] ? t[2] : `(${t[2]})`, false)}</span>` : '';
+        // with no number, an empty tag still balances the spacer on the left, so the diagram is centred
+        const tag = `<span class="diagram-tag">${t ? this.renderMath(t[1] ? t[2] : `(${t[2]})`, false) : ''}</span>`;
         return `<div class="math math-display diagram-display" id="${id}"${src}><span class="diagram-row">${this.mathWithDiagrams(r.tex)}</span>${tag}</div>`;
       }
       const multiRow = /^(align|gather|flalign|alignat|eqnarray)$/.test(base);
