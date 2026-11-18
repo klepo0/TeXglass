@@ -94,9 +94,10 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   dialog to search arXiv (through [OpenAlex](https://openalex.org), since
   arXiv's own search API can't be called from a web page), then click a result
   to open it. Or paste `2301.00001` or any arXiv link. Included files, the
-  `.bbl` and figures come along. Also `?arxiv=2301.00001`.
+  bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
+  files) and figures come along. Also `?arxiv=2301.00001`.
 - **GitHub import**: paste a link to a file, folder or repo of a public
-  repository; the main file, included files, `.bbl` and figures are found for
+  repository; the main file, included files, `.bbl` or `.bib` and figures are found for
   you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
 - **OpenAI math preprints**: the **Preprints** button lists the manuscripts in
   [openai/math](https://github.com/openai/math), searchable and filtered by

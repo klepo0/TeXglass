@@ -6,7 +6,8 @@
  * are read from raw.githubusercontent.com, which allows cross-origin requests
  * and has no rate limit; the GitHub API is used only to list a folder or repo
  * when the link does not name a file. The files named by \input and \include,
- * the .bbl bibliography and PNG/JPEG/SVG figures are fetched as well, so the
+ * the .bbl bibliography (or the .bib files) and PNG/JPEG/SVG figures are
+ * fetched as well, so the
  * viewer gets one self-contained document, as with an arXiv import.
  *
  * Only public repositories can be read this way.
@@ -14,9 +15,9 @@
  * Works in browsers and in Node 18+ (fetch).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./arxiv.js'));
-  else root.TeXglassGitHub = factory(root.TeXglassArxiv);
-})(typeof self !== 'undefined' ? self : this, function (Arxiv) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./arxiv.js'), require('./bib.js'));
+  else root.TeXglassGitHub = factory(root.TeXglassArxiv, root.TeXglassBib);
+})(typeof self !== 'undefined' ? self : this, function (Arxiv, Bib) {
   'use strict';
 
   const RAW = 'https://raw.githubusercontent.com';
@@ -240,6 +241,15 @@
       const bblName = name.replace(/\.[^.]+$/, '') + '.bbl';
       const bbl = await get(rawUrl(ref, full(bblName)));
       if (bbl != null) texFiles[bblName] = bbl;
+      // No .bbl (it is rarely committed): the .bib files, from which the viewer builds one.
+      if (bbl == null && Bib) {
+        for (const n of Bib.bibResources(all()).slice(0, 10)) {
+          const rel = /\.bib$/i.test(n) ? n : n + '.bib';
+          if (texFiles[rel] != null) continue;
+          const t = await get(rawUrl(ref, full(rel)));
+          if (t != null) texFiles[rel] = t.replace(/\r\n?/g, '\n');
+        }
+      }
     }
     const starts = {};
     const source = Arxiv.flatten(name, texFiles, { starts });

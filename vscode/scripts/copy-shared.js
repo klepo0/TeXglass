@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Copy the converter, the HTML export and the stylesheet from the web viewer into the extension,
+/* Copy the converter, the BibTeX reader, the HTML export and the stylesheet from the web viewer into the extension,
  * so both stay one source. Runs before packaging (vscode:prepublish). */
 'use strict';
 const fs = require('fs');
@@ -18,6 +18,7 @@ for (const [from, to] of [
   ['src/zoom.js', 'zoom.js'],
   ['src/scroll.js', 'scroll.js'],
   ['src/copytex.js', 'copytex.js'],
+  ['src/bib.js', 'bib.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));

@@ -2,8 +2,16 @@
  * A small BibTeX reader: turns the entries a document cites into a
  * thebibliography environment that TeXglass can render, in the spirit of the
  * amsplain style (or alpha labels, or citation order, following
- * \bibliographystyle).
+ * \bibliographystyle or biblatex's style option). It also reads the .bbl that
+ * biber writes for biblatex, which is not a thebibliography.
+ *
+ * Shared by the web viewer (window.TeXglassBib) and the VS Code extension
+ * (copied to vscode/shared/bib.js).
  */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.TeXglassBib = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
 'use strict';
 
 const MONTHS = {
@@ -228,10 +236,14 @@ function alphaLabel(e) {
 
 /**
  * Build `\begin{thebibliography}…` for the cited keys (in citation order;
- * '*' means every entry). `style` is the \bibliographystyle name.
+ * '*' means every entry). `style` is the \bibliographystyle name, or biblatex's
+ * style option. An entry's own `label` (from a biblatex .bbl) wins over a
+ * computed one; opts.keepOrder keeps the order of `entries` (a .bbl is sorted
+ * already) instead of sorting.
  * Returns { text, missing: [keys not found] }.
  */
-function makeBibliography(entries, cited, style) {
+function makeBibliography(entries, cited, style, opts) {
+  opts = opts || {};
   const all = cited.includes('*');
   let keys = [];
   const seen = new Set();
@@ -242,10 +254,20 @@ function makeBibliography(entries, cited, style) {
   }
   const missing = keys.filter((k) => !entries[k]);
   keys = keys.filter((k) => entries[k]);
+  // biblatex .bib files often give `date = {2021-03}` instead of `year`.
+  const use = {};
+  for (const k of keys) {
+    const e = entries[k];
+    const date = /^\s*(\d{4})/.exec(e.fields.date || '');
+    use[k] = !e.fields.year && date ? Object.assign({}, e, { fields: Object.assign({}, e.fields, { year: date[1] }) }) : e;
+  }
   const s = (style || '').toLowerCase();
-  if (!/unsrt|ieee|acm|siam|phys|apsrev|nature/.test(s)) {
+  if (opts.keepOrder) {
+    const order = Object.keys(entries);
+    keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  } else if (!/unsrt|ieee|acm|siam|phys|apsrev|nature|sorting=none/.test(s)) {
     const sortKey = (k) => {
-      const e = entries[k];
+      const e = use[k];
       const ns = names(e.fields.author).length ? names(e.fields.author) : names(e.fields.editor);
       return [ns.map((p) => plain(p.last) + ' ' + plain(p.first)).join(' ').toLowerCase(), e.fields.year || '', plain(e.fields.title).toLowerCase()].join('\u0001');
     };
@@ -254,9 +276,9 @@ function makeBibliography(entries, cited, style) {
   const alpha = /alpha/.test(s);
   const used = {};
   const items = keys.map((k) => {
-    let label = '';
-    if (alpha) {
-      label = alphaLabel(entries[k]);
+    let label = use[k].label || '';
+    if (!label && alpha) {
+      label = alphaLabel(use[k]);
       used[label] = (used[label] || 0) + 1;
     }
     return { k, label };
@@ -271,8 +293,190 @@ function makeBibliography(entries, cited, style) {
       }
     }
   }
-  const body = items.map((it) => `\\bibitem${it.label ? `[${it.label}]` : ''}{${it.k}} ${formatEntry(entries[it.k])}`).join('\n\n');
+  const body = items.map((it) => `\\bibitem${it.label ? `[${it.label}]` : ''}{${it.k}} ${formatEntry(use[it.k])}`).join('\n\n');
   return { text: `\\begin{thebibliography}{${items.length}}\n${body}\n\\end{thebibliography}`, missing };
 }
 
-module.exports = { parseBib, makeBibliography, formatEntry, parseName };
+// --- biber's .bbl -------------------------------------------------------------
+//
+// biblatex does not write a thebibliography: biber leaves a .bbl of
+// \entry{key}{type}{…} … \endentry blocks holding the parsed fields, names and
+// the alphabetic label, already sorted. arXiv keeps it next to the source.
+
+/** Whether a .bbl was written by biber for biblatex. */
+function isBiblatexBbl(text) {
+  return /\\entry\s*\{[^}]*\}\s*\{[^}]*\}/.test(text || '') && /\\endentry\b/.test(text || '');
+}
+
+/** The {…} group at or after s[i] (skipping spaces and %-line ends), as { content, end }, or null. */
+function bblGroup(s, i) {
+  while (i < s.length && /[\s%]/.test(s[i])) {
+    if (s[i] === '%') while (i < s.length && s[i] !== '\n') i++;
+    i++;
+  }
+  if (s[i] !== '{') return null;
+  let depth = 0;
+  for (let k = i; k < s.length; k++) {
+    if (s[k] === '\\') { k++; continue; }
+    if (s[k] === '{') depth++;
+    else if (s[k] === '}' && --depth === 0) return { content: s.slice(i + 1, k), end: k + 1 };
+  }
+  return null;
+}
+
+/** Every top-level {…} group in s. */
+function bblGroups(s) {
+  const out = [];
+  let i = 0;
+  for (;;) {
+    while (i < s.length && s[i] !== '{') i++;
+    const g = bblGroup(s, i);
+    if (!g) return out;
+    out.push(g.content);
+    i = g.end;
+  }
+}
+
+const unbrace = (v) => { v = String(v || '').trim(); return /^\{[\s\S]*\}$/.test(v) && bblGroup(v, 0).end === v.length ? v.slice(1, -1) : v; };
+
+/** biblatex's name and range macros, as plain TeX. */
+const bblText = (v) => String(v || '')
+  .replace(/\\bibrangedash\b\s*/g, '--')
+  .replace(/\\bibinithyphendelim\b\s*/g, '-')
+  .replace(/\\bibinitperiod\b\s*/g, '.')
+  .replace(/\\bibnamedelim[a-d]\b\s*|\\bibnamedelimi\b\s*|\\bibinitdelim\b\s*/g, ' ')
+  .replace(/%\n\s*/g, '')
+  .trim();
+
+/** One person of a \name list, as "Family, Given" (or "Family, Jr, Given"). */
+function bblPerson(p) {
+  const gs = bblGroups(p.replace(/(?<!\\)%[^\n]*\n\s*/g, ''));
+  let family = '';
+  let given = '';
+  let prefix = '';
+  let suffix = '';
+  const keyed = gs.find((g) => /(^|,)\s*family\s*=/.test(g));
+  if (keyed) {
+    // biblatex 3.3+: {opts}{family={…}, familyi={…}, given={…}, …}
+    const f = {};
+    let depth = 0;
+    let last = 0;
+    const parts = [];
+    for (let k = 0; k <= keyed.length; k++) {
+      const c = keyed[k];
+      if (c === '\\') { k++; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if ((c === ',' || k === keyed.length) && depth === 0) {
+        parts.push(keyed.slice(last, k));
+        last = k + 1;
+      }
+    }
+    if (last <= keyed.length) parts.push(keyed.slice(last));
+    for (const part of parts) {
+      const m = /^\s*([a-z]+)\s*=\s*([\s\S]*)$/.exec(part);
+      if (m) f[m[1]] = unbrace(m[2]);
+    }
+    ({ family = '', given = '', prefix = '', suffix = '' } = f);
+  } else if (gs.length >= 4) {
+    // Older biblatex: {opts}{family}{familyi}{given}{giveni}{prefix}{prefixi}{suffix}{suffixi}
+    [, family, , given, , prefix = '', , suffix = ''] = gs;
+  } else return '';
+  family = bblText([prefix, family].filter(Boolean).join(' '));
+  given = bblText(given);
+  suffix = bblText(suffix);
+  const brace = (v) => (/,|\sand\s/.test(v) ? `{${v}}` : v);
+  return [brace(family), suffix, given].filter(Boolean).map(brace).join(', ');
+}
+
+/**
+ * Parse a biber .bbl into { key: { type, fields, label } } in its own (sorted)
+ * order, with BibTeX field names so formatEntry can print it.
+ */
+function parseBbl(text) {
+  const entries = {};
+  const re = /\\entry\s*\{([^}]*)\}\s*\{([^}]*)\}([\s\S]*?)\\endentry\b/g;
+  const RENAME = { journaltitle: 'journal', location: 'address', eprinttype: 'archiveprefix', institution: 'institution' };
+  for (const m of String(text || '').matchAll(re)) {
+    const key = m[1].trim();
+    if (entries[key]) continue; // the same entry again, in another sort list
+    const body = m[3];
+    const fields = {};
+    const set = (name, value) => { name = RENAME[name] || name; if (value && !(name in fields)) fields[name] = value; };
+    let labelalpha = '';
+    let extraalpha = '';
+    const cmd = /\\(name|list|field|verb)\s*\{([^}]*)\}/g;
+    let c;
+    while ((c = cmd.exec(body))) {
+      const kind = c[1];
+      const name = c[2].toLowerCase();
+      let i = c.index + c[0].length;
+      if (kind === 'verb') {
+        // \verb{doi}\n \verb 10.1000/xyz\n \endverb
+        const end = body.indexOf('\\endverb', i);
+        if (end < 0) break;
+        const value = body.slice(i, end).split('\n').map((l) => l.replace(/^\s*\\verb\s?/, '')).join('').trim();
+        set(name, value);
+        cmd.lastIndex = end + 8;
+        continue;
+      }
+      const args = [];
+      const want = kind === 'field' ? 1 : kind === 'list' ? 2 : 3; // \list{…}{count}{items}, \name{…}{count}{opts}{people}
+      for (let n = 0; n < want; n++) {
+        const g = bblGroup(body, i);
+        if (!g) break;
+        args.push(g.content);
+        i = g.end;
+      }
+      cmd.lastIndex = i;
+      if (kind === 'field') {
+        const v = bblText(args[0]);
+        if (name === 'labelalpha') labelalpha = v;
+        else if (name === 'extraalpha') extraalpha = v;
+        else set(name, v);
+      } else if (args.length >= 2) {
+        const items = bblGroups(args[args.length - 1]);
+        set(name, (kind === 'name' ? items.map(bblPerson) : items.map(bblText)).filter(Boolean).join(' and '));
+      }
+    }
+    if (fields.publisher) fields.publisher = fields.publisher.replace(/ and /g, ', ');
+    if (fields.address) fields.address = fields.address.replace(/ and /g, ', ');
+    const extra = parseInt(extraalpha, 10);
+    const label = labelalpha ? labelalpha + (extra > 0 ? String.fromCharCode(96 + extra) : '') : '';
+    entries[key] = { type: m[2].trim().toLowerCase(), fields, label };
+  }
+  return entries;
+}
+
+/** The style a document asks for: \bibliographystyle{…}, or biblatex's style/bibstyle and sorting options. */
+function styleOf(text) {
+  const t = String(text || '');
+  const bst = /\\bibliographystyle\s*\{([^}]*)\}/.exec(t);
+  if (bst) return bst[1];
+  const pkg = /\\usepackage\s*(?:\[([^\]]*)\])?\s*\{biblatex\}/.exec(t);
+  if (!pkg) return '';
+  const opt = (n) => (new RegExp(`(?:^|,)\\s*${n}\\s*=\\s*([^,\\s]+)`).exec(pkg[1] || '') || [])[1];
+  const style = opt('bibstyle') || opt('style') || 'numeric';
+  return opt('sorting') === 'none' ? `${style},sorting=none` : style;
+}
+
+/** The keys a document cites, in order; '*' for \nocite{*}. */
+function citedKeys(text) {
+  const cited = [];
+  const noComments = String(text || '').replace(/(?<!\\)%.*$/gm, '');
+  const re = /\\(?:[a-zA-Z]*cite[a-zA-Z]*|nocite)\*?\s*(?:\[[^\]]*\]\s*){0,2}\{([^}]*)\}/g;
+  for (const m of noComments.matchAll(re)) for (const k of m[1].split(',')) if (k.trim()) cited.push(k.trim());
+  return cited;
+}
+
+/** The .bib names a document asks for, from \bibliography{a,b} and \addbibresource{c.bib}. */
+function bibResources(text) {
+  const t = String(text || '').replace(/(?<!\\)%.*$/gm, '');
+  const out = [];
+  for (const m of t.matchAll(/\\bibliography\s*\{([^}]*)\}/g)) out.push(...m[1].split(','));
+  for (const m of t.matchAll(/\\(?:addbibresource|addglobalbib|addsectionbib)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g)) out.push(m[1]);
+  return out.map((n) => n.trim()).filter(Boolean);
+}
+
+return { parseBib, parseBbl, isBiblatexBbl, makeBibliography, formatEntry, parseName, styleOf, citedKeys, bibResources };
+});
