@@ -339,3 +339,53 @@ See \eqref{eq:one}.
     'f(x) = "q"',
   ]);
 });
+
+test('mhequ: equ and equs are display math, numbered when labelled', () => {
+  const { html } = plain(String.raw`\begin{document}
+\begin{equ}[e:one]
+a = b
+\end{equ}
+\begin{equ}
+c = d
+\end{equ}
+\begin{equs}[e:block]
+x &= y \\ \nonumber
+z &= w
+\end{equs}
+\begin{equs}
+p &= q \label{e:row}\\
+r &= s
+\end{equs}
+See \eqref{e:one}, \eqref{e:block} and \eqref{e:row}.
+\end{document}`);
+  const t = text(html).replace(/\s+/g, ' ');
+  assert.match(t, /\[D:a = b \\tag\{1\}\]/);
+  assert.match(t, /\[D:c = d\]/);
+  assert.match(t, /\[D:\\begin\{aligned\} x &= y \\\\ z &= w \\end\{aligned\}\\tag\{2\}\]/);
+  assert.match(t, /\[D:\\begin\{align\*\} p &= q \\tag\{3\} \\\\ r &= s \\end\{align\*\}\]/);
+  assert.match(t, /See \(1\), \(2\) and \(3\)\./);
+  assert.doesNotMatch(t, /e:one|e:block/);
+});
+
+test('\\definealphabet defines one macro per letter', () => {
+  const { html } = plain(String.raw`\definealphabet{mc}{\mathcal}{A}{C}
+\begin{document}$\mcB + \mcC$\end{document}`);
+  assert.equal(html.includes('[I:\\mcB + \\mcC]'), true);
+  const r = TeXglass.render(String.raw`\definealphabet{mc}{\mathcal}{A}{C}
+\begin{document}$\mcB$\end{document}`, { renderMath: (t, d, m) => katex.renderToString(t, { macros: m, throwOnError: true }) });
+  assert.match(r.html, /mathcal/);
+});
+
+test('tree symbols \\<name> drawn with \\csname show their name instead of breaking the formula', () => {
+  const r = TeXglass.render(String.raw`\makeatletter
+\def\<#1>{\csname MH@symb@#1\endcsname}
+\makeatother
+\begin{document}$\mathcal{H}_{\<b0>} + 1$\end{document}`, { renderMath: (t, d, m) => katex.renderToString(t, { macros: m, throwOnError: true }) });
+  assert.doesNotMatch(r.html, /math-error/);
+  assert.match(r.html, /b0/);
+});
+
+test('a $ inside \\text{…} does not end inline math', () => {
+  const { html } = plain(String.raw`\begin{document}Norm $|x|_s^{\text{\tiny $\wedge$}}$ here.\end{document}`);
+  assert.match(text(html), /\[I:\|x\|_s\^\{\\text\{\\tiny \$\\wedge\$\}\}\] here\./);
+});
