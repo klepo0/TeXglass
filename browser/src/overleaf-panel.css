@@ -1,0 +1,59 @@
+/* TeXglass for Overleaf: the preview page in the panel (overleaf.html), on top of styles.css. */
+
+.ol-toolbar {
+  gap: 6px;
+  padding: 6px 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.ol-toolbar .brand { font-size: 17px; margin-right: 2px; flex: none; }
+.ol-toolbar button { padding: 3px 9px; font-size: 13px; flex: none; }
+.ol-toolbar .zoom-group { display: flex; flex: none; }
+.ol-toolbar .zoom-group button { padding: 3px 8px; }
+.ol-toolbar .zoom-group button:first-child { border-radius: 6px 0 0 6px; }
+.ol-toolbar .zoom-group button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.ol-toolbar #close { font-size: 18px; line-height: 1; padding: 2px 8px; }
+.ol-toolbar .file-name,
+.ol-toolbar .status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.ol-toolbar .file-name { flex: 0 1 auto; color: var(--muted); }
+.ol-toolbar .status { flex: 0 1 auto; }
+.ol-spacer { flex: 1; }
+.ol-toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+.ol-note {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+.ol-note button {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+#preview { padding: 24px 18px 40vh; }
+
+/* A click on the preview moves Overleaf's cursor there. */
+#preview > .src-block { cursor: pointer; border-radius: 3px; }
+#preview > .src-block a { cursor: pointer; }
+
+/* The block that holds Overleaf's cursor. */
+#preview > .src-block.ol-cursor { box-shadow: -10px 0 0 -7px var(--accent); }
+
+@media (max-width: 420px) {
+  .ol-toolbar .brand { display: none; }
+}

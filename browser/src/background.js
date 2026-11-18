@@ -11,6 +11,9 @@
  *   - the "View in TeXglass" links that content.js adds to arXiv pages and
  *     sites.js to alphaXiv, HAL and ResearchGate pages.
  *
+ * On Overleaf project pages the toolbar button and its shortcut instead show or
+ * hide the live preview that overleaf.js adds there.
+ *
  * HAL and ResearchGate pages do not carry the paper's arXiv id in their
  * address, so sites.js sends what it finds on the page (a HAL id, a DOI, the
  * title) and resolvePaper() looks it up: the HAL API knows the arXiv id of
@@ -226,6 +229,12 @@ async function openViewer(id, tab) {
 
 // --- toolbar button ------------------------------------------------------------
 
+/** Whether `url` is an Overleaf project, where overleaf.js shows a live preview. */
+function isOverleafProject(url) {
+  const u = parseUrl(url);
+  return !!u && u.protocol === 'https:' && /(^|\.)overleaf\.com$/i.test(u.hostname) && /^\/project\/[0-9a-f]{8,}\/?$/i.test(u.pathname);
+}
+
 /** Asks the tab's sites.js to open its paper; it shows a note on the page when there is none. */
 function openFromPage(tab) {
   try {
@@ -236,10 +245,21 @@ function openFromPage(tab) {
   }
 }
 
+/** Shows or hides the preview on an Overleaf page; opens the viewer if the page has no preview (yet). */
+function toggleOverleaf(tab) {
+  try {
+    const p = api.tabs.sendMessage(tab.id, { type: 'texglass-overleaf-toggle' });
+    if (p && p.catch) p.catch(() => openViewer(null, tab));
+  } catch (e) {
+    openViewer(null, tab);
+  }
+}
+
 api.action.onClicked.addListener((tab) => {
   const url = tab && tab.url;
   const id = url ? arxivId(url) : null;
-  if (!id && url && isLookupPage(url) && tab.id != null) openFromPage(tab);
+  if (url && isOverleafProject(url) && tab.id != null) toggleOverleaf(tab);
+  else if (!id && url && isLookupPage(url) && tab.id != null) openFromPage(tab);
   else openViewer(id, tab);
 });
 
@@ -286,5 +306,5 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 if (typeof module === 'object' && module.exports) {
-  module.exports = { arxivId, viewerUrl, isLookupPage, arxivIdFromDoi, normalizeTitle, parseArxivFeed, resolvePaper };
+  module.exports = { arxivId, viewerUrl, isLookupPage, isOverleafProject, arxivIdFromDoi, normalizeTitle, parseArxivFeed, resolvePaper };
 }
