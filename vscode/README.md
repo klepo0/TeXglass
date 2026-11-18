@@ -78,7 +78,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   Open Font License), so it works offline.
 - **Margin notes**: `\marginpar`, `\marginnote` and `\todo` (todonotes, with
   its `color=`) show in a column to the right of the text, level with the line
-  they were written on, as on paper. `\todo[inline]` stays in the line.
+  they were written on, as on paper. `\todo[inline]` stays in the line. Drag
+  the line between the text and the margin to resize the margin (double-click
+  to reset); the width is remembered.
 - **Highlighter and notes of your own** (study tools): select text and pick a
   colour from the small bar that appears, or the note button to write a note
   on it. Drag the note pad at the bottom right onto any line for a note there,

@@ -25,6 +25,8 @@
  *     save(list) {},                   // the reader's notes changed
  *     renderNote(text) -> Promise<html>, // optional: LaTeX in notes
  *     study: true,                     // the study tools are on
+ *     width: 220,                      // optional: the margin's width in px, as dragged before
+ *     onWidth(px) {},                  // its divider was dragged (null: back to automatic)
  *   });
  *   margin.refresh();                  // after the document was rendered again
  *   margin.setAnnotations(list); margin.setStudy(on);
@@ -276,6 +278,49 @@
     layer.setAttribute('aria-label', 'Margin notes');
     pane.appendChild(layer);
 
+    // The divider between the text and the margin: drag it to widen or narrow
+    // the margin, arrow keys too; a double-click goes back to the automatic width.
+    let userW = opts.width > 0 ? opts.width : null;
+    const grip = page.createElement('div');
+    grip.className = 'tg-margin-grip';
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('aria-orientation', 'vertical');
+    grip.setAttribute('aria-label', 'Resize the margin');
+    grip.tabIndex = 0;
+    grip.title = 'Drag to resize the margin · double-click to reset';
+    layer.appendChild(grip);
+    const maxW = () => Math.max(160, Math.round(pane.clientWidth * 0.5));
+    const setUserW = (w, save) => {
+      userW = w == null ? null : Math.round(Math.min(maxW(), Math.max(110, w)));
+      layout();
+      if (save && opts.onWidth) opts.onWidth(userW);
+    };
+    grip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      const start = e.clientX;
+      const width = marginW;
+      page.body.classList.add('tg-margin-resizing');
+      const move = (ev) => setUserW(width + start - ev.clientX, false);
+      const up = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        grip.removeEventListener('pointercancel', up);
+        page.body.classList.remove('tg-margin-resizing');
+        setUserW(marginW, true);
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+      grip.addEventListener('pointercancel', up);
+    });
+    grip.addEventListener('dblclick', () => setUserW(null, true));
+    grip.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setUserW(marginW + (e.key === 'ArrowLeft' ? 20 : -20), true);
+    });
+
     const highlights = win.CSS && win.CSS.highlights && typeof win.Highlight === 'function' ? win.CSS.highlights : null;
 
     // --- the index, and annotations placed in it ----------------------------------
@@ -453,6 +498,7 @@
       layer.replaceChildren();
       cards = texCards().concat(readerCards());
       for (const c of cards) layer.appendChild(c.el);
+      layer.appendChild(grip);
       cards.forEach((c) => ro && ro.observe(c.el));
       layout();
     }
@@ -469,7 +515,9 @@
       layer.hidden = !on;
       if (!on) return;
       const zoom = (parseFloat(win.getComputedStyle(doc).fontSize) || 18) / 18;
-      const w = Math.round(Math.min(240 * zoom, Math.max(130, pane.clientWidth * 0.26)));
+      const w = userW != null
+        ? Math.min(userW, maxW())
+        : Math.round(Math.min(240 * zoom, Math.max(130, pane.clientWidth * 0.26)));
       if (w !== marginW) {
         marginW = w;
         doc.style.setProperty('--tg-margin-w', w + 'px');
@@ -477,6 +525,8 @@
       const cs = win.getComputedStyle(doc);
       layer.style.left = doc.offsetLeft + doc.offsetWidth - parseFloat(cs.paddingRight) + 20 + 'px';
       layer.style.width = w + 'px';
+      grip.style.height = doc.offsetHeight + 'px';
+      grip.setAttribute('aria-valuenow', String(w));
       const want = cards.map((c) => ({ c, y: c.top() }));
       want.sort((a, b) => (a.y == null) - (b.y == null) || a.y - b.y);
       let bottom = -Infinity;
@@ -881,7 +931,12 @@
       return list.map((a) => Object.assign({}, a));
     }
 
-    return { refresh, setAnnotations, setStudy, layout, notes };
+    return {
+      refresh, setAnnotations, setStudy, layout, notes,
+      /** The margin's width in px (null: automatic). */
+      setWidth: (w) => setUserW(w > 0 ? w : null, false),
+      width: () => marginW,
+    };
   }
 
   return { attach, describe, locate, buildIndex, toDom, fromDom, COLORS };

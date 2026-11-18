@@ -301,7 +301,7 @@ img.graphic { max-width: 100%; height: auto; }
 
 /* Table of contents sidebar (Preview and Edit) */
 .toc-pane {
-  flex: 0 0 var(--side-width, 260px);
+  flex: 0 0 var(--side-width, 280px);
   position: relative;
   overflow: auto;
   padding: 20px 10px 32px 16px;
@@ -316,10 +316,14 @@ img.graphic { max-width: 100%; height: auto; }
 body.toc-right .toc-pane { order: 2; border-right: 0; border-left: 1px solid var(--rule); padding: 20px 16px 32px 10px; }
 .toc-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px 8px; }
 /* The side panel's tabs: Contents, Notation, Map (src/insight.js sidePanel). */
-.side-tabs { display: flex; gap: 2px; min-width: 0; }
+.side-tabs { display: flex; flex: 1; gap: 1px; min-width: 0; overflow: hidden; }
+/* When they do not fit on one row, the tabs stack, so none is cut off (sidePanel sets the class). */
+.toc-pane-head:has(.side-tabs-stacked) { align-items: flex-start; }
+.side-tabs.side-tabs-stacked { flex-direction: column; align-items: stretch; }
+.side-tabs-stacked button { text-align: left; }
 .side-tabs button {
-  font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 3px 7px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 3px 5px; white-space: nowrap; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer;
 }
 .side-tabs button:hover { color: var(--ink); }
 .side-tabs button[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
@@ -1219,6 +1223,29 @@ s.xout { text-decoration-thickness: 0.15em; }
   z-index: 2;
 }
 .tg-margin[hidden] { display: none; }
+/* The divider between the text and the margin (drag to resize it). */
+.tg-margin-grip {
+  position: absolute;
+  top: 0;
+  left: -18px;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.tg-margin-grip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.tg-margin-grip:hover::after, .tg-margin-grip:focus-visible::after, body.tg-margin-resizing .tg-margin-grip::after { background: var(--accent); width: 2px; }
+.tg-margin-grip:focus { outline: none; }
+body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-mcard {
   position: absolute;
   left: 0;
