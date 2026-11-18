@@ -14,7 +14,8 @@
  *
  * and does what the preview asks:
  *
- *   { type: 'jump', at }          put the cursor there and scroll to it
+ *   { type: 'jump', at, file }    put the cursor there and scroll to it; with
+ *                                 `file`, open that project file first
  *   { type: 'load-files' }        download the project's zip (Overleaf's own
  *                                 "Download as zip", with the reader's login)
  *   { type: 'hello' }             send everything again
@@ -100,17 +101,22 @@
   const label = (el) => (el.getAttribute('aria-label') || '').trim() ||
     ((el.querySelector('.item-name-button, .name, button span') || el).textContent || '').trim();
 
+  /** The path in the project of a file tree item: its name and the folders around it. */
+  function pathOf(item) {
+    const parts = [label(item)];
+    let el = item.parentElement && item.parentElement.closest('[role="treeitem"]');
+    while (el) {
+      parts.unshift(label(el));
+      el = el.parentElement && el.parentElement.closest('[role="treeitem"]');
+    }
+    return parts.filter(Boolean).join('/');
+  }
+
   /** Its path in the project, from the file tree's selected item and the folders around it. */
   function fileName() {
     const sel = document.querySelector('.file-tree [role="treeitem"][aria-selected="true"], [role="tree"] [role="treeitem"][aria-selected="true"], .file-tree li.selected');
     if (sel) {
-      const parts = [label(sel)];
-      let el = sel.parentElement && sel.parentElement.closest('[role="treeitem"]');
-      while (el) {
-        parts.unshift(label(el));
-        el = el.parentElement && el.parentElement.closest('[role="treeitem"]');
-      }
-      const path = parts.filter(Boolean).join('/');
+      const path = pathOf(sel);
       if (path) return path;
     }
     const crumbs = document.querySelector('.ol-cm-breadcrumbs, [class*="breadcrumbs"]');
@@ -236,6 +242,49 @@
     v.focus();
   }
 
+  /**
+   * Open project file `path` in the editor, as a click on it in Overleaf's
+   * file tree does, then put the cursor at `at`. A file inside a folder that
+   * is closed may not be in the tree yet: its folders are opened first.
+   */
+  async function openFileAt(path, at) {
+    const items = () => Array.from(document.querySelectorAll('[role="treeitem"]'));
+    const base = path.split('/').pop();
+    const find = () => {
+      const all = items();
+      return all.find((i) => pathOf(i) === path) ||
+        (all.filter((i) => label(i) === base).length === 1 ? all.find((i) => label(i) === base) : null);
+    };
+    let item = find();
+    // Open the folders on the way, one level at a time.
+    const dirs = path.split('/').slice(0, -1);
+    for (let k = 0; !item && k < dirs.length; k++) {
+      const folder = items().find((i) => pathOf(i) === dirs.slice(0, k + 1).join('/'));
+      if (folder && folder.getAttribute('aria-expanded') === 'false') {
+        (folder.querySelector('button, [role="button"]') || folder).click();
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      item = find();
+    }
+    if (!item) return send({ type: 'jump-failed', file: path });
+    const before = current() && current().state.doc;
+    const target = item.querySelector('.item-name-button, .entity-name, button, [role="button"]') || item;
+    target.click();
+    // Wait until the editor shows that file.
+    const start = Date.now();
+    while (Date.now() - start < 4000) {
+      await new Promise((r) => setTimeout(r, 100));
+      lastFind = 0; // look for the editor again: Overleaf may have made a new one
+      const v = current();
+      if (v && fileName() === pathOf(item) && v.state.doc !== before) {
+        await new Promise((r) => setTimeout(r, 50));
+        jump(at);
+        return;
+      }
+    }
+    send({ type: 'jump-failed', file: path });
+  }
+
   async function loadFiles() {
     const m = location.pathname.match(/^\/project\/([0-9a-f]+)/i);
     if (!m) return send({ type: 'files-error', message: 'This page is not an Overleaf project.' });
@@ -257,7 +306,10 @@
       helloFrom = e.source;
       tick(true);
     }
-    else if (d.type === 'jump' && typeof d.at === 'number') jump(d.at);
+    else if (d.type === 'jump' && typeof d.at === 'number') {
+      if (typeof d.file === 'string' && d.file && d.file !== fileName()) openFileAt(d.file, d.at);
+      else jump(d.at);
+    }
     else if (d.type === 'load-files') loadFiles();
   });
 })();

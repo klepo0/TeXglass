@@ -498,8 +498,11 @@
   function jumpToSource(e) {
     const block = e.target.closest('.src-block');
     if (!block || block.parentElement !== preview) return;
-    const at = composed.toOpen(offsetOf(block, e.target, e.clientX, e.clientY));
-    post({ type: 'jump', at });
+    // Text pulled in from another file (\input, or a chapter's main file) goes to that file.
+    const c = offsetOf(block, e.target, e.clientX, e.clientY);
+    const src = composed.sourceAt(c);
+    if (src.file && src.file !== composed.path) post({ type: 'jump', at: src.at, file: src.file });
+    else post({ type: 'jump', at: composed.toOpen(c) });
   }
 
   /** Go to `target` in the preview (a reference, the contents, Go to), unfolding what hides it. */
@@ -828,6 +831,8 @@
       markCursor();
     } else if (d.type === 'files' && d.zip) {
       gotFiles(d.zip);
+    } else if (d.type === 'jump-failed') {
+      say(`Could not open ${d.file} in Overleaf's editor`, true);
     } else if (d.type === 'files-error') {
       filesButton.disabled = false;
       say(d.message || 'Could not download the project.', true);

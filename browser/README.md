@@ -45,6 +45,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   - **marks** the paragraph that holds the cursor;
   - **moves the cursor** to what you click in the preview: a word or the
     start of a paragraph, or a formula with Ctrl/Cmd+click or a double-click;
+    text from another file (an `\input` file, with *Files* loaded) opens that
+    file in the editor first;
   - as in the VS Code preview: a plain **click on a formula copies its
     LaTeX**, **hovering a reference or citation previews** what it points to,
     and **sections and proofs fold** (click a heading or the arrow; *Proofs*

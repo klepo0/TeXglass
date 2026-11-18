@@ -83,6 +83,23 @@ test('a chapter gets the main file\'s preamble, for its macros', () => {
   assert.doesNotMatch(compose({ text: 'No citations.', name: 'sections/intro.tex' }, PROJECT).text, /thebibliography/);
 });
 
+test('text pulled in from another file knows its file and place there, through nested inputs', () => {
+  const texts = {
+    'main.tex': '\\documentclass{article}\n\\begin{document}\nA\n\\input{ch/one}\nB\n\\end{document}\n',
+    'ch/one.tex': 'One start\n\\input{ch/two}\nOne end\n',
+    'ch/two.tex': 'Two body\n',
+  };
+  const c = compose({ text: texts['main.tex'], name: 'main.tex' }, { texts });
+  assert.deepStrictEqual(c.inlined, ['ch/one.tex', 'ch/two.tex']);
+  const at = (w) => c.sourceAt(c.text.indexOf(w));
+  assert.deepStrictEqual(at('One start'), { file: 'ch/one.tex', at: 0 });
+  assert.deepStrictEqual(at('Two body'), { file: 'ch/two.tex', at: 0 });
+  assert.deepStrictEqual(at('One end'), { file: 'ch/one.tex', at: texts['ch/one.tex'].indexOf('One end') });
+  assert.deepStrictEqual(at('B\n'), { file: null, at: texts['main.tex'].indexOf('B\n') });
+  // In the open file, all of it maps to the \input line.
+  assert.strictEqual(c.toOpen(c.text.indexOf('Two body')), texts['main.tex'].indexOf('\\input{ch/one}'));
+});
+
 test('missing \\input files are named, and the open file is found by path, text or name', () => {
   const c = compose({ text: '\\input{nowhere}\nText.', name: 'main.tex' }, { texts: { 'main.tex': 'old' } });
   assert.deepStrictEqual(c.missing, ['nowhere']);
