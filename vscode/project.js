@@ -9,7 +9,7 @@
  */
 'use strict';
 const nodePath = require('path');
-const { parseBib, makeBibliography } = require('./bib.js');
+const { parseBib, parseBbl, isBiblatexBbl, makeBibliography, styleOf } = require('./shared/bib.js');
 
 // A comment, an \input-like command, or a bibliography command.
 const COMMANDS = new RegExp(
@@ -148,7 +148,7 @@ function assemble(mainPath, read, paths) {
     const cited = [];
     const noComments = out.replace(/(?<!\\)%.*$/gm, '');
     for (const m of noComments.matchAll(CITE)) for (const k of m[1].split(',')) if (k.trim()) cited.push(k.trim());
-    const style = (/\\bibliographystyle\s*\{([^}]*)\}/.exec(noComments) || [])[1] || '';
+    const style = styleOf(noComments);
     const bibText = bibliography(mainPath, bib, noComments, cited, style, tryRead, warnings, path);
     if (bibText) {
       // Splice it in where the command was, moving everything after it along.
@@ -175,6 +175,11 @@ function bibliography(mainPath, bib, text, cited, style, read, warnings, path) {
   if (bbl && /\\begin\s*\{thebibliography\}/.test(bbl)) {
     const items = new Set(Array.from(bbl.matchAll(/\\bibitem\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g), (m) => m[1].trim()));
     if (keys.every((k) => items.has(k))) return bbl.trim();
+  }
+  // biber's .bbl for biblatex: the parsed entries, already sorted and labelled.
+  if (bbl && isBiblatexBbl(bbl)) {
+    const entries = parseBbl(bbl);
+    if (keys.every((k) => entries[k])) return makeBibliography(entries, cited, style, { keepOrder: true }).text;
   }
   // .bib files: from \bibliography{a,b} and \addbibresource{c.bib}.
   const names = [];

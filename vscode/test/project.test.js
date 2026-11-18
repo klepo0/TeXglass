@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const { assemble, locate, findRoot } = require('../project.js');
-const { parseBib, makeBibliography, parseName } = require('../bib.js');
+const { parseBib, makeBibliography, parseName } = require('../shared/bib.js');
 
 const fsOf = (files) => (p) => (files[p] !== undefined ? files[p] : null);
 const R = path.resolve('/proj');

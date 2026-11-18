@@ -1661,7 +1661,7 @@
   });
 
   $('github').addEventListener('click', () => {
-    ghSay('Public repositories only. Included files, the .bbl and PNG or JPEG figures are fetched too.');
+    ghSay('Public repositories only. Included files, the bibliography and PNG or JPEG figures are fetched too.');
     openGitHubDialog();
   });
   $('github-cancel').addEventListener('click', () => ghDialog.close());

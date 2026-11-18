@@ -4,16 +4,17 @@
  * arxiv.org/src/<id> serves the source the authors uploaded, gzipped: usually a
  * tar archive, sometimes a single .tex file. It allows cross-origin requests,
  * so a browser page can fetch it directly. This module unpacks it, finds the
- * main file, and inlines \input/\include and the .bbl bibliography so the
+ * main file, and inlines \input/\include and the bibliography (from the .bbl,
+ * or built from the .bib files when there is no usable .bbl) so the
  * viewer gets one self-contained document. Images come back as raw files that
  * the caller can turn into object URLs.
  *
  * Works in browsers and in Node 18+ (fetch and DecompressionStream).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.TeXglassArxiv = factory();
-})(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./bib.js'));
+  else root.TeXglassArxiv = factory(root.TeXglassBib);
+})(typeof self !== 'undefined' ? self : this, function (Bib) {
   'use strict';
 
   /**
@@ -135,8 +136,44 @@
   }
 
   /**
+   * The thebibliography to put in place of \bibliography / \printbibliography,
+   * or '' if the document has one already or there is nothing to build it from.
+   * A BibTeX .bbl is a thebibliography and goes in as it is. biblatex's .bbl
+   * (written by biber) is not, so it is read and turned into one. Without a .bbl,
+   * the .bib files the document names (or, failing that, any in the source) are
+   * read and the cited entries listed.
+   */
+  function bibliographyFor(mainPath, texFiles, text) {
+    if (/\\begin\{thebibliography\}/.test(text)) return '';
+    const asks = /\\(bibliography|printbibliography|addbibresource)\b/.test(text.replace(/(^|[^\\])%.*$/gm, '$1'));
+    const base = mainPath.replace(/\.[^./]+$/, '');
+    const bbls = Object.keys(texFiles).filter((n) => /\.bbl$/i.test(n));
+    const bbl = bbls.find((n) => n === base + '.bbl') || bbls[0];
+    if (bbl && /\\begin\s*\{thebibliography\}/.test(texFiles[bbl])) return texFiles[bbl];
+    if (!asks || !Bib) return '';
+    const cited = Bib.citedKeys(text);
+    const style = Bib.styleOf(text);
+    if (bbl && Bib.isBiblatexBbl(texFiles[bbl])) {
+      const entries = Bib.parseBbl(texFiles[bbl]);
+      if (Object.keys(entries).length) return Bib.makeBibliography(entries, cited, style, { keepOrder: true }).text;
+    }
+    const dirOf = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+    const bibs = [];
+    for (const name of Bib.bibResources(text)) {
+      const found = resolvePath(texFiles, dirOf(mainPath), name, ['.bib', '']);
+      if (found && !bibs.includes(found)) bibs.push(found);
+    }
+    if (!bibs.length) bibs.push(...Object.keys(texFiles).filter((n) => /\.bib$/i.test(n)));
+    if (!bibs.length) return '';
+    const entries = {};
+    for (const b of bibs) Object.assign(entries, Bib.parseBib(texFiles[b]));
+    return Bib.makeBibliography(entries, cited, style).text;
+  }
+
+  /**
    * Inline \input, \include, \subfile and \import into the main file, and
-   * replace \bibliography{…} with the .bbl that arXiv keeps next to it.
+   * replace \bibliography{…} / \printbibliography with a thebibliography
+   * (see bibliographyFor).
    * \include files left out by \includeonly are dropped, and a \subfile
    * brings in only its document body.
    * If opts.starts is an object, it is filled with { path: offset } of where
@@ -169,17 +206,14 @@
       return out;
     };
     let text = expand(mainPath, 0);
-    // A bibliography from BibTeX: arXiv requires the .bbl, which is plain thebibliography.
-    const bbls = Object.keys(texFiles).filter((n) => n.endsWith('.bbl'));
-    if (bbls.length && !/\\begin\{thebibliography\}/.test(text)) {
-      const base = mainPath.replace(/\.[^./]+$/, '');
-      const bbl = bbls.find((n) => n === base + '.bbl') || bbls[0];
+    const bib = bibliographyFor(mainPath, texFiles, text);
+    if (bib) {
       let used = false;
       text = text.replace(/\\bibliography\s*\{[^}]*\}|\\printbibliography(\[[^\]]*\])?/, () => {
         used = true;
-        return texFiles[bbl];
+        return bib;
       });
-      if (!used) text = text.replace(/\\end\{document\}/, () => texFiles[bbl] + '\n\\end{document}');
+      if (!used) text = text.replace(/\\end\{document\}/, () => bib + '\n\\end{document}');
     }
     if (starts) {
       // Take out the marks, remembering where they were.
@@ -227,7 +261,7 @@
     const images = {};
     for (const [path, data] of Object.entries(raw)) {
       const ext = (path.split('.').pop() || '').toLowerCase();
-      if (/^(tex|ltx|latex|bbl|sty|cls|def)$/.test(ext) || !path.includes('.')) texFiles[path] = decodeText(data);
+      if (/^(tex|ltx|latex|bbl|bib|sty|cls|def)$/.test(ext) || !path.includes('.')) texFiles[path] = decodeText(data);
       else if (IMAGE_TYPES[ext]) images[path] = new Blob([data], { type: IMAGE_TYPES[ext] });
     }
     const candidates = {};
@@ -367,5 +401,5 @@
     throw lastError || new Error('Search failed.');
   }
 
-  return { parseId, untar, pickMain, flatten, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex };
+  return { parseId, untar, pickMain, flatten, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex };
 });
