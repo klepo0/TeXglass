@@ -16,6 +16,12 @@
 /* VS Code adds its own padding to the webview body. */
 body { padding: 0; }
 
+/* VS Code's webview stylesheet colours code from the editor theme
+   (textPreformat), which ignores the preview's own light, dark or notes look:
+   dark-grey \verb text on a dark page or a chalkboard. Code takes the
+   document's ink instead, as in the web viewer. */
+#preview code { color: inherit; background: none; padding: 0; border-radius: 0; }
+
 /* The line the editor's cursor is on, after Jump Preview to Cursor (Ctrl+K J).
    Blocks are containing blocks already (content-visibility in styles.css). */
 .sync-mark {
