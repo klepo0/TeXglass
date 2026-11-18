@@ -22,7 +22,10 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
+
+/** The default keyboard shortcut for the toolbar button; people can change it in the browser. */
+const SHORTCUT = 'Alt+Shift+K';
 
 /** Other sites with arXiv papers, where sites.js adds a "View in TeXglass" button. */
 const SITE_MATCHES = [
@@ -42,6 +45,15 @@ function manifest(target) {
     action: {
       default_title: 'View this arXiv paper in TeXglass',
       default_icon: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png' },
+    },
+    // The keyboard shortcut does what the toolbar button does. Alt+Shift+K is
+    // free in Chrome, Edge and Firefox and matches Ctrl+K inside the viewer
+    // (Chromium refuses Alt+Shift+X; it takes Alt+Shift+A, B, I and T itself).
+    commands: {
+      _execute_action: {
+        suggested_key: { default: SHORTCUT },
+        description: 'View this paper in TeXglass, or search arXiv',
+      },
     },
     permissions: ['activeTab', 'contextMenus', 'storage'],
     // arXiv for the papers and its search API; the HAL API to find the arXiv id of HAL deposits.
@@ -205,4 +217,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, manifest, viewerHtml, VERSION, SITE_MATCHES };
+module.exports = { build, manifest, viewerHtml, VERSION, SITE_MATCHES, SHORTCUT };

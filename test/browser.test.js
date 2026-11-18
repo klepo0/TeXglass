@@ -89,7 +89,7 @@ test('menus are created on install and the toolbar button opens the paper next t
 
   fake.listeners.action({ id: 8, index: 0, url: 'https://example.com/' });
   await settle();
-  assert.strictEqual(fake.tabs[1].url, 'moz-extension://abc/index.html');
+  assert.strictEqual(fake.tabs[1].url, 'moz-extension://abc/index.html?arxiv');
 });
 
 test('the right-click menu and page links open the paper; the web viewer can be chosen instead', async () => {
@@ -202,7 +202,7 @@ test('on HAL and ResearchGate pages the toolbar button and page menu ask the pag
   fake.browser.tabs.sendMessage = async () => { throw new Error('no receiver'); };
   fake.listeners.action({ id: 6, index: 2, url: 'https://hal.science/hal-00877723' });
   await settle();
-  assert.strictEqual(fake.tabs[1].url, 'moz-extension://abc/index.html');
+  assert.strictEqual(fake.tabs[1].url, 'moz-extension://abc/index.html?arxiv');
 });
 
 test('the manifests run sites.js on alphaXiv, HAL and ResearchGate and may ask the HAL API', () => {
@@ -216,4 +216,12 @@ test('the manifests run sites.js on alphaXiv, HAL and ResearchGate and may ask t
     assert.ok(m.host_permissions.includes('https://api.archives-ouvertes.fr/*'));
   }
   assert.ok(fs.existsSync(path.join(ROOT, 'browser/src/sites.js')));
+});
+
+test('both manifests give the toolbar button a keyboard shortcut', () => {
+  for (const target of ['chrome', 'firefox']) {
+    const cmd = manifest(target).commands._execute_action;
+    assert.strictEqual(cmd.suggested_key.default, 'Alt+Shift+K', target);
+    assert.ok(cmd.description, target);
+  }
 });

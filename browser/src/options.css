@@ -69,3 +69,10 @@ input[type="url"] {
 .hint {
   color: var(--muted);
 }
+
+kbd {
+  font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

@@ -5,7 +5,13 @@ arXiv papers in TeXglass (also from alphaXiv, HAL and ResearchGate), which
 renders their LaTeX source as a readable page: math, numbered theorems and equations, working references.
 
 - **Toolbar button**: on an arXiv page (`arxiv.org/abs/…`, `/pdf/…` or
-  `/html/…`) it opens that paper. Anywhere else it opens the viewer.
+  `/html/…`) it opens that paper. Anywhere else it opens the viewer with its
+  arXiv search dialog.
+- **Keyboard shortcut**: **Alt+Shift+K** does the same as the toolbar button.
+  Change it at `chrome://extensions/shortcuts` (Edge:
+  `edge://extensions/shortcuts`; Firefox: *Manage Extension Shortcuts* in the
+  gear menu of `about:addons`). Inside the viewer, **Ctrl+K** (Cmd+K on a Mac)
+  opens the arXiv dialog, as on the website.
 - **Right-click menu**: *Open arXiv paper in TeXglass* on any link to an
   arXiv paper, on any site, and *View this paper in TeXglass* on arXiv pages.
 - **Links on arxiv.org**: *View in TeXglass* under "Access Paper" on abstract
