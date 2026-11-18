@@ -1029,3 +1029,10 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .todo { font-size: 0.8em; background: #fff3b0; color: #5a4a00; border-radius: 3px; padding: 0 0.3em; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .todo { background: #4a4010; color: #f4e6a6; } }
 :root[data-theme="dark"] .todo { background: #4a4010; color: #f4e6a6; }
+
+/* ulem underlines and strike-outs */
+u.uuline { text-decoration-style: double; }
+u.uwave { text-decoration-style: wavy; text-decoration-skip-ink: none; }
+u.dashuline { text-decoration-style: dashed; }
+u.dotuline { text-decoration-style: dotted; }
+s.xout { text-decoration-thickness: 0.15em; }

@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.4.7';
+const VERSION = '0.4.8';
 
 /** The default keyboard shortcut for the toolbar button; people can change it in the browser. */
 const SHORTCUT = 'Alt+Shift+K';
