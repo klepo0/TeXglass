@@ -163,12 +163,6 @@ viewer, the CLI and the VS Code extension. Diagrams live in `src/tikz.js` and
 `src/diagrams.js`, editing aids in `src/editor.js`, HTML export in
 `src/export.js`. `npm test` runs the tests.
 
-**Releasing**: bump `version` in `vscode/package.json`, merge, then push a
-matching tag from main (`git tag v0.9.0 && git push origin v0.9.0`). The
-[Release workflow](.github/workflows/release.yml) builds the `.vsix` and
-browser zips, publishes a GitHub Release, and publishes to the VS Code
-Marketplace (trusted publishing) and to Open VSX when `OVSX_PAT` is set.
-
 TeXglass was called TeXdown until November 2026; settings carry over.
 
 ## License
