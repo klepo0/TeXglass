@@ -45,12 +45,17 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   - **marks** the paragraph that holds the cursor;
   - **moves the cursor** to what you click in the preview: a formula, a
     word, or the start of a paragraph;
-  - with **Project files**, downloads the project's zip from Overleaf (its own
+  - has a **table of contents** (*Contents*), **Find** (Ctrl+F) and **Go to**
+    (Ctrl+G: "Lemma 4.1", "(3.2)", "§2"), and a **light or dark theme** (the
+    moon button; it follows your system until you choose). Scrolling the
+    preview yourself or jumping with these holds it in place until the editor
+    scrolls again;
+  - with **Files**, downloads the project's zip from Overleaf (its own
     *Download as zip*, with your login) and pulls in the files the open file
     `\input`s, the main file's preamble when the open file is a chapter (for
     its macros), references from the project's `.bib` files, and PNG, JPEG
     and SVG figures. The open file is always live; the other files are a
-    snapshot, refreshed with *Reload files*.
+    snapshot, refreshed with *Reload*.
 
   The panel only reads the project: the one thing it does to the editor is
   move the cursor when you click. Overleaf's PDF stays the final version.
