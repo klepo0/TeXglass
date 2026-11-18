@@ -350,12 +350,71 @@
     },
   };
   MATH_MACROS['\\mathbbmss'] = MATH_MACROS['\\mathbbm'];
+  // nicefrac / xfrac: a slanted fraction ¹⁄₂, with nicefrac's optional font argument ignored.
+  const niceFrac = (ctx) => {
+    ctx.consumeSpaces();
+    if (ctx.future().text === '[') {
+      for (let depth = 0; ;) {
+        const t = ctx.popToken();
+        if (t.text === 'EOF') break;
+        if (t.text === '{') depth++;
+        else if (t.text === '}') depth--;
+        else if (t.text === ']' && depth === 0) break;
+      }
+    }
+    return '\\texglassNiceFrac';
+  };
+  MATH_MACROS['\\nicefrac'] = niceFrac;
+  MATH_MACROS['\\sfrac'] = niceFrac;
+  MATH_MACROS['\\texglassNiceFrac'] = '{}^{#1}\\!/\\!{}_{#2}';
+  // slashed (Feynman slash notation): a stroke through the argument.
+  MATH_MACROS['\\slashed'] = '\\cancel{#1}';
+  // mathtools: \adjustlimits\lim_a\sup_b only lines up the limits.
+  MATH_MACROS['\\adjustlimits'] = '';
+  // \mathpalette\cmd{x} calls \cmd with the current style, as in
+  // \newcommand\dotop{\mathpalette\dotop@{.6}}; \m@th only resets \mathsurround.
+  MATH_MACROS['\\mathpalette'] = '\\mathchoice{#1\\displaystyle{#2}}{#1\\textstyle{#2}}{#1\\scriptstyle{#2}}{#1\\scriptscriptstyle{#2}}';
+  MATH_MACROS['\\m@th'] = '';
+  // The triple-bar norm delimiter ⦀ (fourier's \VERT, \vvvert), which KaTeX lacks:
+  // drawn as three bars (see TRIPLE_BAR and tripleBars).
+  const TRIPLE_BAR = '\\vert\\mkern-2mu\\vert\\mkern-2mu\\vert';
+  MATH_MACROS['\\vvvert'] = `{${TRIPLE_BAR}}`;
+  MATH_MACROS['\\VERT'] = MATH_MACROS['\\vvvert'];
+
+  /** Names (with backslash) of delimiters that are drawn as three bars. */
+  const DEFAULT_TRIPLE = ['\\vvvert', '\\VERT'];
+
+  /**
+   * One delimiter: wrap('\\vert') gives e.g. '\\left\\vert' or '\\mathopen{\\vert}'.
+   * A triple bar becomes three of them in a row. (Not one \\mathopen{…} round
+   * all three: KaTeX's MathML for that nests <mspace/> inside <mo>, which the
+   * HTML parser reads as an unclosed element that swallows the rest of the page.)
+   */
+  function sizedDelim(wrap, d, triple) {
+    if (!triple.includes(d.trim())) return wrap(d);
+    return [0, 1, 2].map(() => wrap('\\vert')).join('\\mkern-2mu');
+  }
+
+  /**
+   * \left\vvvert … \right\vvvert (or \bigl, \Big, …) for a triple-bar delimiter:
+   * KaTeX takes a single delimiter after \left, so put three bars in a row.
+   */
+  function tripleBars(tex, triple) {
+    for (const d of triple) {
+      if (!tex.includes(d)) continue;
+      const re = new RegExp(`(\\\\(?:left|right|middle|[bB]igg?[lrm]?))\\s*${d.replace(/\\/g, '\\\\')}(?![A-Za-z@])`, 'g');
+      tex = tex.replace(re, (_, pre) => sizedDelim((x) => pre + x, d, triple));
+    }
+    return tex;
+  }
   // graphicx boxes around math, as in \[ \resizebox{\linewidth}{!}{$\displaystyle …$} \]:
   // the content at its own size (a formula too wide for the page scrolls instead).
   const boxedMath = (n) => (ctx) => {
     const args = ctx.consumeArgs(n);
-    // tokens come last-first; leave out the $ that switched the box to math
-    return { tokens: args[n - 1].filter((t) => t.text !== '$'), numArgs: 0 };
+    // tokens come last-first; in a formula leave out the $ that switched the
+    // box to math (inside \hbox{…} the box is text, so the $ stays)
+    const toks = ctx.mode === 'text' ? args[n - 1] : args[n - 1].filter((t) => t.text !== '$');
+    return { tokens: toks, numArgs: 0 };
   };
   MATH_MACROS['\\resizebox'] = boxedMath(3);
   MATH_MACROS['\\scalebox'] = boxedMath(2);
@@ -395,7 +454,8 @@
    * A KaTeX macro for a mathtools \DeclarePairedDelimiter: \cmd{x} puts plain
    * delimiters, \cmd*{x} \left…\right ones, \cmd[\big]{x} \bigl…\bigr ones.
    */
-  function pairedMacro(p) {
+  function pairedMacro(p, triple) {
+    triple = triple || DEFAULT_TRIPLE;
     return (ctx) => {
       ctx.consumeSpaces();
       let size = '';
@@ -422,17 +482,17 @@
       let close;
       let mid;
       if (star) {
-        open = `\\left${p.open}`;
-        close = `\\right${p.close}`;
+        open = sizedDelim((x) => `\\left${x}`, p.open, triple);
+        close = sizedDelim((x) => `\\right${x}`, p.close, triple);
         mid = '\\middle';
       } else if (size) {
         const big = /^\\(big|Big|bigg|Bigg)$/.test(size);
-        open = `${size}${big ? 'l' : ''}${p.open}`;
-        close = `${size}${big ? 'r' : ''}${p.close}`;
+        open = sizedDelim((x) => `${size}${big ? 'l' : ''}${x}`, p.open, triple);
+        close = sizedDelim((x) => `${size}${big ? 'r' : ''}${x}`, p.close, triple);
         mid = size;
       } else {
-        open = `\\mathopen{${p.open}}`;
-        close = `\\mathclose{${p.close}}`;
+        open = sizedDelim((x) => `\\mathopen{${x}}`, p.open, triple);
+        close = sizedDelim((x) => `\\mathclose{${x}}`, p.close, triple);
         mid = '';
       }
       const body = p.body.replace(/\\delimsize\b/g, mid);
@@ -544,6 +604,7 @@
     'makeatletter', 'makeatother', 'normalsize', 'selectfont', 'onecolumn', 'twocolumn', 'mainmatter',
     'frontmatter', 'backmatter', 'printbibliography', 'listoffigures', 'listoftables', 'qedhere', 'xspace',
     'ignorespaces', 'unskip', 'allowbreak', 'break', 'nolinebreak', 'leavevmode', 'displaybreak',
+    'long', 'outer', 'listoftodos',
   ]);
 
   /** Commands whose arguments are dropped entirely. */
@@ -557,6 +618,9 @@
     'usetikzlibrary', 'tikzcdset', 'SelectTips', 'xyoption', 'pgfdeclarelayer', 'pgfsetlayers', 'CompileMatrices',
     'DeclareGraphicsExtensions', 'urlstyle', 'keywords', 'subjclass', 'address', 'email', 'curraddr',
     'dedicatory', 'translator', 'setcopyright', 'raisebox_', 'enlargethispage', 'looseness', 'spacing',
+    'DeclareFontEncoding', 'DeclareFontSubstitution', 'DeclareSymbolFont', 'SetSymbolFont', 'DeclareFontFamily',
+    'DeclareFontShape', 'DeclareMathAlphabet', 'SetMathAlphabet', 'DeclareSymbolFontAlphabet',
+    'setuptodonotes', 'presetkeys',
   ]);
 
   const TEXT_STYLES = {
@@ -627,6 +691,7 @@
       this.warnings = [];
       this.macros = Object.create(null); // name (without backslash) -> {nargs, def, body}
       this.paired = Object.create(null); // \DeclarePairedDelimiter definitions
+      this.triple = DEFAULT_TRIPLE.slice(); // delimiters drawn as three bars (\vvvert)
       this.envs = Object.create(null); // \newenvironment definitions
       this.theorems = Object.create(null);
       this.thmStyle = 'plain';
@@ -752,7 +817,7 @@
     }
 
     renderMath(tex, display) {
-      tex = arraySpecs(this.mathRefs(tex)).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
+      tex = tripleBars(arraySpecs(this.mathRefs(tex)), this.triple).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
       try {
         const html = this.renderMathFn(tex, display, this.katexMacros(tex));
         return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
@@ -768,7 +833,8 @@
           const mac = this.macros[name];
           m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
         }
-        for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name]);
+        for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name], this.triple);
+        for (const d of this.triple) if (!m[d]) m[d] = `{${TRIPLE_BAR}}`;
         m['\\texglassTree'] = (ctx) => {
           const name = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('').trim();
           return this.treeMarker(name);
@@ -1102,6 +1168,37 @@
           const a = readArg(src, j);
           return res(this.citeHtml(a.content, opts[opts.length - 1]), a.end);
         }
+        case 'cites': case 'parencites': case 'textcites': case 'autocites': case 'citeps': {
+          // amsrefs \cites{a,b} and biblatex \cites[pre][post]{a}[post]{b}: one bracket of citations.
+          let j = i;
+          const keys = [];
+          let note;
+          for (;;) {
+            let k = j;
+            const opts = [];
+            let o;
+            while ((o = readOpt(src, k))) { opts.push(o.content); k = o.end; }
+            const at = skipInline(src, k);
+            if (src[at] !== '{') break;
+            const a = readArg(src, k);
+            keys.push(a.content);
+            if (opts.length) note = opts[opts.length - 1];
+            j = a.end;
+          }
+          if (!keys.length) return res('', i);
+          return res(this.citeHtml(keys.join(','), keys.length === 1 ? note : undefined), j);
+        }
+        case 'todo': {
+          // todonotes: show the note inline, small (\todo[inline,color=…]{text}).
+          const o = readOpt(src, i);
+          const a = readArg(src, o ? o.end : i);
+          return res(`<span class="todo">${this.flow(a.content, true)}</span>`, a.end);
+        }
+        case 'missingfigure': {
+          const o = readOpt(src, i);
+          const a = readArg(src, o ? o.end : i);
+          return res(`<span class="todo">[missing figure: ${this.flow(a.content, true)}]</span>`, a.end);
+        }
         case 'footnote': {
           const o = readOpt(src, i);
           const a = readArg(src, o ? o.end : i);
@@ -1299,6 +1396,21 @@
           };
           this._katexMacros = null;
           return res('', body.end);
+        }
+        case 'DeclareMathDelimiter': {
+          // \DeclareMathDelimiter{\cs}{type}{font}{slot}{largefont}{slot} on slot 152 of a fourier font
+          // is the usual way to get the triple bar ⦀. Other glyphs from
+          // font slots can't be known, so only the triple bar is drawn.
+          const nm = readArg(src, i);
+          const args = [];
+          let j = nm.end;
+          for (let k = 0; k < 5; k++) { const a = readArg(src, j); args.push(a.content.trim()); j = a.end; }
+          const cs = nm.content.trim();
+          if (/^\\(v?vvert|Vvert|VERT|tvert|tnorm|triplevert|vertiii)$/.test(cs) || (/fourier/i.test(args[1]) && args[2] === '152')) {
+            if (!this.triple.includes(cs)) this.triple.push(cs);
+            this._katexMacros = null;
+          }
+          return res('', j);
         }
         case 'DeclarePairedDelimiter': case 'DeclarePairedDelimiterX': case 'DeclarePairedDelimiterXPP': {
           // mathtools: \norm{x}, \norm*{x} (\left…\right) and \norm[\big]{x}.

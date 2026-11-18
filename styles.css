@@ -1024,3 +1024,8 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .inline-preview:not(:empty) { margin: 0; padding: 0; }
   ::highlight(texglass-find), ::highlight(texglass-find-current) { background-color: transparent; }
 }
+
+/* todonotes \todo{…}: an inline author's note */
+.todo { font-size: 0.8em; background: #fff3b0; color: #5a4a00; border-radius: 3px; padding: 0 0.3em; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .todo { background: #4a4010; color: #f4e6a6; } }
+:root[data-theme="dark"] .todo { background: #4a4010; color: #f4e6a6; }
