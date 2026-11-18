@@ -677,6 +677,8 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 /* Diagrams (tikzcd, xymatrix, tikzpicture): src/tikz.js + src/diagrams.js */
 .tg-diagram { display: block; margin: 0.8em 0; text-align: center; overflow-x: auto; overflow-y: hidden; position: relative; }
 .math-inline .tg-diagram, .diagram-display .tg-diagram, .float .tg-diagram { display: inline-block; margin: 0; vertical-align: middle; max-width: 100%; }
+/* tree symbols (\<b0>) drawn inside formulas */
+.tg-diagram.tg-tree { display: inline; margin: 0; overflow: visible; }
 .cd-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
 .cd-grid { display: inline-grid; align-items: center; justify-items: center; vertical-align: middle; }
 .cd-cell { display: block; }

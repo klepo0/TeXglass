@@ -138,6 +138,14 @@
     purple: '#9c27b0', brown: '#8d5a3b', pink: '#f06292', teal: '#008080', olive: '#808000', lime: '#8bc34a',
   };
   const GRAYS = { gray: 50, darkgray: 75, lightgray: 25 };
+  // xcolor's dvipsnames (capitalised), common in hand-made symbol packages.
+  Object.assign(COLORS, {
+    Cyan: '#00aeef', YellowOrange: '#faa21a', Violet: '#58429b', Orange: '#f58137', RoyalBlue: '#0071bc',
+    ForestGreen: '#009b55', BrickRed: '#b6321c', Maroon: '#af3235', Plum: '#92268f', Red: '#ed1b23',
+    Blue: '#2d2f92', Green: '#00a64f', Magenta: '#ec008c', Purple: '#99479b', Emerald: '#00a99d',
+    Goldenrod: '#ffdf42', Mulberry: '#a93c93', NavyBlue: '#006eb8', OliveGreen: '#3c8031', Peach: '#f7965a',
+    RedOrange: '#f26035', Sepia: '#671800', Tan: '#da9d76', Turquoise: '#00b4ce', CadetBlue: '#74729a',
+  });
 
   function color(spec) {
     if (!spec) return null;
@@ -1815,6 +1823,9 @@
       else if (k === 'ellipse' || k === 'shape' && v === 'ellipse') n.shape = 'ellipse';
       else if (k === 'rectangle' || k === 'shape' && v === 'rectangle') n.shape = 'rect';
       else if (k === 'coordinate' || k === 'shape' && v === 'coordinate') n.shape = 'coord';
+      else if (k === 'diamond' || k === 'shape' && v === 'diamond') n.shape = 'diamond';
+      else if (k === 'regular polygon' || k === 'shape' && v === 'regular polygon') { n.shape = 'poly'; n.sides = n.sides || 5; }
+      else if (k === 'regular polygon sides') n.sides = Math.max(3, Math.min(12, parseInt(v, 10) || 5));
       else if (k === 'inner sep') n.is = dist(v);
       else if (k === 'outer sep') n.os = dist(v);
       else if (k === 'minimum size') n.mw = n.mh = dist(v);
@@ -1953,12 +1964,19 @@
     if (/\\begin\s*\{(axis|semilogyaxis|semilogxaxis|loglogaxis|polaraxis|groupplot)\}|\\addplot\b/.test(src)) return fallback('pgfplots plots are not rendered here');
     const p = new TikzParser(cb);
     const st = baseState();
+    let baseline = null;
     let s = src;
     if (cb.styles) { try { p.expand(cb.styles); } catch (e) { /* ignore */ } }
     const i = skipWs(s, 0);
     if (s[i] === '[') {
       const e = matchGroup(s, i);
-      p.pathOptions(st, s.slice(i + 1, e - 1));
+      const opts = s.slice(i + 1, e - 1);
+      p.pathOptions(st, opts);
+      // baseline=<dimension>: the height (in picture coordinates) that sits on
+      // the text baseline when the picture is set inline, as in \tikz[baseline=-3]{…}.
+      const bl = /(?:^|,)\s*baseline\s*=\s*([^,]+)/.exec(opts);
+      const blEm = bl && /^\s*[+-]?[\d.]+\s*([a-z]{2})?\s*$/.test(bl[1]) ? toEm(bl[1], 'pt') : null;
+      if (blEm !== null) baseline = blEm / 2.8453;
       st.every.node = st.every.node.concat(st.nodeOpts);
       for (const o of st.nodeOpts) { const [k] = keyVal(o); if (k === 'domain' || k === 'samples' || k === 'smooth') (st.plotOpts || (st.plotOpts = [])).push(o); }
       s = s.slice(e);
@@ -1972,6 +1990,7 @@
     if (!p.paths.length && !p.nodes.length) return fallback('this picture uses TikZ features that are not supported yet');
     const bb = p.bbox();
     const model = { paths: p.paths, nodes: p.nodes.map((n) => { const c = Object.assign({}, n); return c; }), bbox: bb };
+    if (baseline !== null) model.baseline = baseline;
     const json = JSON.stringify(roundDeep(model));
     const S = 2.8453; // em per cm
     const w = round((bb[2] - bb[0]) * S + 1);

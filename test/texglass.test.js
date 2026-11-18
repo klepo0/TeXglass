@@ -376,13 +376,25 @@ test('\\definealphabet defines one macro per letter', () => {
   assert.match(r.html, /mathcal/);
 });
 
-test('tree symbols \\<name> drawn with \\csname show their name instead of breaking the formula', () => {
-  const r = TeXglass.render(String.raw`\makeatletter
+test('tree symbols \\<name> from \\DeclareSymbol are drawn inside the formula', () => {
+  const r = TeXglass.render(String.raw`\tikzset{bxi/.style={circle,fill=Cyan,draw=symbols,inner sep=0pt,minimum size=1.1mm}}
+\tikzset{txi/.style={regular polygon,regular polygon sides=3,draw=symbols,minimum size=1.3mm}}
+\makeatletter
+\def\DeclareSymbol#1#2#3{\expandafter\gdef\csname MH@symb@#1\endcsname{\tikz[baseline=#2,scale=0.15,draw=symbols]{#3}}}
 \def\<#1>{\csname MH@symb@#1\endcsname}
 \makeatother
-\begin{document}$\mathcal{H}_{\<b0>} + 1$\end{document}`, { renderMath: (t, d, m) => katex.renderToString(t, { macros: m, throwOnError: true }) });
-  assert.doesNotMatch(r.html, /math-error/);
-  assert.match(r.html, /b0/);
+\DeclareSymbol{b0}{-3}{\node[bxi]{};}
+\DeclareSymbol{t1}{0}{\draw (0,0) -- (0,1.5) node[txi] {};}
+\begin{document}$\mathcal{H}_{\<b0>} + \<t1> + \<b0s> + \<nope>$\end{document}`, { renderMath: (t, d, m) => katex.renderToString(t, { displayMode: d, macros: m, throwOnError: true }) });
+  assert.doesNotMatch(r.html, /math-error|katex-error/);
+  const pics = Array.from(r.html.matchAll(/class="tg-diagram tg-tikz tg-tree"><span class="tikz-wrap" data-tikz="([^"]*)"/g), (m) => JSON.parse(m[1].replace(/&quot;/g, '"')));
+  assert.equal(pics.length, 3);
+  assert.equal(pics[0].nodes[0].fill, '#00aeef');
+  assert.ok(Math.abs(pics[0].baseline + 3 / 28.4527) < 1e-3);
+  assert.equal(pics[1].nodes[0].shape, 'poly');
+  assert.equal(pics[1].nodes[0].sides, 3);
+  assert.doesNotMatch(r.html, /color:#a5/);
+  assert.match(r.html, /mathtt[^>]*>nope/);
 });
 
 test('a $ inside \\text{…} does not end inline math', () => {
