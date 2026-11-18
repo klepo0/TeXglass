@@ -31,7 +31,7 @@
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
     <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
-    <button id="arxiv" type="button" title="Import a paper's LaTeX source from arXiv">arXiv</button>
+    <button id="arxiv" type="button" title="Search arXiv or import a paper's LaTeX source">arXiv</button>
     <button id="github" type="button" title="Open a .tex file from a public GitHub repository">GitHub</button>
     <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">Preprints</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
@@ -77,10 +77,11 @@
 
   <dialog id="arxiv-dialog" class="arxiv-dialog" aria-labelledby="arxiv-title">
     <form id="arxiv-form" method="dialog">
-      <h2 id="arxiv-title">Import from arXiv</h2>
-      <label for="arxiv-input">Paste an arXiv link or id</label>
-      <input id="arxiv-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://arxiv.org/abs/2301.00001 or 2301.00001">
+      <h2 id="arxiv-title">Open from arXiv</h2>
+      <label for="arxiv-input">Paste an arXiv link or id, or search by title, author or keywords</label>
+      <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="2301.00001, or rough paths signature">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
+      <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
       <div class="arxiv-actions">
         <button type="button" id="arxiv-cancel">Cancel</button>
         <button type="submit" id="arxiv-go" class="primary">Import</button>

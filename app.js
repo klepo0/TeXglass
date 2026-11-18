@@ -1413,6 +1413,7 @@
   const arxivInput = $('arxiv-input');
   const arxivMessage = $('arxiv-message');
   const arxivGo = $('arxiv-go');
+  const arxivResults = $('arxiv-results');
   let arxivBusy = false;
 
   function arxivSay(text, warn) {
@@ -1462,14 +1463,117 @@
     arxivInput.select();
   }
 
+  // --- searching arXiv (through OpenAlex; arXiv's own API blocks web pages) ---
+
+  let searchRun = 0; // newer searches win over slower older ones
+  let searchState = null; // { query, page, results, total, more }
+
+  /** Text with $…$ / \(…\) maths through KaTeX, everything else escaped. */
+  function mathText(text) {
+    const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(text || '').split(/(\$\$[^$]+\$\$|\$[^$]+\$|\\\([\s\S]+?\\\))/).map((part, i) => {
+      if (i % 2 === 0) return esc(part);
+      const tex = part.replace(/^\$\$?|\$\$?$/g, '').replace(/^\\\(|\\\)$/g, '');
+      if (window.katex) {
+        try { return katex.renderToString(tex, { throwOnError: true, output: 'html' }); } catch (e) { /* fall through */ }
+      }
+      return esc(part);
+    }).join('');
+  }
+
+  function updateArxivButton() {
+    const v = arxivInput.value.trim();
+    arxivGo.textContent = !v || TeXglassArxiv.parseId(v) ? 'Import' : 'Search';
+  }
+
+  function showResults(on) {
+    arxivResults.hidden = !on;
+    arxivDialog.classList.toggle('has-results', on);
+  }
+
+  function renderSearch() {
+    const st = searchState;
+    arxivResults.textContent = '';
+    const frag = document.createDocumentFragment();
+    for (const r of st.results) {
+      const li = document.createElement('li');
+      li.className = 'preprint';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'preprint-open';
+      btn.title = `Open the LaTeX source of ${r.id}`;
+      const authors = r.authors.length > 4 ? r.authors.slice(0, 3).join(', ') + ' et al.' : r.authors.join(', ');
+      const meta = [authors, r.year, 'arXiv:' + r.id].filter(Boolean).join(' · ');
+      btn.innerHTML = `<span class="preprint-title">${mathText(r.title)}</span>` +
+        `<span class="arxiv-result-meta">${mathText(meta)}</span>` +
+        (r.abstract ? `<span class="preprint-abstract">${mathText(r.abstract)}</span>` : '');
+      btn.addEventListener('click', () => importArxiv(r.id));
+      const abs = document.createElement('a');
+      abs.className = 'preprint-pdf';
+      abs.href = `https://arxiv.org/abs/${r.id}`;
+      abs.target = '_blank';
+      abs.rel = 'noopener';
+      abs.textContent = 'arXiv';
+      abs.title = 'The abstract page on arxiv.org';
+      li.append(btn, abs);
+      frag.appendChild(li);
+    }
+    if (st.more) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'preprints-more';
+      more.textContent = 'Show more';
+      more.addEventListener('click', () => searchArxiv(st.query, st.page + 1));
+      const li = document.createElement('li');
+      li.appendChild(more);
+      frag.appendChild(li);
+    }
+    arxivResults.appendChild(frag);
+    showResults(st.results.length > 0);
+  }
+
+  async function searchArxiv(query, page) {
+    const run = ++searchRun;
+    page = page || 1;
+    if (page === 1) arxivResults.scrollTop = 0;
+    arxivSay(page === 1 ? 'Searching arXiv…' : 'Loading more…');
+    arxivGo.disabled = true;
+    try {
+      const res = await TeXglassArxiv.search(query, { page });
+      if (run !== searchRun) return;
+      if (page === 1 || !searchState || searchState.query !== query) searchState = { query, results: [] };
+      const seen = new Set(searchState.results.map((r) => r.id));
+      searchState.results.push(...res.results.filter((r) => !seen.has(r.id)));
+      Object.assign(searchState, { page, total: res.total, more: res.more });
+      renderSearch();
+      const n = searchState.total;
+      arxivSay(searchState.results.length
+        ? `${n.toLocaleString()} paper${n === 1 ? '' : 's'} on arXiv. Click one to open its LaTeX source.`
+        : 'No arXiv papers match that search.', !searchState.results.length);
+    } catch (e) {
+      if (run !== searchRun) return;
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      arxivSay(offline
+        ? 'Searching needs an internet connection. You can still paste an arXiv id once you are back online.'
+        : `Search failed: ${e.message || e}. Try again in a moment, or paste an arXiv link or id.`, true);
+    } finally {
+      if (run === searchRun) arxivGo.disabled = false;
+    }
+  }
+
   $('arxiv').addEventListener('click', () => {
-    arxivSay('The source is downloaded from arxiv.org; figures in PNG or JPEG are shown too.');
+    if (!searchState) arxivSay('Search arXiv, or paste a link to download the source; figures in PNG or JPEG are shown too.');
     openArxivDialog();
+    updateArxivButton();
   });
   $('arxiv-cancel').addEventListener('click', () => arxivDialog.close());
+  arxivInput.addEventListener('input', updateArxivButton);
   $('arxiv-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    importArxiv(arxivInput.value);
+    const v = arxivInput.value.trim();
+    if (!v) return;
+    if (TeXglassArxiv.parseId(v)) importArxiv(v);
+    else searchArxiv(v, 1);
   });
 
   // Pasting an arXiv or GitHub link anywhere outside a text field opens it.
