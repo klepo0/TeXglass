@@ -18,10 +18,20 @@
  * Works in the browser (window.TeXglass) and in Node (require).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.TeXglass = factory();
-})(typeof self !== 'undefined' ? self : this, function () {
+  // The BibTeX reader (src/bib.js) is looked up when needed, so it may load after this file.
+  if (typeof module === 'object' && module.exports) module.exports = factory(() => require('./bib.js'));
+  else root.TeXglass = factory(() => root.TeXglassBib);
+})(typeof self !== 'undefined' ? self : this, function (loadBib) {
   'use strict';
+
+  /** src/bib.js, or null where it is not available. */
+  const bibReader = () => {
+    try {
+      return (loadBib && loadBib()) || null;
+    } catch (e) {
+      return null;
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // Small helpers
@@ -733,6 +743,7 @@
         const e = body.search(/\\end\s*\{document\}/);
         if (e >= 0) body = body.slice(0, e);
       }
+      this.preamble = pre;
       if (/\\chapter\b/.test(src)) {
         this.topLevel = 'chapter';
         this.counters.section.parent = 'chapter';
@@ -1524,6 +1535,13 @@
           return this.list(name, body);
         case 'thebibliography':
           return this.bibliography(body);
+        case 'bibdiv': case 'biblist': {
+          // amsrefs: \bib{key}{type}{fields} records, turned into a thebibliography.
+          const Bib = bibReader();
+          if (!Bib) return '';
+          const alpha = /\\usepackage\s*\[[^\]]*\balphabetic\b[^\]]*\]\s*\{amsrefs\}/.test(this.preamble || '');
+          return this.bibliography(Bib.amsrefsBibliography(body, alpha));
+        }
         case 'figure': case 'figure*': case 'table': case 'table*': case 'wrapfigure': {
           const prev = this.floatKind;
           this.floatKind = name.startsWith('table') ? 'table' : 'figure';

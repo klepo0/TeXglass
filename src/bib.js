@@ -448,6 +448,110 @@ function parseBbl(text) {
   return entries;
 }
 
+// --- amsrefs -------------------------------------------------------------------
+//
+// amsrefs puts the bibliography in the .tex itself:
+//   \begin{bibdiv}\begin{biblist}
+//   \bib{key}{article}{ author={Bass, Richard~F.}, author={Chen, Z.}, title={…}, date={2003}, … }
+//   \end{biblist}\end{bibdiv}
+// Fields repeat (one author= per author) and some hold a nested record
+// (book={title=…, publisher=…}, conference={…}, series={…}).
+
+/** `key={value}, …` into [[key, value]], keeping repeats and order. */
+function amsPairs(s) {
+  const out = [];
+  let i = 0;
+  const n = s.length;
+  while (i < n) {
+    while (i < n && /[\s,]/.test(s[i])) i++;
+    const m = /^([a-zA-Z*]+)\s*=\s*/.exec(s.slice(i));
+    if (!m) {
+      // Not a field: skip to the next top-level comma.
+      let depth = 0;
+      while (i < n && !(s[i] === ',' && depth === 0)) {
+        if (s[i] === '\\') i++;
+        else if (s[i] === '{') depth++;
+        else if (s[i] === '}') depth--;
+        i++;
+      }
+      continue;
+    }
+    i += m[0].length;
+    let value;
+    const g = s[i] === '{' ? bblGroup(s, i) : null;
+    if (g) {
+      value = g.content;
+      i = g.end;
+    } else {
+      const end = s.indexOf(',', i);
+      value = s.slice(i, end < 0 ? n : end);
+      i = end < 0 ? n : end;
+    }
+    out.push([m[1].toLowerCase(), value.replace(/\s+/g, ' ').trim()]);
+  }
+  return out;
+}
+
+const amsText = (v) => String(v || '').replace(/\\ndash\b\s*/g, '--').replace(/\\mdash\b\s*/g, '---');
+const isRecord = (v) => /^\s*[a-zA-Z]+\s*=/.test(v || '');
+
+/** The entries of an amsrefs biblist, as { key: { type, fields } } in their order. */
+function parseAmsrefs(text) {
+  const entries = {};
+  const re = /\\bib\*?\s*\{([^}]*)\}\s*\{([^}]*)\}\s*/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const g = bblGroup(text, m.index + m[0].length);
+    if (!g) continue;
+    re.lastIndex = g.end;
+    const key = m[1].trim();
+    const type = m[2].trim().toLowerCase();
+    const fields = {};
+    const people = { author: [], editor: [], translator: [] };
+    const take = (pairs, prefix) => {
+      for (const [k, raw] of pairs) {
+        const v = amsText(raw);
+        if (k in people && !prefix) people[k].push(v);
+        else if ((k === 'book' || k === 'conference' || k === 'series' || k === 'partial') && isRecord(raw)) {
+          const inner = amsPairs(raw);
+          for (const [ik, iv] of inner) {
+            const val = amsText(iv);
+            if (ik === 'title') {
+              if (k === 'series') fields.series = fields.series || val;
+              else fields.booktitle = fields.booktitle || val;
+            } else if (ik === 'editor') people.editor.push(val);
+            else if (!(ik in fields) && !(ik in people)) fields[ik] = val;
+          }
+        } else if (k === 'review' || k === 'xref' || k === 'status' || k === 'language') continue;
+        else if (k === 'date') fields.year = fields.year || (/\d{4}/.exec(v) || [v])[0];
+        else if (k === 'organization' || k === 'institution') fields.school = fields.school || v;
+        else if (k === 'place') fields.address = fields.address || v;
+        else if (k === 'eprint') fields.eprint = v.replace(/^arxiv:\s*/i, '');
+        else if (!(k in fields)) fields[k] = v;
+      }
+    };
+    take(amsPairs(g.content), '');
+    for (const k of Object.keys(people)) if (people[k].length) fields[k] = people[k].join(' and ');
+    if (fields.eprint && !/^\d{4}\.\d{4,5}(v\d+)?$|^[a-z-]+(\.[A-Z]{2})?\/\d{7}/i.test(fields.eprint)) {
+      fields.note = fields.note ? `${fields.note}, ${fields.eprint}` : fields.eprint;
+      delete fields.eprint;
+    }
+    const TYPES = { collection: 'book', report: 'techreport', partial: 'misc', innerbook: 'incollection' };
+    entries[key] = { type: TYPES[type] || (type === 'article' && fields.booktitle ? 'inproceedings' : type), fields };
+  }
+  return entries;
+}
+
+/**
+ * An amsrefs biblist as the body of a thebibliography ("{n}\n\bibitem…"),
+ * every entry in its own order; alpha labels when amsrefs has the alphabetic option.
+ */
+function amsrefsBibliography(biblist, alphabetic) {
+  const entries = parseAmsrefs(biblist);
+  const text = makeBibliography(entries, ['*'], alphabetic ? 'alpha' : 'plain', { keepOrder: true }).text;
+  return text.replace(/^\\begin\{thebibliography\}/, '').replace(/\\end\{thebibliography\}$/, '');
+}
+
 /** The style a document asks for: \bibliographystyle{…}, or biblatex's style/bibstyle and sorting options. */
 function styleOf(text) {
   const t = String(text || '');
@@ -478,5 +582,5 @@ function bibResources(text) {
   return out.map((n) => n.trim()).filter(Boolean);
 }
 
-return { parseBib, parseBbl, isBiblatexBbl, makeBibliography, formatEntry, parseName, styleOf, citedKeys, bibResources };
+return { parseBib, parseBbl, isBiblatexBbl, parseAmsrefs, amsrefsBibliography, makeBibliography, formatEntry, parseName, styleOf, citedKeys, bibResources };
 });
