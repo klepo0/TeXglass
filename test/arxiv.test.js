@@ -144,8 +144,33 @@ test('abstractFromIndex rebuilds the text in order', () => {
   assert.equal(A.abstractFromIndex(null), '');
 });
 
-test('search asks OpenAlex for arXiv papers and keeps those with an arXiv id', async () => {
-  const f = fakeFetch([['https://api.openalex.org/', { body: openAlexPage }]]);
+test('search asks DataCite first for arXiv DOIs', async () => {
+  const f = fakeFetch([['https://api.datacite.org/', { body: { meta: { total: 30 }, data: [
+    { id: '10.48550/arxiv.2301.00001', attributes: {
+      doi: '10.48550/arxiv.2301.00001',
+      identifiers: [{ identifier: '2301.00001', identifierType: 'arXiv' }],
+      titles: [{ title: 'Rough paths' }],
+      creators: [{ name: 'Lyons, Terry', givenName: 'Terry', familyName: 'Lyons' }, { name: 'Gubinelli, Massimiliano' }, { name: ':' }, { name: 'NVIDIA' }],
+      publicationYear: 2023,
+      descriptions: [{ description: 'Other', descriptionType: 'Other' }, { description: 'We  study\n paths.', descriptionType: 'Abstract' }],
+    } },
+    { id: '10.48550/arxiv.math/0211159', attributes: { doi: '10.48550/arxiv.math/0211159', titles: [{ title: 'Old' }] } },
+    { id: '10.1/other', attributes: { doi: '10.1/other', titles: [{ title: 'Not arXiv' }] } },
+  ] } }]]);
+  const res = await A.search('rough paths', { fetch: f });
+  assert.equal(res.source, 'datacite');
+  assert.equal(f.calls.length, 1);
+  assert.match(f.calls[0], /client-id=arxiv\.content/);
+  assert.match(f.calls[0], /sort=relevance/);
+  assert.deepEqual(res.results.map((r) => r.id), ['2301.00001', 'math/0211159']);
+  assert.deepEqual(res.results[0].authors, ['Terry Lyons', 'Massimiliano Gubinelli', 'NVIDIA']);
+  assert.equal(res.results[0].abstract, 'We study paths.');
+  assert.equal(res.results[0].year, 2023);
+  assert.equal(res.more, false);
+});
+
+test('search falls back to OpenAlex when DataCite fails, and keeps papers with an arXiv id', async () => {
+  const f = fakeFetch([['https://api.datacite.org/', { status: 503, body: {} }], ['https://api.openalex.org/', { body: openAlexPage }]]);
   const res = await A.search('rough paths', { fetch: f });
   assert.equal(res.source, 'openalex');
   assert.equal(res.total, 2);
@@ -154,9 +179,9 @@ test('search asks OpenAlex for arXiv papers and keeps those with an arXiv id', a
   assert.equal(res.results[0].abstract, 'We study rough paths');
   assert.deepEqual(res.results[0].authors, ['Ada Lovelace', 'Alan Turing']);
   assert.equal(res.results[0].year, 2023);
-  assert.match(f.calls[0], /search=rough%20paths/);
-  assert.match(f.calls[0], /filter=locations\.source\.id:S4306400194/);
-  assert.match(f.calls[0], /page=1/);
+  assert.match(f.calls[1], /search=rough%20paths/);
+  assert.match(f.calls[1], /filter=locations\.source\.id:S4306400194/);
+  assert.match(f.calls[1], /page=1/);
 });
 
 test('search falls back to Semantic Scholar when OpenAlex refuses', async () => {
@@ -170,7 +195,16 @@ test('search falls back to Semantic Scholar when OpenAlex refuses', async () => 
   const res = await A.search('noether', { fetch: f, page: 2 });
   assert.equal(res.source, 'semanticscholar');
   assert.deepEqual(res.results.map((r) => r.id), ['2001.01234']);
-  assert.match(f.calls[1], /offset=25/);
+  assert.match(f.calls[2], /offset=25/);
+});
+
+test('a source that finds nothing passes to the next, and an empty answer is kept if all are empty', async () => {
+  const empty = fakeFetch([['https://api.datacite.org/', { body: { meta: { total: 0 }, data: [] } }], ['https://api.openalex.org/', { body: openAlexPage }]]);
+  assert.equal((await A.search('x', { fetch: empty })).source, 'openalex');
+  const none = fakeFetch([['https://api.datacite.org/', { body: { meta: { total: 0 }, data: [] } }]]);
+  const res = await A.search('x', { fetch: none });
+  assert.equal(res.source, 'datacite');
+  assert.deepEqual(res.results, []);
 });
 
 test('search reports the last error when every source fails, and skips empty queries', async () => {
@@ -184,7 +218,7 @@ test('search says there is more when a full page came back', async () => {
   const results = Array.from({ length: 25 }, (_, i) => ({
     display_name: 'P' + i, locations: [{ landing_page_url: `https://arxiv.org/abs/2301.${String(10000 + i)}` }],
   }));
-  const res = await A.search('p', { fetch: fakeFetch([['https://api.openalex.org/', { body: { meta: { count: 80 }, results } }]]) });
+  const res = await A.search('p', { source: 'openalex', fetch: fakeFetch([['https://api.openalex.org/', { body: { meta: { count: 80 }, results } }]]) });
   assert.equal(res.results.length, 25);
   assert.equal(res.more, true);
 });

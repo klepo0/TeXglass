@@ -316,9 +316,11 @@
   // --- searching arXiv ---------------------------------------------------------
   //
   // arXiv's own search API (export.arxiv.org/api) sends no CORS header, so a web
-  // page cannot call it. OpenAlex indexes every arXiv paper and allows browser
-  // requests without a key; Semantic Scholar is the fallback when OpenAlex is
-  // down or out of its free daily budget.
+  // page cannot call it. Every arXiv paper has a DataCite DOI (10.48550/arXiv.*),
+  // and DataCite's API allows browser requests with no key or daily budget, so
+  // it is asked first. OpenAlex (which pauses keyless search under load and has
+  // a per-IP daily budget) and Semantic Scholar (often 429, with no CORS header
+  // on the error) are fallbacks.
 
   const OPENALEX_ARXIV = 'S4306400194'; // OpenAlex's id for the arXiv repository
   const SEARCH_PAGE = 25;
@@ -379,11 +381,44 @@
     return { total: json.total || results.length, results };
   }
 
-  /** The request URLs for one page of a search, OpenAlex first. */
+  /** "Lyons, Terry" -> "Terry Lyons"; organisations stay as they are. */
+  function dataCiteName(c) {
+    if (!c) return '';
+    if (c.givenName && c.familyName) return `${c.givenName} ${c.familyName}`;
+    return String(c.name || '').replace(/^([^,]+),\s*(.+)$/, '$2 $1').trim();
+  }
+
+  function fromDataCite(json) {
+    const results = [];
+    for (const item of json.data || []) {
+      const a = item.attributes || {};
+      let id = null;
+      for (const i of a.identifiers || []) if (/^arxiv$/i.test(i.identifierType || '')) id = parseId(i.identifier);
+      if (!id) {
+        const m = /10\.48550\/arxiv\.(.+)$/i.exec(a.doi || item.id || '');
+        if (m) id = parseId(m[1]);
+      }
+      if (!id) continue;
+      const abs = (a.descriptions || []).find((d) => d.descriptionType === 'Abstract') || (a.descriptions || [])[0];
+      results.push({
+        id,
+        title: ((a.titles || [])[0] || {}).title || id,
+        authors: (a.creators || []).map(dataCiteName).filter((n) => /[a-z]/i.test(n)),
+        year: a.publicationYear || null,
+        abstract: abs ? String(abs.description || '').replace(/\s+/g, ' ').trim() : '',
+      });
+    }
+    return { total: (json.meta && json.meta.total) || results.length, results };
+  }
+
+  /** The request URLs for one page of a search, in the order they are tried. */
   function searchUrls(query, page) {
     const q = encodeURIComponent(String(query).trim());
     const p = Math.max(1, page | 0);
     return {
+      datacite: `https://api.datacite.org/dois?query=${q}&client-id=arxiv.content&sort=relevance` +
+        `&page%5Bsize%5D=${SEARCH_PAGE}&page%5Bnumber%5D=${p}` +
+        '&fields%5Bdois%5D=doi,titles,creators,publicationYear,descriptions,identifiers',
       openalex: `https://api.openalex.org/works?search=${q}&filter=locations.source.id:${OPENALEX_ARXIV}` +
         `&per_page=${SEARCH_PAGE}&page=${p}` +
         '&select=id,display_name,publication_year,authorships,abstract_inverted_index,locations,primary_location,ids',
@@ -395,7 +430,8 @@
   /**
    * Search arXiv papers by keywords, title or author.
    * Resolves to { total, results: [{ id, title, authors, year, abstract }], source, page, more }.
-   * OpenAlex results are filtered to arXiv; Semantic Scholar results to papers with an arXiv id.
+   * DataCite and OpenAlex are asked for arXiv records only; Semantic Scholar results are
+   * kept when they have an arXiv id. A source that fails, or finds nothing, passes to the next.
    */
   async function search(query, options) {
     const opts = options || {};
@@ -403,20 +439,26 @@
     const page = Math.max(1, opts.page | 0);
     if (!String(query || '').trim()) return { total: 0, results: [], source: null, page, more: false };
     const urls = searchUrls(query, page);
-    const sources = opts.source ? [opts.source] : ['openalex', 'semanticscholar'];
+    const sources = opts.source ? [opts.source] : ['datacite', 'openalex', 'semanticscholar'];
+    const names = { datacite: 'DataCite', openalex: 'OpenAlex', semanticscholar: 'Semantic Scholar' };
+    const parse = { datacite: fromDataCite, openalex: fromOpenAlex, semanticscholar: fromSemanticScholar };
     let lastError = null;
+    let empty = null;
     for (const source of sources) {
       try {
-        const res = await doFetch(urls[source], { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(`${source === 'openalex' ? 'OpenAlex' : 'Semantic Scholar'} answered ${res.status}.`);
+        const res = await doFetch(urls[source]);
+        if (!res.ok) throw new Error(`${names[source]} answered ${res.status}`);
         const json = await res.json();
-        const out = source === 'openalex' ? fromOpenAlex(json) : fromSemanticScholar(json);
-        const fetched = source === 'openalex' ? (json.results || []).length : (json.data || []).length;
-        return Object.assign(out, { source, page, more: fetched === SEARCH_PAGE && page * SEARCH_PAGE < out.total });
+        const out = parse[source](json);
+        const fetched = (json.data || json.results || []).length;
+        Object.assign(out, { source, page, more: fetched === SEARCH_PAGE && page * SEARCH_PAGE < out.total });
+        if (out.results.length || page > 1) return out;
+        empty = empty || out;
       } catch (e) {
-        lastError = e;
+        lastError = new Error(`${names[source]}: ${e && e.message ? e.message : e}`);
       }
     }
+    if (empty) return empty;
     throw lastError || new Error('Search failed.');
   }
 

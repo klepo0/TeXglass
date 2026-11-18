@@ -93,7 +93,8 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 
 - **Open** a file (Ctrl+O) or drag it onto the page.
 - **arXiv search and import**: type words, a title or an author in the arXiv
-  dialog to search arXiv (through [OpenAlex](https://openalex.org), since
+  dialog to search arXiv (through [DataCite](https://datacite.org), which holds
+  every arXiv DOI, with OpenAlex and Semantic Scholar as fallbacks, since
   arXiv's own search API can't be called from a web page), then click a result
   to open it. Or paste `2301.00001` or any arXiv link. **Ctrl+K** (Cmd+K on a
   Mac) opens the dialog. Included files, the authors' own `.sty` macros, the
