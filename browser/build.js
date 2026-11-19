@@ -8,6 +8,11 @@
  *   browser/dist/chrome/   and browser/dist/texglass-arxiv-chrome-<version>.zip   (Chrome, Edge)
  *   browser/dist/firefox/  and browser/dist/texglass-arxiv-firefox-<version>.zip  (Firefox)
  *
+ * The version is the VS Code extension's (vscode/package.json): one number for
+ * the whole release, bumped only by the Release workflow. A plain build is a dev
+ * build, labelled <version>-dev.<commit> so it can't be mistaken for the release;
+ * the Release workflow passes --release for the clean name.
+ *
  * Each one bundles a copy of the web viewer (index.html, app.js, styles.css,
  * src/*.js) with KaTeX from node_modules, so `npm install` must have run.
  * The two builds differ only in the manifest: Chrome runs the background
@@ -22,7 +27,20 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = '0.12.0';
+const VERSION = require('../vscode/package.json').version;
+const RELEASE = process.argv.includes('--release');
+
+/** The commit this build comes from, for dev build names ("local" outside git). */
+function commit() {
+  try {
+    return require('child_process').execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'local';
+  }
+}
+
+/** The name a build goes by: the version for a release, <version>-dev.<commit> otherwise. */
+const LABEL = RELEASE ? VERSION : `${VERSION}-dev.${commit()}`;
 
 /** The default keyboard shortcut for the toolbar button; people can change it in the browser. */
 const SHORTCUT = 'Alt+Shift+K';
@@ -107,6 +125,9 @@ function manifest(target) {
   } else {
     m.background = { service_worker: 'background.js' };
     m.minimum_chrome_version = '111'; // "world": "MAIN" content scripts, for Overleaf
+    // Chrome shows version_name on chrome://extensions, so a dev build says which commit it is.
+    // (The version itself must stay plain numbers; Firefox has no version_name.)
+    if (LABEL !== VERSION) m.version_name = LABEL;
   }
   return m;
 }
@@ -155,7 +176,7 @@ function build(target) {
   copyDir(path.join(ROOT, 'vscode/media/fonts'), path.join(out, 'vscode/media/fonts'), (name) => /^kalam-|OFL-kalam/.test(name));
   copyDir(KATEX, path.join(out, 'vendor/katex'));
 
-  const zip = path.join(DIST, `texglass-arxiv-${target}-${VERSION}.zip`);
+  const zip = path.join(DIST, `texglass-arxiv-${target}-${LABEL}.zip`);
   fs.writeFileSync(zip, zipDir(out));
   return { out, zip };
 }
@@ -242,4 +263,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, manifest, viewerHtml, zipDir, VERSION, SITE_MATCHES, OVERLEAF_MATCHES, SHORTCUT };
+module.exports = { build, manifest, viewerHtml, zipDir, VERSION, LABEL, SITE_MATCHES, OVERLEAF_MATCHES, SHORTCUT };
