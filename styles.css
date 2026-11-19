@@ -1509,8 +1509,10 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-btn:hover, .uses-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 @media (hover: none) { .uses-btn { opacity: 0.6; } }
 .uses-focus .uses-fade { opacity: 0.22; transition: opacity 0.2s; }
-.uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6) { opacity: 0.5; }
+.uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6, .uses-head) { opacity: 0.5; }
 .uses-focus .uses-fade:hover { opacity: 0.6; }
+/* "Hide the rest": unrelated blocks fold away; headings of sections with something lit stay */
+@media screen { .uses-focus.uses-collapse .uses-fade:not(.uses-head) { display: none; } }
 .uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }

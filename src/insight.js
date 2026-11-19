@@ -8,6 +8,8 @@
  *   - a notation index: the paper's macros and defined symbols, with first uses;
  *   - "What does this use?": a button by each result's heading lights up the
  *     results it rests on (or that rest on it) in the text and fades the rest.
+ *     While it is on, a map on show (side panel or larger map) lights up the
+ *     same results, and picking a result on the map moves the light to it.
  *
  * None of this runs while a document renders. Everything is read from the
  * page the first time it is needed, kept until the page changes
@@ -713,15 +715,20 @@
           open('deps', view.selected);
           return;
         }
+        if (e.target.closest('.dep-unfocus')) {
+          e.preventDefault();
+          unfocus();
+          return;
+        }
         const node = e.target.closest('.dep-node, [data-pick]');
         if (node) {
           e.preventDefault();
-          select(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
+          pick(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
         }
       });
       body.addEventListener('keydown', (e) => {
         const node = e.target.closest && e.target.closest('.dep-node');
-        if (node && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(view, Number(node.dataset.n)); }
+        if (node && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(view, Number(node.dataset.n)); }
       });
       body.addEventListener('input', (e) => {
         if (e.target.matches('.insight-filter')) filterNotation(view, e.target.value);
@@ -805,20 +812,39 @@
           'Each arrow goes from a result to one that uses it. Pick a result to light up what it rests on and what rests on it.</p>' +
           `<div class="dep-wrap">${mapSvg(lay)}</div><div class="dep-detail" aria-live="polite"></div>`;
       body._nodes = g.nodes;
+      view.synced = false;
+      if (focusState && syncMap(view)) return;
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
       else body.querySelector('.dep-detail').innerHTML = '<p class="insight-muted">No result picked.</p>';
     }
 
-    function select(view, k) {
+    /**
+     * A result picked on a map: while "What does this use?" is on, the light in the
+     * text moves to it (and the maps follow); otherwise only this map lights it up.
+     */
+    function pick(view, k) {
+      const n = view.body._nodes && view.body._nodes[k];
+      if (!n) return;
+      if (focusState && n.el && doc.contains(n.el)) focus(n.el, focusState.dir, true);
+      else select(view, k);
+    }
+
+    /**
+     * Light up result k on a map and what it rests on and what rests on it, or,
+     * with dir ('uses' | 'usedBy', from "What does this use?"), only that side.
+     */
+    function select(view, k, dir) {
       const body = view.body;
       const nodes = body._nodes;
       const n = nodes && nodes[k];
       if (!n) return;
       view.selected = k;
-      const up = closure(n, 'uses');
-      const down = closure(n, 'usedBy');
+      view.synced = !!dir;
+      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses');
+      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy');
       const svg = body.querySelector('.dep-map');
       svg.classList.add('dep-picked');
+      svg.classList.toggle('dep-synced', !!dir);
       svg.querySelectorAll('.dep-node').forEach((g) => {
         const m = nodes[Number(g.dataset.n)];
         g.classList.toggle('dep-sel', m === n);
@@ -839,15 +865,19 @@
         return rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${list(rest)}` : '';
       };
       const detail = body.querySelector('.dep-detail');
+      const lit = focusState && focusState.id === n.id;
       detail.innerHTML =
         `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
-        ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>` +
+        (lit
+          ? ` <span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
+          : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
         `<p><span class="insight-usedby-k">Uses</span> ${list(n.uses)}${indirect(up, n.uses)}</p>` +
         `<p><span class="insight-usedby-k">Used in</span> ${list(n.usedBy)}${indirect(down, n.usedBy)}</p>`;
       const go = detail.querySelector('.dep-go');
       go.dataset.go = '';
       go._target = n.el;
-      detail.querySelector('.dep-focus').addEventListener('click', (e) => {
+      const fb = detail.querySelector('.dep-focus');
+      if (fb) fb.addEventListener('click', (e) => {
         e.preventDefault();
         view.leave();
         focus(n.el, 'uses', true);
@@ -861,6 +891,42 @@
         if (r.left < w.left || r.right > w.right) wrap.scrollLeft += r.left - w.left - (w.width - r.width) / 2;
         if (r.top < w.top || r.bottom > w.bottom) wrap.scrollTop += r.top - w.top - (w.height - r.height) / 2;
       }
+    }
+
+    /** A map with nothing picked. */
+    function clearPick(view, note) {
+      const body = view.body;
+      view.selected = null;
+      view.synced = false;
+      const svg = body.querySelector('.dep-map');
+      if (svg) {
+        svg.classList.remove('dep-picked', 'dep-synced');
+        svg.querySelectorAll('.dep-sel, .dep-up, .dep-down, .dep-lit').forEach((x) => x.classList.remove('dep-sel', 'dep-up', 'dep-down', 'dep-lit'));
+      }
+      const detail = body.querySelector('.dep-detail');
+      if (detail) detail.innerHTML = `<p class="insight-muted">${note || 'No result picked.'}</p>`;
+    }
+
+    /**
+     * Keep a map in step with "What does this use?": light up the focused result
+     * and the same side of it as the text. True when the map now shows the focus.
+     */
+    function syncMap(view) {
+      const nodes = view.body._nodes;
+      if (!nodes || !view.body.querySelector('.dep-map')) return false;
+      if (!focusState) {
+        if (view.synced) clearPick(view);
+        return false;
+      }
+      const n = nodes.find((m) => m.id === focusState.id);
+      if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) select(view, n.order, focusState.dir);
+      else clearPick(view, `${esc(focusState.name)} is lit up in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
+      view.synced = true;
+      return true;
+    }
+
+    function syncMaps() {
+      for (const v of views) if (v.tab === 'deps' && v.isShown()) syncMap(v);
     }
 
     function setHover(on, fromUi) {
@@ -952,6 +1018,9 @@
     // bottom steps through them, switches to "what uses it", and ends it.
     let focusState = null; // { id, dir, marked: [el], stops: [el], at }
     let bar = null;
+    // "Hide the rest": the unrelated text is folded away instead of faded
+    // (kept from one result to the next until switched off).
+    let collapseRest = false;
 
     const USES_ICON =
       '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
@@ -992,13 +1061,15 @@
       if (t) addUsesButton(t);
     });
 
+    const HEADING = /^H[1-6]$/;
+
     /** The block an equation, figure or item reference lights up. */
     const blockOf = (t) => t.closest('.math-display, figure, table, .theorem, .proof, li, p') || t;
 
     function clearMarks() {
       if (!focusState) return;
-      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref');
-      doc.classList.remove('uses-focus');
+      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head');
+      doc.classList.remove('uses-focus', 'uses-collapse');
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
 
@@ -1032,15 +1103,21 @@
           const cls = keep.get(c);
           if (cls) { c.classList.add(cls); marked.push(c); }
           else if (lit.has(c)) walk(c);
-          else if (!c.classList.contains('uses-btn')) { c.classList.add('uses-fade'); marked.push(c); }
+          else if (!c.classList.contains('uses-btn')) {
+            c.classList.add('uses-fade');
+            if (HEADING.test(c.tagName) || (c.children.length === 1 && HEADING.test(c.firstElementChild.tagName))) c.classList.add('uses-head');
+            marked.push(c);
+          }
         }
       };
       walk(doc);
       doc.classList.add('uses-focus');
+      doc.classList.toggle('uses-collapse', collapseRest);
       const stops = [el].concat(others.map((m) => m.el));
       focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length };
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       showBar();
+      syncMaps();
       if (scroll) opts.jump(el);
     }
 
@@ -1048,6 +1125,7 @@
       clearMarks();
       focusState = null;
       if (bar) bar.hidden = true;
+      syncMaps();
     }
 
     /** After a new render: light up the same result again, if it is still there. */
@@ -1060,6 +1138,7 @@
       else {
         doc.classList.remove('uses-focus');
         if (bar) bar.hidden = true;
+        syncMaps();
       }
     }
 
@@ -1072,6 +1151,14 @@
           const b = e.target.closest('button');
           if (!b || !focusState) return;
           if (b.dataset.act === 'done') return unfocus();
+          if (b.dataset.act === 'collapse') {
+            collapseRest = !collapseRest;
+            doc.classList.toggle('uses-collapse', collapseRest);
+            showBar();
+            // stay with the result being read
+            opts.jump(focusState.stops[focusState.at]);
+            return;
+          }
           if (b.dataset.dir) {
             const el = document_.getElementById(focusState.id);
             return focus(el, b.dataset.dir);
@@ -1095,6 +1182,7 @@
         `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
         `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button></span>` +
         step +
+        `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
         '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
       bar.hidden = false;
     }
