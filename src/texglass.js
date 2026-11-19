@@ -1436,7 +1436,9 @@
         case 'title': case 'author': case 'date': {
           const o = readOpt(src, i);
           const a = readArg(src, o ? o.end : i);
-          this.meta[name] = a.content;
+          // amsart (and others) take one \author per author: each adds one
+          if (name === 'author' && this.meta.author && a.content.trim()) this.meta.author += ' \\and ' + a.content;
+          else this.meta[name] = a.content;
           return res('', a.end);
         }
         case 'maketitle':
