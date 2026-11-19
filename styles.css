@@ -678,6 +678,9 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
   font-size: 14px;
 }
 .insight-dialog[open] { display: flex; flex-direction: column; }
+/* A result previewed from the map: the text's own font, at the popover's size. */
+.dep-preview-text { font-size: inherit; line-height: 1.55; }
+.dep-preview-text .theorem { margin: 0; }
 .insight-dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .insight-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
 .insight-tabs { display: flex; gap: 4px; }

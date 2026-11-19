@@ -390,7 +390,6 @@
       const main = /^(theorem|thm|maintheorem|mainthm|corollary|cor)$/i.test(n.kind) ? ' dep-main' : '';
       parts.push(
         `<g class="dep-node dep-${n.style}${main}" data-n="${n.order}" tabindex="0" role="button" aria-label="${esc(n.name + (n.note ? ' (' + n.note + ')' : ''))}">` +
-          `<title>${esc(n.name + (n.note ? ' (' + n.note + ')' : ''))}</title>` +
           `<rect x="${lay.x.get(n)}" y="${lay.y.get(n)}" width="${w}" height="${H}" rx="5"/>` +
           `<text x="${lay.x.get(n) + w / 2}" y="${lay.y.get(n) + H / 2 + 4.5}" text-anchor="middle">${esc(label)}</text></g>`
       );
@@ -478,13 +477,16 @@
     let showTimer = null;
     let hideTimer = null;
     let popFor = null;
+    let popView = null; // the map view whose node the popover previews
     let under = null; // the formula the pointer is on
 
-    function hidePop() {
-      clearTimeout(showTimer);
+    /** Hide the popover. A timer that hides it late leaves a pending show alone. */
+    function hidePop(late) {
+      if (late !== true) clearTimeout(showTimer);
       clearTimeout(hideTimer);
       pop.hidden = true;
       popFor = null;
+      popView = null;
     }
 
     /** What to say about the notation in a formula: [{ kind, … }], rarest first. */
@@ -539,6 +541,7 @@
         if (go) go._target = n.kind === 'symbol' ? n.s.el : n.e.first;
       });
       renderSymbols(body);
+      if (pop.parentNode !== document_.body) document_.body.appendChild(pop);
       pop.replaceChildren(body);
       pop.hidden = false;
       popFor = el;
@@ -571,13 +574,13 @@
       clearTimeout(showTimer);
       if (el === popFor && !pop.contains(e.relatedTarget)) {
         clearTimeout(hideTimer);
-        hideTimer = setTimeout(hidePop, 250);
+        hideTimer = setTimeout(() => hidePop(true), 250);
       }
     });
     pop.addEventListener('mouseenter', () => clearTimeout(hideTimer));
     pop.addEventListener('mouseleave', (e) => {
       if (popFor && popFor.contains(e.relatedTarget)) return;
-      hideTimer = setTimeout(hidePop, 250);
+      hideTimer = setTimeout(() => hidePop(true), 250);
     });
     pop.addEventListener('click', (e) => {
       const a = e.target.closest('a[data-go]');
@@ -592,6 +595,86 @@
     });
     doc.addEventListener('mousedown', () => { clearTimeout(showTimer); });
     (doc.closest('.pane') || window).addEventListener('scroll', () => { if (!pop.hidden) hidePop(); }, { passive: true });
+
+    // --- previews of the results in the map ------------------------------------------
+    //
+    // Resting on a node of the map, in the side panel or in the larger map, shows the
+    // result itself, as a reference link in the text does. The preview is a copy of
+    // the rendered statement, made only when the pointer rests on a node.
+
+    function showResult(g, view) {
+      const n = view.body._nodes && view.body._nodes[Number(g.dataset.n)];
+      if (!n || !n.el || !n.el.isConnected) return;
+      const body = document_.createElement('div');
+      body.className = 'ref-popover-body dep-preview';
+      const text = document_.createElement('div');
+      text.className = 'document dep-preview-text';
+      text.appendChild(copyOf(n.el));
+      body.appendChild(text);
+      // a modal dialog sits above the page, so the preview goes inside it there
+      const host = g.closest('dialog') || document_.body;
+      if (pop.parentNode !== host) host.appendChild(pop);
+      pop.replaceChildren(body);
+      pop.hidden = false;
+      popFor = g;
+      popView = view;
+      const r = g.getBoundingClientRect();
+      let width = Math.min(560, window.innerWidth - 32);
+      pop.style.width = width + 'px';
+      let extra = 0;
+      body.querySelectorAll('.math-display, .tg-diagram').forEach((el) => {
+        extra = Math.max(extra, el.scrollWidth - el.clientWidth);
+      });
+      if (extra > 0) {
+        width = Math.min(width + extra + 2, window.innerWidth - 32);
+        pop.style.width = width + 'px';
+      }
+      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
+      const h = pop.offsetHeight;
+      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+    }
+
+    function wirePreviews(view) {
+      let over = null;
+      view.body.addEventListener('mouseover', (e) => {
+        const g = e.target.closest && e.target.closest('.dep-node');
+        if (!g) return;
+        if (g === popFor) { clearTimeout(hideTimer); return; }
+        clearTimeout(showTimer);
+        over = g;
+        showTimer = setTimeout(() => {
+          if (over === g && g.isConnected) {
+            hidePop();
+            showResult(g, view);
+          }
+        }, opts.nodeDelay != null ? opts.nodeDelay : 300);
+      });
+      view.body.addEventListener('mouseout', (e) => {
+        const g = e.target.closest && e.target.closest('.dep-node');
+        if (!g || g.contains(e.relatedTarget)) return;
+        if (over === g) over = null;
+        clearTimeout(showTimer);
+        if (g === popFor && !pop.contains(e.relatedTarget)) {
+          clearTimeout(hideTimer);
+          hideTimer = setTimeout(() => hidePop(true), 250);
+        }
+      });
+      view.body.addEventListener('mousedown', () => clearTimeout(showTimer));
+      view.body.addEventListener('scroll', () => { if (popView === view) hidePop(); }, { passive: true, capture: true });
+    }
+
+    // a link inside a previewed result goes where it points, as in the text
+    pop.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="#"]');
+      if (!a || a.matches('[data-go]')) return;
+      const t = document_.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+      if (!t) return;
+      e.preventDefault();
+      const v = popView;
+      hidePop();
+      if (v) v.leave();
+      opts.jump(t);
+    });
 
     // --- "Used in" under a reference preview ---------------------------------------
 
@@ -646,6 +729,7 @@
       body.addEventListener('change', (e) => {
         if (e.target.matches('.insight-hover input')) setHover(e.target.checked, true);
       });
+      wirePreviews(view);
       views.add(view);
     }
 
@@ -805,6 +889,7 @@
         '</div><div class="insight-body"></div>';
       document_.body.appendChild(dialog);
       dialog.querySelector('.insight-close').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('close', () => { if (popView === dialogView) hidePop(); });
       dialog.addEventListener('click', (e) => {
         if (e.target === dialog) dialog.close(); // a click on the backdrop
       });

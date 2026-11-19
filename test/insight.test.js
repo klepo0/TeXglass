@@ -144,6 +144,17 @@ test('the dependency map, the notation index and notation on hover read the rend
     await page.click('.dep-node[data-n="3"]');
     assert.equal(await page.locator('.dep-node.dep-up').count(), 4); // Theorem 2.1 rests on everything else
     assert.match(await page.textContent('.dep-detail'), /Indirectly/);
+    // Resting on a node of the larger map previews that result, inside the dialog.
+    await page.mouse.move(0, 0); // off the node just picked, whose preview may be up
+    await page.waitForSelector('.insight-popover', { state: 'hidden' });
+    await page.hover('.dep-node[data-n="1"]');
+    await page.waitForSelector('.insight-dialog .insight-popover:not([hidden]) .dep-preview');
+    const shown = await page.textContent('.insight-dialog .insight-popover');
+    assert.match(shown, /Lemma 1\.2/);
+    assert.match(shown, /is closed/);
+    assert.equal(await page.locator('.dep-node title').count(), 0); // no browser tooltip on top of it
+    await page.mouse.move(0, 0);
+    await page.waitForSelector('.insight-popover', { state: 'hidden' });
     await page.click('.dep-go');
     assert.equal(await page.evaluate(() => document.querySelector('.insight-dialog').open), false);
 
@@ -192,6 +203,12 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
     await page.click('[data-side-tab="deps"]');
     assert.equal(await page.locator('.side-insight .dep-node').count(), 5);
     assert.equal(await page.evaluate(() => window.saved['texglass:side-tab']), 'deps');
+    // Resting on a node of the panel's map previews that result too.
+    await page.hover('.side-insight .dep-node[data-n="3"]');
+    await page.waitForSelector('body > .insight-popover:not([hidden]) .dep-preview');
+    assert.match(await page.textContent('.insight-popover'), /Theorem 2\.1/);
+    await page.mouse.move(600, 700);
+    await page.waitForSelector('.insight-popover', { state: 'hidden' });
     await page.click('[data-side-tab="toc"]');
     assert.equal(await page.locator('#toc-list').isVisible(), true);
     // Drag the divider; the width is kept.
