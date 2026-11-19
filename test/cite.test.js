@@ -232,6 +232,17 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     assert.deepEqual(s.proofs, ['uses-fade', 'uses-sel']); // its own proof is lit, Lemma 1.2's is not
     assert.ok(s.paras.every((c) => c === 'uses-fade'));
     assert.match(s.bar, /Theorem 2\.1 uses 2 results/);
+    // "Hide the rest" folds away what is faded, and keeps the setting for the next result.
+    const shown = () => p.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem, #preview > p, #preview section > p')).filter((el) => el.offsetParent).length);
+    const before = await shown();
+    await p.click('.uses-bar [data-act="collapse"]');
+    assert.equal(await p.getAttribute('.uses-bar [data-act="collapse"]', 'aria-pressed'), 'true');
+    assert.equal(await shown(), 3); // Lemmas 1.1, 1.2 and Theorem 2.1; no paragraph, no Lemma 1.3
+    assert.ok(before > 3);
+    assert.ok(await p.evaluate(() => document.querySelector('#preview h2, #preview h1').offsetParent)); // headings stay
+    await p.click('.uses-bar [data-act="collapse"]');
+    assert.equal(await shown(), before);
+    assert.deepEqual(await p.evaluate(() => window.jumped.splice(0)), [await p.evaluate(() => document.querySelectorAll('#preview .theorem')[3].id), await p.evaluate(() => document.querySelectorAll('#preview .theorem')[3].id)]); // it stays with the result
     // Step through them.
     await p.click('.uses-bar [data-act="next"]');
     const firstId = await p.evaluate(() => document.querySelector('#preview .theorem').id);
@@ -263,6 +274,52 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     await p.evaluate((html) => { document.getElementById('preview').innerHTML = html; window.insight.invalidate(); }, r.blocks.join('\n'));
     s = await state();
     assert.deepEqual(s.thms, ['uses-on', 'uses-sel', 'uses-fade', 'uses-fade']);
+
+    // The map, when shown, lights up the same: Lemma 1.2 and what it uses, not what uses it.
+    const map = () => p.evaluate(() => ({
+      sel: Array.from(document.querySelectorAll('.dep-node.dep-sel')).map((g) => g.textContent),
+      up: Array.from(document.querySelectorAll('.dep-node.dep-up')).map((g) => g.textContent),
+      down: Array.from(document.querySelectorAll('.dep-node.dep-down')).map((g) => g.textContent),
+      picked: !!document.querySelector('.dep-map.dep-picked'),
+      detail: document.querySelector('.dep-detail').textContent,
+    }));
+    await p.evaluate(() => window.insight.open('deps'));
+    let m = await map();
+    assert.deepEqual(m.sel, ['Lemma 1.2']);
+    assert.deepEqual(m.up, ['Lemma 1.1']);
+    assert.deepEqual(m.down, []); // Theorem 2.1 uses it, but the text shows "uses" only
+    assert.match(m.detail, /lit up in the text/);
+    // Switching to "Used in" moves the map along.
+    await p.evaluate(() => window.insight.focus(document.getElementById('preview').querySelectorAll('.theorem')[1], 'usedBy'));
+    m = await map();
+    assert.deepEqual(m.up, []);
+    assert.deepEqual(m.down, ['Theorem 2.1']);
+    // Picking another result on the map moves the light in the text to it, same direction.
+    await p.click('.dep-node:has-text("Lemma 1.1")');
+    s = await state();
+    assert.deepEqual(s.thms, ['uses-sel', 'uses-on', 'uses-fade', 'uses-on']);
+    assert.match(s.bar, /Lemma 1\.1 is used in 2 results/);
+    m = await map();
+    assert.deepEqual(m.sel, ['Lemma 1.1']);
+    assert.deepEqual(m.down.sort(), ['Lemma 1.2', 'Theorem 2.1']);
+    assert.equal(await p.evaluate(() => document.querySelector('.insight-dialog').open), true); // the map stays open
+    // A result not on the map says so; ending it from the map clears both.
+    await p.evaluate(() => window.insight.focus(document.getElementById('preview').querySelectorAll('.theorem')[2], 'uses'));
+    m = await map();
+    assert.equal(m.picked, false);
+    assert.match(m.detail, /Lemma 1\.3 is lit up in the text, but it is not on the map/);
+    await p.click('.dep-node:has-text("Theorem 2.1")');
+    await p.click('.dep-unfocus');
+    s = await state();
+    assert.equal(s.focus, false);
+    m = await map();
+    assert.equal(m.picked, false);
+    assert.match(m.detail, /No result picked/);
+    // With nothing lit in the text, picking on the map only lights the map.
+    await p.click('.dep-node:has-text("Lemma 1.2")');
+    m = await map();
+    assert.deepEqual(m.down, ['Theorem 2.1']); // both sides, as before
+    assert.equal((await state()).focus, false);
   } finally {
     await browser.close();
   }

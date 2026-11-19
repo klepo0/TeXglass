@@ -187,6 +187,7 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
       const store = { get: (k) => window.saved[k] || null, set: (k, v) => { window.saved[k] = v; } };
       const insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {} });
       insight.setDefinitions(defs);
+      window.ins = insight;
       window.side = TeXglassInsight.sidePanel({
         pane: document.getElementById('toc-pane'),
         head: document.querySelector('.toc-pane-head'),
@@ -209,6 +210,15 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
     assert.match(await page.textContent('.insight-popover'), /Theorem 2\.1/);
     await page.mouse.move(600, 700);
     await page.waitForSelector('.insight-popover', { state: 'hidden' });
+    // "What does this use?" lights up the same results on the panel's map; picking there moves it.
+    await page.evaluate(() => window.ins.focus(document.querySelectorAll('#preview .theorem')[3], 'uses'));
+    assert.match(await page.textContent('.side-insight .dep-node.dep-sel'), /Theorem 2\.1/);
+    assert.equal(await page.locator('.side-insight .dep-node.dep-up').count(), 4);
+    await page.click('.side-insight .dep-node[data-n="1"]');
+    assert.equal(await page.evaluate(() => document.querySelectorAll('#preview .theorem')[1].classList.contains('uses-sel')), true);
+    assert.match(await page.textContent('.side-insight .dep-node.dep-sel'), /Lemma 1\.2/);
+    await page.evaluate(() => window.ins.unfocus());
+    assert.equal(await page.locator('.side-insight .dep-map.dep-picked').count(), 0);
     await page.click('[data-side-tab="toc"]');
     assert.equal(await page.locator('#toc-list').isVisible(), true);
     // Drag the divider; the width is kept.
