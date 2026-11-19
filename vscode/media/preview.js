@@ -607,6 +607,30 @@
     target.classList.add('flash');
   }
 
+  // Citation previews (shared/cite.js). The webview may not reach the network,
+  // so the extension does the lookups and sends the answers back.
+  const pendingJson = new Map();
+  let jsonId = 0;
+  const cites = window.TeXglassCite
+    ? window.TeXglassCite.create({
+      getJson: (url) => new Promise((resolve, reject) => {
+        const id = ++jsonId;
+        pendingJson.set(id, { resolve, reject });
+        vscode.postMessage({ type: 'fetch-json', id, url });
+      }),
+      openArxiv: (id) => vscode.postMessage({ type: 'open-arxiv', id }),
+      openLink: (href) => vscode.postMessage({ type: 'open-link', href }),
+    })
+    : null;
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.type !== 'json' || !pendingJson.has(m.id)) return;
+    const p = pendingJson.get(m.id);
+    pendingJson.delete(m.id);
+    if (m.ok) p.resolve(m.json);
+    else p.reject(Object.assign(new Error(m.error || 'Request failed'), m.status ? { status: m.status } : {}));
+  });
+
   // The popover stays open while the pointer is on the link or on the popover
   // itself, so a long preview can be scrolled. It closes a moment after the
   // pointer has left both.
@@ -648,8 +672,14 @@
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
+    // A citation: the cited paper's title and abstract, looked up by the extension now.
+    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
+    placePopover(a, body);
+  });
+  function placePopover(a, body) {
     const r = a.getBoundingClientRect();
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
@@ -667,7 +697,7 @@
     // The popover's own 8px padding is the gap to the link (the hover bridge).
     const h = popover.offsetHeight;
     popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
-  });
+  }
   preview.addEventListener('mouseout', (e) => {
     const a = e.target.closest('a.ref, .cite a');
     if (!a || popover.hidden || a.contains(e.relatedTarget)) return;

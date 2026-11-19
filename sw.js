@@ -32,7 +32,7 @@ const PRECACHE = [
   'vendor/katex/katex.min.js',
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
-  ...['arxiv', 'bib', 'copytex', 'diagrams', 'editor', 'eps', 'export', 'find', 'github', 'insight', 'openai-math',
+  ...['arxiv', 'bib', 'cite', 'copytex', 'diagrams', 'editor', 'eps', 'export', 'find', 'github', 'insight', 'openai-math',
     'margin', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
 ];
 
