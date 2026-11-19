@@ -16,6 +16,7 @@
   <script defer src="src/bib.js"></script>
   <script defer src="src/eps.js"></script>
   <script defer src="src/arxiv.js"></script>
+  <script defer src="src/local.js"></script>
   <script defer src="src/github.js"></script>
   <script defer src="src/openai-math.js"></script>
   <script defer src="src/find.js"></script>
@@ -38,11 +39,12 @@
       <button id="mode-edit" type="button" aria-pressed="false" title="Click any part of the document to edit it (Ctrl+E)">Edit</button>
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
-    <button id="open" type="button" title="Open a .tex file (Ctrl+O)">Open</button>
+    <button id="open" type="button" title="Open a .tex file (Ctrl+O). Shift+click, or Ctrl+Shift+O, opens a folder with its \input files and figures">Open</button>
     <button id="arxiv" type="button" title="Search arXiv or import a paper's LaTeX source (Ctrl+K)" aria-keyshortcuts="Control+K Meta+K">arXiv</button>
     <button id="github" type="button" title="Open a .tex file from a public GitHub repository">GitHub</button>
     <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">Preprints</button>
-    <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
+    <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" multiple hidden>
+    <input id="folder-input" type="file" webkitdirectory hidden>
     <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
     <button id="export" type="button" title="Download the document as a standalone HTML page, math and numbering included">Export</button>
     <button id="print" type="button" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print</button>
@@ -65,6 +67,11 @@
       <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     </button>
   </header>
+  <div id="folder-hint" class="folder-hint" role="status" hidden>
+    <span id="folder-hint-text"></span>
+    <button id="folder-hint-open" type="button" class="primary"></button>
+    <button id="folder-hint-close" type="button" class="folder-hint-close" aria-label="Dismiss">×</button>
+  </div>
 
   <main class="panes" id="panes">
     <nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden>
@@ -93,11 +100,25 @@
       <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="2301.00001, or rough paths signature">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
+      <p class="local-hint">Or open a document on this computer: <button type="button" id="arxiv-local-file" class="link-button">a .tex file</button> or <button type="button" id="arxiv-local-folder" class="link-button">its folder</button>, with its <code>\input</code> files and figures.</p>
       <div class="arxiv-actions">
         <button type="button" id="arxiv-cancel">Cancel</button>
         <button type="submit" id="arxiv-go" class="primary">Import</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="local-dialog" class="arxiv-dialog" aria-labelledby="local-title">
+    <div class="local-body">
+      <h2 id="local-title">Open from this computer</h2>
+      <p>Choose a <code>.tex</code> file, or the folder it is in to bring in its <code>\input</code> files, bibliography and figures. You can also drop either on this page.</p>
+      <p id="local-file-access" class="local-note" hidden>To view <code>.tex</code> files that you open in the browser itself (<code>file://</code> addresses), turn on <strong>Allow access to file URLs</strong> for TeXglass in your extension settings: <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>), then <em>Details</em>.</p>
+      <div class="arxiv-actions">
+        <button type="button" id="local-cancel">Cancel</button>
+        <button type="button" id="local-folder">Choose a folder</button>
+        <button type="button" id="local-file" class="primary">Choose a .tex file</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="github-dialog" class="arxiv-dialog" aria-labelledby="github-title">
@@ -128,7 +149,7 @@
     <ol id="preprints-list" class="preprints-list"></ol>
   </dialog>
 
-  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file to view it</div></div>
+  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file, or its folder, to view it</div></div>
   <div id="ref-popover" class="ref-popover document" role="tooltip" hidden></div>
 </body>
 </html>

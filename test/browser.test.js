@@ -20,7 +20,7 @@ function fakeBrowser(stored = {}) {
     runtime: { getURL: (p) => 'moz-extension://abc/' + p, onInstalled: on('installed'), onStartup: on('startup'), onMessage: on('message') },
     action: { onClicked: on('action') },
     contextMenus: { removeAll: (cb) => { menus.length = 0; cb(); }, create: (m) => menus.push(m), onClicked: on('menu') },
-    tabs: { create: async (props) => { tabs.push(props); } },
+    tabs: { create: async (props) => { tabs.push(props); }, update: async (id, props) => { tabs.push(Object.assign({ updated: id }, props)); } },
     storage: { sync: { get: async (defaults) => Object.assign({}, defaults, stored) } },
   };
   return { browser, listeners, menus, tabs };
@@ -80,7 +80,7 @@ test('menus are created on install and the toolbar button opens the paper next t
   const fake = fakeBrowser();
   loadBackground(fake);
   fake.listeners.installed();
-  assert.deepStrictEqual(fake.menus.map((m) => m.id), ['texglass-link', 'texglass-page']);
+  assert.deepStrictEqual(fake.menus.map((m) => m.id), ['texglass-link', 'texglass-page', 'texglass-local']);
   assert.ok(fake.menus[0].targetUrlPatterns.includes('*://*.arxiv.org/abs/*'));
 
   fake.listeners.action({ id: 7, index: 2, url: 'https://arxiv.org/pdf/2102.13459v3' });
@@ -224,4 +224,49 @@ test('both manifests give the toolbar button a keyboard shortcut', () => {
     assert.strictEqual(cmd.suggested_key.default, 'Alt+Shift+K', target);
     assert.ok(cmd.description, target);
   }
+});
+
+test('.tex files on this computer: the menu item, the toolbar button and file:// pages', async () => {
+  const fake = fakeBrowser({ viewer: 'web' });
+  const ctx = loadBackground(fake);
+  fake.listeners.installed();
+  const local = fake.menus.find((m) => m.id === 'texglass-local');
+  assert.deepStrictEqual([...local.contexts], ['action']);
+
+  // The menu item opens the chosen viewer with its "open from this computer" dialog.
+  await fake.listeners.menu({ menuItemId: 'texglass-local' }, { id: 1, index: 0 });
+  await settle();
+  assert.strictEqual(fake.tabs[0].url, 'https://klepo0.github.io/TeXglass/?open');
+
+  // A file:// .tex address always goes to the bundled viewer, which may read it.
+  const file = 'file:///C:/Users/me/My%20paper/main.tex';
+  assert.ok(ctx.isLocalTex(file) && ctx.isLocalTex('file:///home/me/a.LTX'));
+  assert.ok(!ctx.isLocalTex('file:///home/me/a.pdf') && !ctx.isLocalTex('https://example.com/a.tex'));
+  fake.listeners.action({ id: 3, index: 1, url: file });
+  await settle();
+  assert.strictEqual(fake.tabs[1].url, 'moz-extension://abc/index.html?file=' + encodeURIComponent(file));
+
+  // file-tex.js on such a page: the same tab shows it in TeXglass.
+  fake.listeners.message({ type: 'texglass-open-file', url: file }, { tab: { id: 9 }, url: file });
+  fake.listeners.message({ type: 'texglass-open-file', url: 'https://example.com/a.tex' }, { tab: { id: 9 }, url: 'https://example.com/a.tex' });
+  await settle();
+  assert.strictEqual(fake.tabs.length, 3);
+  assert.deepStrictEqual({ ...fake.tabs[2] }, { updated: 9, url: 'moz-extension://abc/index.html?file=' + encodeURIComponent(file) });
+});
+
+test('file:// pages stay as they are when that is turned off in the options', async () => {
+  const fake = fakeBrowser({ openFiles: false });
+  loadBackground(fake);
+  fake.listeners.message({ type: 'texglass-open-file', url: 'file:///a/b.tex' }, { tab: { id: 9 }, url: 'file:///a/b.tex' });
+  await settle();
+  assert.strictEqual(fake.tabs.length, 0);
+});
+
+test('Chrome may read file:// .tex files (once allowed); Firefox, which never allows it, gets no such script', () => {
+  const chrome = manifest('chrome');
+  const firefox = manifest('firefox');
+  assert.ok(chrome.host_permissions.includes('file:///*'));
+  assert.ok(chrome.content_scripts.some((c) => c.js.includes('file-tex.js') && c.matches.includes('file:///*.tex')));
+  assert.ok(!firefox.host_permissions.some((h) => h.startsWith('file:')));
+  assert.ok(!firefox.content_scripts.some((c) => c.js.includes('file-tex.js')));
 });

@@ -283,6 +283,24 @@
       throw new Error(`${id} has no LaTeX source on arXiv: the authors uploaded only a PDF.`);
     } else raw = { 'main.tex': bytes };
 
+    let paper;
+    try {
+      paper = fromFiles(raw);
+    } catch (e) {
+      throw new Error(`No .tex file found in the source of ${id}.`);
+    }
+    return Object.assign(paper, { id, name: `arXiv-${id.replace('/', '-')}.tex` });
+  }
+
+  /**
+   * A document from a set of files (a paper's source, a folder on this computer):
+   * raw is { path: Uint8Array }. The main file is opts.main, or else the one
+   * pickMain chooses; its \input files, local packages and bibliography are
+   * inlined (flatten) and its figures returned as Blobs.
+   * Returns { name, source, images: { path: Blob }, main, files: [paths], starts }.
+   */
+  function fromFiles(raw, opts) {
+    opts = opts || {};
     const texFiles = {};
     const images = {};
     for (const [path, data] of Object.entries(raw)) {
@@ -304,9 +322,11 @@
     }
     const candidates = {};
     for (const n of Object.keys(texFiles)) if (/\.(tex|ltx|latex)$/i.test(n) || !n.includes('.')) candidates[n] = texFiles[n];
-    const main = pickMain(candidates);
-    if (!main) throw new Error(`No .tex file found in the source of ${id}.`);
-    return { id, name: `arXiv-${id.replace('/', '-')}.tex`, source: flatten(main, texFiles), images, main, files: Object.keys(raw) };
+    const main = opts.main && texFiles[opts.main] != null ? opts.main : pickMain(candidates);
+    if (!main) throw new Error('No .tex file found.');
+    const starts = {};
+    const source = flatten(main, texFiles, { starts });
+    return { name: main.split('/').pop(), source, images, main, files: Object.keys(raw), starts };
   }
 
   /**
@@ -481,5 +501,5 @@
     throw lastError || new Error('Search failed.');
   }
 
-  return { parseId, untar, pickMain, flatten, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex, latin1 };
+  return { parseId, untar, pickMain, flatten, fromFiles, normalize, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex, latin1 };
 });

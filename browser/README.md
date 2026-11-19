@@ -76,6 +76,21 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   (`overleaf.html`, in a frame) with `postMessage`. Self-hosted Overleaf
   servers are not covered: the extension asks for `overleaf.com` only.
 
+- **Files on this computer**: right-click the toolbar button and choose
+  *Open a .tex file from this computer…* to pick a `.tex` file or its whole
+  folder (or drop either on the TeXglass page). A folder brings in the main
+  file's `\input` files, local packages, bibliography and figures. In
+  **Chrome and Edge** you can also open a `.tex` file in the browser itself
+  (drag it onto a tab, or type its `file:///…` address): once you turn on
+  *Allow access to file URLs* for the extension (`chrome://extensions` or
+  `edge://extensions`, then *Details*), TeXglass shows it rendered instead of
+  as plain text, reads the files it pulls in from beside it, and re-renders
+  when you save any of them. The browser's Back button returns to the plain
+  text; the options page can turn this off. (If the browser downloads a
+  `.tex` file instead of showing it, which depends on how the computer
+  registers `.tex` files, use the menu item.) Firefox never lets extensions
+  read `file://` addresses, so there the menu item is the way.
+
 The viewer downloads the source from `arxiv.org/src/<id>` (a gzipped tar
 archive or a single gzipped `.tex` file), picks the main file, inlines its
 `\input`/`\include` files and the authors' own `.sty` macros, builds the

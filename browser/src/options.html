@@ -21,6 +21,19 @@
         <input type="url" id="webUrl" spellcheck="false" aria-label="Web viewer address"></span>
       </label>
     </fieldset>
+    <fieldset>
+      <legend>Files on this computer</legend>
+      <label>
+        <input type="checkbox" name="openFiles" id="openFiles">
+        <span><strong>Show .tex files that I open in the browser in TeXglass</strong><br>
+        Chrome and Edge only, once you turn on <em>Allow access to file URLs</em> for this extension
+        (<code>chrome://extensions</code> or <code>edge://extensions</code>, then <em>Details</em>).
+        TeXglass also reads the files it pulls in (<code>\input</code>, bibliography, figures) from beside it,
+        and shows your changes when you save them.</span>
+      </label>
+      <p class="hint">Anywhere, the toolbar button's right-click menu has <em>Open a .tex file from this computer…</em>,
+        for choosing a file or its whole folder (or drop either on the TeXglass page).</p>
+    </fieldset>
     <p class="status" id="status" role="status"></p>
   </form>
   <p class="hint">Click the toolbar button on an arXiv page, right-click a link to an arXiv paper, or use
