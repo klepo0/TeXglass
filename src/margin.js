@@ -8,7 +8,7 @@
  *    lifted into the margin, level with the line they were written on.
  *  - the reader's (study tools): highlights and notes made on the preview. A
  *    selection gets a small bar to highlight it or write a note on it, and a
- *    note pad at the bottom right can be dragged onto any line. Notes in the
+ *    note pad at the bottom right (movable by its handle) can be dragged onto any line. Notes in the
  *    margin can be dragged to another line too.
  *
  * Reader notes never touch the .tex: they are anchored by the text they mark
@@ -29,10 +29,13 @@
  *     onWidth(px) {},                  // its divider was dragged (null: back to automatic)
  *     collapsed: false,                // optional: start with the margin folded away
  *     onCollapse(folded) {},           // its fold button was used
+ *     padAt: { right, bottom },        // optional: where the note pad was moved to (px from the corner)
+ *     onPadMove(at) {},                // the note pad was moved by its handle (null: back to the corner)
  *   });
  *   margin.refresh();                  // after the document was rendered again
  *   margin.setAnnotations(list); margin.setStudy(on);
  *   margin.setCollapsed(on);           // fold the margin away, or bring it back
+ *   margin.setPadAt(at);               // put the note pad where it was moved to before
  *
  * The anchoring functions (describe, locate) work on plain strings and are
  * exported for tests.
@@ -909,11 +912,79 @@
     const pad = page.createElement('button');
     pad.type = 'button';
     pad.className = 'tg-note-pad';
-    pad.hidden = !study;
     pad.title = 'Drag onto the page to add a note';
     pad.setAttribute('aria-label', 'Add a note: drag onto the page');
     pad.innerHTML = ICONS.note;
-    page.body.appendChild(pad);
+    // The pad sits in a dock with a handle on top: drag the handle to move the
+    // pad out of the way (the pad itself drags a new note onto the page).
+    const dock = page.createElement('div');
+    dock.className = 'tg-note-dock';
+    dock.hidden = !study;
+    const padGrip = page.createElement('div');
+    padGrip.className = 'tg-note-dock-grip';
+    padGrip.tabIndex = 0;
+    padGrip.setAttribute('role', 'button');
+    padGrip.title = 'Drag to move the note pad · double-click to put it back';
+    padGrip.setAttribute('aria-label', 'Move the note pad (arrow keys)');
+    dock.append(padGrip, pad);
+    page.body.appendChild(dock);
+    let padAt = null; // { right, bottom } in px, or null: the corner the stylesheet gives
+    function placePad() {
+      if (!padAt) {
+        dock.style.right = '';
+        dock.style.bottom = '';
+        return;
+      }
+      const w = dock.offsetWidth || 36;
+      const h = dock.offsetHeight || 46;
+      const right = Math.round(Math.max(2, Math.min(win.innerWidth - w - 2, padAt.right)));
+      const bottom = Math.round(Math.max(2, Math.min(win.innerHeight - h - 2, padAt.bottom)));
+      dock.style.right = right + 'px';
+      dock.style.bottom = bottom + 'px';
+    }
+    function setPadAt(at, save) {
+      padAt = at && isFinite(at.right) && isFinite(at.bottom) ? { right: +at.right, bottom: +at.bottom } : null;
+      placePad();
+      if (padAt) padAt = { right: parseFloat(dock.style.right), bottom: parseFloat(dock.style.bottom) };
+      if (save && opts.onPadMove) opts.onPadMove(padAt && Object.assign({}, padAt));
+    }
+    const padNow = () => {
+      const r = dock.getBoundingClientRect();
+      return { right: win.innerWidth - r.right, bottom: win.innerHeight - r.bottom };
+    };
+    padGrip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      padGrip.setPointerCapture(e.pointerId);
+      const sx = e.clientX;
+      const sy = e.clientY;
+      const from = padNow();
+      let moved = false;
+      dock.classList.add('tg-note-dock-moving');
+      const move = (ev) => {
+        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 2) moved = true;
+        setPadAt({ right: from.right - (ev.clientX - sx), bottom: from.bottom - (ev.clientY - sy) }, false);
+      };
+      const up = () => {
+        padGrip.removeEventListener('pointermove', move);
+        padGrip.removeEventListener('pointerup', up);
+        padGrip.removeEventListener('pointercancel', up);
+        dock.classList.remove('tg-note-dock-moving');
+        if (moved) setPadAt(padAt, true);
+      };
+      padGrip.addEventListener('pointermove', move);
+      padGrip.addEventListener('pointerup', up);
+      padGrip.addEventListener('pointercancel', up);
+    });
+    padGrip.addEventListener('dblclick', () => setPadAt(null, true));
+    padGrip.addEventListener('keydown', (e) => {
+      const d = { ArrowLeft: [20, 0], ArrowRight: [-20, 0], ArrowUp: [0, 20], ArrowDown: [0, -20] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      const at = padNow();
+      setPadAt({ right: at.right + d[0], bottom: at.bottom + d[1] }, true);
+    });
+    win.addEventListener('resize', () => { if (padAt) placePad(); });
 
     function startDrag(e, from, onDrop) {
       e.preventDefault();
@@ -1034,7 +1105,8 @@
 
     function setStudy(on) {
       study = !!on;
-      pad.hidden = !study;
+      dock.hidden = !study;
+      if (study) placePad();
       if (!study) hideBar();
       paintHighlights();
       build();
@@ -1051,6 +1123,8 @@
       /** Fold the margin away (true) or bring it back. */
       setCollapsed: (on) => setCollapsed(on, false),
       collapsed: () => collapsed,
+      /** Put the note pad at { right, bottom } px from the window's corner (null: the default corner). */
+      setPadAt: (at) => setPadAt(at, false),
       width: () => marginW,
     };
   }

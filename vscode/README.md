@@ -85,8 +85,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   the text, and clicking one or dragging the arrow back out opens it again.
 - **Highlighter and notes of your own** (study tools): select text and pick a
   colour from the small bar that appears, or the note button to write a note
-  on it. Drag the note pad at the bottom right onto any line for a note there,
-  and drag a note in the margin to move it to another line. Notes take LaTeX
+  on it. Drag the note pad at the bottom right onto any line for a note there
+  (to move the pad itself out of the way, drag the dotted handle above it; it
+  stays where you leave it), and drag a note in the margin to move it to another line. Notes take LaTeX
   maths (`$…$`) with the document's own macros. Click a highlight to recolour
   or remove it; hover a note for edit and delete. Everything is saved next to
   the `.tex` file in `name.texglass.json` (commit it, or add it to
