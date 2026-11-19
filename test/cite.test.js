@@ -145,6 +145,22 @@ test('a published title that differs from the arXiv one is found among the first
   assert.match(decodeURIComponent(asked[1]), /creators\.name:"Writer" AND titles\.title:\(Stochastic OR sewing OR imaginary OR spaces\)/);
 });
 
+test('a DOI of a book chapter ("Introduction") does not lend its title, and a same title by others is not taken', async () => {
+  const text = 'Ada Writer and Bo Reader, A Course on Imaginary Paths, Imaginary Press, 2020. doi:10.1/book_1.';
+  const entry = { text, arxiv: null, doi: '10.1/book_1', title: 'A Course on Imaginary Paths' };
+  const { asked, getJson } = canned([
+    ['https://api.crossref.org/works/', { message: { DOI: '10.1/book_1', title: ['Introduction'], author: [{ family: 'Writer' }], abstract: 'The first chapter.' } }],
+    ['https://api.datacite.org/dois?query=titles.title%3A%22Introduction', dataCite(['1109.00008', 'Introduction', ['Other'], 2011])],
+    ['https://api.datacite.org/dois?query=titles.title', dataCite(['2501.00009', 'A course on imaginary paths', ['Someone'], 2025])],
+    ['https://api.datacite.org/dois?query=creators.name', { data: [] }],
+  ]);
+  const r = await Cite.lookup(entry, getJson);
+  assert.equal(r.arxiv, null);
+  assert.equal(r.title, '');
+  assert.equal(r.abstract, '');
+  assert.ok(!asked.some((u) => u.includes('Introduction')));
+});
+
 test('a near title by someone else, or put on arXiv years later, is not taken', async () => {
   const text = 'Ada Writer, Existence of imaginary solutions via approximations, Imag. Ann. 7 (1996), 1–9.';
   const entry = { text, arxiv: null, doi: null, title: 'Existence of imaginary solutions via approximations' };

@@ -343,6 +343,12 @@
       out.found = true;
     };
     let askedCrossref = false;
+    // A DOI can name a part of the work the entry cites (a book's first
+    // chapter, "Introduction"): then its title and abstract are not the entry's.
+    const fitting = (info) => {
+      if (!entry.title || !info.title || titleSimilarity(info.title, entry.title) >= 0.8 || titleInEntry(info.title, entry.text)) return info;
+      return Object.assign({}, info, { title: '', abstract: '', surnames: info.surnames });
+    };
 
     // 1. No identifier: find the DOI and title from the reference as printed.
     if (!out.arxiv && !out.doi && !entry.title) {
@@ -356,7 +362,7 @@
     if (!out.arxiv && out.doi && !out.title && !askedCrossref) {
       askedCrossref = true;
       const json = await ask(urls.doi(out.doi));
-      if (json && json.message) take(fromCrossref(json.message));
+      if (json && json.message) take(fitting(fromCrossref(json.message)));
     }
     // 3. Is it on arXiv? Look for the title among arXiv records, then among
     // the first author's papers on arXiv, since a title on arXiv often differs
@@ -379,7 +385,8 @@
       const year = yearOf(entry.text);
       const byTitle = (r) => {
         const sim = titleSimilarity(r.title, title);
-        if (sim >= 0.98) return sim; // the same title, as before
+        // the same title, by one of the authors (a long title needs no author: names are not always read right)
+        if (sim >= 0.98 && (!names.length || !r.authors.length || names.some((n) => hasAuthor(r, n)) || norm(title).split(' ').length >= 6)) return sim;
         // a near title put on arXiv years after the paper came out is a later paper ("… revisited")
         if (year && r.year && r.year > year + 2) return 0;
         if (sim >= 0.92 && (!first || names.some((n) => hasAuthor(r, n)))) return sim;
@@ -404,7 +411,7 @@
     // 5. Still no abstract: Crossref sometimes has it.
     if (out.doi && !out.abstract && !askedCrossref) {
       const json = await ask(urls.doi(out.doi));
-      if (json && json.message) take(fromCrossref(json.message));
+      if (json && json.message) take(fitting(fromCrossref(json.message)));
     }
     if (!reached && failed) throw failed;
     return out;
