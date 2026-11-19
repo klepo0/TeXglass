@@ -1056,6 +1056,9 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
+  .uses-btn, .uses-bar { display: none !important; }
+  .uses-focus .uses-fade { opacity: 1 !important; }
+  .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
   :root {
     --bg: #fff !important;
     --paper: #fff !important;
@@ -1432,3 +1435,56 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .tg-drop-line[hidden] { display: none; }
+
+/* Citation previews (src/cite.js): the cited paper's title and abstract under its entry. */
+.cite-note { margin-top: 0.6em; padding-top: 0.5em; border-top: 1px solid var(--rule); font-size: 0.88em; line-height: 1.5; }
+.cite-title { font-weight: 600; margin-bottom: 0.3em; }
+.cite-abstract { color: var(--ink); }
+.cite-abstract .insight-usedby-k { margin-right: 0.3em; }
+.cite-wait::after { content: ""; display: inline-block; width: 0.8em; height: 0.8em; margin-left: 0.4em; vertical-align: -0.1em;
+  border: 2px solid var(--rule); border-top-color: var(--accent); border-radius: 50%; animation: cite-spin 0.8s linear infinite; }
+@keyframes cite-spin { to { transform: rotate(360deg); } }
+.cite-actions { margin-top: 0.5em; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em 0.8em; }
+.cite-open {
+  font: inherit; font-size: 0.95em; padding: 0.15em 0.7em; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+}
+.cite-open:hover { filter: brightness(1.08); }
+.cite-out { font-size: 0.92em; color: var(--muted); }
+.cite-out:hover { color: var(--accent); }
+
+/* "What does this use?" (src/insight.js): a result's dependencies lit up, the rest faded. */
+.uses-btn {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.12em;
+  width: 1.25em; height: 1.25em; margin: 0 0.15em 0 0.25em; padding: 0; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 0.15s;
+  font-style: normal;
+}
+.uses-btn svg { width: 0.9em; height: 0.9em; }
+.theorem:hover .uses-btn, .uses-btn:focus-visible, .uses-btn[aria-pressed="true"] { opacity: 1; }
+.uses-btn:hover, .uses-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+@media (hover: none) { .uses-btn { opacity: 0.6; } }
+.uses-focus .uses-fade { opacity: 0.22; transition: opacity 0.2s; }
+.uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6) { opacity: 0.5; }
+.uses-focus .uses-fade:hover { opacity: 0.6; }
+.uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+.uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
+.uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }
+.uses-bar {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 12;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; max-width: calc(100vw - 32px);
+  padding: 7px 10px 7px 14px; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px;
+}
+.uses-bar[hidden] { display: none; }
+.uses-bar button {
+  font: inherit; padding: 2px 8px; border: 1px solid var(--rule); border-radius: 6px; background: none; color: inherit; cursor: pointer;
+}
+.uses-bar button:hover { border-color: var(--accent); }
+.uses-dir { display: inline-flex; }
+.uses-dir button:first-child { border-radius: 6px 0 0 6px; }
+.uses-dir button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.uses-bar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.uses-step { color: var(--muted); font-variant-numeric: tabular-nums; }
+.uses-done { font-weight: 600; }

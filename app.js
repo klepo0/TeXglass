@@ -41,6 +41,7 @@
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
   let imageMap = null; // { path: object URL } for those figures
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
+  let cites = null; // citation previews (src/cite.js)
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -1251,8 +1252,14 @@
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
+    // A citation: the cited paper's title and abstract, looked up now (never while rendering).
+    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
+    placePopover(a, body);
+  }
+  function placePopover(a, body) {
     const r = a.getBoundingClientRect();
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
@@ -1332,6 +1339,21 @@
   } else {
     $('find').hidden = true;
   }
+
+  // --- citation previews -------------------------------------------------------------
+
+  // Resting on a citation shows its bibliography entry, then the cited paper's
+  // title and abstract once looked up; a paper on arXiv opens in TeXglass in a new tab.
+  cites = window.TeXglassCite
+    ? window.TeXglassCite.create({
+      openArxiv: (id) => {
+        const url = new URL(location.href);
+        url.search = '?arxiv=' + encodeURIComponent(id);
+        url.hash = '';
+        window.open(url.href, '_blank', 'noopener');
+      },
+    })
+    : null;
 
   // --- notation and dependencies -------------------------------------------------
 
