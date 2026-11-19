@@ -35,7 +35,8 @@ browser extension:
 - **Side panel** with three tabs: **Contents**, a **Notation** index of the
   paper's macros and defined symbols, and a **Map** of which lemmas each
   theorem uses, read from the `\ref`s in statements and proofs (a reference
-  preview also says where a result is used). Drag its edge to make it wider;
+  preview also says where a result is used). Rest the pointer on a result in
+  the map, small or large, to preview its statement. Drag its edge to make it wider;
   the width is remembered, and on a narrow panel the tabs stack.
 - **Handwritten notes look**, beside the light/dark button: notes on squared
   paper, or chalk on a board in the dark theme. All of it is worked out when you first ask for it, so rendering is
