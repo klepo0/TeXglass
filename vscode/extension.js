@@ -24,6 +24,40 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+
+/** Hosts the citation previews may ask (see shared/cite.js). */
+const LOOKUP_HOSTS = new Set(['api.datacite.org', 'api.crossref.org']);
+
+/** GET a JSON document from a lookup host, with a timeout; rejects with { status } on an HTTP error. */
+function fetchJson(url) {
+  let u;
+  try { u = new URL(url); } catch (e) { return Promise.reject(new Error('Bad URL')); }
+  if (u.protocol !== 'https:' || !LOOKUP_HOSTS.has(u.hostname)) return Promise.reject(new Error('Not allowed'));
+  const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), { status });
+  if (typeof fetch === 'function') {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    return fetch(u.href, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
+      .then((res) => {
+        if (!res.ok) throw httpError(res.status);
+        return res.json();
+      })
+      .finally(() => clearTimeout(timer));
+  }
+  // VS Code before 1.82 runs Node 16, which has no fetch.
+  return new Promise((resolve, reject) => {
+    const req = require('https').get(u.href, { headers: { Accept: 'application/json', 'User-Agent': 'TeXglass' }, timeout: 10000 }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(httpError(res.statusCode));
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch (e) { reject(e); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('Timed out')));
+    req.on('error', reject);
+  });
+}
 const INK_FILTERS = require('./ink.js');
 
 const VIEW_TYPE = 'texglass.preview';
@@ -488,6 +522,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -634,6 +669,7 @@ ${INK_FILTERS}
           sideWidth: this.context.globalState.get('texglass.sideWidth', null),
           marginWidth: this.context.globalState.get('texglass.marginWidth', null),
           marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
+          notePad: this.context.globalState.get('texglass.notePad', null),
         });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
@@ -711,12 +747,30 @@ ${INK_FILTERS}
         if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-collapsed') this.context.globalState.update('texglass.marginCollapsed', !!m.value);
+        if (m.key === 'texglass:note-pad') {
+          const at = m.value && Number.isFinite(m.value.right) && Number.isFinite(m.value.bottom)
+            ? { right: m.value.right, bottom: m.value.bottom } : null;
+          this.context.globalState.update('texglass.notePad', at);
+        }
         break;
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);
         break;
       case 'open-link':
         if (/^https?:|^mailto:/.test(m.href)) vscode.env.openExternal(vscode.Uri.parse(m.href));
+        break;
+      case 'fetch-json':
+        // Citation previews: the webview asks, the extension fetches (only from the paper databases).
+        fetchJson(m.url).then(
+          (json) => this.post({ type: 'json', id: m.id, ok: true, json }),
+          (e) => this.post({ type: 'json', id: m.id, ok: false, error: String((e && e.message) || e), status: (e && e.status) || 0 })
+        );
+        break;
+      case 'open-arxiv':
+        // A cited paper on arXiv: open it in the TeXglass web viewer.
+        if (/^[\w.\/-]+$/.test(String(m.id || ''))) {
+          vscode.env.openExternal(vscode.Uri.parse(`https://klepo0.github.io/TeXglass/?arxiv=${encodeURIComponent(m.id)}`));
+        }
         break;
       default:
     }

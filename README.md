@@ -28,6 +28,15 @@ browser extension:
   sections, working `\ref`/`\eqref`/`\cref`, citations and bibliographies
   (BibTeX, biblatex and amsrefs).
 - **Hover previews** of references and citations; click to jump there.
+- **Citation previews**: resting on a citation shows its bibliography entry,
+  then the cited paper's title and abstract (looked up on DataCite and Crossref
+  only when you hover, and kept for the visit), with **Open in TeXglass** when the
+  paper is on arXiv. Offline, the bibliography entry is shown on its own.
+- **What does this use?**: the small button by a theorem's heading lights up
+  the results it rests on, directly or not, its proof and the equations it
+  cites, and fades the rest of the page. Switch to **Used in** for the other
+  direction, step through them, or press Esc to end it. The Map tab has the
+  same thing as **Show what it uses**.
 - **Go to** any theorem, equation or section by number (Ctrl+G).
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined

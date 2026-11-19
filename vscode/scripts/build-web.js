@@ -21,7 +21,7 @@ esbuild
     minify: process.argv.includes('--minify'),
     sourcemap: false,
     // Only reached on the desktop, never in the browser.
-    external: ['vscode', 'fs', 'os', 'worker_threads'],
+    external: ['vscode', 'fs', 'os', 'worker_threads', 'https'],
     alias: { path: 'path-browserify' },
     define: { TEXGLASS_WEB: 'true' },
     logLevel: 'info',

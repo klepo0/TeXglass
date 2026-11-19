@@ -54,6 +54,13 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   reference to a result also says what it uses and where it is used. These are
   worked out from the preview only when asked for, so rendering is as fast as
   before.
+- **Citation previews**: hovering a citation shows the bibliography entry,
+  then the cited paper's title and abstract, looked up by the extension on
+  DataCite and Crossref only when you hover. **Open in TeXglass** opens a paper
+  that is on arXiv in the TeXglass web viewer. Offline, only the entry shows.
+- **What does this use?**: the small button by a theorem's heading lights up
+  the results it rests on (or, with **Used in**, the results that rest on it)
+  and fades the rest; Esc ends it.
 - **Fold** sections and proofs with the arrow beside them, or by clicking a
   section heading or a folded proof. Folds are remembered.
 - The buttons in the preview's title bar: **Contents** shows a sidebar of the
@@ -86,8 +93,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   the text, and clicking one or dragging the arrow back out opens it again.
 - **Highlighter and notes of your own** (study tools): select text and pick a
   colour from the small bar that appears, or the note button to write a note
-  on it. Drag the note pad at the bottom right onto any line for a note there,
-  and drag a note in the margin to move it to another line. Notes take LaTeX
+  on it. Drag the note pad at the bottom right onto any line for a note there
+  (to move the pad itself out of the way, drag the dotted handle above it; it
+  stays where you leave it), and drag a note in the margin to move it to another line. Notes take LaTeX
   maths (`$…$`) with the document's own macros. Click a highlight to recolour
   or remove it; hover a note for edit and delete. Everything is saved next to
   the `.tex` file in `name.texglass.json` (commit it, or add it to

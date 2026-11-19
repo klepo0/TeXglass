@@ -5,7 +5,9 @@
  *   - notation on hover: resting the pointer on a formula shows where its
  *     notation comes from (the paper's own macros, and symbols defined with :=);
  *   - a dependency map: which results each theorem's statement and proof refer to;
- *   - a notation index: the paper's macros and defined symbols, with first uses.
+ *   - a notation index: the paper's macros and defined symbols, with first uses;
+ *   - "What does this use?": a button by each result's heading lights up the
+ *     results it rests on (or that rest on it) in the text and fades the rest.
  *
  * None of this runs while a document renders. Everything is read from the
  * page the first time it is needed, kept until the page changes
@@ -22,6 +24,7 @@
  *   insight.invalidate();                  // after the page changed
  *   insight.open('notation' | 'deps');     // the panel
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
+ *   insight.focus(theoremEl, 'uses' | 'usedBy'); insight.unfocus();
  */
 (function (root) {
   'use strict';
@@ -157,7 +160,10 @@
     const nodeOf = (el) => {
       let n = byEl.get(el);
       if (!n) {
-        n = { el, id: el.id, name: thmName(el), note: thmNote(el), kind: kindOf(el), style: styleOf(el), uses: new Set(), usedBy: new Set(), order: nodes.length };
+        n = {
+          el, id: el.id, name: thmName(el), note: thmNote(el), kind: kindOf(el), style: styleOf(el), uses: new Set(), usedBy: new Set(), order: nodes.length,
+          proofs: [], refs: { statement: new Set(), proof: new Set() }, // its proofs, and the equations, figures… it refers to
+        };
         byEl.set(el, n);
         nodes.push(n);
       }
@@ -167,10 +173,14 @@
       const t = target && target.closest('.theorem[id]');
       return t && !t.closest(INSIDE_POPOVER) ? t : null;
     };
-    const addRefs = (owner, scope, skip) => {
+    const addRefs = (owner, scope, skip, part) => {
       for (const a of scope.querySelectorAll('a.ref[href^="#"]')) {
         if (skip && skip(a)) continue;
-        const t = resultOf(targetOf(a, doc));
+        const target = targetOf(a, doc);
+        const t = resultOf(target);
+        if (!t && target && !/^H[1-6]$/.test(target.tagName) && !target.closest('section > h1, section > h2') && !target.closest(INSIDE_POPOVER)) {
+          owner.refs[part].add(target); // an equation, a figure, a numbered item
+        }
         if (!t || t === owner.el) continue;
         const dep = nodeOf(t);
         owner.uses.add(dep);
@@ -185,7 +195,7 @@
         addRefs(last, el, (a) => {
           const p = a.closest('.proof, .theorem');
           return p !== el && el.contains(p); // a nested proof or result counts for itself
-        });
+        }, 'statement');
         continue;
       }
       const head = el.querySelector('.proof-head');
@@ -198,7 +208,8 @@
       }
       if (!owner) owner = last;
       if (!owner) continue;
-      addRefs(owner, el, (a) => head && head.contains(a));
+      owner.proofs.push(el);
+      addRefs(owner, el, (a) => head && head.contains(a), 'proof');
     }
     nodes.sort((a, b) => (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
     nodes.forEach((n, k) => { n.order = k; });
@@ -427,6 +438,7 @@
       locate = null;
       hidePop();
       refreshViews();
+      refocus();
     }
 
     function setDefinitions(d) {
@@ -828,12 +840,18 @@
       };
       const detail = body.querySelector('.dep-detail');
       detail.innerHTML =
-        `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a></div>` +
+        `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
+        ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>` +
         `<p><span class="insight-usedby-k">Uses</span> ${list(n.uses)}${indirect(up, n.uses)}</p>` +
         `<p><span class="insight-usedby-k">Used in</span> ${list(n.usedBy)}${indirect(down, n.usedBy)}</p>`;
       const go = detail.querySelector('.dep-go');
       go.dataset.go = '';
       go._target = n.el;
+      detail.querySelector('.dep-focus').addEventListener('click', (e) => {
+        e.preventDefault();
+        view.leave();
+        focus(n.el, 'uses', true);
+      });
       const node = svg.querySelector(`.dep-node[data-n="${k}"] rect`);
       const wrap = body.querySelector('.dep-wrap');
       if (node && wrap) {
@@ -924,6 +942,167 @@
       };
     }
 
+
+    // --- "What does this use?": light up a result's dependencies in the text ------
+
+    // Each result gets a small button by its heading (added when the pointer
+    // first comes near it, never while rendering). Pressing it lights up the
+    // result, its proof, the results it rests on (directly or not) and the
+    // equations it refers to, and fades the rest of the page. A bar at the
+    // bottom steps through them, switches to "what uses it", and ends it.
+    let focusState = null; // { id, dir, marked: [el], stops: [el], at }
+    let bar = null;
+
+    const USES_ICON =
+      '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+      '<circle cx="12" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="12.5" r="2.2" fill="currentColor"/>' +
+      '<path d="M5.1 5.6 7 10.4M10.9 5.6 9 10.4" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>';
+
+    function headOf(el) {
+      for (const h of el.querySelectorAll('.thm-head')) if (h.closest('.theorem') === el) return h;
+      return null;
+    }
+
+    function addUsesButton(el) {
+      if (el._usesBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
+      const head = headOf(el);
+      if (!head) return;
+      const b = document_.createElement('button');
+      b.type = 'button';
+      b.className = 'uses-btn';
+      b.title = 'What does this use? Light up what it rests on, and fade the rest';
+      b.setAttribute('aria-label', 'What does this use?');
+      b.innerHTML = USES_ICON;
+      b.addEventListener('mousedown', (e) => e.stopPropagation());
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (focusState && focusState.id === el.id) unfocus();
+        else focus(el, 'uses');
+      });
+      head.after(b);
+      el._usesBtn = b;
+    }
+    doc.addEventListener('mouseover', (e) => {
+      const t = e.target.closest && e.target.closest('.theorem[id]');
+      if (t && doc.contains(t)) addUsesButton(t);
+    });
+    doc.addEventListener('focusin', (e) => {
+      const t = e.target.closest && e.target.closest('.theorem[id]');
+      if (t) addUsesButton(t);
+    });
+
+    /** The block an equation, figure or item reference lights up. */
+    const blockOf = (t) => t.closest('.math-display, figure, table, .theorem, .proof, li, p') || t;
+
+    function clearMarks() {
+      if (!focusState) return;
+      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref');
+      doc.classList.remove('uses-focus');
+      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
+    }
+
+    /** Light up what el uses (dir 'uses') or what uses it ('usedBy'). */
+    function focus(el, dir, scroll) {
+      if (!el || !doc.contains(el)) return;
+      clearMarks();
+      hidePop();
+      const g = getGraph();
+      const n = g.byEl.get(el) || { el, name: thmName(el), proofs: [], refs: { statement: new Set(), proof: new Set() }, uses: new Set(), usedBy: new Set() };
+      const others = Array.from(closure(n, dir)).sort((a, b) => a.order - b.order);
+      const keep = new Map(); // element -> class
+      keep.set(el, 'uses-sel');
+      for (const p of n.proofs) keep.set(p, 'uses-sel');
+      for (const m of others) if (!keep.has(m.el)) keep.set(m.el, 'uses-on');
+      if (dir === 'uses') {
+        const refs = new Set([...n.refs.statement, ...n.refs.proof]);
+        for (const m of others) for (const r of m.refs.statement) refs.add(r);
+        for (const r of refs) {
+          const b = blockOf(r);
+          if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
+          keep.set(b, 'uses-ref');
+        }
+      }
+      // Fade every block that holds nothing lit; go inside the ones that do.
+      const lit = new Set();
+      for (const k of keep.keys()) for (let p = k.parentElement; p && p !== doc; p = p.parentElement) lit.add(p);
+      const marked = [];
+      const walk = (node) => {
+        for (const c of node.children) {
+          const cls = keep.get(c);
+          if (cls) { c.classList.add(cls); marked.push(c); }
+          else if (lit.has(c)) walk(c);
+          else if (!c.classList.contains('uses-btn')) { c.classList.add('uses-fade'); marked.push(c); }
+        }
+      };
+      walk(doc);
+      doc.classList.add('uses-focus');
+      const stops = [el].concat(others.map((m) => m.el));
+      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length };
+      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
+      showBar();
+      if (scroll) opts.jump(el);
+    }
+
+    function unfocus() {
+      clearMarks();
+      focusState = null;
+      if (bar) bar.hidden = true;
+    }
+
+    /** After a new render: light up the same result again, if it is still there. */
+    function refocus() {
+      if (!focusState) return;
+      const { id, dir } = focusState;
+      focusState = null;
+      const el = document_.getElementById(id);
+      if (el && doc.contains(el) && el.classList.contains('theorem')) focus(el, dir);
+      else {
+        doc.classList.remove('uses-focus');
+        if (bar) bar.hidden = true;
+      }
+    }
+
+    function showBar() {
+      if (!bar) {
+        bar = document_.createElement('div');
+        bar.className = 'uses-bar';
+        bar.setAttribute('role', 'status');
+        bar.addEventListener('click', (e) => {
+          const b = e.target.closest('button');
+          if (!b || !focusState) return;
+          if (b.dataset.act === 'done') return unfocus();
+          if (b.dataset.dir) {
+            const el = document_.getElementById(focusState.id);
+            return focus(el, b.dataset.dir);
+          }
+          const k = focusState.stops.length;
+          focusState.at = (focusState.at + (b.dataset.act === 'next' ? 1 : -1) + k) % k;
+          opts.jump(focusState.stops[focusState.at]);
+          showBar();
+        });
+        document_.body.appendChild(bar);
+      }
+      const f = focusState;
+      const what = f.dir === 'uses'
+        ? (f.count ? `uses ${f.count} result${f.count > 1 ? 's' : ''}` : 'uses no other numbered result')
+        : (f.count ? `is used in ${f.count} result${f.count > 1 ? 's' : ''}` : 'is not used in any numbered result');
+      const step = f.stops.length > 1
+        ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
+        : '';
+      bar.innerHTML =
+        `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}</span>` +
+        `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
+        `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button></span>` +
+        step +
+        '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
+      bar.hidden = false;
+    }
+
+    document_.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && focusState && !e.defaultPrevented && !document_.querySelector('dialog[open]')) unfocus();
+    });
+
     // after the page changed: redraw what is showing
     let refreshTimer = null;
     refreshViews = () => {
@@ -940,6 +1119,9 @@
       setDefinitions,
       usedByNote,
       setHover: (on) => setHover(on, false),
+      focus: (el, dir) => focus(el, dir || 'uses'),
+      unfocus,
+      focused: () => (focusState ? { id: focusState.id, dir: focusState.dir } : null),
       graph: getGraph,
       index: getIndex,
     };
