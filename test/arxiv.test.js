@@ -235,6 +235,17 @@ test('flatten puts the authors\' own .sty files where they are loaded, but not p
   assert.doesNotMatch(out, /oops/);
 });
 
+test('flatten leaves out an author\'s own copy of a standard package', () => {
+  const files = {
+    'p.tex': '\\documentclass{article}\n\\usepackage{footmisc,enumitem}\n\\begin{document}x\\end{document}',
+    'footmisc.sty': '\\def\\footnoterule{low-level}',
+    'enumitem.sty': '\\def\\enit@x{low-level}',
+  };
+  const out = A.flatten('p.tex', files);
+  assert.doesNotMatch(out, /low-level/);
+  assert.match(out, /\\usepackage\{footmisc,enumitem\}/);
+});
+
 test('an amsrefs .bbl (no .bib in the source) takes the place of \\bibliography', () => {
   const files = {
     'p.tex': '\\documentclass{amsart}\n\\usepackage[alphabetic]{amsrefs}\n\\begin{document}\nSee \\cite{w}.\n\\bibliography{refs}\n\\end{document}',

@@ -541,3 +541,26 @@ test('amsart: each \\author adds an author to the title block', () => {
   const html = TeXglass.render(src, { renderMath: (t) => t }).html;
   assert.match(html, /<span class="author">Ada Writer<\/span><span class="author">Bo Reader<\/span>/);
 });
+
+test('a macro that calls itself does not hang the renderer', () => {
+  // \\let then \\def wrapping the old meaning, as package code does; calling
+  // itself twice made the old renderer expand it 2^200 times.
+  const src = '\\documentclass{article}\n\\def\\twice{a\\twice b\\twice c}\n\\def\\loop{\\loop}' +
+    '\n\\begin{document}\nStart \\twice{} \\loop{} end.\n\\end{document}';
+  const t = Date.now();
+  const out = plain(src);
+  assert.ok(Date.now() - t < 2000, 'renders quickly');
+  assert.match(text(out.html), /Start a+/);
+  assert.match(text(out.html), /end\./);
+  assert.ok(out.warnings.some((w) => /expands without end/.test(w)));
+});
+
+test('a math-only check over many macros that use each other stays fast', () => {
+  // Each \\mK uses the previous one twice: the math-only check used to walk every path.
+  let defs = '\\def\\mA{x}\n';
+  const names = 'ABCDEFGHIJKLMNOP';
+  for (let k = 1; k < names.length; k++) defs += `\\def\\m${names[k]}{\\m${names[k - 1]}\\relax\\m${names[k - 1]}}\n`;
+  const t = Date.now();
+  plain(`\\documentclass{article}\n${defs}\\begin{document}\nHi \\mB.\n\\end{document}`);
+  assert.ok(Date.now() - t < 2000, 'renders quickly');
+});

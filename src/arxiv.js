@@ -181,8 +181,20 @@
    * If opts.starts is an object, it is filled with { path: offset } of where
    * each pulled-in file's text begins in the result.
    */
-  /** Packages whose environments TeXglass understands without reading their .sty. */
-  const NATIVE_PACKAGES = new Set(['mhequ']);
+  /**
+   * Packages whose .sty TeXglass does not read when a paper ships its own copy:
+   * ones whose environments it understands itself (mhequ), and standard
+   * packages that authors sometimes upload alongside their paper. Their code
+   * is low-level TeX meant for typesetting pages (footnote placement, list
+   * spacing, caption boxes), which only adds stray text or takes long to read.
+   */
+  const NATIVE_PACKAGES = new Set([
+    'mhequ',
+    'amsmath', 'amssymb', 'amsthm', 'amsfonts', 'mathtools', 'graphicx', 'graphics', 'color', 'xcolor',
+    'hyperref', 'url', 'geometry', 'fullpage', 'natbib', 'cite', 'enumitem', 'enumerate', 'footmisc',
+    'caption', 'caption3', 'subcaption', 'subfig', 'subfigure', 'float', 'booktabs', 'multirow',
+    'setspace', 'fancyhdr', 'titlesec', 'cleveref', 'xspace', 'bm', 'mathrsfs', 'dsfont', 'bbm',
+  ]);
 
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;

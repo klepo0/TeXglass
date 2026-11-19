@@ -827,6 +827,10 @@
   // The renderer (one instance per pass)
   // ---------------------------------------------------------------------------
 
+  // Limits on user macro expansion (see expandMacro).
+  const MACRO_NESTING = 4;
+  const MACRO_EXPANSIONS = 200000;
+
   class Renderer {
     constructor(options, known) {
       this.options = options;
@@ -855,6 +859,8 @@
       this.target = null; // what a \label currently refers to
       this.ids = 0;
       this.depth = 0;
+      this.expanding = new Map(); // macro -> how many of its expansions are open
+      this.expansions = 0;
       this.listDepth = 0;
       this.floatKind = null;
       this.meta = { title: null, author: null, date: null };
@@ -1742,11 +1748,29 @@
         args.push(a.content);
         j = a.end;
       }
-      const body = m.body.replace(/#(\d)/g, (_, d) => (args[d - 1] !== undefined ? args[d - 1] : ''));
-      // Math-only macros (\R -> \mathbb{R}) are sometimes used in text; TeX
-      // would complain, we just render them as math.
-      if (this.isMathBody(body, 0)) return { html: this.inlineMath(body), end: j };
-      return { html: this.flow(body, true), end: j };
+      // A macro that calls itself (often package code that wraps the old
+      // meaning of a command we cannot keep apart, as \let\old\cmd then
+      // \def\cmd{...\old...}) would expand forever, or exponentially often
+      // when it calls itself twice. Stop at a few nested expansions of the same
+      // macro, and after a generous number of expansions in all.
+      const open = this.expanding.get(m) || 0;
+      if (open >= MACRO_NESTING || ++this.expansions > MACRO_EXPANSIONS) {
+        if (!this.expansionWarned) {
+          this.expansionWarned = true;
+          this.warnings.push('A macro expands without end; its deeper expansions are left out.');
+        }
+        return { html: '', end: j };
+      }
+      this.expanding.set(m, open + 1);
+      try {
+        const body = m.body.replace(/#(\d)/g, (_, d) => (args[d - 1] !== undefined ? args[d - 1] : ''));
+        // Math-only macros (\R -> \mathbb{R}) are sometimes used in text; TeX
+        // would complain, we just render them as math.
+        if (this.isMathBody(body, 0)) return { html: this.inlineMath(body), end: j };
+        return { html: this.flow(body, true), end: j };
+      } finally {
+        this.expanding.set(m, open);
+      }
     }
 
     /**
@@ -1754,15 +1778,21 @@
      * another user macro (\newcommand{\RR}{\R}). Bodies that switch to math
      * themselves ($…$, \ensuremath) or hold links are left as text.
      */
-    isMathBody(body, depth) {
+    isMathBody(body, depth, seen) {
       if (/\$|\\\(|\\(?:ensuremath|url|href|text[a-z]*|begin)(?![A-Za-z])/.test(body)) return false;
       if (MATH_ONLY.test(body)) return true;
       if (depth > 8) return false;
+      // Each macro is looked into once: package code (an author's own copy of
+      // a .sty) has macros that use many others, and walking every path
+      // through them takes exponential time.
+      seen = seen || new Set();
       const re = /\\([A-Za-z@]+)/g;
       let m;
       while ((m = re.exec(body))) {
+        if (seen.has(m[1])) continue;
+        seen.add(m[1]);
         const mac = this.macros[m[1]];
-        if (mac && this.isMathBody(mac.body, depth + 1)) return true;
+        if (mac && this.isMathBody(mac.body, depth + 1, seen)) return true;
       }
       return false;
     }
