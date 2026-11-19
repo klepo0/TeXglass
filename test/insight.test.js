@@ -244,6 +244,32 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
     tabs = await tabsAt();
     assert.equal(new Set(tabs.map((b) => b.top)).size, 3, 'narrow: stacked');
     assert.ok(tabs.every((b) => b.inside), 'every tab is inside the panel');
+    // The tabs stay at the top while the panel scrolls, stacked or not, on either side.
+    await page.evaluate(() => {
+      document.getElementById('toc-list').innerHTML = Array.from({ length: 120 }, (_, i) => `<li><a href="#">${i + 1} Section</a></li>`).join('');
+    });
+    const stuck = () => page.evaluate(() => {
+      const pane = document.getElementById('toc-pane');
+      pane.scrollTop = pane.scrollHeight;
+      const p = pane.getBoundingClientRect();
+      const head = document.querySelector('.toc-pane-head').getBoundingClientRect();
+      const tab = document.querySelector('[data-side-tab="toc"]').getBoundingClientRect();
+      const hit = document.elementFromPoint(tab.left + tab.width / 2, tab.top + tab.height / 2);
+      return { scrolled: pane.scrollTop > 500, top: Math.round(head.top - p.top), left: Math.round(head.left - p.left), right: Math.round(p.right - head.right), tabOnTop: !!(hit && hit.closest('[data-side-tab="toc"]')) };
+    });
+    for (const right of [false, true]) {
+      await page.evaluate((r) => document.body.classList.toggle('toc-right', r), right);
+      for (const w of [180, 400]) {
+        await page.evaluate((x) => window.side.setWidth(x), w);
+        const s = await stuck();
+        assert.ok(s.scrolled && s.top <= 0 && s.tabOnTop, JSON.stringify({ right, w, s }));
+        assert.ok(s.left <= 1 && s.right <= 1, 'the head covers the panel\'s full width ' + JSON.stringify(s));
+      }
+    }
+    await page.evaluate(() => document.body.classList.remove('toc-right'));
+    await page.click('[data-side-tab="notation"]');
+    assert.equal(await page.locator('#toc-list').isHidden(), true);
+    await page.click('[data-side-tab="toc"]');
     await page.dblclick('.side-resizer');
     assert.equal(await width(), 280);
   } finally {
