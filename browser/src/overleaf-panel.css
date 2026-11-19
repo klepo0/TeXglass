@@ -19,7 +19,8 @@
 .ol-toolbar .icon-button svg { width: 16px; height: 16px; }
 
 /* The contents: a column beside the document when the panel is wide, a drawer when it is narrow (styles.css). */
-.toc-pane { flex-basis: 220px; }
+.toc-pane { flex-basis: var(--side-width, 250px); }
+.toc-empty { list-style: none; padding: 4px 8px; color: var(--muted); font-size: 13px; }
 .ol-toolbar .file-name,
 .ol-toolbar .status {
   min-width: 0;
@@ -52,6 +53,8 @@
 }
 
 #preview { padding: 24px 18px 40vh; }
+/* The handwritten look (notes.css) sets its own padding; keep the room to scroll the end to the top. */
+:root[data-look="notes"] #preview.document { padding-bottom: 40vh; }
 
 /* A click on the preview moves Overleaf's cursor there. */
 #preview > .src-block { cursor: pointer; border-radius: 3px; }
