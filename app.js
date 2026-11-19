@@ -1506,6 +1506,8 @@
   // itself, so a long preview can be scrolled. It closes a moment after the
   // pointer has left both.
   const HIDE_DELAY = 250;
+  // References, citations and footnote marks.
+  const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
   function hidePopover() {
@@ -1525,7 +1527,15 @@
     body.className = 'ref-popover-body';
     let node = target;
     if (node.classList.contains('caption') && node.parentElement.tagName === 'FIGURE') node = node.parentElement;
-    if (/^H[1-6]$/.test(node.tagName)) {
+    if (node.tagName === 'LI' && node.parentElement && node.parentElement.closest('.footnotes')) {
+      // A footnote: its text, without the list number or the back link.
+      const note = document.createElement('div');
+      note.className = 'fn-preview';
+      node.childNodes.forEach((c) => note.appendChild(c.cloneNode(true)));
+      note.querySelectorAll('.fn-back').forEach((el) => el.remove());
+      note.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+      body.appendChild(note);
+    } else if (/^H[1-6]$/.test(node.tagName)) {
       body.innerHTML = `<p><strong>${node.innerHTML}</strong></p>`;
     } else {
       const clone = node.cloneNode(true);
@@ -1562,14 +1572,14 @@
     popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
   }
   preview.addEventListener('mouseover', (e) => {
-    const a = e.target.closest('a.ref, .cite a');
+    const a = e.target.closest(PREVIEW_LINKS);
     if (!a || (editing && editing.el.contains(a) && !editing.previewEl.contains(a))) return;
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target || target.contains(a)) return;
     showPopover(a, target);
   });
   preview.addEventListener('mouseout', (e) => {
-    const a = e.target.closest('a.ref, .cite a');
+    const a = e.target.closest(PREVIEW_LINKS);
     if (!a || popover.hidden || a.contains(e.relatedTarget)) return;
     if (popover.contains(e.relatedTarget)) return; // moving into the popover
     hidePopoverSoon();
