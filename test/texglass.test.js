@@ -535,3 +535,9 @@ test('ulem underlines, strike-outs and underlined \\emph', () => {
   const m = realMath(String.raw`\begin{document}$\text{\uline{a} and \uwave{b}}$\end{document}`);
   assert.doesNotMatch(m.html, /math-error|katex-error/);
 });
+
+test('amsart: each \\author adds an author to the title block', () => {
+  const src = '\\documentclass{amsart}\n\\title{T}\n\\author{Ada Writer}\n\\address{Somewhere}\n\\author{Bo Reader}\n\\email{b@example.org}\n\\begin{document}\n\\maketitle\nText.\n\\end{document}';
+  const html = TeXglass.render(src, { renderMath: (t) => t }).html;
+  assert.match(html, /<span class="author">Ada Writer<\/span><span class="author">Bo Reader<\/span>/);
+});
