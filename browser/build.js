@@ -52,6 +52,9 @@ const SITE_MATCHES = [
   'https://www.researchgate.net/publication/*',
 ];
 
+/** .tex files opened in the browser (Chrome and Edge, with "Allow access to file URLs"), which file-tex.js shows in TeXglass. */
+const FILE_MATCHES = ['file:///*.tex', 'file:///*.ltx', 'file:///*.latex'];
+
 /** Overleaf project pages, where overleaf.js adds a live preview of the open file. */
 const OVERLEAF_MATCHES = ['https://overleaf.com/project/*', 'https://*.overleaf.com/project/*'];
 
@@ -61,7 +64,7 @@ function manifest(target) {
     name: 'TeXglass for arXiv',
     short_name: 'TeXglass',
     version: VERSION,
-    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references. Also on alphaXiv, HAL and ResearchGate, and a live preview beside the editor on Overleaf.',
+    description: 'Open arXiv papers in TeXglass: their LaTeX source rendered as a readable page, with math, numbered theorems and working references. Also on alphaXiv, HAL and ResearchGate, a live preview beside the editor on Overleaf, and .tex files on your computer.',
     icons: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
     action: {
       default_title: 'View this arXiv paper in TeXglass',
@@ -124,6 +127,11 @@ function manifest(target) {
     };
   } else {
     m.background = { service_worker: 'background.js' };
+    // .tex files on this computer: Chrome and Edge let an extension read file:// addresses
+    // once the person turns on "Allow access to file URLs" for it (off by default).
+    // Firefox never lets extensions read them, so there TeXglass opens files with a picker.
+    m.host_permissions.push('file:///*');
+    m.content_scripts.push({ matches: FILE_MATCHES, js: ['file-tex.js'], run_at: 'document_start' });
     m.minimum_chrome_version = '111'; // "world": "MAIN" content scripts, for Overleaf
     // Chrome shows version_name on chrome://extensions, so a dev build says which commit it is.
     // (The version itself must stay plain numbers; Firefox has no version_name.)
@@ -263,4 +271,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, manifest, viewerHtml, zipDir, VERSION, LABEL, SITE_MATCHES, OVERLEAF_MATCHES, SHORTCUT };
+module.exports = { build, manifest, viewerHtml, zipDir, VERSION, LABEL, SITE_MATCHES, OVERLEAF_MATCHES, FILE_MATCHES, SHORTCUT };

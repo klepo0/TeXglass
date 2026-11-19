@@ -1,7 +1,7 @@
 'use strict';
 (function () {
   const api = globalThis.browser || globalThis.chrome;
-  const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/' };
+  const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/', openFiles: true };
   const form = document.getElementById('form');
   const webUrl = document.getElementById('webUrl');
   const status = document.getElementById('status');
@@ -17,6 +17,7 @@
     const s = Object.assign({}, DEFAULTS, await api.storage.sync.get(DEFAULTS));
     form.elements.viewer.value = s.viewer;
     webUrl.value = s.webUrl;
+    form.elements.openFiles.checked = s.openFiles !== false;
   }
 
   async function save() {
@@ -26,7 +27,7 @@
       say('The website address must start with https://');
       return;
     }
-    await api.storage.sync.set({ viewer, webUrl: url });
+    await api.storage.sync.set({ viewer, webUrl: url, openFiles: form.elements.openFiles.checked });
     say('Saved.');
   }
 

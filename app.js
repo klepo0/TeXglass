@@ -32,6 +32,7 @@
   let dirty = false; // edited here since the last open or save
   let fileHandle = null; // File System Access handle, for live reload and saving
   let lastModified = 0;
+  let watcher = null; // { check: async () => new source or null }: live reload of a folder or a file:// document
   let renderTimer = null;
   let saveTimer = null;
   let statusTimer = null;
@@ -175,7 +176,7 @@
     if (insight) insight.setDefinitions(result.defs);
     lastLabels = result.labels;
     lastToc = result.toc;
-    document.title = result.title ? `${result.title} — TeXglass` : 'TeXglass';
+    document.title = result.title ? `${result.title} — TeXglass` : fileName.textContent && fileName.textContent !== 'welcome.tex' ? `${fileName.textContent} — TeXglass` : 'TeXglass';
     const n = result.warnings.length;
     warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
     status.title = result.warnings.join('\n');
@@ -488,6 +489,8 @@
 
   function load(text, name, images, gh) {
     closeEditor(false);
+    watcher = null;
+    showFolderHint(null);
     setGitHub(gh || null);
     imageUrls.forEach((u) => URL.revokeObjectURL(u));
     imageUrls = [];
@@ -1019,14 +1022,16 @@
 
   // --- opening and saving files -------------------------------------------------
 
+  const Local = window.TeXglassLocal;
+  const LATEX_TYPES = [{ description: 'LaTeX', accept: { 'text/x-tex': ['.tex', '.ltx', '.latex'] } }];
+
   async function openWithPicker() {
     // The picker is not allowed inside an embedded frame; use the plain file input there.
     if (window.showOpenFilePicker && !inFrame) {
       try {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'LaTeX', accept: { 'text/x-tex': ['.tex', '.ltx', '.latex'] } }],
-        });
-        await openHandle(handle);
+        const handles = await window.showOpenFilePicker({ types: LATEX_TYPES, multiple: !!Local });
+        if (handles.length === 1) await openHandle(handles[0]);
+        else await openFiles(await Promise.all(handles.map((h) => h.getFile())));
       } catch (e) {
         if (e.name !== 'AbortError') $('file-input').click();
       }
@@ -1035,17 +1040,243 @@
     }
   }
 
+  /**
+   * Open a whole folder: its main .tex file with what it pulls in (\input
+   * files, local packages, bibliography, figures). Chromium's folder picker
+   * also lets TeXglass watch the files; elsewhere a folder <input> reads them once.
+   */
+  async function openFolder() {
+    if (!Local) return openWithPicker();
+    if (window.showDirectoryPicker && !inFrame) {
+      let dir;
+      try {
+        dir = await window.showDirectoryPicker(fileHandle ? { startIn: fileHandle, id: 'texglass-folder' } : { id: 'texglass-folder' });
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        $('folder-input').click();
+        return;
+      }
+      showStatus(`Reading ${dir.name}…`);
+      try {
+        const { raw, handles } = await Local.readDirectoryHandle(dir);
+        openRaw(raw, dir.name, handles);
+      } catch (e) {
+        flashStatus('Could not read the folder: ' + (e.message || e.name));
+      }
+    } else {
+      $('folder-input').click();
+    }
+  }
+
   async function openHandle(handle) {
     fileHandle = handle;
     const file = await handle.getFile();
     lastModified = file.lastModified;
-    load(await file.text(), file.name);
+    const text = await file.text();
+    load(text, file.name);
     flashStatus('Watching the file for changes');
+    suggestFolder(text, file.name);
   }
 
   async function openFile(file) {
     fileHandle = null;
-    load(await file.text(), file.name);
+    const text = await file.text();
+    load(text, file.name);
+    suggestFolder(text, file.name);
+  }
+
+  /** Several files (from a picker or an input): one .tex file opens alone, more as a folder. */
+  async function openFiles(files) {
+    files = Array.from(files);
+    const tex = files.filter((f) => /\.(tex|ltx|latex)$/i.test(f.name));
+    if (files.length === 1 || !Local || (tex.length === 1 && files.length === 1)) return openFile(files[0]);
+    showStatus('Reading the files…');
+    openRaw(await Local.readFileList(files), files.length + ' files');
+  }
+
+  /** The file that was open on its own, when its folder is opened next: it is the main file if it is a whole document. */
+  let soloName = null;
+
+  /** Open a folder's files ({ path: bytes }); `handles` ({ path: file handle }) watches them for changes. */
+  function openRaw(raw, label, handles) {
+    let opened;
+    try {
+      let main = null;
+      if (soloName) {
+        // The file that was open, if it is a whole document (has \documentclass) and sits in this folder.
+        const paths = Object.keys(Local.stripCommonFolder(Object.assign({}, raw)));
+        const hits = paths.filter((p) => p.split('/').pop() === soloName).sort((x, y) => x.length - y.length);
+        const full = Object.keys(raw).find((p) => p.endsWith(hits[0] || '\u0000'));
+        if (hits[0] && full && /\\documentclass/.test(new TextDecoder().decode(raw[full]))) main = hits[0];
+      }
+      opened = Local.fromFolder(raw, { main });
+    } catch (e) {
+      flashStatus(e.message);
+      return false;
+    }
+    fileHandle = null; // the source shown is the files put together; Save downloads it rather than overwriting the main file
+    load(opened.source, opened.name, opened.images);
+    soloName = null;
+    const others = opened.files.length - 1;
+    flashStatus(`Opened ${opened.main}` + (others > 0 ? ` from ${label}, with ${others} other file${others === 1 ? '' : 's'}` : ''));
+    if (handles) watcher = folderWatcher(raw, handles);
+    return true;
+  }
+
+  /** Watches the LaTeX files of a folder chosen with the folder picker. */
+  function folderWatcher(raw, handles) {
+    const times = {};
+    const texts = Object.keys(handles).filter((p) => Local.isText(p));
+    const ready = Promise.all(texts.map(async (p) => { times[p] = (await handles[p].getFile()).lastModified; }));
+    return {
+      async check() {
+        await ready;
+        let changed = false;
+        for (const p of texts) {
+          const f = await handles[p].getFile();
+          if (f.lastModified === times[p]) continue;
+          times[p] = f.lastModified;
+          raw[p] = new Uint8Array(await f.arrayBuffer());
+          changed = true;
+        }
+        return changed ? Local.fromFolder(raw).source : null;
+      },
+    };
+  }
+
+  /**
+   * Open a file:// address, which the browser extension can read once it is
+   * allowed to "access file URLs": the file and the files it pulls in, read
+   * from beside it, and read again when they change.
+   */
+  async function openFileUrl(url) {
+    let u;
+    try { u = new URL(url); } catch (e) { u = null; }
+    if (!u || u.protocol !== 'file:' || !Local) {
+      flashStatus('Not a file on this computer: ' + url);
+      return false;
+    }
+    const folder = new URL('.', u);
+    const name = decodeURIComponent(u.pathname.split('/').pop());
+    const read = async (rel) => {
+      try {
+        const res = await fetch(new URL(rel.split('/').map(encodeURIComponent).join('/'), folder));
+        return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+      } catch (e) {
+        return null;
+      }
+    };
+    showStatus(`Opening ${name}…`);
+    const raw = await Local.gather(name, read);
+    if (!raw) {
+      showFileAccessHelp(name);
+      return false;
+    }
+    let opened;
+    try {
+      opened = Local.fromFolder(raw, { main: name });
+    } catch (e) {
+      flashStatus(e.message);
+      return false;
+    }
+    fileHandle = null;
+    load(opened.source, name, opened.images);
+    const others = opened.files.length - 1;
+    flashStatus(others > 0 ? `Opened ${name} with ${others} other file${others === 1 ? '' : 's'} from its folder` : `Opened ${name}`);
+    // Read the LaTeX files again every few seconds, and follow new \input files.
+    let last = {};
+    for (const p of Object.keys(raw)) if (Local.isText(p)) last[p] = new TextDecoder().decode(raw[p]);
+    watcher = {
+      async check() {
+        let changed = false;
+        for (const p of Object.keys(last)) {
+          const b = await read(p);
+          const t = b ? new TextDecoder().decode(b) : null;
+          if (t != null && t !== last[p]) changed = true;
+        }
+        if (!changed) return null;
+        const fresh = await Local.gather(name, read);
+        if (!fresh) return null;
+        last = {};
+        for (const p of Object.keys(fresh)) if (Local.isText(p)) last[p] = new TextDecoder().decode(fresh[p]);
+        return Local.fromFolder(fresh, { main: name }).source;
+      },
+    };
+    return true;
+  }
+
+  // --- the bar that offers to open a lone file's folder, and other notes about opening files ---
+
+  const folderHint = $('folder-hint');
+  const folderHintText = $('folder-hint-text');
+  const folderHintOpen = $('folder-hint-open');
+  /** Show a note in the bar under the toolbar, with a button (null hides it). */
+  function showFolderHint(text, button) {
+    if (!folderHint) return;
+    folderHint.hidden = !text;
+    folderHintText.textContent = text || '';
+    folderHintOpen.hidden = !button;
+    if (button) folderHintOpen.textContent = button;
+  }
+
+  /** After a file opens on its own: if it \inputs files or shows figures, offer to open its folder. */
+  function suggestFolder(text, name) {
+    if (!Local) return;
+    const m = Local.missing(text);
+    const parts = [];
+    if (m.inputs.length) parts.push(`${m.inputs.length} other file${m.inputs.length === 1 ? '' : 's'} (\\input)`);
+    if (m.figures.length) parts.push(`${m.figures.length} figure${m.figures.length === 1 ? '' : 's'}`);
+    if (!parts.length) return;
+    soloName = name;
+    showFolderHint(`${name} uses ${parts.join(' and ')} that TeXglass cannot see. Open its folder to include them.`, 'Open its folder');
+  }
+
+  /** When the extension may not read a file:// address: say how to allow it. */
+  function showFileAccessHelp(name) {
+    const chromium = location.protocol === 'chrome-extension:';
+    showStatus(warningsText);
+    showFolderHint(chromium
+      ? `TeXglass could not read ${name}. To open .tex files from this computer directly, turn on "Allow access to file URLs" for TeXglass in your browser's extension settings (chrome://extensions or edge://extensions, then Details). Or choose the file here.`
+      : `This browser does not let extensions read ${name} from its address. Choose the file (or its folder) here instead.`,
+    'Choose the file');
+    soloName = name;
+    folderHintOpen.dataset.action = 'file';
+  }
+
+  if (folderHint) {
+    folderHintOpen.addEventListener('click', () => {
+      const action = folderHintOpen.dataset.action;
+      delete folderHintOpen.dataset.action;
+      showFolderHint(null);
+      if (action === 'file') openWithPicker();
+      else openFolder();
+    });
+    $('folder-hint-close').addEventListener('click', () => showFolderHint(null));
+  }
+
+  // --- opening from this computer: the dialog behind ?open (the extension's "Open a .tex file" menu item) ---
+
+  const localDialog = $('local-dialog');
+  function showLocalDialog() {
+    if (!localDialog) return openWithPicker();
+    $('local-file-access').hidden = location.protocol !== 'chrome-extension:';
+    if (localDialog.showModal) localDialog.showModal();
+    else localDialog.setAttribute('open', '');
+    $('local-file').focus();
+  }
+  if (localDialog) {
+    const closeLocal = () => (localDialog.open && localDialog.close ? localDialog.close() : localDialog.removeAttribute('open'));
+    $('local-file').addEventListener('click', () => { closeLocal(); openWithPicker(); });
+    $('local-folder').addEventListener('click', () => { closeLocal(); openFolder(); });
+    $('local-cancel').addEventListener('click', closeLocal);
+    localDialog.addEventListener('click', (e) => { if (e.target === localDialog) closeLocal(); });
+  }
+  for (const [id, fn] of [['arxiv-local-file', openWithPicker], ['arxiv-local-folder', openFolder]]) {
+    const el = $(id);
+    if (el) el.addEventListener('click', () => {
+      if (arxivDialog && arxivDialog.open) arxivDialog.close();
+      fn();
+    });
   }
 
   function save() {
@@ -1143,24 +1374,44 @@
 
   // Re-render when the file changes on disk (browsers with the File System Access API),
   // unless there are edits made here that would be lost.
+  const reshow = (text) => {
+    closeEditor(false);
+    doc = text.replace(/\r\n?/g, '\n');
+    setSource(doc);
+    render();
+    store.set('texglass:last', doc);
+  };
   setInterval(async () => {
     if (!fileHandle || document.hidden || dirty) return;
     try {
       const file = await fileHandle.getFile();
       if (file.lastModified !== lastModified) {
         lastModified = file.lastModified;
-        closeEditor(false);
-        doc = (await file.text()).replace(/\r\n?/g, '\n');
-        setSource(doc);
-        render();
-        store.set('texglass:last', doc);
+        reshow(await file.text());
       }
     } catch (e) {
       fileHandle = null;
     }
   }, 1000);
 
-  $('open').addEventListener('click', openWithPicker);
+  // The same for a folder, or a file:// document and the files it pulls in.
+  let checking = false;
+  setInterval(async () => {
+    if (!watcher || checking || document.hidden || dirty) return;
+    checking = true;
+    const w = watcher;
+    try {
+      const text = await w.check();
+      if (text != null && w === watcher && text.replace(/\r\n?/g, '\n') !== doc) reshow(text);
+    } catch (e) {
+      if (w === watcher) watcher = null;
+    } finally {
+      checking = false;
+    }
+  }, 1500);
+
+  // Open: a .tex file (several files are put together like a folder); Shift+click opens a folder.
+  $('open').addEventListener('click', (e) => (e.shiftKey ? openFolder() : openWithPicker()));
   $('save').addEventListener('click', save);
   $('export').addEventListener('click', exportHtml);
 
@@ -1173,8 +1424,17 @@
   });
   $('print').addEventListener('click', () => window.print());
   $('file-input').addEventListener('change', (e) => {
-    if (e.target.files[0]) openFile(e.target.files[0]);
+    if (e.target.files.length) openFiles(e.target.files);
     e.target.value = '';
+  });
+  const folderInput = $('folder-input');
+  if (folderInput) folderInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    e.target.value = '';
+    if (!files.length || !Local) return;
+    showStatus('Reading the folder…');
+    const top = (files[0].webkitRelativePath || '').split('/')[0];
+    openRaw(await Local.readFileList(files), top || 'the folder');
   });
 
   // Drag and drop.
@@ -1197,7 +1457,29 @@
     e.preventDefault();
     dragDepth = 0;
     overlay.hidden = true;
-    const item = e.dataTransfer.items && e.dataTransfer.items[0];
+    const items = Array.from(e.dataTransfer.items || []).filter((i) => i.kind === 'file');
+    const entries = items.map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null));
+    // A folder, or several files: put them together (main file, \input files, figures).
+    if (Local && (items.length > 1 || entries.some((en) => en && en.isDirectory))) {
+      // Chromium hands over a handle for one dropped folder, which lets TeXglass watch it.
+      // (Both are asked for before any await: the dropped items empty once the event is over.)
+      const asking = items.length === 1 && items[0].getAsFileSystemHandle && !inFrame ? items[0].getAsFileSystemHandle().catch(() => null) : null;
+      const handle = asking ? await asking : null;
+      showStatus('Reading the files…');
+      try {
+        if (handle && handle.kind === 'directory') {
+          const { raw, handles } = await Local.readDirectoryHandle(handle);
+          openRaw(raw, handle.name, handles);
+        } else {
+          const label = entries.length === 1 && entries[0] ? entries[0].name : `${items.length} files`;
+          openRaw(await Local.readDropped(entries.filter(Boolean)), label);
+        }
+      } catch (err) {
+        flashStatus('Could not read what was dropped: ' + (err.message || err.name));
+      }
+      return;
+    }
+    const item = items[0];
     if (item && item.getAsFileSystemHandle && !inFrame) {
       try {
         const handle = await item.getAsFileSystemHandle();
@@ -1211,7 +1493,7 @@
   window.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    if (mod && key === 'o') { e.preventDefault(); openWithPicker(); }
+    if (mod && key === 'o') { e.preventDefault(); if (e.shiftKey) openFolder(); else openWithPicker(); }
     if (mod && key === 's') { e.preventDefault(); save(); }
     if (mod && e.shiftKey && key === 'e') { e.preventDefault(); setMode(mode === 'split' ? 'preview' : 'split'); }
     else if (mod && key === 'e') { e.preventDefault(); setMode(mode === 'edit' ? 'preview' : 'edit'); }
@@ -2003,6 +2285,15 @@
     // ?arxiv=2301.00001 opens that paper (a bare ?arxiv, the arXiv dialog); ?gh=<GitHub link> opens that file;
     // ?preprint=<folder> opens that manuscript from github.com/openai/math.
     const params = new URLSearchParams(location.search);
+    // ?file=<file:// address>: a .tex file on this computer (the browser extension, allowed to read file URLs);
+    // a bare ?open shows the dialog for choosing a file or folder from this computer.
+    const fileUrl = params.get('file');
+    if (fileUrl && Local) return openFileUrl(fileUrl);
+    if (params.has('open')) {
+      const done = last ? loadLast() : loadWelcome();
+      showLocalDialog();
+      return done;
+    }
     const arxiv = params.get('arxiv');
     const gh = params.get('gh') || params.get('github');
     if (arxiv && window.TeXglassArxiv) {

@@ -191,6 +191,26 @@ body {
 .arxiv-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .arxiv-actions button:disabled { opacity: 0.6; cursor: default; }
 img.graphic { max-width: 100%; height: auto; }
+/* Opening from this computer: the dialog, the line in the arXiv dialog, and the bar under the toolbar */
+.local-body p { margin: 0 0 12px; font-size: 14px; }
+.local-body .local-note { font-size: 13px; color: var(--muted); }
+.local-hint { margin: 2px 0 12px; font-size: 13px; color: var(--muted); }
+.link-button { font: inherit; padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.folder-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.folder-hint[hidden] { display: none; }
+.folder-hint span { flex: 1; min-width: 0; }
+.folder-hint button { font: inherit; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+.folder-hint button[hidden] { display: none; }
+.folder-hint .folder-hint-close { background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
+@media print { .folder-hint { display: none !important; } }
 
 /* Browse OpenAI's math preprints */
 .preprints-dialog {

@@ -14,6 +14,14 @@
  * On Overleaf project pages the toolbar button and its shortcut instead show or
  * hide the live preview that overleaf.js adds there.
  *
+ * .tex files on this computer: the toolbar button's right-click menu has
+ * "Open a .tex file from this computer…", which opens the viewer with its
+ * dialog for choosing a file or a folder (?open). In Chrome and Edge, once the
+ * person allows the extension to "access file URLs", a .tex file opened in the
+ * browser (file://…) is shown in the bundled viewer instead (file-tex.js asks
+ * for it; the toolbar button does the same), which reads the file and the
+ * files it pulls in from beside it (?file=<address>).
+ *
  * HAL and ResearchGate pages do not carry the paper's arXiv id in their
  * address, so sites.js sends what it finds on the page (a HAL id, a DOI, the
  * title) and resolvePaper() looks it up: the HAL API knows the arXiv id of
@@ -36,7 +44,7 @@ if (typeof importScripts === 'function' && typeof TeXglassArxiv === 'undefined')
 
 const api = globalThis.browser || globalThis.chrome;
 
-const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/' };
+const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/', openFiles: true };
 
 const ARXIV_PATHS = ['abs', 'pdf', 'html', 'src', 'e-print'];
 const ALPHAXIV_PATHS = ['abs', 'overview', 'pdf'];
@@ -202,8 +210,12 @@ async function settings() {
  * with its arXiv dialog showing (a bare ?arxiv), ready to search.
  */
 async function viewerUrl(id) {
+  return viewerWith(id ? `?arxiv=${encodeURIComponent(id)}` : '?arxiv');
+}
+
+/** The viewer (the one chosen in the options) with `query`. */
+async function viewerWith(query) {
   const s = await settings();
-  const query = id ? `?arxiv=${encodeURIComponent(id)}` : '?arxiv';
   if (s.viewer === 'web' && /^https?:\/\//i.test(s.webUrl)) {
     const base = new URL(s.webUrl);
     base.search = query;
@@ -213,8 +225,22 @@ async function viewerUrl(id) {
   return api.runtime.getURL('index.html') + query;
 }
 
-async function openViewer(id, tab) {
-  const props = { url: await viewerUrl(id) };
+/** Whether `url` is a .tex file on this computer (file://…/x.tex). */
+function isLocalTex(url) {
+  const u = parseUrl(url);
+  return !!u && u.protocol === 'file:' && /\.(tex|ltx|latex)$/i.test(u.pathname);
+}
+
+/**
+ * The bundled viewer showing the file at file:// address `url`. Always the
+ * bundled one: a website may not read files on this computer.
+ */
+function fileViewerUrl(url) {
+  return api.runtime.getURL('index.html') + '?file=' + encodeURIComponent(url);
+}
+
+async function openViewer(id, tab, url) {
+  const props = { url: url || (await viewerUrl(id)) };
   if (tab && tab.id != null && tab.id >= 0) {
     props.index = tab.index + 1;
     props.openerTabId = tab.id;
@@ -259,6 +285,7 @@ api.action.onClicked.addListener((tab) => {
   const url = tab && tab.url;
   const id = url ? arxivId(url) : null;
   if (url && isOverleafProject(url) && tab.id != null) toggleOverleaf(tab);
+  else if (url && isLocalTex(url)) openViewer(null, tab, fileViewerUrl(url));
   else if (!id && url && isLookupPage(url) && tab.id != null) openFromPage(tab);
   else openViewer(id, tab);
 });
@@ -279,13 +306,20 @@ function createMenus() {
       contexts: ['page', 'frame'],
       documentUrlPatterns: [...PAGE_PATTERNS, ...LOOKUP_PATTERNS],
     });
+    // On the toolbar button's own right-click menu.
+    api.contextMenus.create({
+      id: 'texglass-local',
+      title: 'Open a .tex file from this computer…',
+      contexts: ['action'],
+    });
   });
 }
 
 api.runtime.onInstalled.addListener(createMenus);
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(createMenus);
 
-api.contextMenus.onClicked.addListener((info, tab) => {
+api.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'texglass-local') return openViewer(null, tab, await viewerWith('?open'));
   const url = info.menuItemId === 'texglass-link' ? info.linkUrl : info.frameUrl || info.pageUrl;
   const id = url && arxivId(url);
   if (id) openViewer(id, tab);
@@ -298,6 +332,11 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'texglass-open' && typeof msg.id === 'string') {
     const id = TeXglassArxiv.parseId(msg.id);
     if (id) openViewer(id, sender.tab);
+  } else if (msg && msg.type === 'texglass-open-file' && sender.tab && sender.tab.id != null && isLocalTex(sender.url || msg.url)) {
+    // A .tex file opened in the browser: show it in TeXglass in the same tab (unless turned off in the options).
+    settings().then((s) => {
+      if (s.openFiles !== false) api.tabs.update(sender.tab.id, { url: fileViewerUrl(sender.url || msg.url) });
+    });
   } else if (msg && msg.type === 'texglass-resolve') {
     resolveCached(msg.hints).then((id) => sendResponse({ id }), () => sendResponse({ id: null }));
     return true; // answers asynchronously
@@ -306,5 +345,5 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 if (typeof module === 'object' && module.exports) {
-  module.exports = { arxivId, viewerUrl, isLookupPage, isOverleafProject, arxivIdFromDoi, normalizeTitle, parseArxivFeed, resolvePaper };
+  module.exports = { arxivId, viewerUrl, viewerWith, isLocalTex, fileViewerUrl, isLookupPage, isOverleafProject, arxivIdFromDoi, normalizeTitle, parseArxivFeed, resolvePaper };
 }

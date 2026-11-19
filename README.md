@@ -122,7 +122,11 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   </tr>
 </table>
 
-- **Open** a file (Ctrl+O) or drag it onto the page.
+- **Open** a file (Ctrl+O) or drag it onto the page. To bring in its
+  `\input` files, local packages, bibliography and figures, open or drop its
+  **folder** instead (Shift+click *Open*, or Ctrl+Shift+O), or choose several
+  files at once; TeXglass finds the main file. In Chrome and Edge a folder
+  chosen this way re-renders when you save any of its `.tex` files.
 - The **Contents** button shows the side panel; its **Notation** tab has a
   checkbox that turns notation on hover off and on. The pen button beside the
   light/dark button switches to the handwritten notes look.
