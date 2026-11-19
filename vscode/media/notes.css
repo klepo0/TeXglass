@@ -118,9 +118,14 @@
 :root[data-look="notes"] #preview.document.tg-with-margin {
   padding-right: calc(44px * var(--zoom, 1) + var(--tg-margin-w, 200px) + 20px);
 }
+/* Folded: the sheet gives the room back, keeping a strip for the fold button. */
+:root[data-look="notes"] #preview.document.tg-with-margin.tg-margin-collapsed {
+  padding-right: calc(44px * var(--zoom, 1) + 28px);
+}
 :root[data-look="notes"] .tg-margin { font-family: var(--hand), "Segoe Print", "Comic Sans MS", cursive; font-size: calc(19px * var(--zoom, 1) * var(--hand-scale, 1)); color: var(--ink); }
 @media (max-width: 640px) {
   :root[data-look="notes"] #preview.document.tg-with-margin { padding-right: calc(var(--tg-margin-w, 200px) + 36px); }
+  :root[data-look="notes"] #preview.document.tg-with-margin.tg-margin-collapsed { padding-right: 44px; }
 }
 
 :root[data-look="notes"][data-paper="grid"] #preview.document {
