@@ -98,6 +98,7 @@
       study: false,
       onWidth: (w) => vscode.postMessage({ type: 'side-pref', key: 'texglass:margin-width', value: w }),
       onCollapse: (on) => vscode.postMessage({ type: 'side-pref', key: 'texglass:margin-collapsed', value: on }),
+      onPadMove: (at) => vscode.postMessage({ type: 'side-pref', key: 'texglass:note-pad', value: at }),
     })
     : null;
 
@@ -784,6 +785,7 @@
         if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
         if (margin && m.marginWidth) margin.setWidth(m.marginWidth);
         if (margin) margin.setCollapsed(!!m.marginCollapsed);
+        if (margin && m.notePad) margin.setPadAt(m.notePad);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);

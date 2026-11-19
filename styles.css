@@ -1077,7 +1077,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
   /* The margin column is laid out for the screen: notes float beside the text instead. */
-  .tg-margin, .tg-hlbar, .tg-note-pad, .tg-drop-line { display: none !important; }
+  .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .tg-drop-line { display: none !important; }
   #preview.tg-with-margin { max-width: none !important; padding: 0 !important; }
   .tg-with-margin .mnote > .mnote-body { display: block !important; }
   .tg-with-margin .mnote::before { content: none !important; }
@@ -1402,12 +1402,33 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-hlbar-del { display: none !important; }
 .tg-hlbar-existing .tg-hlbar-del { display: inline-flex !important; }
 
-/* The note pad: drag it onto a line to write a note there. */
-.tg-note-pad {
+/* The note pad: drag it onto a line to write a note there. Its handle on top moves it. */
+.tg-note-dock {
   position: fixed;
   right: 14px;
   bottom: 40px;
   z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.tg-note-dock[hidden] { display: none; }
+.tg-note-dock-grip {
+  width: 22px;
+  height: 10px;
+  margin-bottom: 1px;
+  border-radius: 4px;
+  cursor: move;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: radial-gradient(circle, var(--muted) 1px, transparent 1.4px) 0 0 / 5px 5px;
+  background-position: center;
+}
+.tg-note-dock:hover .tg-note-dock-grip, .tg-note-dock-grip:focus-visible, .tg-note-dock-moving .tg-note-dock-grip { opacity: 0.8; }
+.tg-note-dock-grip:focus { outline: none; }
+.tg-note-dock-grip:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.tg-note-pad {
   display: inline-flex;
   align-items: center;
   justify-content: center;
