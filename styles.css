@@ -335,6 +335,19 @@ img.graphic { max-width: 100%; height: auto; }
 /* The contents can sit on the right of the document instead. */
 body.toc-right .toc-pane { order: 2; border-right: 0; border-left: 1px solid var(--rule); padding: 20px 16px 32px 10px; }
 .toc-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 8px 8px; }
+/* The head row (the tabs) stays at the top while the panel scrolls, so another
+   tab is always one click away. It bleeds over the panel's padding, so nothing
+   peeks out beside or above it, and keeps 6px of that padding once it sticks
+   (sticky offsets count from inside the panel's 20px top padding). */
+.toc-pane > .toc-pane-head {
+  position: sticky;
+  top: -34px;
+  z-index: 2;
+  margin: -20px -10px 8px -16px;
+  padding: 20px 10px 6px 24px;
+  background: var(--bg);
+}
+body.toc-right .toc-pane > .toc-pane-head { margin: -20px -16px 8px -10px; padding: 20px 16px 6px 18px; }
 /* The side panel's tabs: Contents, Notation, Map (src/insight.js sidePanel). */
 .side-tabs { display: flex; flex: 1; gap: 1px; min-width: 0; overflow: hidden; }
 /* When they do not fit on one row, the tabs stack, so none is cut off (sidePanel sets the class). */
