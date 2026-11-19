@@ -27,9 +27,12 @@
  *     study: true,                     // the study tools are on
  *     width: 220,                      // optional: the margin's width in px, as dragged before
  *     onWidth(px) {},                  // its divider was dragged (null: back to automatic)
+ *     collapsed: false,                // optional: start with the margin folded away
+ *     onCollapse(folded) {},           // its fold button was used
  *   });
  *   margin.refresh();                  // after the document was rendered again
  *   margin.setAnnotations(list); margin.setStudy(on);
+ *   margin.setCollapsed(on);           // fold the margin away, or bring it back
  *
  * The anchoring functions (describe, locate) work on plain strings and are
  * exported for tests.
@@ -43,6 +46,7 @@
   const CONTEXT = 32; // characters of text kept before and after a quote
   const COLORS = ['yellow', 'green', 'pink', 'blue'];
   const GAP = 6; // between cards in the margin
+  const FOLD_AT = 70; // the margin's divider dragged narrower than this (px) folds it away
 
   // ---------------------------------------------------------------------------
   // Anchoring in plain text
@@ -287,7 +291,7 @@
     grip.setAttribute('aria-orientation', 'vertical');
     grip.setAttribute('aria-label', 'Resize the margin');
     grip.tabIndex = 0;
-    grip.title = 'Drag to resize the margin · double-click to reset';
+    grip.title = 'Drag to resize the margin, or right to fold it away · double-click to reset';
     layer.appendChild(grip);
     const maxW = () => Math.max(160, Math.round(pane.clientWidth * 0.5));
     const setUserW = (w, save) => {
@@ -301,18 +305,36 @@
       grip.setPointerCapture(e.pointerId);
       const start = e.clientX;
       const width = marginW;
+      const before = userW;
       page.body.classList.add('tg-margin-resizing');
-      const move = (ev) => setUserW(width + start - ev.clientX, false);
+      // Dragged narrower than the narrowest margin, it folds away; back out, it opens again.
+      const move = (ev) => {
+        const want = width + start - ev.clientX;
+        if (want < FOLD_AT) {
+          if (!collapsed) { collapsed = true; layout(); }
+          return;
+        }
+        collapsed = false;
+        setUserW(want, false);
+      };
       const up = () => {
         grip.removeEventListener('pointermove', move);
         grip.removeEventListener('pointerup', up);
         grip.removeEventListener('pointercancel', up);
+        grip.removeEventListener('lostpointercapture', up);
+        if (!page.body.classList.contains('tg-margin-resizing')) return;
         page.body.classList.remove('tg-margin-resizing');
-        setUserW(marginW, true);
+        if (collapsed) {
+          userW = before; // opened again, it has the width it had
+          setCollapsed(true, true, true);
+        } else {
+          setUserW(marginW, true);
+        }
       };
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up);
       grip.addEventListener('pointercancel', up);
+      grip.addEventListener('lostpointercapture', up, { once: true });
     });
     grip.addEventListener('dblclick', () => setUserW(null, true));
     grip.addEventListener('keydown', (e) => {
@@ -320,6 +342,70 @@
       e.preventDefault();
       setUserW(marginW + (e.key === 'ArrowLeft' ? 20 : -20), true);
     });
+
+    // The fold button: it hides the margin, and the text takes the room back. The
+    // notes stay marked in the text (a dot); clicking one brings the margin back.
+    let collapsed = !!opts.collapsed;
+    const toggle = page.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'tg-margin-toggle';
+    const setCollapsed = (on, save, force) => {
+      on = !!on;
+      const was = collapsed;
+      collapsed = on;
+      layout();
+      if (save && (force || was !== on) && opts.onCollapse) opts.onCollapse(on);
+    };
+    // Folded, the button is a handle too: drag it left to pull the margin out.
+    let dragged = false;
+    toggle.addEventListener('pointerdown', (e) => {
+      dragged = false;
+      if (!collapsed || e.button !== 0) return;
+      toggle.setPointerCapture(e.pointerId);
+      const start = e.clientX;
+      const move = (ev) => {
+        const want = start - ev.clientX;
+        if (!dragged && Math.abs(want) < 6) return;
+        dragged = true;
+        page.body.classList.add('tg-margin-resizing');
+        if (want < FOLD_AT) {
+          if (!collapsed) { collapsed = true; layout(); }
+          return;
+        }
+        collapsed = false;
+        setUserW(want, false);
+      };
+      const up = () => {
+        toggle.removeEventListener('pointermove', move);
+        toggle.removeEventListener('pointerup', up);
+        toggle.removeEventListener('pointercancel', up);
+        page.body.classList.remove('tg-margin-resizing');
+        if (!dragged) return;
+        if (collapsed) {
+          layout();
+        } else {
+          setUserW(marginW, true);
+          if (opts.onCollapse) opts.onCollapse(false);
+        }
+      };
+      toggle.addEventListener('pointermove', move);
+      toggle.addEventListener('pointerup', up);
+      toggle.addEventListener('pointercancel', up);
+    });
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (dragged) { dragged = false; return; }
+      setCollapsed(!collapsed, true);
+    });
+    doc.addEventListener('click', (e) => {
+      if (!collapsed || !e.target.closest || !e.target.closest('.mnote')) return;
+      setCollapsed(false, true);
+    });
+    // The button stays in view while the document scrolls.
+    let scrollFrame = 0;
+    pane.addEventListener('scroll', () => {
+      if (!scrollFrame) scrollFrame = win.requestAnimationFrame(() => { scrollFrame = 0; placeToggle(); });
+    }, { passive: true });
 
     const highlights = win.CSS && win.CSS.highlights && typeof win.Highlight === 'function' ? win.CSS.highlights : null;
 
@@ -499,6 +585,7 @@
       cards = texCards().concat(readerCards());
       for (const c of cards) layer.appendChild(c.el);
       layer.appendChild(grip);
+      layer.appendChild(toggle);
       cards.forEach((c) => ro && ro.observe(c.el));
       layout();
     }
@@ -509,11 +596,35 @@
     }
 
     let marginW = 0;
+    function placeToggle() {
+      if (layer.hidden) return;
+      const top = Math.max(0, Math.min(pane.scrollTop + 10, doc.offsetHeight - 30));
+      toggle.style.top = top + 'px';
+    }
+
     function layout() {
       const on = cards.length > 0;
       doc.classList.toggle('tg-with-margin', on);
+      doc.classList.toggle('tg-margin-collapsed', on && collapsed);
+      layer.classList.toggle('tg-margin-folded', collapsed);
       layer.hidden = !on;
       if (!on) return;
+      const n = cards.length;
+      const what = n === 1 ? '1 margin note' : n + ' margin notes';
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.title = collapsed ? 'Show the margin (' + what + ')' : 'Hide the margin';
+      toggle.setAttribute('aria-label', toggle.title);
+      toggle.innerHTML = collapsed
+        ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tg-margin-count">' + n + '</span>'
+        : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      if (collapsed) {
+        // A strip at the right of the text, for the button only.
+        const cs = win.getComputedStyle(doc);
+        layer.style.left = doc.offsetLeft + doc.offsetWidth - parseFloat(cs.paddingRight) + 6 + 'px';
+        layer.style.width = '0px';
+        placeToggle();
+        return;
+      }
       const zoom = (parseFloat(win.getComputedStyle(doc).fontSize) || 18) / 18;
       const w = userW != null
         ? Math.min(userW, maxW())
@@ -527,6 +638,7 @@
       layer.style.width = w + 'px';
       grip.style.height = doc.offsetHeight + 'px';
       grip.setAttribute('aria-valuenow', String(w));
+      placeToggle();
       const want = cards.map((c) => ({ c, y: c.top() }));
       want.sort((a, b) => (a.y == null) - (b.y == null) || a.y - b.y);
       let bottom = -Infinity;
@@ -731,6 +843,7 @@
       const card = layer.querySelector(`.tg-mcard-user[data-id="${id}"]`);
       const a = byId(id);
       if (!card || !a) return;
+      if (collapsed) setCollapsed(false, true);
       editing = id;
       const body = card.querySelector('.tg-mcard-body');
       const ta = page.createElement('textarea');
@@ -935,6 +1048,9 @@
       refresh, setAnnotations, setStudy, layout, notes,
       /** The margin's width in px (null: automatic). */
       setWidth: (w) => setUserW(w > 0 ? w : null, false),
+      /** Fold the margin away (true) or bring it back. */
+      setCollapsed: (on) => setCollapsed(on, false),
+      collapsed: () => collapsed,
       width: () => marginW,
     };
   }

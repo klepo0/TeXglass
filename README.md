@@ -46,7 +46,10 @@ browser extension:
 - **Diagrams drawn**: `tikz-cd`, `xymatrix` and simple TikZ.
 - **Margin notes**: `\marginpar` and `\todo` sit in a margin column beside
   their line. Drag the line between the text and the margin to make the
-  margin wider or narrower; the width is remembered.
+  margin wider or narrower; the width is remembered. Fold the margin away with
+  the small arrow on that line, or by dragging the line all the way right; the
+  notes stay as dots in the text, and clicking one (or dragging the arrow back
+  out) opens the margin again. Whether it is folded is remembered too.
 - **Search** (Ctrl+F), **zoom**, and **light and dark themes**.
 - **No TeX install, no compile step**, and fast on long papers.
 

@@ -13,6 +13,8 @@
       study: false,
       // the margin's width, once its divider was dragged (stored below)
       onWidth: (w) => store.set('texglass:margin-width', w == null ? '' : String(w)),
+      // folded away with its button, or not (stored below)
+      onCollapse: (on) => store.set('texglass:margin-collapsed', on ? '1' : ''),
     })
     : null;
   const source = $('source');
@@ -52,7 +54,10 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
   };
-  if (margin) margin.setWidth(parseFloat(store.get('texglass:margin-width')));
+  if (margin) {
+    margin.setWidth(parseFloat(store.get('texglass:margin-width')));
+    margin.setCollapsed(store.get('texglass:margin-collapsed') === '1');
+  }
 
   // Until November 2026 the viewer was called TeXdown and kept its state under
   // texdown:* keys. Carry those over once, so the last document, folds, theme

@@ -633,6 +633,7 @@ ${INK_FILTERS}
           sideTab: this.context.globalState.get('texglass.sideTab', 'toc'),
           sideWidth: this.context.globalState.get('texglass.sideWidth', null),
           marginWidth: this.context.globalState.get('texglass.marginWidth', null),
+          marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
         });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
@@ -709,6 +710,7 @@ ${INK_FILTERS}
         if (m.key === 'texglass:side-tab') this.context.globalState.update('texglass.sideTab', String(m.value));
         if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
+        if (m.key === 'texglass:margin-collapsed') this.context.globalState.update('texglass.marginCollapsed', !!m.value);
         break;
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);

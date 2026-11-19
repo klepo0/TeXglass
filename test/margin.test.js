@@ -199,3 +199,75 @@ test('the margin\'s divider drags to resize it, and a double-click goes back to 
     await browser.close();
   }
 });
+
+test('the margin folds away with its button or by dragging its divider, and opens again', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1100, height: 700 } });
+    await page.setContent(`<style>${fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8')}</style>` +
+      `<main class="panes"><section class="pane" id="pane"><article id="preview" class="document">${DOC()}</article></section></main>`);
+    await page.addScriptTag({ path: path.join(ROOT, 'src/margin.js') });
+    await page.evaluate(() => {
+      window.folds = [];
+      window.widths = [];
+      window.margin = TeXglassMargin.attach({
+        pane: document.getElementById('pane'),
+        doc: document.getElementById('preview'),
+        width: 200,
+        onWidth: (w) => window.widths.push(w),
+        onCollapse: (on) => window.folds.push(on),
+      });
+      window.margin.refresh();
+    });
+    const state = () => page.evaluate(() => ({
+      folded: window.margin.collapsed(),
+      cards: Array.from(document.querySelectorAll('.tg-mcard')).filter((c) => c.getClientRects().length).length,
+      textRight: Math.round(document.querySelector('#preview p').getBoundingClientRect().right),
+      width: Math.round(document.querySelector('.tg-margin').getBoundingClientRect().width),
+    }));
+    const open = await state();
+    assert.deepEqual([open.folded, open.cards, open.width], [false, 2, 200]);
+
+    // The button folds it: no cards, and the text takes the room back.
+    await page.click('.tg-margin-toggle');
+    const shut = await state();
+    assert.deepEqual([shut.folded, shut.cards], [true, 0]);
+    assert.ok(shut.textRight > open.textRight + 80, 'the text widens: ' + JSON.stringify([open, shut]));
+    assert.match(await page.getAttribute('.tg-margin-toggle', 'title'), /2 margin notes/);
+    assert.deepEqual(await page.evaluate(() => window.folds), [true]);
+
+    // Clicking a note's dot in the text opens it again.
+    await page.evaluate(() => document.querySelector('.mnote-todo').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    assert.equal((await state()).folded, false);
+
+    // Dragging the divider all the way right folds it; the width is kept for later.
+    let box = await page.locator('.tg-margin-grip').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 180, box.y + 40, { steps: 6 });
+    await page.mouse.up();
+    assert.equal((await state()).folded, true);
+    assert.deepEqual(await page.evaluate(() => window.folds), [true, false, true]);
+    assert.deepEqual(await page.evaluate(() => window.widths), []);
+
+    // Dragging the folded button left pulls the margin out to that width.
+    box = await page.locator('.tg-margin-toggle').boundingBox();
+    await page.mouse.move(box.x + 4, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 4 - 240, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+    const pulled = await state();
+    assert.equal(pulled.folded, false);
+    assert.ok(Math.abs(pulled.width - 240) <= 2, 'pulled out to ' + pulled.width);
+    assert.equal(pulled.cards, 2);
+    assert.deepEqual(await page.evaluate(() => window.folds), [true, false, true, false]);
+
+    // The host can fold it (a remembered state) without being told back.
+    await page.evaluate(() => window.margin.setCollapsed(true));
+    assert.equal((await state()).folded, true);
+    assert.equal(await page.evaluate(() => window.folds.length), 4);
+  } finally {
+    await browser.close();
+  }
+});

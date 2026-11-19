@@ -97,6 +97,7 @@
       }),
       study: false,
       onWidth: (w) => vscode.postMessage({ type: 'side-pref', key: 'texglass:margin-width', value: w }),
+      onCollapse: (on) => vscode.postMessage({ type: 'side-pref', key: 'texglass:margin-collapsed', value: on }),
     })
     : null;
 
@@ -752,6 +753,7 @@
         (m.folds || []).forEach((k) => folded.add(k));
         if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
         if (margin && m.marginWidth) margin.setWidth(m.marginWidth);
+        if (margin) margin.setCollapsed(!!m.marginCollapsed);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);
