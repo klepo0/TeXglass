@@ -149,12 +149,158 @@
     return (doc.ownerDocument || doc).getElementById(id);
   }
 
+  // --- mentions without a link: "Lemma 2.3" typed by hand, "the previous lemma" ---
+
+  // Short forms of the words that name results.
+  const ABBR = {
+    thm: 'theorem', thms: 'theorem', th: 'theorem', lem: 'lemma', lemm: 'lemma', lemmata: 'lemma', prop: 'proposition', props: 'proposition',
+    cor: 'corollary', coro: 'corollary', cors: 'corollary', def: 'definition', defn: 'definition', defs: 'definition', rem: 'remark', rmk: 'remark',
+    conj: 'conjecture', ass: 'assumption', assump: 'assumption', hyp: 'hypothesis', hypotheses: 'hypothesis', ex: 'example', exa: 'example',
+    obs: 'observation', cl: 'claim', eq: null, eqn: null, eqs: null, sec: null, fig: null, ch: null, chap: null, app: null,
+  };
+
+  /** The word a result's name starts with, in lower case: "lemma" for "Lemma 2.3". */
+  const wordOf = (name) => (/^[A-Za-zÀ-ÿ]+/.exec(name) || [''])[0].toLowerCase();
+
+  /** Does a word typed in the text ("Lemmas", "Prop.", "thm") name results called word ("proposition")? */
+  function kindMatches(typed, word) {
+    if (!word) return false;
+    const t = typed.toLowerCase().replace(/\.$/, '');
+    if (Object.prototype.hasOwnProperty.call(ABBR, t)) return ABBR[t] === word;
+    if (t === word || t === word + 's' || t === word + 'es') return true;
+    if (word.endsWith('y') && t === word.slice(0, -1) + 'ies') return true; // corollaries
+    // a shortened word with its dot: "Coroll.", "Propos."
+    return typed.endsWith('.') && t.length >= 3 && word.startsWith(t);
+  }
+
+  const NUM = '[A-Z]?\\d+(?:\\.\\d+)*[a-z]?';
+  // "Theorem 2.3", "Lemmas 4.1, 4.2 and 4.5", "Prop. 3.1"
+  const NUMBERED = new RegExp(`\\b([A-Za-z]{2,}\\.?)[\\s\\u00a0~]*(${NUM}(?:\\s*(?:,|and|&|or|–|-)\\s*${NUM})*)(?![\\w.]*\\d)`, 'g');
+  // "the previous lemma", "the lemma above", "the next proposition"
+  const RELATIVE = /\b(?:the|this|that)?\s*(previous|preceding|above|last|foregoing|aforementioned|following|next|below)\s+([A-Za-z]{2,}\.?)|\bthe\s+([A-Za-z]{2,}\.?)\s+(above|below)\b/gi;
+  const BACK = /^(previous|preceding|above|last|foregoing|aforementioned)$/i;
+  // what makes "Theorem 2.1" someone else's: "of [5]", "in Smith's paper", "from the book"
+  const ELSEWHERE = /^\s*(?:\([^)]{0,30}\)\s*)?(?:of|in|from)\s+(?:†|\[|ref\b|reference|the\s+(?:paper|work|article|book|monograph|survey|preprint|notes|thesis)|[A-Z][a-z]+(?:'s|\s+et\s+al|\s+and\s+[A-Z]))/;
+  const CITE_MARK = '†'; // a citation, in the text read below
+  const LINK_MARK = '‡'; // a link already followed
+
   /**
-   * Which results refer to which: { nodes, byEl }, each node being
-   * { el, id, name, note, kind, style, uses: Set(node), usedBy: Set(node), order }.
-   * A result uses whatever its statement and its proof refer to. A proof
-   * belongs to the result its heading names ("Proof of Theorem 2"), else to
-   * the result just before it.
+   * The words of a block, as one string: formulas, links and citations stand
+   * as placeholders, so that nothing inside them reads as a mention.
+   */
+  function wordsOf(scope, skip) {
+    let s = '';
+    const walk = (node) => {
+      for (let c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { s += c.data; continue; }
+        if (c.nodeType !== 1) continue;
+        if (skip && skip(c)) { s += ' '; continue; }
+        const cl = c.classList;
+        if (cl.contains('cite')) s += ` ${CITE_MARK} `;
+        else if (c.tagName === 'A') s += ` ${LINK_MARK} `;
+        else if (cl.contains('math') || cl.contains('katex') || cl.contains('thm-name') || cl.contains('proof-head') || c.tagName === 'SUP') s += ' • ';
+        else {
+          walk(c);
+          if (/^(P|DIV|LI|TD|TR|BR|TABLE|UL|OL|DT|DD)$/.test(c.tagName)) s += ' • ';
+        }
+      }
+    };
+    walk(scope);
+    return s.replace(/\s+/g, ' ');
+  }
+
+  /**
+   * The results a block mentions without a link: [{ node, why }].
+   * at(rel, word) finds the result before ('back') or after ('on') the block
+   * that a relative mention means.
+   */
+  function mentionsIn(text, byNumber, at) {
+    const out = [];
+    let m;
+    NUMBERED.lastIndex = 0;
+    while ((m = NUMBERED.exec(text))) {
+      const word = m[1];
+      if (/^(and|or|of|in|see|by|to|the|from|with|on|at|for|as|are|is|be|we|it)$/i.test(word.replace(/\.$/, ''))) continue;
+      const before = text.slice(Math.max(0, m.index - 4), m.index);
+      if (new RegExp(`${CITE_MARK}\\s*,?\\s*$`).test(before)) continue; // "[5], Theorem 2" is the cited paper's
+      if (ELSEWHERE.test(text.slice(m.index + m[0].length, m.index + m[0].length + 60))) continue;
+      for (const num of m[2].split(/\s*(?:,|and|&|or)\s*/)) {
+        const range = /^(.+?)\s*[–-]\s*(.+)$/.exec(num);
+        for (const n of range ? [range[1], range[2]] : [num]) {
+          const node = byNumber.get(n.trim());
+          if (node && kindMatches(word, wordOf(node.name))) out.push({ node, why: `${word} ${n.trim()}` });
+        }
+      }
+    }
+    RELATIVE.lastIndex = 0;
+    while ((m = RELATIVE.exec(text))) {
+      const where = m[1] || m[4];
+      const word = m[2] || m[3];
+      const node = at(BACK.test(where) ? 'back' : 'on', word);
+      if (node) out.push({ node, why: m[0].trim() });
+    }
+    return out;
+  }
+
+  /** The text of an element as read on the page (KaTeX's hidden MathML left out). */
+  function plainText(el) {
+    let s = '';
+    const walk = (node) => {
+      for (let c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) s += c.data;
+        else if (c.nodeType === 1 && !c.classList.contains('katex-mathml') && !c.classList.contains('uses-btn')) walk(c);
+      }
+    };
+    walk(el);
+    return s.trim().replace(/\s+/g, ' ');
+  }
+
+  /** A result's section: the chapter (or section) heading it sits under. */
+  function sectionsOf(doc, nodes) {
+    const top = doc.querySelector('h1.chapter, h2.chapter') ? 'chapter' : 'section';
+    const heads = Array.from(doc.querySelectorAll(`.${top}[id], h1.appendix[id], h2.appendix[id]`))
+      .filter((h) => /^H[1-6]$/.test(h.tagName) && !h.closest(INSIDE_POPOVER));
+    const sections = [];
+    let k = 0;
+    let cur = null;
+    for (const n of nodes) {
+      while (k < heads.length && heads[k].compareDocumentPosition(n.el) & 4) {
+        const h = heads[k++];
+        const num = h.querySelector('.secnum');
+        const title = plainText(h);
+        const numText = num ? num.textContent.trim() : '';
+        cur = { id: h.id, num: numText, title: numText ? title.slice(numText.length).trim() : title, order: sections.length };
+        sections.push(cur);
+      }
+      n.section = cur;
+    }
+    return sections;
+  }
+
+  /** "[3] Hairer": a short name for an entry of the bibliography. */
+  function citeName(li) {
+    const lab = li.querySelector('.bib-label');
+    const label = lab ? lab.textContent.trim() : '[?]';
+    const body = li.querySelector('.bib-body') || li;
+    const text = body.textContent.trim().replace(/\s+/g, ' ');
+    const first = text.split(/,|\band\b|:/)[0].trim();
+    // "M. Hairer" → "Hairer"; "Hairer" → "Hairer"
+    const words = first.split(' ').filter((w) => !/\.$/.test(w) || w.length > 3);
+    let who = words.length ? words[words.length - 1] : '';
+    if (who.length > 16) who = who.slice(0, 15) + '…';
+    return { label, who: who.replace(/[.;]$/, '') };
+  }
+
+  /**
+   * Which results refer to which: { nodes, byEl, cites, sections }, each node being
+   * { el, id, name, note, kind, style, uses: Set(node), usedBy: Set(node), order,
+   *   edges: Map(node → { statement, proof, guessed, why }), cites: Map(cite → { statement, proof }),
+   *   section, proofs, refs }.
+   * A result uses whatever its statement and its proof refer to: links to other
+   * results, links to equations inside them or inside their proofs, and, as
+   * guessed links, results named by hand ("Lemma 2.3", "the previous lemma").
+   * A proof belongs to the result its heading names ("Proof of Theorem 2"), else
+   * to the result just before it. Cited works are { el, id, label, who, usedBy, order }.
    */
   function dependencyGraph(doc) {
     const byEl = new Map();
@@ -165,57 +311,150 @@
         n = {
           el, id: el.id, name: thmName(el), note: thmNote(el), kind: kindOf(el), style: styleOf(el), uses: new Set(), usedBy: new Set(), order: nodes.length,
           proofs: [], refs: { statement: new Set(), proof: new Set() }, // its proofs, and the equations, figures… it refers to
+          edges: new Map(), cites: new Map(), section: null,
         };
         byEl.set(el, n);
         nodes.push(n);
       }
       return n;
     };
-    const resultOf = (target) => {
-      const t = target && target.closest('.theorem[id]');
-      return t && !t.closest(INSIDE_POPOVER) ? t : null;
-    };
-    const addRefs = (owner, scope, skip, part) => {
-      for (const a of scope.querySelectorAll('a.ref[href^="#"]')) {
-        if (skip && skip(a)) continue;
-        const target = targetOf(a, doc);
-        const t = resultOf(target);
-        if (!t && target && !/^H[1-6]$/.test(target.tagName) && !target.closest('section > h1, section > h2') && !target.closest(INSIDE_POPOVER)) {
-          owner.refs[part].add(target); // an equation, a figure, a numbered item
-        }
-        if (!t || t === owner.el) continue;
-        const dep = nodeOf(t);
-        owner.uses.add(dep);
-        dep.usedBy.add(owner);
-      }
-    };
+    const blocks = Array.from(doc.querySelectorAll('.theorem[id], .proof')).filter((el) => !el.closest(INSIDE_POPOVER));
+    for (const el of blocks) if (el.classList.contains('theorem')) nodeOf(el);
+    nodes.sort((a, b) => (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
+    nodes.forEach((n, k) => { n.order = k; });
+    const byNumber = new Map(); // "2.3" → the result numbered so, when only one is
+    for (const n of nodes) {
+      const num = n.el.dataset.number || (/\s([A-Z]?\d[\w.]*)$/.exec(n.name) || [])[1];
+      if (!num) continue;
+      byNumber.set(num, byNumber.has(num) ? null : n);
+    }
+
+    // Whose is each proof
+    const ownerOf = new Map(); // proof → node
     let last = null;
-    for (const el of doc.querySelectorAll('.theorem[id], .proof')) {
-      if (el.closest(INSIDE_POPOVER)) continue;
-      if (el.classList.contains('theorem')) {
-        last = nodeOf(el);
-        addRefs(last, el, (a) => {
-          const p = a.closest('.proof, .theorem');
-          return p !== el && el.contains(p); // a nested proof or result counts for itself
-        }, 'statement');
-        continue;
-      }
+    for (const el of blocks) {
+      if (el.classList.contains('theorem')) { last = byEl.get(el); continue; }
       const head = el.querySelector('.proof-head');
       let owner = null;
       if (head && head.closest('.proof') === el) {
         for (const a of head.querySelectorAll('a.ref[href^="#"]')) {
-          const t = resultOf(targetOf(a, doc));
-          if (t) { owner = nodeOf(t); break; }
+          const t = targetOf(a, doc);
+          const r = t && t.closest('.theorem[id]');
+          if (r && byEl.has(r)) { owner = byEl.get(r); break; }
+        }
+        if (!owner && !head.querySelector('a.ref')) {
+          // "Proof of Theorem 1.3", typed by hand
+          const found = mentionsIn(head.textContent.replace(/\s+/g, ' '), byNumber, () => null);
+          if (found.length) owner = found[0].node;
         }
       }
       if (!owner) owner = last;
       if (!owner) continue;
+      ownerOf.set(el, owner);
       owner.proofs.push(el);
-      addRefs(owner, el, (a) => head && head.contains(a), 'proof');
     }
-    nodes.sort((a, b) => (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
-    nodes.forEach((n, k) => { n.order = k; });
-    return { nodes, byEl };
+
+    /** The result a link's target belongs to: the result itself, or the one whose proof holds it. */
+    const resultOf = (target) => {
+      if (!target || target.closest(INSIDE_POPOVER)) return null;
+      const t = target.closest('.theorem[id], .proof');
+      if (!t) return null;
+      return t.classList.contains('theorem') ? byEl.get(t) || null : ownerOf.get(t) || null;
+    };
+    const link = (owner, dep, part, guessed, why) => {
+      if (!dep || dep === owner) return;
+      let e = owner.edges.get(dep);
+      if (!e) {
+        e = { statement: false, proof: false, guessed: true, why: '' };
+        owner.edges.set(dep, e);
+        owner.uses.add(dep);
+        dep.usedBy.add(owner);
+      }
+      e[part] = true;
+      if (!guessed) e.guessed = false;
+      else if (!e.why) e.why = why;
+    };
+    const citeByEl = new Map(); // bibliography entry, or "key:Smith14" for a key with no entry on the page
+    const cites = [];
+    const citeOf = (li, key) => {
+      let c = citeByEl.get(li || 'key:' + key);
+      if (!c) {
+        c = li
+          ? Object.assign({ el: li, id: li.id, usedBy: new Set(), order: cites.length, cite: true }, citeName(li))
+          : { el: null, id: null, usedBy: new Set(), order: cites.length, cite: true, label: key.length > 18 ? key.slice(0, 17) + '…' : key, who: '' };
+        citeByEl.set(li || 'key:' + key, c);
+        cites.push(c);
+      }
+      return c;
+    };
+    const cite = (owner, c, part) => {
+      const e = owner.cites.get(c) || { statement: false, proof: false };
+      e[part] = true;
+      owner.cites.set(c, e);
+      c.usedBy.add(owner);
+    };
+    const read = (owner, scope, skip, part) => {
+      for (const a of scope.querySelectorAll('a[href^="#"]')) {
+        if (skip(a)) continue;
+        const target = targetOf(a, doc);
+        if (!target || target.closest(INSIDE_POPOVER)) continue;
+        if (a.closest('.cite')) {
+          const li = target.closest('li');
+          if (li && li.id) cite(owner, citeOf(li), part);
+          continue;
+        }
+        if (!a.classList.contains('ref')) continue;
+        const dep = resultOf(target);
+        if (!target.closest('.theorem[id]') && !/^H[1-6]$/.test(target.tagName) && !target.closest('section > h1, section > h2')) {
+          owner.refs[part].add(target); // an equation, a figure, a numbered item
+        }
+        link(owner, dep, part, false);
+      }
+      // citations of works the page has no entry for (no .bib or .bbl): by their keys
+      for (const k of scope.querySelectorAll('.cite .cite-key')) {
+        if (skip(k)) continue;
+        const key = k.textContent.trim();
+        if (key) cite(owner, citeOf(null, key), part);
+      }
+      // results named without a link
+      const text = wordsOf(scope, skip);
+      if (!/[A-Za-z]{2,}\.?[\s\u00a0~]*[A-Z]?\d|previous|preceding|above|last|foregoing|aforementioned|following|next|below/i.test(text)) return;
+      // the result a relative mention means, before or after this block
+      let here = null; // where the block sits among the results
+      const at = (dir, word) => {
+        if (here == null) {
+          here = 0;
+          while (here < nodes.length && (nodes[here].el.compareDocumentPosition(scope) & 4 || nodes[here].el === scope)) here++;
+        }
+        const fits = (n) => n !== owner && !n.el.contains(scope) && (/^results?$/i.test(word) ? n.style === 'plain' : kindMatches(word, wordOf(n.name)));
+        if (dir === 'back') {
+          for (let k = here - 1; k >= 0; k--) if (fits(nodes[k])) return nodes[k];
+        } else {
+          for (let k = here; k < nodes.length; k++) if (fits(nodes[k])) return nodes[k];
+        }
+        return null;
+      };
+      for (const { node, why } of mentionsIn(text, byNumber, at)) link(owner, node, part, true, why);
+    };
+    for (const el of blocks) {
+      if (el.classList.contains('theorem')) {
+        const owner = byEl.get(el);
+        read(owner, el, (x) => {
+          const p = x.closest('.proof, .theorem');
+          return p !== el && el.contains(p); // a nested proof or result counts for itself
+        }, 'statement');
+        continue;
+      }
+      const owner = ownerOf.get(el);
+      if (!owner) continue;
+      const head = el.querySelector('.proof-head');
+      read(owner, el, (x) => !!head && head.contains(x), 'proof');
+    }
+    // in the bibliography's order, keys without an entry after them
+    cites.sort((a, b) => (a.el && b.el ? (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1) : a.el ? -1 : b.el ? 1 : a.order - b.order));
+    cites.forEach((c, k) => { c.order = k; });
+    const sections = sectionsOf(doc, nodes);
+    return { nodes, byEl, cites, sections };
   }
 
   /**
@@ -317,91 +556,273 @@
   // The dependency map, as an SVG
   // ---------------------------------------------------------------------------
 
+  /** Small results that serve a bigger one: lemmas, claims, steps. */
+  const SMALL = /^(lemma|lem|lemm|claim|sublemma|step|fact|observation|obs|technical)$/i;
+  const isSmall = (n) => SMALL.test(n.kind) || SMALL.test(wordOf(n.name));
+
   /**
-   * Lay the results that refer to one another out in columns, left to right:
-   * a result sits one column right of everything it uses.
+   * Chains of small lemmas that only serve one result: Map(root → [lemmas]),
+   * the lemmas in document order. A lemma folds into a result when everything
+   * that uses it folds into that result too; a group needs two lemmas or more.
    */
-  function layout(graph) {
-    const nodes = graph.nodes.filter((n) => n.uses.size || n.usedBy.size);
+  function foldGroups(graph) {
+    const memo = new Map();
+    const into = (n) => {
+      if (memo.has(n)) return memo.get(n);
+      memo.set(n, n); // a cycle stops here
+      let r = n;
+      if (isSmall(n) && n.usedBy.size) {
+        let t;
+        for (const u of n.usedBy) {
+          const x = into(u);
+          if (t === undefined) t = x;
+          else if (t !== x) { t = null; break; }
+        }
+        if (t && t !== n) r = t;
+      }
+      memo.set(n, r);
+      return r;
+    };
+    const groups = new Map();
+    for (const n of graph.nodes) {
+      const r = into(n);
+      if (r === n) continue;
+      if (!groups.has(r)) groups.set(r, []);
+      groups.get(r).push(n);
+    }
+    for (const [r, list] of groups) if (list.length < 2) groups.delete(r);
+    return groups;
+  }
+
+  /**
+   * Lay the map out: results in columns, left to right, a result one column right
+   * of everything it uses; cited works in the first column. With sections on,
+   * each section of the paper is a band across the map. Folded lemmas are drawn
+   * as their result.
+   *
+   *   o.cites      draw cited works as leaves
+   *   o.sections   group by section
+   *   o.fold       fold chains of small lemmas into the result they serve
+   *   o.expanded   Set of ids of results whose folded lemmas are shown anyway
+   */
+  function layout(graph, o) {
+    o = o || {};
+    const groups = o.fold ? foldGroups(graph) : new Map();
+    const foldedInto = new Map(); // lemma → the result drawn for it
+    for (const [r, list] of groups) {
+      if (o.expanded && o.expanded.has(r.id)) continue;
+      for (const m of list) foldedInto.set(m, r);
+    }
+    const drawnOf = (n) => foldedInto.get(n) || n;
+    const showCites = !!o.cites && graph.cites && graph.cites.length > 0;
+
+    // the edges between what is drawn, merged: [{ a, b, statement, proof, guessed, cite }]
+    const edgeMap = new Map();
+    const key = (x) => (x.cite ? 'c' + x.order : String(x.order));
+    const addEdge = (a, b, e, cite) => {
+      if (a === b) return;
+      const k = key(a) + '>' + key(b);
+      let d = edgeMap.get(k);
+      if (!d) {
+        d = { a, b, statement: false, proof: false, guessed: true, cite: !!cite };
+        edgeMap.set(k, d);
+      }
+      d.statement = d.statement || !!e.statement;
+      d.proof = d.proof || !!e.proof;
+      if (!e.guessed) d.guessed = false;
+    };
+    for (const n of graph.nodes) {
+      const b = drawnOf(n);
+      for (const [dep, e] of n.edges) addEdge(drawnOf(dep), b, e);
+      if (showCites) for (const [c, e] of n.cites) addEdge(c, b, { statement: e.statement, proof: e.proof, guessed: false }, true);
+    }
+    const edges = Array.from(edgeMap.values());
+    const into = new Map(); // drawn thing → [edges into it]
+    const has = new Set();
+    for (const e of edges) {
+      has.add(e.a);
+      has.add(e.b);
+      if (!into.has(e.b)) into.set(e.b, []);
+      into.get(e.b).push(e);
+    }
+    const nodes = graph.nodes.filter((n) => has.has(n));
+    const cites = showCites ? graph.cites.filter((c) => has.has(c)) : [];
+
+    // columns
     const col = new Map();
     const visiting = new Set();
     const colOf = (n) => {
       if (col.has(n)) return col.get(n);
+      if (n.cite) { col.set(n, 0); return 0; }
       if (visiting.has(n)) return 0; // a cycle: break it here
       visiting.add(n);
       let c = 0;
-      for (const d of n.uses) c = Math.max(c, colOf(d) + 1);
+      for (const e of into.get(n) || []) c = Math.max(c, colOf(e.a) + 1);
       visiting.delete(n);
       col.set(n, c);
       return c;
     };
     nodes.forEach(colOf);
-    const cols = [];
-    for (const n of nodes) (cols[col.get(n)] || (cols[col.get(n)] = [])).push(n);
+    cites.forEach(colOf);
+
+    // bands: one per section, in the paper's order, or one for everything
+    const sectionOf = new Map();
+    for (const n of nodes) sectionOf.set(n, n.section || null);
+    for (const c of cites) {
+      // a cited work sits with the first result that cites it
+      let first = null;
+      for (const e of edges) if (e.a === c && (!first || e.b.order < first.order)) first = e.b;
+      sectionOf.set(c, first ? first.section || null : null);
+    }
+    const used = new Set(sectionOf.values());
+    const grouped = !!o.sections && used.size > 1;
+    const bands = [];
+    if (grouped) {
+      if (used.has(null)) bands.push({ section: null, items: [] });
+      for (const s of graph.sections || []) if (used.has(s)) bands.push({ section: s, items: [] });
+    } else bands.push({ section: null, items: [] });
+    const bandOf = new Map(bands.map((b) => [b.section, b]));
+    for (const x of [...cites, ...nodes]) (grouped ? bandOf.get(sectionOf.get(x)) : bands[0]).items.push(x);
+
     const ROW = 34;
     const H = 24;
-    const width = (n) => Math.min(190, 18 + n.name.length * 7.2);
-    const y = new Map();
-    let x = 12;
+    const LABEL = grouped ? 20 : 0;
+    const shownFold = new Map(); // result → the lemmas folded into it, on this map
+    for (const [r, list] of groups) if (has.has(r) && !(o.expanded && o.expanded.has(r.id))) shownFold.set(r, list);
+    const width = (n) => (n.cite ? Math.min(150, 16 + (n.label.length + n.who.length + 1) * 6.6) : Math.min(190, 18 + n.name.length * 7.2) + (shownFold.has(n) ? 26 : 0));
+    const ncols = Math.max(0, ...Array.from(col.values())) + 1;
+    const colW = new Array(ncols).fill(0);
+    for (const [n, c] of col) colW[c] = Math.max(colW[c], width(n));
     const xs = new Map();
-    let height = 0;
-    cols.forEach((list) => {
-      if (!list) return;
-      // order by where the results they use sit, then by document order
-      const bary = (n) => {
-        let s = 0;
-        let k = 0;
-        for (const d of n.uses) if (y.has(d)) { s += y.get(d); k++; }
-        return k ? s / k : null;
-      };
-      const keyed = list.map((n) => ({ n, b: bary(n) }));
-      keyed.sort((a, b) => (a.b == null || b.b == null ? a.n.order - b.n.order : a.b - b.b || a.n.order - b.n.order));
-      let next = 12;
-      let w = 0;
-      for (const { n, b } of keyed) {
-        const top = Math.max(next, b == null ? next : Math.round(b));
-        y.set(n, top);
-        xs.set(n, x);
-        next = top + ROW;
-        w = Math.max(w, width(n));
-      }
-      height = Math.max(height, next);
-      x += w + 70;
-    });
-    return { nodes, x: xs, y, width, H, size: { w: Math.max(x - 58, 200), h: Math.max(height, 40) } };
+    const colX = [];
+    let x = 12;
+    for (let c = 0; c < ncols; c++) {
+      colX[c] = x;
+      if (colW[c]) x += colW[c] + 70;
+    }
+    const y = new Map();
+    let top = 8;
+    for (const band of bands) {
+      band.y0 = top;
+      const start = top + LABEL + 4;
+      let bottom = start;
+      const cols = [];
+      for (const n of band.items) (cols[col.get(n)] || (cols[col.get(n)] = [])).push(n);
+      cols.forEach((list) => {
+        if (!list) return;
+        // order by where the things they use sit (in this band), then by document order
+        const bary = (n) => {
+          let s = 0;
+          let k = 0;
+          for (const e of into.get(n) || []) if (y.has(e.a) && y.get(e.a) >= start) { s += y.get(e.a); k++; }
+          return k ? s / k : null;
+        };
+        const keyed = list.map((n) => ({ n, b: bary(n) }));
+        keyed.sort((a, b) => (a.b == null || b.b == null ? a.n.order - b.n.order : a.b - b.b || a.n.order - b.n.order));
+        let next = start;
+        for (const { n, b } of keyed) {
+          const t = Math.max(next, b == null ? next : Math.round(b));
+          y.set(n, t);
+          xs.set(n, colX[col.get(n)]);
+          next = t + ROW;
+        }
+        bottom = Math.max(bottom, next);
+      });
+      band.y1 = bottom;
+      top = bottom + (grouped ? 6 : 0);
+      band.label = band.section
+        ? (band.section.num ? `§${band.section.num} ` : '') + band.section.title
+        : grouped ? 'Before the first section' : '';
+      if (band.label.length > 60) band.label = band.label.slice(0, 58) + '…';
+      delete band.items;
+    }
+    return {
+      nodes, cites, edges, x: xs, y, width, H, bands: grouped ? bands : [], grouped,
+      drawnOf, foldedInto, groups, shownFold,
+      size: { w: Math.max(x - 58, 200), h: Math.max(top + 4, 40) },
+    };
   }
 
   function mapSvg(lay) {
     const parts = [];
     const { H } = lay;
-    for (const n of lay.nodes) {
-      for (const d of n.uses) {
-        if (!lay.x.has(d)) continue;
-        const x1 = lay.x.get(d) + lay.width(d);
-        const y1 = lay.y.get(d) + H / 2;
-        const x2 = lay.x.get(n);
-        const y2 = lay.y.get(n) + H / 2;
-        const back = x2 <= x1;
-        const dx = back ? 40 : Math.max(24, (x2 - x1) / 2);
-        parts.push(`<path class="dep-edge" data-from="${d.order}" data-to="${n.order}" d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 4},${y2}" marker-end="url(#dep-arrow)"/>`);
-      }
-    }
-    for (const n of lay.nodes) {
-      const w = lay.width(n);
-      const label = n.name.length > 24 ? n.name.slice(0, 23) + '…' : n.name;
-      const main = /^(theorem|thm|maintheorem|mainthm|corollary|cor)$/i.test(n.kind) ? ' dep-main' : '';
+    const k = (x) => (x.cite ? 'c' + x.order : String(x.order));
+    const w = lay.size.w + 12;
+    lay.bands.forEach((b, i) => {
       parts.push(
-        `<g class="dep-node dep-${n.style}${main}" data-n="${n.order}" tabindex="0" role="button" aria-label="${esc(n.name + (n.note ? ' (' + n.note + ')' : ''))}">` +
-          `<rect x="${lay.x.get(n)}" y="${lay.y.get(n)}" width="${w}" height="${H}" rx="5"/>` +
-          `<text x="${lay.x.get(n) + w / 2}" y="${lay.y.get(n) + H / 2 + 4.5}" text-anchor="middle">${esc(label)}</text></g>`
+        `<g class="dep-band${i % 2 ? ' dep-band-odd' : ''}"${b.section ? ` data-sec="${esc(b.section.id)}"` : ''}><rect x="2" y="${b.y0}" width="${w - 4}" height="${b.y1 - b.y0}" rx="6"/>` +
+          `<text x="10" y="${b.y0 + 14}">${esc(b.label)}</text></g>`
+      );
+    });
+    for (const e of lay.edges) {
+      const d = e.a;
+      const n = e.b;
+      if (!lay.x.has(d) || !lay.x.has(n)) continue;
+      const x1 = lay.x.get(d) + lay.width(d);
+      const y1 = lay.y.get(d) + H / 2;
+      const x2 = lay.x.get(n);
+      const y2 = lay.y.get(n) + H / 2;
+      const back = x2 <= x1;
+      const dx = back ? 40 : Math.max(24, (x2 - x1) / 2);
+      const cls = 'dep-edge' + (e.cite ? ' dep-cite-edge' : e.proof ? ' dep-proof' : ' dep-stmt') + (e.guessed && !e.cite ? ' dep-guess' : '');
+      parts.push(`<path class="${cls}" data-from="${k(d)}" data-to="${k(n)}" d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 4},${y2}" marker-end="url(#dep-arrow)"/>`);
+    }
+    for (const c of lay.cites) {
+      const cw = lay.width(c);
+      const label = `${c.label} ${c.who}`.trim();
+      parts.push(
+        `<g class="dep-node dep-citenode" data-c="${c.order}" tabindex="0" role="button" aria-label="${esc('Cited work ' + label)}">` +
+          `<rect x="${lay.x.get(c)}" y="${lay.y.get(c)}" width="${cw}" height="${H}" rx="${H / 2}"/>` +
+          `<text x="${lay.x.get(c) + cw / 2}" y="${lay.y.get(c) + H / 2 + 4.5}" text-anchor="middle">${esc(label.length > 22 ? label.slice(0, 21) + '…' : label)}</text></g>`
       );
     }
+    for (const n of lay.nodes) {
+      const nw = lay.width(n);
+      const label = n.name.length > 24 ? n.name.slice(0, 23) + '…' : n.name;
+      const main = /^(theorem|thm|maintheorem|mainthm|corollary|cor)$/i.test(n.kind) ? ' dep-main' : '';
+      const x = lay.x.get(n);
+      const y = lay.y.get(n);
+      const folded = lay.shownFold.get(n);
+      const tw = folded ? nw - 26 : nw;
+      parts.push(
+        `<g class="dep-node dep-${n.style}${main}${folded ? ' dep-has-fold' : ''}" data-n="${n.order}" tabindex="0" role="button" aria-label="${esc(n.name + (n.note ? ' (' + n.note + ')' : '') + (folded ? `, with ${folded.length} lemmas folded in` : ''))}">` +
+          `<rect x="${x}" y="${y}" width="${nw}" height="${H}" rx="5"/>` +
+          `<text x="${x + tw / 2}" y="${y + H / 2 + 4.5}" text-anchor="middle">${esc(label)}</text></g>`
+      );
+      if (folded) {
+        parts.push(
+          `<g class="dep-fold" data-fold="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(`Show the ${folded.length} lemmas folded into ${n.name}`)}">` +
+            `<rect x="${x + nw - 25}" y="${y + 4}" width="21" height="${H - 8}" rx="${(H - 8) / 2}"/>` +
+            `<text x="${x + nw - 14.5}" y="${y + H / 2 + 4}" text-anchor="middle">+${folded.length}</text></g>`
+        );
+      } else if (lay.groups.has(n) && lay.x.has(n)) {
+        // folding is on and this result's lemmas are out: a small button folds them back
+        parts.push(
+          `<g class="dep-fold dep-unfold" data-fold="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc(`Fold the lemmas that only serve ${n.name} back into it`)}">` +
+            `<rect x="${x + nw + 3}" y="${y + 5}" width="15" height="${H - 10}" rx="${(H - 10) / 2}"/>` +
+            `<text x="${x + nw + 10.5}" y="${y + H / 2 + 4}" text-anchor="middle">−</text></g>`
+        );
+      }
+    }
     return (
-      `<svg class="dep-map" width="${lay.size.w + 12}" height="${lay.size.h}" viewBox="0 0 ${lay.size.w + 12} ${lay.size.h}" xmlns="http://www.w3.org/2000/svg">` +
+      `<svg class="dep-map" width="${w}" height="${lay.size.h}" viewBox="0 0 ${w} ${lay.size.h}" xmlns="http://www.w3.org/2000/svg">` +
       '<defs><marker id="dep-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="dep-arrowhead"/></marker></defs>' +
       parts.join('') +
       '</svg>'
     );
+  }
+
+  /** The key for the legend under a map: how each kind of line looks. */
+  function legendHtml(lay) {
+    const line = (cls) => `<svg width="34" height="10" aria-hidden="true"><path class="dep-edge ${cls}" d="M2,5 L32,5"/></svg>`;
+    const items = [];
+    const any = (f) => lay.edges.some(f);
+    if (any((e) => !e.cite && e.proof && !e.guessed)) items.push(`${line('dep-proof')} used in a proof`);
+    if (any((e) => !e.cite && !e.proof && !e.guessed)) items.push(`${line('dep-stmt')} named in a statement`);
+    if (any((e) => !e.cite && e.guessed)) items.push(`${line('dep-proof dep-guess')} guessed from the wording (no link)`);
+    if (lay.cites.length) items.push('<span class="dep-key-cite" aria-hidden="true"></span> cited work');
+    if (lay.shownFold.size) items.push('<span class="dep-key-fold" aria-hidden="true">+2</span> lemmas folded in (pick to show)');
+    return items.length ? `<div class="dep-legend">${items.map((i) => `<span>${i}</span>`).join('')}</div>` : '';
   }
 
   /** Everything n uses, directly or not (dir 'uses'), or everything that uses it ('usedBy'). */
@@ -410,6 +831,23 @@
     const stack = [n];
     while (stack.length) {
       for (const m of stack.pop()[dir]) if (!out.has(m) && m !== n) { out.add(m); stack.push(m); }
+    }
+    return out;
+  }
+
+  /** As closure(), but only along links written in the text, not guessed ones. */
+  function explicitClosure(n, dir) {
+    const out = new Set();
+    const stack = [n];
+    const sure = (a, b) => { const e = a.edges && a.edges.get(b); return e && !e.guessed; }; // a uses b
+    while (stack.length) {
+      const x = stack.pop();
+      for (const m of x[dir]) {
+        if (out.has(m) || m === n) continue;
+        if (!(dir === 'uses' ? sure(x, m) : sure(m, x))) continue;
+        out.add(m);
+        stack.push(m);
+      }
     }
     return out;
   }
@@ -605,13 +1043,22 @@
     // the rendered statement, made only when the pointer rests on a node.
 
     function showResult(g, view) {
-      const n = view.body._nodes && view.body._nodes[Number(g.dataset.n)];
+      const n = g.dataset.c != null ? view.body._cites && view.body._cites[Number(g.dataset.c)] : view.body._nodes && view.body._nodes[Number(g.dataset.n)];
       if (!n || !n.el || !n.el.isConnected) return;
       const body = document_.createElement('div');
       body.className = 'ref-popover-body dep-preview';
       const text = document_.createElement('div');
       text.className = 'document dep-preview-text';
-      text.appendChild(copyOf(n.el));
+      if (n.cite) {
+        // an entry of the bibliography, kept in a list of its own
+        const list = document_.createElement('ol');
+        list.className = 'dep-preview-bib';
+        list.appendChild(copyOf(n.el));
+        const sec = document_.createElement('section');
+        sec.className = 'bibliography';
+        sec.appendChild(list);
+        text.appendChild(sec);
+      } else text.appendChild(copyOf(n.el));
       body.appendChild(text);
       // a modal dialog sits above the page, so the preview goes inside it there
       const host = g.closest('dialog') || document_.body;
@@ -720,21 +1167,40 @@
           unfocus();
           return;
         }
+        const fold = e.target.closest('[data-fold]');
+        if (fold) {
+          e.preventDefault();
+          hidePop();
+          toggleFold(view, fold.dataset.fold);
+          return;
+        }
         const node = e.target.closest('.dep-node, [data-pick]');
         if (node) {
           e.preventDefault();
-          pick(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
+          if (node.dataset.c != null) selectCite(view, Number(node.dataset.c));
+          else pick(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
         }
       });
       body.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const fold = e.target.closest && e.target.closest('.dep-fold');
+        if (fold) { e.preventDefault(); toggleFold(view, fold.dataset.fold); return; }
         const node = e.target.closest && e.target.closest('.dep-node');
-        if (node && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(view, Number(node.dataset.n)); }
+        if (!node) return;
+        e.preventDefault();
+        if (node.dataset.c != null) selectCite(view, Number(node.dataset.c));
+        else pick(view, Number(node.dataset.n));
       });
       body.addEventListener('input', (e) => {
         if (e.target.matches('.insight-filter')) filterNotation(view, e.target.value);
       });
       body.addEventListener('change', (e) => {
         if (e.target.matches('.insight-hover input')) setHover(e.target.checked, true);
+        if (e.target.matches('.dep-opts input[data-opt]')) {
+          mapOpts[e.target.dataset.opt] = e.target.checked;
+          if (e.target.dataset.opt === 'fold') for (const v of views) v.expanded = new Set();
+          for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
+        }
       });
       wirePreviews(view);
       views.add(view);
@@ -795,27 +1261,63 @@
       });
     }
 
+    // How maps are drawn, shared by every map on show: cited works as leaves,
+    // bands for sections, and small lemmas folded into the result they serve
+    // (null: when the map is big).
+    const mapOpts = { cites: true, sections: true, fold: null };
+    const FOLD_FROM = 14; // results on a map before lemmas fold by themselves
+
     function fillDeps(view) {
       const body = view.body;
       const g = getGraph();
-      const lay = layout(g);
-      if (!lay.nodes.length) {
-        body.innerHTML = '<p class="insight-empty">No result in this document refers to another one, so there is nothing to map. (The map is drawn from the \\ref and \\cref links in statements and proofs.)</p>';
+      if (!view.expanded) view.expanded = new Set();
+      const linked = g.nodes.filter((n) => n.uses.size || n.usedBy.size || n.cites.size);
+      const fold = mapOpts.fold != null ? mapOpts.fold : linked.filter((n) => n.uses.size || n.usedBy.size).length > FOLD_FROM;
+      const lay = layout(g, { cites: mapOpts.cites, sections: mapOpts.sections, fold, expanded: view.expanded });
+      view.lay = lay;
+      body._nodes = g.nodes;
+      body._cites = g.cites;
+      if (!lay.nodes.length && !lay.cites.length) {
+        body.innerHTML = '<p class="insight-empty">No result in this document refers to another one, so there is nothing to map. (The map is drawn from the \\ref and \\cref links in statements and proofs, from results named by hand such as “Lemma 2.3” or “the previous lemma”, and from citations.)</p>';
         return;
       }
-      let edges = 0;
-      lay.nodes.forEach((n) => { edges += n.uses.size; });
+      let links = 0;
+      let guessed = 0;
+      for (const n of g.nodes) for (const e of n.edges.values()) { links++; if (e.guessed) guessed++; }
+      const counts = `${linked.length} result${linked.length === 1 ? '' : 's'}, ${links} link${links === 1 ? '' : 's'} between them` +
+        (guessed ? ` (${guessed} guessed from the wording)` : '') +
+        (g.cites.length ? `, ${g.cites.length} cited work${g.cites.length === 1 ? '' : 's'}` : '');
+      const box = (k, label, on, title) => `<label title="${esc(title)}"><input type="checkbox" data-opt="${k}"${on ? ' checked' : ''}> ${label}</label>`;
+      const opts_ = [];
+      if (g.sections.length > 1) opts_.push(box('sections', 'Sections', mapOpts.sections, 'Group the results by the section they sit in'));
+      if (g.cites.length) opts_.push(box('cites', 'Citations', mapOpts.cites, 'Show the works cited in statements and proofs'));
+      if (foldGroups(g).size) opts_.push(box('fold', 'Fold lemmas', fold, 'Fold chains of lemmas that serve only one result into that result'));
+      const controls = opts_.length ? `<div class="dep-opts">${opts_.join('')}</div>` : '';
       body.innerHTML = view.side
-        ? `<p class="insight-lead">${lay.nodes.length} results, ${edges} references. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on. <a href="#" class="dep-larger">Larger map</a></p>` +
-          `<div class="dep-wrap">${mapSvg(lay)}</div><div class="dep-detail" aria-live="polite"></div>`
-        : `<p class="insight-lead">${lay.nodes.length} results and ${edges} references between them, read from the \\ref and \\cref links in statements and proofs. ` +
+        ? `<p class="insight-lead">${counts}. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on. <a href="#" class="dep-larger">Larger map</a></p>` +
+          controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`
+        : `<p class="insight-lead">${counts}, read from the links in statements and proofs, from results named by hand, and from citations. ` +
           'Each arrow goes from a result to one that uses it. Pick a result to light up what it rests on and what rests on it.</p>' +
-          `<div class="dep-wrap">${mapSvg(lay)}</div><div class="dep-detail" aria-live="polite"></div>`;
-      body._nodes = g.nodes;
+          controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`;
       view.synced = false;
       if (focusState && syncMap(view)) return;
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
+      else if (view.selectedCite != null && g.cites[view.selectedCite]) selectCite(view, view.selectedCite);
       else body.querySelector('.dep-detail').innerHTML = '<p class="insight-muted">No result picked.</p>';
+    }
+
+    /** Fold or unfold the lemmas folded into the result with this id, on one map. */
+    function toggleFold(view, id) {
+      if (!view.expanded) view.expanded = new Set();
+      if (view.expanded.has(id)) {
+        view.expanded.delete(id);
+        // a lemma picked inside the group gives way to the result it folds into
+        const nodes = view.body._nodes || [];
+        const root = nodes.find((n) => n.id === id);
+        const list = root && view.lay && view.lay.groups.get(root);
+        if (list && view.selected != null && list.includes(nodes[view.selected])) view.selected = root.order;
+      } else view.expanded.add(id);
+      fillDeps(view);
     }
 
     /**
@@ -829,60 +1331,33 @@
       else select(view, k);
     }
 
-    /**
-     * Light up result k on a map and what it rests on and what rests on it, or,
-     * with dir ('uses' | 'usedBy', from "What does this use?"), only that side.
-     */
-    function select(view, k, dir) {
+    /** What a key on the map (data-n, data-from…) stands for: a result, or "c3", a cited work. */
+    const thingOf = (body, key) => (String(key)[0] === 'c' ? body._cites[Number(String(key).slice(1))] : body._nodes[Number(key)]);
+
+    /** Light up these on a map: { sel, up: Set, down: Set }, results or cited works, as drawn. */
+    function lightMap(view, sel, up, down) {
       const body = view.body;
-      const nodes = body._nodes;
-      const n = nodes && nodes[k];
-      if (!n) return;
-      view.selected = k;
-      view.synced = !!dir;
-      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses');
-      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy');
       const svg = body.querySelector('.dep-map');
+      const lay = view.lay;
+      const drawn = (set) => new Set(Array.from(set, (m) => (m.cite ? m : lay.drawnOf(m))));
+      const U = drawn(up);
+      const D = drawn(down);
+      U.delete(sel);
+      D.delete(sel);
       svg.classList.add('dep-picked');
-      svg.classList.toggle('dep-synced', !!dir);
       svg.querySelectorAll('.dep-node').forEach((g) => {
-        const m = nodes[Number(g.dataset.n)];
-        g.classList.toggle('dep-sel', m === n);
-        g.classList.toggle('dep-up', up.has(m));
-        g.classList.toggle('dep-down', down.has(m));
+        const m = thingOf(body, g.dataset.c != null ? 'c' + g.dataset.c : g.dataset.n);
+        g.classList.toggle('dep-sel', m === sel);
+        g.classList.toggle('dep-up', U.has(m));
+        g.classList.toggle('dep-down', D.has(m));
       });
       svg.querySelectorAll('.dep-edge').forEach((p) => {
-        const a = nodes[Number(p.dataset.from)];
-        const b = nodes[Number(p.dataset.to)];
-        const on = ((up.has(a) || a === n) && (up.has(b) || b === n)) || ((down.has(a) || a === n) && (down.has(b) || b === n));
+        const a = thingOf(body, p.dataset.from);
+        const b = thingOf(body, p.dataset.to);
+        const on = ((U.has(a) || a === sel) && (U.has(b) || b === sel)) || ((D.has(a) || a === sel) && (D.has(b) || b === sel));
         p.classList.toggle('dep-lit', on);
       });
-      const list = (set) => set.size
-        ? Array.from(set).sort((a, b) => a.order - b.order).map((m) => `<a href="#" data-pick="${m.order}">${esc(m.name)}</a>`).join(', ')
-        : '<span class="insight-muted">nothing</span>';
-      const indirect = (all, direct) => {
-        const rest = new Set(Array.from(all).filter((m) => !direct.has(m)));
-        return rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${list(rest)}` : '';
-      };
-      const detail = body.querySelector('.dep-detail');
-      const lit = focusState && focusState.id === n.id;
-      detail.innerHTML =
-        `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
-        (lit
-          ? ` <span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
-          : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
-        `<p><span class="insight-usedby-k">Uses</span> ${list(n.uses)}${indirect(up, n.uses)}</p>` +
-        `<p><span class="insight-usedby-k">Used in</span> ${list(n.usedBy)}${indirect(down, n.usedBy)}</p>`;
-      const go = detail.querySelector('.dep-go');
-      go.dataset.go = '';
-      go._target = n.el;
-      const fb = detail.querySelector('.dep-focus');
-      if (fb) fb.addEventListener('click', (e) => {
-        e.preventDefault();
-        view.leave();
-        focus(n.el, 'uses', true);
-      });
-      const node = svg.querySelector(`.dep-node[data-n="${k}"] rect`);
+      const node = svg.querySelector(sel.cite ? `.dep-node[data-c="${sel.order}"] rect` : `.dep-node[data-n="${sel.order}"] rect`);
       const wrap = body.querySelector('.dep-wrap');
       if (node && wrap) {
         // bring the node into the map's own scroll box, without scrolling anything else
@@ -893,10 +1368,113 @@
       }
     }
 
+    /** "Lemma 2.1 (guessed)": a list of results to pick, each with how it is linked. */
+    function pickList(set, edgeOf) {
+      if (!set.size) return '<span class="insight-muted">nothing</span>';
+      return Array.from(set).sort((a, b) => a.order - b.order).map((m) => {
+        const e = edgeOf && edgeOf(m);
+        let tag = '';
+        if (e && e.guessed) tag = ` <span class="dep-tag dep-tag-guess" title="${esc(`No link in the text: guessed from “${e.why}”`)}">guessed</span>`;
+        else if (e && !e.proof) tag = ' <span class="dep-tag" title="Named in the statement, not in a proof">statement</span>';
+        return `<a href="#" data-pick="${m.order}"${e && e.guessed ? ' class="dep-l-guess"' : ''}>${esc(m.name)}</a>${tag}`;
+      }).join(', ');
+    }
+
+    /**
+     * Light up result k on a map and what it rests on and what rests on it, or,
+     * with dir ('uses' | 'usedBy', from "What does this use?"), only that side.
+     */
+    function select(view, k, dir) {
+      const body = view.body;
+      const nodes = body._nodes;
+      const n = nodes && nodes[k];
+      if (!n || !view.lay) return;
+      if (view.lay.foldedInto.has(n)) {
+        // folded into a bigger result: unfold it there first
+        view.expanded.add(view.lay.foldedInto.get(n).id);
+        view.selected = k;
+        view.selectedCite = null;
+        fillDeps(view);
+        return;
+      }
+      view.selected = k;
+      view.selectedCite = null;
+      view.synced = !!dir;
+      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses');
+      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy');
+      // the works cited by what it rests on
+      const cited = new Set();
+      if (dir !== 'usedBy') for (const m of [n, ...up]) for (const c of m.cites.keys()) cited.add(c);
+      const svg = body.querySelector('.dep-map');
+      if (!svg) return;
+      svg.classList.toggle('dep-synced', !!dir);
+      lightMap(view, n, new Set([...up, ...cited]), down);
+      const indirect = (all, direct) => {
+        const rest = new Set(Array.from(all).filter((m) => !direct.has(m)));
+        return rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${pickList(rest)}` : '';
+      };
+      const detail = body.querySelector('.dep-detail');
+      const lit = focusState && focusState.id === n.id;
+      const folded = view.lay.shownFold.get(n);
+      const cites = Array.from(n.cites.keys()).sort((a, b) => a.order - b.order);
+      detail.innerHTML =
+        `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
+        (lit
+          ? ` <span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
+          : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
+        `<p><span class="insight-usedby-k">Uses</span> ${pickList(n.uses, (m) => n.edges.get(m))}${indirect(up, n.uses)}</p>` +
+        `<p><span class="insight-usedby-k">Used in</span> ${pickList(n.usedBy, (m) => m.edges.get(n))}${indirect(down, n.usedBy)}</p>` +
+        (cites.length ? `<p><span class="insight-usedby-k">Cites</span> ${cites.map((c) => (c.el ? `<a href="#" data-cite="${c.order}">${esc(`${c.label} ${c.who}`.trim())}</a>` : `<span>${esc(c.label)}</span>`)).join(', ')}</p>` : '') +
+        (folded ? `<p><span class="insight-usedby-k">Folded in</span> ${pickList(new Set(folded))} <a href="#" data-fold="${esc(n.id)}">Show them</a></p>` : '');
+      const go = detail.querySelector('.dep-go');
+      go.dataset.go = '';
+      go._target = n.el;
+      detail.querySelectorAll('a[data-cite]').forEach((a) => {
+        a.dataset.go = '';
+        a._target = body._cites[Number(a.dataset.cite)].el;
+      });
+      const fb = detail.querySelector('.dep-focus');
+      if (fb) fb.addEventListener('click', (e) => {
+        e.preventDefault();
+        view.leave();
+        focus(n.el, 'uses', true);
+      });
+    }
+
+    /** Light up a cited work on a map, and the results that rest on it. */
+    function selectCite(view, k) {
+      const body = view.body;
+      const c = body._cites && body._cites[k];
+      if (!c || !view.lay || !body.querySelector(`.dep-node[data-c="${k}"]`)) return;
+      view.selected = null;
+      view.selectedCite = k;
+      view.synced = false;
+      const down = new Set();
+      for (const u of c.usedBy) {
+        down.add(u);
+        for (const m of closure(u, 'usedBy')) down.add(m);
+      }
+      body.querySelector('.dep-map').classList.remove('dep-synced');
+      lightMap(view, c, new Set(), down);
+      const direct = new Set(c.usedBy);
+      const rest = new Set(Array.from(down).filter((m) => !direct.has(m)));
+      const detail = body.querySelector('.dep-detail');
+      detail.innerHTML =
+        `<div class="dep-detail-head"><strong>${esc(`${c.label} ${c.who}`.trim())}</strong> <span class="insight-muted">${c.el ? 'cited work' : 'cited work, not in the bibliography on this page'}</span>${c.el ? ' <a href="#" class="dep-go">Go to it</a>' : ''}</div>` +
+        `<p><span class="insight-usedby-k">Cited in</span> ${pickList(direct)}` +
+        (rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${pickList(rest)}` : '') + '</p>';
+      const go = detail.querySelector('.dep-go');
+      if (go) {
+        go.dataset.go = '';
+        go._target = c.el;
+      }
+    }
+
     /** A map with nothing picked. */
     function clearPick(view, note) {
       const body = view.body;
       view.selected = null;
+      view.selectedCite = null;
       view.synced = false;
       const svg = body.querySelector('.dep-map');
       if (svg) {
@@ -919,6 +1497,13 @@
         return false;
       }
       const n = nodes.find((m) => m.id === focusState.id);
+      const drawn = n && view.lay && view.lay.drawnOf(n);
+      if (n && drawn !== n) {
+        // folded into a bigger result: unfold it, then light it up
+        view.expanded.add(drawn.id);
+        fillDeps(view);
+        return true;
+      }
       if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) select(view, n.order, focusState.dir);
       else clearPick(view, `${esc(focusState.name)} is lit up in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
       view.synced = true;
@@ -1068,7 +1653,7 @@
 
     function clearMarks() {
       if (!focusState) return;
-      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head');
+      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess');
       doc.classList.remove('uses-focus', 'uses-collapse');
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
@@ -1079,15 +1664,21 @@
       clearMarks();
       hidePop();
       const g = getGraph();
-      const n = g.byEl.get(el) || { el, name: thmName(el), proofs: [], refs: { statement: new Set(), proof: new Set() }, uses: new Set(), usedBy: new Set() };
+      const n = g.byEl.get(el) || { el, name: thmName(el), proofs: [], refs: { statement: new Set(), proof: new Set() }, uses: new Set(), usedBy: new Set(), edges: new Map(), cites: new Map() };
       const others = Array.from(closure(n, dir)).sort((a, b) => a.order - b.order);
+      // reached only through a link guessed from the wording ("the previous lemma")
+      const sure = explicitClosure(n, dir);
+      const guessed = others.filter((m) => !sure.has(m));
       const keep = new Map(); // element -> class
       keep.set(el, 'uses-sel');
       for (const p of n.proofs) keep.set(p, 'uses-sel');
-      for (const m of others) if (!keep.has(m.el)) keep.set(m.el, 'uses-on');
+      for (const m of others) if (!keep.has(m.el)) keep.set(m.el, sure.has(m) ? 'uses-on' : 'uses-on uses-guess');
       if (dir === 'uses') {
         const refs = new Set([...n.refs.statement, ...n.refs.proof]);
         for (const m of others) for (const r of m.refs.statement) refs.add(r);
+        // the works it cites, and those cited in the statements of what it uses
+        for (const c of n.cites.keys()) if (c.el) refs.add(c.el);
+        for (const m of others) for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
         for (const r of refs) {
           const b = blockOf(r);
           if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
@@ -1101,7 +1692,7 @@
       const walk = (node) => {
         for (const c of node.children) {
           const cls = keep.get(c);
-          if (cls) { c.classList.add(cls); marked.push(c); }
+          if (cls) { c.classList.add(...cls.split(' ')); marked.push(c); }
           else if (lit.has(c)) walk(c);
           else if (!c.classList.contains('uses-btn')) {
             c.classList.add('uses-fade');
@@ -1114,7 +1705,7 @@
       doc.classList.add('uses-focus');
       doc.classList.toggle('uses-collapse', collapseRest);
       const stops = [el].concat(others.map((m) => m.el));
-      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length };
+      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, guessed: guessed.length };
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       showBar();
       syncMaps();
@@ -1174,11 +1765,12 @@
       const what = f.dir === 'uses'
         ? (f.count ? `uses ${f.count} result${f.count > 1 ? 's' : ''}` : 'uses no other numbered result')
         : (f.count ? `is used in ${f.count} result${f.count > 1 ? 's' : ''}` : 'is not used in any numbered result');
+      const guess = f.guessed ? ` <span class="uses-guessed" title="Named in the text without a link (“the previous lemma”, “Lemma 2.3”), so TeXglass guessed which result is meant. These have a dashed outline.">(${f.guessed} guessed)</span>` : '';
       const step = f.stops.length > 1
         ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
         : '';
       bar.innerHTML =
-        `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}</span>` +
+        `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}${guess}</span>` +
         `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
         `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button></span>` +
         step +
@@ -1332,7 +1924,7 @@
     };
   }
 
-  const api = { attach, sidePanel, dependencyGraph, notationIndex, definedSymbol, layout };
+  const api = { attach, sidePanel, dependencyGraph, notationIndex, definedSymbol, layout, foldGroups, mentionsIn };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassInsight = api;
 })(typeof self !== 'undefined' ? self : this);

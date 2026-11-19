@@ -35,7 +35,9 @@ browser extension:
 - **What does this use?**: the small button by a theorem's heading lights up
   the results it rests on, directly or not, its proof and the equations it
   cites, and fades the rest of the page. Switch to **Used in** for the other
-  direction, step through them, or press Esc to end it. The Map tab has the
+  direction, step through them, or press Esc to end it. Results reached only
+  through a guessed link (see the Map below) get a dashed outline, and the
+  cited works light up in the bibliography. The Map tab has the
   same thing as **Show what it uses**.
 - **Go to** any theorem, equation or section by number (Ctrl+G).
 - **Notation on hover**: rest the pointer on a formula to see where its
@@ -47,6 +49,13 @@ browser extension:
   preview also says where a result is used). Rest the pointer on a result in
   the map, small or large, to preview its statement. Drag its edge to make it wider;
   the width is remembered, and on a narrow panel the tabs stack.
+  The map also reads results named without a link ("Lemma 2.3" typed by
+  hand, "the previous lemma"), drawn dashed as guesses, and links a cited
+  equation to the result it sits in, or whose proof holds it. Solid lines are
+  used in a proof, dotted ones only named in a statement; cited works
+  (`\cite`) are leaves. Results are grouped by section, and chains of
+  lemmas that serve a single result fold into it (+3 on the result shows
+  them) once the map is big.
 - **Handwritten notes look**, beside the light/dark button: notes on squared
   paper, or chalk on a board in the dark theme. All of it is worked out when you first ask for it, so rendering is
   not slowed down.

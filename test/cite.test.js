@@ -277,9 +277,9 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
 
     // The map, when shown, lights up the same: Lemma 1.2 and what it uses, not what uses it.
     const map = () => p.evaluate(() => ({
-      sel: Array.from(document.querySelectorAll('.dep-node.dep-sel')).map((g) => g.textContent),
-      up: Array.from(document.querySelectorAll('.dep-node.dep-up')).map((g) => g.textContent),
-      down: Array.from(document.querySelectorAll('.dep-node.dep-down')).map((g) => g.textContent),
+      sel: Array.from(document.querySelectorAll('.dep-node[data-n].dep-sel')).map((g) => g.textContent),
+      up: Array.from(document.querySelectorAll('.dep-node[data-n].dep-up')).map((g) => g.textContent),
+      down: Array.from(document.querySelectorAll('.dep-node[data-n].dep-down')).map((g) => g.textContent),
       picked: !!document.querySelector('.dep-map.dep-picked'),
       detail: document.querySelector('.dep-detail').textContent,
     }));

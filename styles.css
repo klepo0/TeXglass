@@ -748,6 +748,36 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .dep-node.dep-up rect { stroke: var(--accent); stroke-width: 2; }
 .dep-node.dep-down rect { stroke: var(--warn); stroke-width: 2; }
 .dep-detail { padding: 10px 2px 0; line-height: 1.6; }
+/* Kinds of link: used in a proof (solid), named in a statement (dotted),
+   guessed from the wording (dashed, lighter), to a cited work (thin). */
+.dep-edge.dep-stmt { stroke-dasharray: 1.5 3; stroke-linecap: round; stroke-width: 1.5; }
+.dep-edge.dep-guess { stroke-dasharray: 6 4; stroke-linecap: butt; stroke-width: 1.1; opacity: 0.45; }
+.dep-edge.dep-cite-edge { stroke-width: 0.8; opacity: 0.4; }
+.dep-picked .dep-edge.dep-lit.dep-guess { opacity: 0.7; }
+.dep-node.dep-citenode rect { fill: var(--bg); stroke: var(--rule); stroke-dasharray: 3 2; }
+.dep-node.dep-citenode text { fill: var(--muted); font-style: italic; font-size: 11px; }
+.dep-node.dep-citenode.dep-sel text { fill: var(--paper); }
+.dep-band rect { fill: var(--ink); opacity: 0.025; }
+.dep-band.dep-band-odd rect { opacity: 0.055; }
+.dep-band text { fill: var(--muted); font-size: 11px; letter-spacing: 0.02em; }
+.dep-fold { cursor: pointer; outline: none; }
+.dep-fold rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.dep-fold text { fill: var(--accent); font-size: 10.5px; font-weight: 600; }
+.dep-fold:hover rect, .dep-fold:focus-visible rect { stroke-width: 2; }
+.dep-node.dep-has-fold rect { stroke-width: 2; }
+.dep-opts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.dep-opts label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.dep-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 6px 2px 0; font-size: 12px; color: var(--muted); }
+.dep-legend > span { display: inline-flex; align-items: center; gap: 4px; }
+.dep-legend svg { overflow: visible; }
+.dep-legend .dep-edge { opacity: 0.9; }
+.dep-key-cite { display: inline-block; width: 26px; height: 11px; border: 1px dashed var(--muted); border-radius: 6px; }
+.dep-key-fold { display: inline-block; padding: 0 5px; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 600; line-height: 13px; }
+.dep-tag { font-size: 0.78em; color: var(--muted); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+.dep-tag-guess { border-style: dashed; }
+.dep-detail a.dep-l-guess { text-decoration-style: dashed; }
+.dep-preview-bib { list-style: none; margin: 0; padding: 0; }
+.dep-preview-text .bibliography { margin: 0; border: 0; padding: 0; }
 .dep-detail p { margin: 4px 0; }
 .dep-detail-head { font-size: 15px; }
 .dep-go { margin-left: 10px; font-size: 13px; }
@@ -769,6 +799,7 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .insight-side .insight-lead { font-size: 12px; margin: 0 0 8px; }
 .insight-side .dep-wrap { max-height: 55vh; }
 .insight-side .dep-detail { font-size: 13px; }
+.insight-side .dep-opts, .insight-side .dep-legend { font-size: 11.5px; }
 .insight-side .dep-detail-head { font-size: 14px; }
 
 /* Click a formula to copy its LaTeX (src/copytex.js). */
@@ -1516,6 +1547,9 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }
+/* reached only through a link guessed from the wording */
+.uses-focus .uses-on.uses-guess { outline-style: dashed; }
+.uses-guessed { color: var(--muted); font-size: 0.9em; cursor: help; }
 .uses-bar {
   position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 12;
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; max-width: calc(100vw - 32px);
