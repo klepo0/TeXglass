@@ -1246,6 +1246,45 @@ s.xout { text-decoration-thickness: 0.15em; }
 .tg-margin-grip:hover::after, .tg-margin-grip:focus-visible::after, body.tg-margin-resizing .tg-margin-grip::after { background: var(--accent); width: 2px; }
 .tg-margin-grip:focus { outline: none; }
 body.tg-margin-resizing { cursor: col-resize; user-select: none; }
+/* The fold button, on the divider; folded, it waits beside the text with a count. */
+.tg-margin-toggle {
+  position: absolute;
+  top: 10px;
+  left: -21px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 18px;
+  min-width: 16px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--muted);
+  font: 10px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.tg-margin-toggle svg { width: 14px; height: 14px; flex: none; }
+.tg-margin-toggle:hover, .tg-margin-toggle:focus-visible { opacity: 1; color: var(--ink); border-color: var(--accent); }
+.tg-margin-folded .tg-margin-toggle { left: 0; padding: 0 5px 0 1px; opacity: 0.8; }
+.tg-margin-folded .tg-mcard, body:not(.tg-margin-resizing) .tg-margin-folded .tg-margin-grip { display: none; }
+/* Folded: the text takes the room back; the notes stay as dots in the text. */
+#preview.tg-with-margin.tg-margin-collapsed { max-width: calc(760px * var(--zoom, 1) + 28px); padding-right: 44px; }
+.tg-margin-collapsed .mnote { cursor: pointer; }
+.tg-margin-collapsed .mnote:not(.mnote-todo)::before {
+  content: "";
+  display: inline-block;
+  width: 0.35em;
+  height: 0.35em;
+  margin: 0 0.1em;
+  border-radius: 50%;
+  vertical-align: 0.4em;
+  background: var(--muted);
+  opacity: 0.6;
+}
 .tg-mcard {
   position: absolute;
   left: 0;
