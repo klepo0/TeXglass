@@ -66,6 +66,14 @@ test('uses the .bbl when it covers every citation, else the .bib', () => {
   assert.match(pr.text, /From the bib/);
 });
 
+test('an amsrefs .bbl (\\bib records in a bibdiv) is used as it is', () => {
+  const tex = 'x \\cite{a}\n\\bibliography{refs}\n';
+  const bbl = '\\begin{bibdiv}\n\\begin{biblist}\n\\bib{a}{article}{\n  author={Writer, Ada},\n  title={From the amsrefs bbl},\n}\n\\end{biblist}\n\\end{bibdiv}\n';
+  const pr = assemble(P('m.tex'), fsOf({ [P('m.tex')]: tex, [P('m.bbl')]: bbl }));
+  assert.match(pr.text, /\\begin\{bibdiv\}[\s\S]*From the amsrefs bbl/);
+  assert.doesNotMatch(pr.text, /\\bibliography\{refs\}/);
+});
+
 test('biblatex: \\addbibresource and \\printbibliography, alpha labels', () => {
   const files = {
     [P('m.tex')]: '\\addbibresource{refs.bib}\n\\bibliographystyle{alpha}\n\\textcite{x} \\nocite{y}\n\\printbibliography[title=Refs]\n',

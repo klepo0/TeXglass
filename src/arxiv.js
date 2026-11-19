@@ -138,18 +138,20 @@
   /**
    * The thebibliography to put in place of \bibliography / \printbibliography,
    * or '' if the document has one already or there is nothing to build it from.
-   * A BibTeX .bbl is a thebibliography and goes in as it is. biblatex's .bbl
+   * A BibTeX .bbl is a thebibliography and goes in as it is, and so does an
+   * amsrefs .bbl (a bibdiv of \bib records). biblatex's .bbl
    * (written by biber) is not, so it is read and turned into one. Without a .bbl,
    * the .bib files the document names (or, failing that, any in the source) are
    * read and the cited entries listed.
    */
   function bibliographyFor(mainPath, texFiles, text) {
-    if (/\\begin\{thebibliography\}/.test(text)) return '';
+    if (/\\begin\s*\{(thebibliography|bibdiv|biblist)\}/.test(text)) return '';
     const asks = /\\(bibliography|printbibliography|addbibresource)\b/.test(text.replace(/(^|[^\\])%.*$/gm, '$1'));
     const base = mainPath.replace(/\.[^./]+$/, '');
     const bbls = Object.keys(texFiles).filter((n) => /\.bbl$/i.test(n));
     const bbl = bbls.find((n) => n === base + '.bbl') || bbls[0];
-    if (bbl && /\\begin\s*\{thebibliography\}/.test(texFiles[bbl])) return texFiles[bbl];
+    // a BibTeX .bbl, or amsrefs' (\bib records in a bibdiv, drawn by texglass.js)
+    if (bbl && /\\begin\s*\{(thebibliography|bibdiv|biblist)\}/.test(texFiles[bbl])) return texFiles[bbl];
     if (!asks || !Bib) return '';
     const cited = Bib.citedKeys(text);
     const style = Bib.styleOf(text);

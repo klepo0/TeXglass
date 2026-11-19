@@ -101,6 +101,76 @@ test('a title found nowhere gives found: false; no network at all rejects', asyn
   await assert.rejects(Cite.lookup({ text: 'X, “A book nobody indexed”, 1901.', arxiv: null, doi: null, title: 'A book nobody indexed' }, offline));
 });
 
+test('titles that differ a little still match; different papers do not', () => {
+  const sim = Cite.titleSimilarity;
+  assert.ok(sim('Stochastic sewing in Banach spaces', 'Stochastic sewing in Banach space') > 0.95);
+  assert.ok(sim('Robust non-linear filtering', 'Robust nonlinear filtering') > 0.95);
+  // a subtitle added on publication
+  assert.ok(sim('Partial equations of shapes: a rough view on weak solutions', 'Partial equations of shapes: a rough view') >= 0.85);
+  assert.ok(sim('Imaginary flows', 'Flows driven by imaginary paths') < 0.8);
+  assert.ok(sim('Imaginary flows', 'Imaginary flows and homogenisation') < 0.8);
+  assert.deepEqual(Cite.surnamesIn('A. B. Writer, C. van Reader, and Dee, E.'), ['Writer', 'Reader', 'Dee']);
+  assert.deepEqual(Cite.surnamesIn('Ada Writer and Bo Lê'), ['Writer', 'Lê']);
+  assert.equal(Cite.doiIn('https://doi.org/10.1007/978-3-030-01593-0\\_16'), '10.1007/978-3-030-01593-0_16');
+});
+
+/** A DataCite search answer with these arXiv records: [id, title, family names, year]. */
+const dataCite = (...recs) => ({ data: recs.map(([id, title, names, year]) => ({
+  id: '10.48550/arxiv.' + id,
+  attributes: {
+    doi: '10.48550/arxiv.' + id,
+    identifiers: [{ identifier: id, identifierType: 'arXiv' }],
+    creators: names.map((n) => ({ name: `${n}, A.`, familyName: n })),
+    titles: [{ title }],
+    publicationYear: year,
+    descriptions: [{ descriptionType: 'Abstract', description: 'An abstract.' }],
+  },
+})) });
+
+test('a published title that differs from the arXiv one is found among the first author\'s papers', async () => {
+  const text = 'Ada Writer and Bo Reader, Stochastic sewing of imaginary spaces, J. Imag. Math. 3 (2021), 1–20.';
+  const entry = { text, arxiv: null, doi: null, title: 'Stochastic sewing of imaginary spaces' };
+  const { asked, getJson } = canned([
+    // the title search ranks other papers first
+    ['https://api.datacite.org/dois?query=titles.title', dataCite(['2101.00002', 'Sewing machines in imaginary spaces', ['Other'], 2021])],
+    ['https://api.datacite.org/dois?query=creators.name%3A%22Writer%22', dataCite(
+      ['1901.00003', 'Imaginary spaces', ['Writer'], 2019],
+      ['2011.00001', 'Stochastic sewing of imaginary space', ['Writer', 'Reader'], 2020],
+    )],
+  ]);
+  const r = await Cite.lookup(entry, getJson);
+  assert.equal(r.arxiv, '2011.00001');
+  assert.equal(r.abstract, 'An abstract.');
+  assert.match(asked[1], /sort=relevance/);
+  assert.match(decodeURIComponent(asked[1]), /creators\.name:"Writer" AND titles\.title:\(Stochastic OR sewing OR imaginary OR spaces\)/);
+});
+
+test('a near title by someone else, or put on arXiv years later, is not taken', async () => {
+  const text = 'Ada Writer, Existence of imaginary solutions via approximations, Imag. Ann. 7 (1996), 1–9.';
+  const entry = { text, arxiv: null, doi: null, title: 'Existence of imaginary solutions via approximations' };
+  const { getJson } = canned([
+    ['https://api.datacite.org/dois?query=titles.title', dataCite(['2001.00004', 'Existence of imaginary solutions via approximations II', ['Other'], 2020])],
+    ['https://api.datacite.org/dois?query=creators.name', dataCite(['2107.00005', 'Existence of imaginary solutions via approximations. Revisited', ['Writer'], 2021])],
+  ]);
+  const r = await Cite.lookup(entry, getJson);
+  assert.equal(r.arxiv, null);
+});
+
+test('an entry with no title to go on is found among its first author\'s papers of those years', async () => {
+  const text = 'A. Writer, Imaginary flows on rough surfaces. Preprint (2022).';
+  const { asked, getJson } = canned([
+    ['https://api.crossref.org/works?', { message: { items: [{ DOI: '10.1/x', title: ['Something else entirely'] }] } }],
+    ['https://api.datacite.org/dois?query=creators.name', dataCite(
+      ['2203.00006', 'Imaginary flows', ['Writer'], 2022],
+      ['2204.00007', 'Imaginary flows on rough surfaces', ['Writer'], 2022],
+    )],
+    ['https://api.datacite.org/dois/', ARXIV_RECORD],
+  ]);
+  const r = await Cite.lookup({ text, arxiv: null, doi: null, title: '' }, getJson);
+  assert.equal(r.arxiv, '2204.00007');
+  assert.match(decodeURIComponent(asked[1]), /creators\.name:"Writer" AND publicationYear:\[2018 TO 2023\]/);
+});
+
 const DOC = String.raw`\documentclass{article}
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}

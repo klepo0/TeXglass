@@ -237,7 +237,7 @@
     const all = () => Object.values(texFiles).join('\n');
 
     // A .bbl next to the main file, if one was committed.
-    if (!/\\begin\{thebibliography\}/.test(all()) && /\\(bibliography|printbibliography)\b/.test(all())) {
+    if (!/\\begin\s*\{(thebibliography|bibdiv|biblist)\}/.test(all()) && /\\(bibliography|printbibliography)\b/.test(all())) {
       const bblName = name.replace(/\.[^.]+$/, '') + '.bbl';
       const bbl = await get(rawUrl(ref, full(bblName)));
       if (bbl != null) texFiles[bblName] = bbl;

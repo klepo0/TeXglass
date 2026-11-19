@@ -19,6 +19,15 @@
  *   const note = cites.noteFor(li, { onChange() { ... } });   // the <li> of a bibliography entry, or null
  *   cites.decorate(preview);     // after a render: an "Open in TeXglass" button on entries on arXiv
  *
+ * Finding a paper on arXiv: an arXiv id in the entry (arXiv:…, an eprint
+ * field, an arxiv.org link, a 10.48550/arXiv DOI) settles it. Otherwise the
+ * entry's title (or, for a DOI, Crossref's) is searched for among DataCite's
+ * arXiv records, ranked by relevance; failing that, among the first author's
+ * arXiv papers. A near title (a plural, a hyphen, a subtitle apart) counts
+ * only when the first author is among the record's authors and it was not
+ * put on arXiv years after the entry's date. An entry with no title to go on
+ * is matched with a paper of the first author's whose title the entry contains.
+ *
  * decorate() reads only the entries' own text and links (arXiv:…, eprint
  * fields, arxiv.org links, 10.48550/arXiv DOIs). An entry with a DOI or a
  * title but no arXiv id is looked up only when the pointer rests on it, or
@@ -64,7 +73,7 @@
   function doiIn(s) {
     const m = /\b(10\.\d{4,9}\/[^\s"'<>]+)/.exec(String(s || ''));
     if (!m) return null;
-    let d = m[1].replace(/[.,;:]+$/, '');
+    let d = m[1].replace(/\\([_%&#])/g, '$1').replace(/[.,;:]+$/, '');
     // a closing bracket that opens nowhere in the DOI belongs to the text around it
     while (/[)\]]$/.test(d) && (d.split('(').length < d.split(')').length || d.split('[').length < d.split(']').length)) d = d.slice(0, -1);
     try { d = decodeURIComponent(d); } catch (e) { /* keep it */ }
@@ -87,6 +96,76 @@
     const t = norm(title);
     if (t.length < 12 || t.split(' ').length < 2) return false;
     return (' ' + norm(entryText) + ' ').includes(' ' + t + ' ');
+  }
+
+  /** A title squashed to letters and digits: "Non-linear  Lévy-area" -> "nonlinearlevyarea". */
+  const squash = (s) => norm(s).replace(/ /g, '');
+
+  /** Dice similarity of two strings' letter pairs: 1 for the same, near 1 for a plural or a hyphen apart. */
+  function pairSimilarity(a, b) {
+    if (a === b) return 1;
+    if (a.length < 2 || b.length < 2) return 0;
+    const pairs = new Map();
+    for (let i = 0; i < a.length - 1; i++) { const k = a.slice(i, i + 2); pairs.set(k, (pairs.get(k) || 0) + 1); }
+    let n = 0;
+    for (let i = 0; i < b.length - 1; i++) {
+      const k = b.slice(i, i + 2);
+      const c = pairs.get(k);
+      if (c) { n++; pairs.set(k, c - 1); }
+    }
+    return (2 * n) / (a.length + b.length - 2);
+  }
+
+  /**
+   * How alike two titles are, from 0 to 1. Journal and arXiv versions of a
+   * paper often differ a little ("spaces" / "space", "non-linear" /
+   * "nonlinear", a subtitle added on publication), so this is not equality: a
+   * title that runs on past the other, but agrees with it as far as it goes,
+   * counts as 0.85.
+   */
+  function titleSimilarity(a, b) {
+    a = squash(a);
+    b = squash(b);
+    if (!a || !b) return 0;
+    let sim = pairSimilarity(a, b);
+    const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+    if (s.length >= 20 && pairSimilarity(s, l.slice(0, s.length)) >= 0.9) sim = Math.max(sim, 0.85);
+    return sim;
+  }
+
+  /** Family names from a list of authors as printed: "A. Writer, B. van Reader and Cee, D." -> ["Writer", "Reader", "Cee"]. */
+  function surnamesIn(names) {
+    const out = [];
+    for (let piece of String(names || '').replace(/\bet al\b\.?/gi, '').split(/,|;|&|\band\b/)) {
+      const words = piece.trim().split(/\s+/).filter((w) => w && !/\.$/.test(w) && !/^\p{L}$/u.test(w) && !/^(jr|sr|ii|iii|iv)$/i.test(w));
+      const last = (words[words.length - 1] || '').replace(/[^\p{L}'’-]+/gu, '');
+      if (last.length >= 2 && /^\p{Lu}/u.test(last) && !out.includes(last)) out.push(last);
+    }
+    return out;
+  }
+
+  /** The authors' family names, as printed in an entry (the part before its title, else before its year). */
+  function surnamesOf(entry) {
+    const text = entry.text || '';
+    let end = -1;
+    if (entry.title) end = text.indexOf(entry.title);
+    if (end <= 0) {
+      const m = /[:“"‘]|\(?\b(1[89]|20)\d\d\b/.exec(text);
+      end = m ? m.index : Math.min(text.length, 120);
+    }
+    return surnamesIn(text.slice(0, end)).slice(0, 6);
+  }
+
+  /** The year an entry gives (the last one that looks like a year), or null. */
+  function yearOf(text) {
+    const all = String(text || '').match(/\b(?:1[89]|20)\d\d\b/g);
+    return all ? +all[all.length - 1] : null;
+  }
+
+  /** Is this person (a family name) among the record's authors? */
+  function hasAuthor(record, surname) {
+    const n = ' ' + norm(surname) + ' ';
+    return (record.authors || []).some((a) => (' ' + norm(a) + ' ').includes(n));
   }
 
   /**
@@ -126,13 +205,27 @@
 
   const DATACITE_FIELDS = '&fields%5Bdois%5D=doi,titles,creators,publicationYear,descriptions,identifiers';
 
+  /** The words of a piece of text, safe inside a DataCite (Elasticsearch) query. */
+  function words(s, max) {
+    const w = String(s || '').replace(/\\[a-zA-Z]+/g, ' ').match(/[\p{L}\p{N}]+/gu) || [];
+    return w.filter((x) => !/^(and|or|not|to|a|an|the|of|in|on|for|with|by|at|from|via)$/i.test(x)).slice(0, max || 6).join(' ');
+  }
+
   const urls = {
     /** The DataCite record of an arXiv paper (every arXiv paper has a DOI 10.48550/arXiv.<id>). */
     arxiv: (id) => `https://api.datacite.org/dois/${encodeURIComponent('10.48550/arXiv.' + id)}?${DATACITE_FIELDS.slice(1)}`,
     /** arXiv papers with this exact title. */
     arxivTitle: (title) =>
       `https://api.datacite.org/dois?query=${encodeURIComponent('titles.title:"' + title.replace(/["\\]/g, ' ') + '"')}` +
-      `&client-id=arxiv.content&page%5Bsize%5D=5${DATACITE_FIELDS}`,
+      `&client-id=arxiv.content&sort=relevance&page%5Bsize%5D=5${DATACITE_FIELDS}`,
+    /** arXiv papers by this author whose titles share words with this one. */
+    arxivAuthorTitle: (surname, title) =>
+      `https://api.datacite.org/dois?query=${encodeURIComponent(`creators.name:"${words(surname)}"` + (title ? ` AND titles.title:(${words(title, 14).split(' ').join(' OR ')})` : ''))}` +
+      `&client-id=arxiv.content&sort=relevance&page%5Bsize%5D=10${DATACITE_FIELDS}`,
+    /** arXiv papers by this author, around a year. */
+    arxivAuthorYear: (surname, year) =>
+      `https://api.datacite.org/dois?query=${encodeURIComponent(`creators.name:"${words(surname)}"` + (year ? ` AND publicationYear:[${year - 4} TO ${year + 1}]` : ''))}` +
+      `&client-id=arxiv.content&page%5Bsize%5D=50${DATACITE_FIELDS}`,
     /** Crossref's record of a DOI. */
     doi: (doi) => `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
     /** Crossref's best matches for a reference as printed in a bibliography. */
@@ -176,10 +269,14 @@
 
   function fromCrossref(w) {
     const issued = w && w.issued && w.issued['date-parts'] && w.issued['date-parts'][0];
+    let arxiv = null;
+    for (const r of (w.relation && w.relation['has-preprint']) || []) arxiv = arxiv || arxivIdIn(r.id || '');
     return {
+      arxiv,
       doi: w.DOI || null,
       title: plainAbstract((w.title || [])[0] || ''),
       authors: (w.author || []).map(personName).filter(Boolean),
+      surnames: (w.author || []).map((a) => a.family || '').filter(Boolean),
       year: (issued && issued[0]) || null,
       abstract: plainAbstract(w.abstract || ''),
     };
@@ -208,6 +305,7 @@
     const take = (info) => {
       for (const k of ['title', 'year', 'abstract', 'arxiv', 'doi']) if (info[k] && !out[k]) out[k] = info[k];
       if (info.authors && info.authors.length && !out.authors.length) out.authors = info.authors;
+      if (info.surnames && info.surnames.length && !(out.surnames && out.surnames.length)) out.surnames = info.surnames;
       out.found = true;
     };
     let askedCrossref = false;
@@ -226,12 +324,43 @@
       const json = await ask(urls.doi(out.doi));
       if (json && json.message) take(fromCrossref(json.message));
     }
-    // 3. Is it on arXiv? Look for the title among arXiv records.
+    // 3. Is it on arXiv? Look for the title among arXiv records, then among
+    // the first author's papers on arXiv, since a title on arXiv often differs
+    // a little from the published one, and a short title alone ranks the
+    // paper below others that share its words.
     const title = out.title || entry.title;
-    if (!out.arxiv && title) {
-      const json = await ask(urls.arxivTitle(title));
-      const hit = ((json && json.data) || []).map(fromDataCite).find((r) => r.arxiv && norm(r.title) === norm(title));
-      if (hit) take(hit);
+    if (!out.arxiv) {
+      const names = out.surnames && out.surnames.length ? out.surnames : surnamesOf(entry);
+      const first = names[0];
+      const best = (json, score) => {
+        let hit = null;
+        let top = 0;
+        for (const r of ((json && json.data) || []).map(fromDataCite)) {
+          const v = r.arxiv ? score(r) : 0;
+          if (v > top) { top = v; hit = r; }
+        }
+        return hit;
+      };
+      // a match: the same title, or a near one by the same first author
+      const year = yearOf(entry.text);
+      const byTitle = (r) => {
+        const sim = titleSimilarity(r.title, title);
+        if (sim >= 0.98) return sim; // the same title, as before
+        // a near title put on arXiv years after the paper came out is a later paper ("… revisited")
+        if (year && r.year && r.year > year + 2) return 0;
+        if (sim >= 0.92 && (!first || names.some((n) => hasAuthor(r, n)))) return sim;
+        return sim >= 0.8 && first && hasAuthor(r, first) ? sim : 0;
+      };
+      if (title) {
+        let hit = best(await ask(urls.arxivTitle(title)), byTitle);
+        if (!hit && first) hit = best(await ask(urls.arxivAuthorTitle(first, title)), byTitle);
+        if (hit) take(hit);
+      } else if (first) {
+        // no title to go on: a paper of the first author's whose title the entry contains
+        const hit = best(await ask(urls.arxivAuthorYear(first, year)), (r) =>
+          hasAuthor(r, first) && titleInEntry(r.title, entry.text) ? squash(r.title).length : 0);
+        if (hit) take(hit);
+      }
     }
     // 4. On arXiv: its record has the abstract.
     if (out.arxiv && !out.abstract) {
@@ -452,7 +581,7 @@
     return { noteFor, find, decorate };
   }
 
-  const api = { create, lookup, entryOf, arxivIdIn, doiIn, norm, titleInEntry, urls, fromDataCite, fromCrossref };
+  const api = { create, lookup, entryOf, arxivIdIn, doiIn, norm, titleInEntry, titleSimilarity, surnamesIn, surnamesOf, urls, fromDataCite, fromCrossref };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassCite = api;
 })(typeof self !== 'undefined' ? self : this);
