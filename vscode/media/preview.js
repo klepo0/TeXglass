@@ -762,6 +762,7 @@
         if (insight && m.defs !== undefined) insight.setDefinitions(m.defs);
         show(m.blocks, m.lines);
         if (insight) insight.invalidate();
+        if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');

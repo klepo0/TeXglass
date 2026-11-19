@@ -192,6 +192,7 @@
     updateToc();
     if (margin) margin.refresh();
     if (insight) insight.invalidate(); // read the page again when next needed
+    if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
   }
 
   const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
@@ -1625,7 +1626,8 @@
   // --- citation previews -------------------------------------------------------------
 
   // Resting on a citation shows its bibliography entry, then the cited paper's
-  // title and abstract once looked up; a paper on arXiv opens in TeXglass in a new tab.
+  // title and abstract once looked up; a paper on arXiv opens in TeXglass in a new tab,
+  // as does the "Open in TeXglass" button on its entry in the bibliography.
   cites = window.TeXglassCite
     ? window.TeXglassCite.create({
       openArxiv: (id) => {
@@ -1636,6 +1638,7 @@
       },
     })
     : null;
+  if (cites) cites.decorate(preview);
 
   // --- notation and dependencies -------------------------------------------------
 

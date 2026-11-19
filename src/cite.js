@@ -17,6 +17,12 @@
  *     openLink(href) { ... },      // optional: open an outside link
  *   });
  *   const note = cites.noteFor(li, { onChange() { ... } });   // the <li> of a bibliography entry, or null
+ *   cites.decorate(preview);     // after a render: an "Open in TeXglass" button on entries on arXiv
+ *
+ * decorate() reads only the entries' own text and links (arXiv:…, eprint
+ * fields, arxiv.org links, 10.48550/arXiv DOIs). An entry with a DOI or a
+ * title but no arXiv id is looked up only when the pointer rests on it, or
+ * when a citation preview of it has already found the paper.
  */
 (function (root) {
   'use strict';
@@ -342,7 +348,12 @@
       }
       div.innerHTML = '<div class="insight-muted cite-wait">Looking up the abstract…</div>';
       find(entry).then(
-        (info) => { div.innerHTML = html(info, entry); done(); },
+        (info) => {
+          div.innerHTML = html(info, entry);
+          // found on arXiv by the lookup: the entry in the bibliography gets its button too
+          if (info.arxiv && li.isConnected && !li.closest('.ref-popover')) { li.dataset.tgArxiv = info.arxiv; openButton(li, info.arxiv); }
+          done();
+        },
         () => {
           div.innerHTML = '<div class="insight-muted">Could not reach arXiv or Crossref; showing the entry from the bibliography.</div>' +
             (entry.arxiv ? `<div class="cite-actions"><button type="button" class="cite-open" data-arxiv="${esc(entry.arxiv)}">Open in TeXglass</button></div>` : '');
@@ -352,7 +363,93 @@
       return div;
     }
 
-    return { noteFor, find };
+    // -------------------------------------------------------------------------
+    // The bibliography itself: a button on each entry that is on arXiv
+    // -------------------------------------------------------------------------
+
+    const LOOKUP_DWELL = 450; // ms the pointer rests on an entry before it is looked up
+
+    function openButton(li, id) {
+      if (li.querySelector('.bib-open')) return;
+      const body = li.querySelector('.bib-body') || li;
+      const b = (li.ownerDocument || document).createElement('button');
+      b.type = 'button';
+      b.className = 'bib-open';
+      b.dataset.arxiv = id;
+      // The label is drawn by CSS, so copying the bibliography does not pick it up.
+      b.setAttribute('aria-label', `Open arXiv:${id} in TeXglass`);
+      b.title = `Open arXiv:${id} in TeXglass`;
+      body.appendChild(b);
+    }
+
+    function lookUpLater(li) {
+      if (li.dataset.tgArxiv !== '' || li.dataset.tgLookup) return;
+      const entry = entryOf(li);
+      if (!entry.doi && !entry.title) return;
+      li.dataset.tgLookup = 'wait';
+      let timer = null;
+      const go = () => {
+        li.removeEventListener('pointerleave', stop);
+        if (!online()) { delete li.dataset.tgLookup; return; }
+        li.dataset.tgLookup = 'asked';
+        find(entry).then(
+          (info) => { if (info.arxiv) { li.dataset.tgArxiv = info.arxiv; openButton(li, info.arxiv); } },
+          () => { delete li.dataset.tgLookup; } // try again on the next visit
+        );
+      };
+      const stop = () => { clearTimeout(timer); li.removeEventListener('pointerleave', stop); delete li.dataset.tgLookup; };
+      li.addEventListener('pointerleave', stop);
+      timer = setTimeout(go, LOOKUP_DWELL);
+    }
+
+    const wired = new WeakSet();
+    function wire(doc, container) {
+      if (!wired.has(doc)) {
+        wired.add(doc);
+        // Capture, so the host's own click handlers (fold, jump to source) never see it.
+        doc.addEventListener('click', (e) => {
+          const b = e.target && e.target.closest && e.target.closest('.bib-open');
+          if (!b) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (opts.openArxiv) opts.openArxiv(b.dataset.arxiv);
+        }, true);
+      }
+      if (!wired.has(container)) {
+        wired.add(container);
+        container.addEventListener('pointerover', (e) => {
+          const li = e.target && e.target.closest && e.target.closest('.bibliography li');
+          if (li && container.contains(li)) lookUpLater(li);
+        });
+      }
+    }
+
+    /**
+     * Give each bibliography entry under `container` that names an arXiv paper
+     * an "Open in TeXglass" button. Cheap (a few regular expressions an entry)
+     * and safe to call after every render: entries already seen are skipped.
+     */
+    function decorate(container) {
+      if (!container || !container.querySelectorAll) return 0;
+      wire(container.ownerDocument || document, container);
+      let n = 0;
+      for (const li of container.querySelectorAll('.bibliography li')) {
+        if (li.dataset.tgArxiv !== undefined) {
+          if (li.dataset.tgArxiv) { openButton(li, li.dataset.tgArxiv); n++; }
+          continue;
+        }
+        const entry = entryOf(li);
+        let id = entry.arxiv;
+        // a citation preview may already have found it
+        const known = !id && cache.get(entry.key);
+        if (known) known.then((info) => { if (info.arxiv && !li.querySelector('.bib-open')) { li.dataset.tgArxiv = info.arxiv; openButton(li, info.arxiv); } }, () => {});
+        li.dataset.tgArxiv = id || '';
+        if (id) { openButton(li, id); n++; }
+      }
+      return n;
+    }
+
+    return { noteFor, find, decorate };
   }
 
   const api = { create, lookup, entryOf, arxivIdIn, doiIn, norm, titleInEntry, urls, fromDataCite, fromCrossref };

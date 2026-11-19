@@ -196,6 +196,71 @@ test('a citation\'s note shows the abstract, an Open in TeXglass button, and onl
   }
 });
 
+test('bibliography entries on arXiv get an Open in TeXglass button; others are looked up only on a rest', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const doc = DOC.replace('\\end{thebibliography}',
+      '\\bibitem{journal} C. Someone, \\emph{Paths in random media revisited}, Ann. Probab. 12 (2020). doi:10.1214/99-AOP123.\n\\end{thebibliography}');
+    const r = TeXglass.render(doc, { renderMath, sourceMap: true });
+    const p = await page(browser, r);
+    const out = await p.evaluate(async () => {
+      window.asked = [];
+      window.opened = [];
+      let clicksSeen = 0;
+      document.getElementById('preview').addEventListener('click', () => { clicksSeen++; });
+      const cites = TeXglassCite.create({
+        getJson: async (url) => {
+          window.asked.push(url);
+          if (url.includes('api.crossref.org/works/10.1214')) {
+            return { message: { title: ['Paths in random media revisited'], DOI: '10.1214/99-AOP123', relation: {} } };
+          }
+          if (url.includes('api.datacite.org/dois?')) {
+            return { data: [{ id: '10.48550/arxiv.2402.05555', attributes: { doi: '10.48550/arXiv.2402.05555', titles: [{ title: 'Paths in random media revisited' }], identifiers: [], publicationYear: 2024 } }] };
+          }
+          if (url.includes('/dois/10.48550')) return { data: { attributes: { titles: [{ title: 'x' }], descriptions: [] } } };
+          throw Object.assign(new Error('HTTP 404'), { status: 404 });
+        },
+        online: () => true,
+        openArxiv: (id) => { window.opened.push(id); },
+      });
+      const preview = document.getElementById('preview');
+      const n = cites.decorate(preview);
+      const again = cites.decorate(preview); // idempotent
+      const items = [...document.querySelectorAll('.bibliography li')];
+      const buttons = items.map((li) => li.querySelectorAll('.bib-open').length);
+      const bodyText = items[0].querySelector('.bib-body').textContent;
+      const label = getComputedStyle(items[0].querySelector('.bib-open'), '::after').content;
+      items[0].querySelector('.bib-open').click();
+      const askedBeforeRest = window.asked.length;
+      // a quick pass over the third entry asks nothing; resting on it looks it up
+      items[2].dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      items[2].dispatchEvent(new PointerEvent('pointerleave'));
+      await new Promise((res) => setTimeout(res, 600));
+      const askedAfterPass = window.asked.length;
+      items[2].dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      await new Promise((res) => setTimeout(res, 900));
+      const found = items[2].querySelector('.bib-open');
+      return {
+        n, again, buttons, bodyText, label, opened: window.opened, clicksSeen, askedBeforeRest, askedAfterPass,
+        found: found && found.dataset.arxiv, asked: window.asked.length,
+      };
+    });
+    assert.equal(out.n, 1);
+    assert.equal(out.again, 1);
+    assert.deepEqual(out.buttons, [1, 0, 0]);
+    assert.doesNotMatch(out.bodyText, /Open in TeXglass/); // copying the entry does not pick up the label
+    assert.equal(out.label, '"Open in TeXglass"');
+    assert.deepEqual(out.opened, ['2301.00001']);
+    assert.equal(out.clicksSeen, 0); // the host's click handlers never see it
+    assert.equal(out.askedBeforeRest, 0); // nothing is asked while decorating
+    assert.equal(out.askedAfterPass, 0);
+    assert.equal(out.found, '2402.05555');
+  } finally {
+    await browser.close();
+  }
+});
+
 test('"What does this use?" lights up what a result rests on and fades the rest', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
