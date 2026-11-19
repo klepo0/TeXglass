@@ -152,7 +152,7 @@ test('overleaf.html loads only files that the extension ships', () => {
   assert.ok(refs.length > 8);
   for (const r of refs) {
     assert.doesNotMatch(r, /^(https?:)?\/\//, r);
-    const where = r.startsWith('src/') || r.startsWith('vendor/') || r === 'styles.css' ? path.join(ROOT, r) : path.join(ROOT, 'browser/src', r);
+    const where = r.startsWith('src/') || r.startsWith('vendor/') || r.startsWith('vscode/') || r === 'styles.css' ? path.join(ROOT, r) : path.join(ROOT, 'browser/src', r);
     assert.ok(fs.existsSync(where), r);
   }
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, 'extension pages refuse inline scripts');

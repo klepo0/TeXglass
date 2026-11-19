@@ -12,10 +12,15 @@
  *     block; a formula with Ctrl/Cmd+click or a double-click, since a plain
  *     click on a formula copies its LaTeX, as in the VS Code preview;
  *   - folds sections and proofs (click a heading or the arrow; "Proofs" folds
- *     them all) and previews references and citations on hover;
- *   - has the web viewer's reading aids: a table of contents, Find (Ctrl+F)
+ *     them all) and previews references and citations on hover, with the
+ *     cited paper's abstract when it can be looked up (src/cite.js);
+ *   - shows where notation comes from when resting on a formula, and "What
+ *     does this use?" beside each result (src/insight.js);
+ *   - has the web viewer's reading aids: a side panel with tabs for the
+ *     contents, the notation index and the map of which results use which,
+ *     Find (Ctrl+F)
  *     and Go to (Ctrl+G, "Lemma 4.1", "(3.2)", "§2"), and a light or dark
- *     theme. Moving around the preview with them, or scrolling it, holds it
+ *     theme, and the handwritten-notes look. Moving around the preview with them, or scrolling it, holds it
  *     there until the editor scrolls again;
  *   - with "Files", downloads the project's zip from Overleaf and
  *     pulls in the files that the open file \inputs, the main file's preamble
@@ -24,7 +29,7 @@
  *
  * It only ever reads the document. Overleaf's own PDF stays the final word.
  */
-/* global TeXglass, TeXglassOverleaf, TeXglassZoom, TeXglassScroll */
+/* global TeXglass, TeXglassOverleaf, TeXglassZoom, TeXglassScroll, TeXglassInsight */
 (function () {
   'use strict';
 
@@ -59,6 +64,8 @@
   const hold = () => { held = true; };
   let lastToc = [];
   let cursor = -1;
+  let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
+  let cites = null; // citation previews (src/cite.js)
 
   function post(msg) {
     // 'hello' carries nothing; everything else waits until Overleaf has spoken.
@@ -148,6 +155,7 @@
     convert(c.text, project ? project.urls : null)
       .then((result) => {
         composed = c;
+        if (insight && result.defs) insight.setDefinitions(result.defs);
         const n = result.warnings.length;
         say(n ? `${n} warning${n > 1 ? 's' : ''}` : '', n > 0);
         status.title = result.warnings.join('\n');
@@ -155,6 +163,8 @@
         applyFolds();
         lastToc = result.toc || [];
         updateToc();
+        if (insight) insight.invalidate(); // read the page again when next needed
+        if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         explain(c);
       }, (e) => {
         composed = c;
@@ -489,7 +499,7 @@
     jumpToSource(e);
   });
   preview.addEventListener('dblclick', (e) => {
-    if (!composed || e.target.closest('a, .fold-toggle')) return;
+    if (!composed || e.target.closest('a, .fold-toggle, .uses-btn')) return;
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges(); // the double-click selected a word
     jumpToSource(e);
@@ -554,8 +564,17 @@
       clone.querySelectorAll('.folded').forEach((el) => el.classList.remove('folded'));
       body.appendChild(clone);
     }
+    // What the result uses and where it is used (src/insight.js).
+    const used = insight && insight.usedByNote(target);
+    if (used) body.appendChild(used);
+    // A citation: the cited paper's title and abstract, looked up now (never while rendering).
+    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
+    placePopover(a, body);
+  }
+  function placePopover(a, body) {
     const r = a.getBoundingClientRect();
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
@@ -658,9 +677,11 @@
     if (key !== tocKey) {
       tocKey = key;
       const top = items.length ? Math.min(...items.map((t) => t.level)) : 0;
-      tocList.innerHTML = items
-        .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXglass.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
-        .join('');
+      tocList.innerHTML = items.length
+        ? items
+          .map((t) => `<li class="toc-d${Math.min(3, t.level - top)}"><a href="#${t.id}" data-id="${t.id}">${t.num ? `<span class="toc-num">${TeXglass.escapeHtml(t.num)}</span>` : ''}<span class="toc-title">${t.title}</span></a></li>`)
+          .join('')
+        : '<li class="toc-empty">This file has no sections.</li>';
       tocLinks = Array.from(tocList.querySelectorAll('a'));
     }
     showToc();
@@ -668,10 +689,11 @@
   }
 
   function showToc() {
-    const has = tocLinks.length > 0;
+    // With the Notation and Map tabs the panel has something to show even without sections.
+    const has = tocLinks.length > 0 || (!!insight && preview.childElementCount > 0);
     tocPane.hidden = !(tocWanted && has);
     tocToggle.disabled = !has;
-    tocToggle.title = has ? 'Show or hide the table of contents' : 'This file has no sections';
+    tocToggle.title = has ? 'Show or hide the side panel: contents, notation index and the map of which results use which' : 'This file is empty';
     tocToggle.setAttribute('aria-pressed', String(tocWanted && has));
     document.documentElement.style.setProperty('--ol-top', document.querySelector('.ol-toolbar').getBoundingClientRect().bottom + 'px');
   }
@@ -744,6 +766,46 @@
     setTocSide(right);
   });
 
+  // --- citation previews, notation and dependencies (as in the web viewer) ------------
+
+  // Resting on a citation shows its entry, then the cited paper's title and abstract
+  // once looked up; a paper on arXiv opens in the extension's own viewer.
+  cites = window.TeXglassCite
+    ? window.TeXglassCite.create({
+      openArxiv: (id) => window.open(new URL('index.html?arxiv=' + encodeURIComponent(id), location.href).href, '_blank', 'noopener'),
+    })
+    : null;
+
+  // Resting on a formula shows where its notation comes from, and each result gets a
+  // "What does this use?" button. All of it is read from the page when first needed,
+  // never while rendering, so typing in Overleaf stays as quick as before.
+  insight = window.TeXglassInsight
+    ? TeXglassInsight.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      renderTex: (texs, defs) => (TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
+      hover: store.get('texglass:notationHover') !== 'off',
+      onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
+    })
+    : null;
+  // The side panel's tabs (Contents, Notation, Map) and its divider. The panel's tab and
+  // width are kept apart from the full viewer's, since this panel is usually narrower.
+  if (insight) {
+    const sideStore = {
+      get: (k) => store.get(k.replace('texglass:', 'texglass:overleaf-')),
+      set: (k, v) => store.set(k.replace('texglass:', 'texglass:overleaf-'), v),
+    };
+    TeXglassInsight.sidePanel({
+      pane: tocPane,
+      head: tocPane.querySelector('.toc-pane-head'),
+      list: tocList,
+      insight,
+      store: sideStore,
+      onJump: () => { hold(); if (narrow.matches) { tocWanted = false; showToc(); } },
+      onTab: (tab) => { if (tab === 'toc') spyToc(); },
+    });
+  }
+
   // --- find and go to ----------------------------------------------------------------
 
   // Ctrl+F searches the preview; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2" (src/find.js).
@@ -788,6 +850,28 @@
     });
     updateThemeButton();
   }
+
+  // --- handwritten notes look ---------------------------------------------------------
+  //
+  // Notes on squared paper, or chalk on a board in the dark theme (vscode/media/notes.css,
+  // as in the web viewer and VS Code). Shared with the extension's viewer, like the theme.
+
+  const handButton = $('hand-toggle');
+  function setHandwritten(on, save) {
+    if (on && window.TeXglassInk && !document.querySelector('.tg-ink-filters')) document.body.insertAdjacentHTML('afterbegin', window.TeXglassInk);
+    if (on) rootEl.dataset.look = 'notes';
+    else delete rootEl.dataset.look;
+    handButton.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Show as a typeset page' : 'Show as handwritten notes';
+    handButton.setAttribute('aria-label', label);
+    handButton.title = on ? label : 'Show as handwritten notes (chalk on a board in the dark theme)';
+    if (save) store.set('texglass:look', on ? 'notes' : 'standard');
+  }
+  handButton.addEventListener('click', () => setHandwritten(rootEl.dataset.look !== 'notes', true));
+  setHandwritten(store.get('texglass:look') === 'notes', false);
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'texglass:look') setHandwritten(e.newValue === 'notes', false);
+  });
 
   // --- zoom and close ----------------------------------------------------------------
 

@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-paper="grid" data-hand="kalam" data-hand-math="on" data-ink="ballpoint" data-ink-texture="on">
 <head>
   <meta charset="utf-8">
   <title>TeXglass preview</title>
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="vscode/media/notes.css">
   <link rel="stylesheet" href="overleaf-panel.css">
   <script defer src="vendor/katex/katex.min.js"></script>
   <script defer src="src/tikz.js"></script>
@@ -16,6 +17,9 @@
   <script defer src="src/scroll.js"></script>
   <script defer src="src/find.js"></script>
   <script defer src="src/copytex.js"></script>
+  <script defer src="src/insight.js"></script>
+  <script defer src="src/cite.js"></script>
+  <script defer src="vscode/ink.js"></script>
   <script defer src="overleaf-project.js"></script>
   <script defer src="overleaf-panel.js"></script>
 </head>
@@ -25,7 +29,7 @@
     <span id="file-name" class="file-name"></span>
     <span id="status" class="status" role="status"></span>
     <span class="ol-spacer"></span>
-    <button id="toc-toggle" type="button" aria-pressed="false" aria-controls="toc-pane" title="Show or hide the table of contents">Contents</button>
+    <button id="toc-toggle" type="button" aria-pressed="false" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which">Contents</button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Proofs</button>
     <button id="find" type="button" title="Search the preview (Ctrl+F) or go to a theorem, equation or section by its number (Ctrl+G)">Find</button>
     <button id="files" type="button" title="Download this project's other files from Overleaf (its zip), to include \input files, the main file's macros, .bib references and figures">Files</button>
@@ -34,6 +38,9 @@
       <button id="zoom-out" type="button" aria-label="Zoom out" title="Smaller">−</button>
       <button id="zoom-in" type="button" aria-label="Zoom in" title="Larger">+</button>
     </div>
+    <button id="hand-toggle" class="icon-button" type="button" aria-pressed="false" aria-label="Show as handwritten notes" title="Show as handwritten notes (chalk on a board in the dark theme)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z M13.8 6.8l3.4 3.4 M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+    </button>
     <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch between light and dark">
       <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
       <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
