@@ -168,14 +168,43 @@
     return (record.authors || []).some((a) => (' ' + norm(a) + ' ').includes(n));
   }
 
+  /** A node's text with its maths as $TeX$ (KaTeX's own text repeats each formula two or three times). */
+  function plainText(node) {
+    const copy = node.cloneNode(true);
+    for (const m of Array.from(copy.querySelectorAll('.math[data-tex]'))) m.replaceWith(`$${m.getAttribute('data-tex')}$`);
+    for (const m of Array.from(copy.querySelectorAll('.katex-mathml'))) m.replaceWith('');
+    return copy.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Is this emphasised part of an entry where the paper appeared rather than
+   * its title? Styles such as alpha and plain set the journal in italics:
+   * "A. Writer. On paths. Ann. Probab., 12(3):1–9, 1984." So it is a venue
+   * when abbreviated (a capitalised word with a full stop inside it), when a
+   * volume or pages follow it, or when it is an arXiv preprint note.
+   */
+  function isVenue(em, after) {
+    if (/\barxiv\b/i.test(em)) return true;
+    if (/\b\p{Lu}\p{Ll}*\.\s+\S/u.test(em)) return true;
+    return /^[.,:;]?\s*(\(?\d|pages?\b|pp\.|vol\b|no\.|in press|to appear)/i.test(after);
+  }
+
+  /** The title in "Authors. Title. Venue": the part after the authors' last name. */
+  function titleBefore(pre) {
+    pre = pre.replace(/[\s.,;:]+$/, '');
+    const m = /^(.*?\p{L}\p{Ll})\.\s+(.+)$/u.exec(pre);
+    const t = m ? m[2].trim() : '';
+    return t.split(/\s+/).length >= 2 ? t : '';
+  }
+
   /**
    * What an entry says about the paper it cites:
    * { key, text, arxiv, doi, title } where title is a guess (the emphasised
-   * part, or a quoted part), or ''.
+   * part, a quoted part, or what comes before an emphasised journal), or ''.
    */
   function entryOf(li) {
     const body = li.querySelector('.bib-body') || li;
-    const text = body.textContent.replace(/\s+/g, ' ').trim();
+    const text = plainText(body);
     const hrefs = Array.from(body.querySelectorAll('a[href]')).map((a) => a.getAttribute('href'));
     let arxiv = null;
     let doi = null;
@@ -191,7 +220,12 @@
     }
     let title = '';
     const em = body.querySelector('em, i, .textit, .emph');
-    if (em && em.textContent.trim().split(/\s+/).length >= 2) title = em.textContent.replace(/\s+/g, ' ').trim();
+    const emText = em ? plainText(em) : '';
+    if (emText) {
+      const at = text.indexOf(emText);
+      if (at >= 0 && isVenue(emText, text.slice(at + emText.length))) title = titleBefore(text.slice(0, at));
+      else if (emText.split(/\s+/).length >= 2) title = emText;
+    }
     if (!title) {
       const q = /[“"‘]([^”"’]{12,300})[”"’]/.exec(text) || /``([^']{12,300})''/.exec(text);
       if (q) title = q[1].trim();
@@ -309,6 +343,12 @@
       out.found = true;
     };
     let askedCrossref = false;
+    // A DOI can name a part of the work the entry cites (a book's first
+    // chapter, "Introduction"): then its title and abstract are not the entry's.
+    const fitting = (info) => {
+      if (!entry.title || !info.title || titleSimilarity(info.title, entry.title) >= 0.8 || titleInEntry(info.title, entry.text)) return info;
+      return Object.assign({}, info, { title: '', abstract: '', surnames: info.surnames });
+    };
 
     // 1. No identifier: find the DOI and title from the reference as printed.
     if (!out.arxiv && !out.doi && !entry.title) {
@@ -322,7 +362,7 @@
     if (!out.arxiv && out.doi && !out.title && !askedCrossref) {
       askedCrossref = true;
       const json = await ask(urls.doi(out.doi));
-      if (json && json.message) take(fromCrossref(json.message));
+      if (json && json.message) take(fitting(fromCrossref(json.message)));
     }
     // 3. Is it on arXiv? Look for the title among arXiv records, then among
     // the first author's papers on arXiv, since a title on arXiv often differs
@@ -345,7 +385,8 @@
       const year = yearOf(entry.text);
       const byTitle = (r) => {
         const sim = titleSimilarity(r.title, title);
-        if (sim >= 0.98) return sim; // the same title, as before
+        // the same title, by one of the authors (a long title needs no author: names are not always read right)
+        if (sim >= 0.98 && (!names.length || !r.authors.length || names.some((n) => hasAuthor(r, n)) || norm(title).split(' ').length >= 6)) return sim;
         // a near title put on arXiv years after the paper came out is a later paper ("… revisited")
         if (year && r.year && r.year > year + 2) return 0;
         if (sim >= 0.92 && (!first || names.some((n) => hasAuthor(r, n)))) return sim;
@@ -370,7 +411,7 @@
     // 5. Still no abstract: Crossref sometimes has it.
     if (out.doi && !out.abstract && !askedCrossref) {
       const json = await ask(urls.doi(out.doi));
-      if (json && json.message) take(fromCrossref(json.message));
+      if (json && json.message) take(fitting(fromCrossref(json.message)));
     }
     if (!reached && failed) throw failed;
     return out;

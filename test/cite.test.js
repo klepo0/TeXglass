@@ -145,6 +145,22 @@ test('a published title that differs from the arXiv one is found among the first
   assert.match(decodeURIComponent(asked[1]), /creators\.name:"Writer" AND titles\.title:\(Stochastic OR sewing OR imaginary OR spaces\)/);
 });
 
+test('a DOI of a book chapter ("Introduction") does not lend its title, and a same title by others is not taken', async () => {
+  const text = 'Ada Writer and Bo Reader, A Course on Imaginary Paths, Imaginary Press, 2020. doi:10.1/book_1.';
+  const entry = { text, arxiv: null, doi: '10.1/book_1', title: 'A Course on Imaginary Paths' };
+  const { asked, getJson } = canned([
+    ['https://api.crossref.org/works/', { message: { DOI: '10.1/book_1', title: ['Introduction'], author: [{ family: 'Writer' }], abstract: 'The first chapter.' } }],
+    ['https://api.datacite.org/dois?query=titles.title%3A%22Introduction', dataCite(['1109.00008', 'Introduction', ['Other'], 2011])],
+    ['https://api.datacite.org/dois?query=titles.title', dataCite(['2501.00009', 'A course on imaginary paths', ['Someone'], 2025])],
+    ['https://api.datacite.org/dois?query=creators.name', { data: [] }],
+  ]);
+  const r = await Cite.lookup(entry, getJson);
+  assert.equal(r.arxiv, null);
+  assert.equal(r.title, '');
+  assert.equal(r.abstract, '');
+  assert.ok(!asked.some((u) => u.includes('Introduction')));
+});
+
 test('a near title by someone else, or put on arXiv years later, is not taken', async () => {
   const text = 'Ada Writer, Existence of imaginary solutions via approximations, Imag. Ann. 7 (1996), 1–9.';
   const entry = { text, arxiv: null, doi: null, title: 'Existence of imaginary solutions via approximations' };
@@ -455,6 +471,39 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     m = await map();
     assert.deepEqual(m.down, ['Theorem 2.1']); // both sides, as before
     assert.equal((await state()).focus, false);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('entry titles: an italic journal is not the title, and maths is read as TeX', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const src = String.raw`\documentclass{article}
+\begin{document}
+\cite{a,b,c,d}
+\begin{thebibliography}{9}
+\bibitem{a} Ada Writer and Bo Le~Reader. Optimal $L^2$-bounds for imaginary paths. \emph{Imag. J. Probab.}, 27(4):1--9, 2021.
+\bibitem{b} D. L. Writer. Martingale shapes. \emph{Annals of Imaginary Probability}, 1:19--42, 1973.
+\bibitem{c} Ada Writer. \emph{Imaginary processes and their calculus}, volume 116 of \emph{Imaginary Studies}. Imaginary Press, 2009.
+\bibitem{d} Ada Writer. Rough imaginary flows. \emph{arXiv preprint arXiv:2506.11900}, 2025.
+\end{thebibliography}
+\end{document}`;
+    const r = TeXglass.render(src, { renderMath });
+    const p = await browser.newPage();
+    await p.setContent(`<article>${r.html}</article>`);
+    await p.addScriptTag({ path: path.join(ROOT, 'src/cite.js') });
+    const got = await p.evaluate(() => Array.from(document.querySelectorAll('.bibliography li'), (li) => {
+      const e = TeXglassCite.entryOf(li);
+      return { title: e.title, arxiv: e.arxiv, text: e.text };
+    }));
+    assert.equal(got[0].title, 'Optimal $L^2$-bounds for imaginary paths');
+    assert.ok(!/L2L/.test(got[0].text));
+    assert.equal(got[1].title, 'Martingale shapes');
+    assert.equal(got[2].title, 'Imaginary processes and their calculus');
+    assert.equal(got[3].title, 'Rough imaginary flows');
+    assert.equal(got[3].arxiv, '2506.11900');
   } finally {
     await browser.close();
   }
