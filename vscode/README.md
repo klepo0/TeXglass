@@ -47,7 +47,11 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
 - The contents sidebar has three tabs: **Contents**, **Notation** (the
   document's macros and defined symbols with their first uses) and **Map**
   (which lemmas each theorem uses, from the `\ref`s in its statement and
-  proof); rest the pointer on a result in the map to preview its statement.
+  proof, from results named without a link such as "the previous lemma",
+  shown dashed, and from citations, shown as leaves; solid lines are used in a
+  proof, dotted ones only named in a statement; results are grouped by section,
+  and chains of lemmas serving one result fold into it on big maps); rest the
+  pointer on a result in the map to preview its statement.
   **TeXglass: Show Notation Index** and **TeXglass: Show Dependency Map
   of the Results** open those tabs. Drag the sidebar's edge to resize it; the
   width and tab are remembered. Hovering a

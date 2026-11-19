@@ -276,3 +276,143 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
     await browser.close();
   }
 });
+
+test('mentions without a link are guessed; a mention of another paper\'s result is not', () => {
+  const a = { name: 'Lemma 2.1' };
+  const b = { name: 'Proposition 2.2' };
+  const c = { name: 'Theorem 3' };
+  const byNumber = new Map([['2.1', a], ['2.2', b], ['3', c]]);
+  const names = (text, at) => Insight.mentionsIn(text, byNumber, at || (() => null)).map((m) => m.node.name);
+  assert.deepEqual(names('By Lemma 2.1 and Prop. 2.2 we get it.'), ['Lemma 2.1', 'Proposition 2.2']);
+  assert.deepEqual(names('By Lemmas 2.1 and 2.2'), ['Lemma 2.1']); // 2.2 is a proposition
+  assert.deepEqual(names('Combine Thm 3 with Corollary 2.1.'), ['Theorem 3']);
+  assert.deepEqual(names('By Theorem 3 of †, and Theorem 3 in Smith\'s paper.'), []);
+  assert.deepEqual(names('By †, Theorem 3.'), []);
+  assert.deepEqual(names('see Section 2.1 and Figure 3'), []);
+  assert.deepEqual(names('By the previous lemma, and the proposition below.', (dir, w) => (dir === 'back' && /lemma/i.test(w) ? a : dir === 'on' && /prop/i.test(w) ? b : null)), ['Lemma 2.1', 'Proposition 2.2']);
+});
+
+const PAPER = String.raw`\documentclass{article}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\begin{document}
+\section{Tools}
+\begin{lemma}\label{l:a}
+A first estimate.
+\end{lemma}
+\begin{proof} We show
+\begin{equation}\label{e:key} a \le b \end{equation}
+as in \cite{Smith}. \end{proof}
+\begin{lemma}
+By the previous lemma, a second estimate holds.
+\end{lemma}
+\section{Building up}
+\begin{proposition}\label{p:b}
+Something bigger.
+\end{proposition}
+\begin{proof} By \eqref{e:key} and Lemma 1.2. Theorem 1.1 of \cite{Jones} is not ours. \end{proof}
+\section{The main result}
+\begin{lemma}\label{l:c} A step. \end{lemma}
+\begin{lemma}\label{l:d} Another step, from Lemma~\ref{l:c}. \end{lemma}
+\begin{lemma}\label{l:e} A last step. \end{lemma}
+\begin{proof} By Lemma~\ref{l:d}. \end{proof}
+\begin{theorem}\label{t:main}
+Under Proposition~\ref{p:b}, the main claim holds.
+\end{theorem}
+\begin{proof}[Proof of Theorem 3.4]
+Combine Lemma~\ref{l:e} with \cite{Smith}.
+\end{proof}
+\begin{thebibliography}{9}
+\bibitem{Smith} A. Smith, Estimates.
+\bibitem{Jones} B. Jones, Other things.
+\end{thebibliography}
+\end{document}`;
+
+test('the map reads equations, mentions and citations, groups by section and folds lemmas', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const r = TeXglass.render(PAPER, { renderMath, sourceMap: true });
+    const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+    await page.setContent(
+      `<style>${fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8')}</style>` +
+      `<section class="pane" id="pane" style="height:100vh;overflow:auto"><article id="preview" class="document">${r.blocks.join('\n')}</article></section>`
+    );
+    await page.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+    await page.evaluate(() => {
+      window.insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {} });
+    });
+    const g = await page.evaluate(() => {
+      const graph = window.insight.graph();
+      return {
+        edges: graph.nodes.map((n) => [n.name, Array.from(n.edges, ([m, e]) => `${m.name}:${e.guessed ? 'guessed' : e.proof ? 'proof' : 'statement'}`).sort()]),
+        cites: graph.nodes.map((n) => Array.from(n.cites.keys(), (c) => `${c.label} ${c.who}`)).filter((l) => l.length),
+        sections: graph.nodes.map((n) => n.section && n.section.num),
+        groups: Array.from(TeXglassInsight.foldGroups(graph), ([root, list]) => [root.name, list.map((m) => m.name)]),
+      };
+    });
+    assert.deepEqual(g.edges, [
+      ['Lemma 1.1', []],
+      ['Lemma 1.2', ['Lemma 1.1:guessed']], // "the previous lemma"
+      ['Proposition 2.1', ['Lemma 1.1:proof', 'Lemma 1.2:guessed']], // (1) sits in the proof of Lemma 1.1; "Theorem 1.1 of [2]" is someone else's
+      ['Lemma 3.1', []],
+      ['Lemma 3.2', ['Lemma 3.1:statement']],
+      ['Lemma 3.3', ['Lemma 3.2:proof']],
+      ['Theorem 3.4', ['Lemma 3.3:proof', 'Proposition 2.1:statement']], // "Proof of Theorem 3.4" typed by hand
+    ]);
+    assert.deepEqual(g.cites, [['[1] Smith'], ['[2] Jones'], ['[1] Smith']]);
+    assert.deepEqual(g.sections, ['1', '1', '2', '3', '3', '3', '3']);
+    assert.deepEqual(g.groups, [
+      ['Proposition 2.1', ['Lemma 1.1', 'Lemma 1.2']], // Lemma 1.1 serves Lemma 1.2 and Proposition 2.1, which come to the same
+      ['Theorem 3.4', ['Lemma 3.1', 'Lemma 3.2', 'Lemma 3.3']],
+    ]);
+
+    // The larger map: bands for sections, kinds of line, cited works as leaves.
+    await page.evaluate(() => window.insight.open('deps'));
+    assert.deepEqual(await page.$$eval('.dep-band text', (els) => els.map((e) => e.textContent)), ['§1 Tools', '§2 Building up', '§3 The main result']);
+    assert.equal(await page.locator('.dep-map .dep-edge.dep-guess').count(), 2);
+    assert.equal(await page.locator('.dep-map .dep-edge.dep-stmt:not(.dep-guess)').count(), 2);
+    assert.equal(await page.locator('.dep-map .dep-edge.dep-proof:not(.dep-guess)').count(), 3);
+    assert.deepEqual(await page.$$eval('.dep-citenode', (els) => els.map((e) => e.textContent)), ['[1] Smith', '[2] Jones']);
+    assert.match(await page.textContent('.insight-dialog .dep-legend'), /used in a proof.*named in a statement.*guessed.*cited work/);
+    // Small maps are not folded until asked.
+    assert.equal(await page.locator('.dep-fold').count(), 0);
+    await page.check('.dep-opts input[data-opt="fold"]');
+    assert.equal(await page.locator('.dep-node[data-n]').count(), 2); // the lemmas folded into Proposition 2.1 and Theorem 3.4
+    assert.deepEqual(await page.$$eval('.dep-fold', (els) => els.map((e) => e.textContent)), ['+2', '+3']);
+    // Picking a folded lemma unfolds it there.
+    await page.click('.dep-node:has-text("Theorem 3.4")');
+    assert.match(await page.textContent('.dep-detail'), /Folded in Lemma 3\.1, Lemma 3\.2, Lemma 3\.3/);
+    await page.click('.dep-detail [data-pick="4"]');
+    assert.equal(await page.locator('.dep-node[data-n]').count(), 5);
+    assert.match(await page.textContent('.dep-node.dep-sel'), /Lemma 3\.2/);
+    await page.click('.dep-unfold');
+    assert.equal(await page.locator('.dep-node[data-n]').count(), 2);
+    // The guessed link says so, and where it came from.
+    await page.click('.dep-node[data-n="2"]');
+    assert.match(await page.getAttribute('.dep-detail .dep-tag-guess', 'title'), /Lemma 1\.2/); // typed by hand in the proof
+    await page.click('.dep-detail [data-pick="1"]');
+    assert.match(await page.getAttribute('.dep-detail .dep-tag-guess', 'title'), /the previous lemma/);
+    // A cited work lights up what rests on it.
+    await page.click('.dep-citenode[data-c="0"]');
+    assert.match(await page.textContent('.dep-detail'), /Cited in Lemma 1\.1, Theorem 3\.4/);
+    assert.ok(await page.locator('.dep-node[data-n="2"].dep-down').count()); // Proposition 2.1 rests on Lemma 1.1
+    // Switching citations and sections off.
+    await page.uncheck('.dep-opts input[data-opt="cites"]');
+    await page.uncheck('.dep-opts input[data-opt="sections"]');
+    assert.equal(await page.locator('.dep-citenode').count(), 0);
+    assert.equal(await page.locator('.dep-band').count(), 0);
+    await page.evaluate(() => document.querySelector('.insight-dialog').close());
+
+    // "What does this use?": a result reached only through a guess is marked so; cited entries light up.
+    await page.evaluate(() => window.insight.focus(document.querySelectorAll('#preview .theorem')[2], 'uses'));
+    const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem'), (el) => (el.className.match(/uses-\w+/g) || []).join(' ')));
+    assert.deepEqual(lit.slice(0, 3), ['uses-on', 'uses-on uses-guess', 'uses-sel']);
+    assert.match(await page.textContent('.uses-bar'), /uses 2 results \(1 guessed\)/);
+    // its own citation [2] lights up; [1], cited in the proof of Lemma 1.1, does not
+    assert.deepEqual(await page.$$eval('.bibliography li', (els) => els.map((e) => e.classList.contains('uses-ref'))), [false, true]);
+  } finally {
+    await browser.close();
+  }
+});
