@@ -234,3 +234,16 @@ test('flatten puts the authors\' own .sty files where they are loaded, but not p
   assert.match(out, /\\usepackage\{mhequ\}/);
   assert.doesNotMatch(out, /oops/);
 });
+
+test('an amsrefs .bbl (no .bib in the source) takes the place of \\bibliography', () => {
+  const files = {
+    'p.tex': '\\documentclass{amsart}\n\\usepackage[alphabetic]{amsrefs}\n\\begin{document}\nSee \\cite{w}.\n\\bibliography{refs}\n\\end{document}',
+    'p.bbl': '% \\bib, bibdiv, biblist are defined by the amsrefs package.\n\\begin{bibdiv}\n\\begin{biblist}\n\\bib{w}{article}{\n  author={Writer, Ada},\n  title={{On imaginary paths}},\n  date={2020},\n}\n\\end{biblist}\n\\end{bibdiv}\n',
+  };
+  const out = A.flatten('p.tex', files);
+  assert.match(out, /\\begin\{bibdiv\}[\s\S]*On imaginary paths[\s\S]*\\end\{bibdiv\}\s*\\end\{document\}/);
+  assert.doesNotMatch(out, /\\bibliography\{refs\}/);
+  const html = require('../src/texglass.js').render(out, { renderMath: (t) => t }).html;
+  assert.match(html, /class="bibliography"/);
+  assert.match(html, /<a href="#bib-[^"]+">Wri20<\/a>/);
+});

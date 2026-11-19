@@ -176,6 +176,11 @@ function bibliography(mainPath, bib, text, cited, style, read, warnings, path) {
     const items = new Set(Array.from(bbl.matchAll(/\\bibitem\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g), (m) => m[1].trim()));
     if (keys.every((k) => items.has(k))) return bbl.trim();
   }
+  // amsrefs' .bbl: \bib records in a bibdiv, drawn by the converter itself.
+  if (bbl && /\\begin\s*\{(bibdiv|biblist)\}/.test(bbl)) {
+    const items = new Set(Array.from(bbl.matchAll(/\\bib\*?\s*\{([^}]*)\}/g), (m) => m[1].trim()));
+    if (keys.every((k) => items.has(k))) return bbl.trim();
+  }
   // biber's .bbl for biblatex: the parsed entries, already sorted and labelled.
   if (bbl && isBiblatexBbl(bbl)) {
     const entries = parseBbl(bbl);

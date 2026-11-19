@@ -218,7 +218,8 @@ function formatEntry(e) {
   if (f.note) text += ` ${f.note}${/[.!?]$/.test(f.note) ? '' : '.'}`;
   const eprint = f.eprint && (!f.archiveprefix || /arxiv/i.test(f.archiveprefix)) ? f.eprint : '';
   if (eprint) text += ` \\href{https://arxiv.org/abs/${eprint}}{arXiv:${eprint}}.`;
-  else if (f.doi) text += ` \\href{https://doi.org/${f.doi}}{doi:${f.doi}}.`;
+  // a DOI written for TeX ("10.1007/x\_16") goes in the link as it really is
+  else if (f.doi) text += ` \\href{https://doi.org/${f.doi.replace(/\\([_%&#])/g, '$1')}}{doi:${f.doi}}.`;
   else if (f.url) text += ` \\url{${f.url}}.`;
   return text;
 }
