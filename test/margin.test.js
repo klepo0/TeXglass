@@ -272,6 +272,32 @@ test('the margin folds away with its button or by dragging its divider, and open
   }
 });
 
+test('in the handwritten look the margin folds all the way too', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1100, height: 700 } });
+    const css = ['styles.css', 'vscode/media/notes.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+    await page.setContent(`<style>${css}</style>` +
+      `<main class="panes"><section class="pane" id="preview-pane"><article id="preview" class="document">${DOC()}</article></section></main>`);
+    await page.evaluate(() => document.documentElement.setAttribute('data-look', 'notes'));
+    await page.addScriptTag({ path: path.join(ROOT, 'src/margin.js') });
+    await page.evaluate(() => {
+      window.margin = TeXglassMargin.attach({ pane: document.getElementById('preview-pane'), doc: document.getElementById('preview'), width: 200 });
+      window.margin.refresh();
+    });
+    const pad = () => page.evaluate(() => parseFloat(getComputedStyle(document.getElementById('preview')).paddingRight));
+    const open = await pad();
+    await page.click('.tg-margin-toggle');
+    assert.equal(await page.evaluate(() => window.margin.collapsed()), true);
+    const shut = await pad();
+    assert.ok(open - shut >= 150, 'the margin gives its room back: ' + [open, shut]);
+    assert.ok(shut < 100, 'only a strip for the button stays: ' + shut);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('the note pad moves by its handle and remembers where; dragging the pad itself still adds a note', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
