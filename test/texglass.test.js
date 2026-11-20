@@ -564,3 +564,97 @@ test('a math-only check over many macros that use each other stays fast', () => 
   plain(`\\documentclass{article}\n${defs}\\begin{document}\nHi \\mB.\n\\end{document}`);
   assert.ok(Date.now() - t < 2000, 'renders quickly');
 });
+
+test('KaTeX MathML with an empty element inside <mo> still closes it, so it cannot swallow the page', () => {
+  // \mathrel{\rlap{…}\mkern2mu…} (a common "independent" symbol): KaTeX puts
+  // <mspace/> inside <mo>, where the HTML parser reads it as an open element.
+  const r = realKatex(String.raw`
+\newcommand\indep{\protect\mathpalette{\protect\independenT}{\perp}}
+\def\independenT#1#2{\mathrel{\rlap{$#1#2$}\mkern2mu{#1#2}}}
+\begin{document}
+$X \indep Y$ and $\mathrel{a\mkern2mu b}$.
+\end{document}`);
+  assert.doesNotMatch(r.html, /katex-error|math-error/);
+  assert.doesNotMatch(r.html, /<mspace[^>]*\/>/);
+  assert.match(r.html, /<mspace[^>]*><\/mspace>/);
+});
+
+test('\\let\\cmd\\@undefined forgets a command, and double angle brackets render', () => {
+  const r = realKatex(String.raw`
+\makeatletter
+\let\llangle\@undefined
+\let\rrangle\@undefined
+\DeclareMathDelimiter{\llangle}{\mathopen}{MnLargeSymbols}{'164}{MnLargeSymbols}{'164}
+\DeclareMathDelimiter{\rrangle}{\mathclose}{MnLargeSymbols}{'171}{MnLargeSymbols}{'171}
+\makeatother
+\begin{document}
+$\llangle x \rrangle + \big\llangle y \bigr\rrangle_q + \left\llangle \frac ab \right\rrangle$
+\end{document}`);
+  assert.doesNotMatch(r.html, /katex-error|math-error/);
+  const tex = plain(String.raw`\let\foo\undefined\begin{document}$\left\llangle a \right\rrangle$\end{document}`).html;
+  assert.match(tex, /\\left\\langle\\mkern-4mu\\left\\langle a \\right\\rangle\\mkern-4mu\\right\\rangle/);
+});
+
+test('upgreek letters and \\talloblong render', () => {
+  const r = realKatex(String.raw`\begin{document}$\uptau + \upalpha_{\Upgamma} + \talloblong x \talloblong_p$\end{document}`);
+  assert.doesNotMatch(r.html, /katex-error|math-error/);
+});
+
+test('a label with commas in it is one label, while \\cref{a,b} still lists two', () => {
+  const { html, warnings } = plain(String.raw`\begin{document}
+\section{A}\label{sec:a}
+\begin{equation}x\label{eq:x,y,z}\end{equation}
+See \eqref{eq:x,y,z} and \cref{sec:a,eq:x,y,z}.
+\end{document}`);
+  assert.deepEqual(warnings.filter((w) => /Undefined reference/.test(w)), ['Undefined reference "eq:x".', 'Undefined reference "y".', 'Undefined reference "z".']);
+  assert.match(text(html), /See \(1\) and/);
+});
+
+test('imsart / elsarticle front matter: title block, thanks notes, keywords; running heads dropped', () => {
+  const { html, title } = plain(String.raw`\documentclass{imsart}
+\startlocaldefs
+\newcommand\R{\mathbb R}
+\endlocaldefs
+\begin{document}
+\begin{frontmatter}
+\title{A Study of Things}
+\runtitle{Short Things}
+\author{\fnms{Ada} \snm{Lovelace}\ead[label=e1]{ada@example.org}\thanksref{t1}}
+\thankstext{t1}{Supported by a grant.}
+\address{Somewhere \\ \printead{e1}}
+\affiliation{Some University}
+\author{\fnms{Alan} \snm{Turing}\corref{}}
+\runauthor{A. Lovelace and A. Turing}
+\begin{abstract}We study $\R$.\end{abstract}
+\begin{keyword}[class=MSC]
+\kwd[Primary ]{60H10}
+\kwd{60G99}
+\end{keyword}
+\begin{keyword}
+\kwd{first word}
+\kwd{second}
+\end{keyword}
+\end{frontmatter}
+\section{Intro}
+Text.
+\end{document}`);
+  const t = text(html);
+  assert.equal(title, 'A Study of Things');
+  assert.match(html, /<h1 class="doc-title">A Study of Things<\/h1>/);
+  assert.match(t, /Ada Lovelace1/);
+  assert.match(t, /Alan Turing/);
+  assert.match(t, /Supported by a grant\./);
+  assert.match(t, /MSC subject classifications: Primary 60H10, 60G99/);
+  assert.match(t, /Keywords: first word, second/);
+  assert.doesNotMatch(t, /Short Things|A\. Lovelace and|Some University|ada@example|t1|TODAY/);
+  assert.ok(html.indexOf('doc-title') < html.indexOf('abstract'), 'title before the abstract');
+
+  // elsarticle: \fntext[key]{…} with \fnref, keywords split by \sep
+  const els = text(plain(String.raw`\begin{document}\begin{frontmatter}
+\title{T}\author{B. Name\fnref{f1}}\fntext[f1]{Note one.}
+\begin{keyword} alpha \sep beta \end{keyword}
+\end{frontmatter}\end{document}`).html);
+  assert.match(els, /B\. Name1/);
+  assert.match(els, /Note one\./);
+  assert.match(els, /Keywords: alpha, beta/);
+});

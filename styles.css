@@ -608,6 +608,8 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 
 .abstract { margin: 0 2.5em 2em; font-size: 0.93em; }
 .abstract-title { text-align: center; font-weight: 600; font-variant: small-caps; margin-bottom: 0.4em; }
+.keywords { margin: 0 2.5em 0.4em; font-size: 0.93em; }
+.keywords-head { font-variant: small-caps; margin-right: 0.3em; }
 
 .toc { margin: 0 0 2em; padding: 0.8em 1.2em; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); }
 .toc h2 { font-size: 1.05em; margin: 0 0 0.4em; }
