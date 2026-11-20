@@ -110,6 +110,26 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.exportNotes",
+        "title": "Export Highlights and Notes…",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.importNotes",
+        "title": "Import Highlights and Notes…",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.syncNotes",
+        "title": "Sync Highlights and Notes with GitHub",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.stopSyncingNotes",
+        "title": "Stop Syncing Highlights and Notes with GitHub",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.find",
         "title": "Find in Preview",
         "category": "TeXglass",
@@ -271,6 +291,21 @@
           "command": "texglass.toggleStudyTools",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "0_look@1"
+        },
+        {
+          "command": "texglass.exportNotes",
+          "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.studyTools",
+          "group": "5_notes@1"
+        },
+        {
+          "command": "texglass.importNotes",
+          "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.studyTools",
+          "group": "5_notes@2"
+        },
+        {
+          "command": "texglass.syncNotes",
+          "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.studyTools",
+          "group": "5_notes@3"
         }
       ],
       "explorer/context": [
@@ -451,7 +486,7 @@
         "texglass.studyTools": {
           "type": "boolean",
           "default": true,
-          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed."
+          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed. Export and import them with the TeXglass: Export/Import Highlights and Notes commands, and sync them between machines with TeXglass: Sync Highlights and Notes with GitHub (a private gist on your account); with VS Code's Settings Sync on, they also follow you to your other machines."
         },
         "texglass.notationHover": {
           "type": "boolean",

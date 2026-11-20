@@ -10,7 +10,14 @@
     ? window.TeXglassMargin.attach({
       pane: previewPane,
       doc: preview,
-      study: false,
+      study: false, // turned on once a paper is open (notes, below)
+      // the reader's highlights and notes, kept per paper (see "the reader's notes" below)
+      save: (list) => notesChanged(list),
+      renderNote: (text) => {
+        const at = doc.indexOf('\\begin{document}');
+        const preamble = at >= 0 ? doc.slice(0, at) : '';
+        return Promise.resolve(TeXglass.render(`${preamble}\\begin{document}\n${String(text)}\n\\end{document}`).html);
+      },
       // the margin's width, once its divider was dragged (stored below)
       onWidth: (w) => store.set('texglass:margin-width', w == null ? '' : String(w)),
       // folded away with its button, or not (stored below)
@@ -55,6 +62,7 @@
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
+    remove(k) { try { localStorage.removeItem(k); } catch (e) { /* storage unavailable */ } },
   };
   if (margin) {
     margin.setWidth(parseFloat(store.get('texglass:margin-width')));
@@ -503,6 +511,7 @@
     doc = text.replace(/\r\n?/g, '\n');
     setSource(doc);
     fileName.textContent = name || 'untitled.tex';
+    openNotes(gh && gh.path, name, doc);
     setDirty(false);
     clearPreview();
     const shown = render();
@@ -668,6 +677,7 @@
     document.body.classList.toggle('mode-edit', m === 'edit');
     document.body.classList.toggle('editing', m === 'split');
     if (copier) copier.setEnabled(m !== 'edit');
+    updateStudy();
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
     store.set('texglass:mode', m);
     if (m !== 'edit') closeEditor(true);
@@ -1419,7 +1429,7 @@
   // --- the "…" menu: Save, Export, Print ---------------------------------------
   const moreBtn = $('more');
   const moreMenu = $('more-menu');
-  const menuItems = () => [...moreMenu.querySelectorAll('[role="menuitem"]')];
+  const menuItems = () => [...moreMenu.querySelectorAll('[role^="menuitem"]')].filter((b) => !b.hidden && !b.disabled);
   function setMenu(open, focusFirst) {
     moreMenu.hidden = !open;
     moreBtn.setAttribute('aria-expanded', String(open));
@@ -1430,7 +1440,7 @@
     if (e.key === 'ArrowDown') { e.preventDefault(); setMenu(true, true); }
   });
   // Choosing an item closes the menu first (its own listener above does the work).
-  moreMenu.addEventListener('click', (e) => { if (e.target.closest('[role="menuitem"]')) setMenu(false); });
+  moreMenu.addEventListener('click', (e) => { if (e.target.closest('[role^="menuitem"]')) setMenu(false); });
   moreMenu.addEventListener('keydown', (e) => {
     const items = menuItems();
     const i = items.indexOf(document.activeElement);
@@ -1448,6 +1458,286 @@
   document.addEventListener('pointerdown', (e) => {
     if (!moreMenu.hidden && !e.target.closest('.more-group')) setMenu(false);
   });
+
+  // --- the reader's highlights and notes ---------------------------------------
+  // Highlights and notes made on the preview (src/margin.js) are kept per paper
+  // in this browser (localStorage, texglass:notes:<paper key>); see
+  // src/notes-sync.js for the key and the file. They can be exported to a file
+  // and imported again, and synced between devices: through the browser's own
+  // sync in the browser extension, and through a private GitHub gist with the
+  // reader's own token wherever they sign in. Copies are merged by note id.
+  const NotesSync = window.TeXglassNotesSync;
+  const NOTES = 'texglass:notes:';
+  const extApi = (() => {
+    try {
+      const api = (typeof browser !== 'undefined' && browser) || (typeof chrome !== 'undefined' && chrome) || null;
+      return api && api.storage && api.storage.sync && api.runtime && api.runtime.id ? api : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  const EXT_ITEM_MAX = 8000; // chrome.storage.sync keeps at most 8 KB per item
+  let paper = null; // { key, record } for the open document's notes
+  let notesSyncing = Promise.resolve();
+  let notesPushTimer = null;
+
+  function readNotes(key) {
+    try {
+      const r = JSON.parse(store.get(NOTES + key) || 'null');
+      if (r && Array.isArray(r.notes)) return Object.assign(NotesSync.empty(key), r, { paper: key });
+    } catch (e) { /* not a record */ }
+    return null;
+  }
+  function writeNotes(key, record) {
+    if (!record.notes.length && !Object.keys(record.deleted || {}).length) store.remove(NOTES + key);
+    else store.set(NOTES + key, JSON.stringify(record));
+  }
+  /** Every paper with notes in this browser: { key: record }. */
+  function allNotes() {
+    const out = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(NOTES)) {
+          const r = readNotes(k.slice(NOTES.length));
+          if (r) out[k.slice(NOTES.length)] = r;
+        }
+      }
+    } catch (e) { /* storage unavailable */ }
+    return out;
+  }
+
+  const studyOn = () => store.get('texglass:study') !== '0';
+  function updateStudy() {
+    const on = !!(margin && NotesSync && paper && studyOn() && mode !== 'edit');
+    if (margin) margin.setStudy(on);
+    const item = $('notes-toggle');
+    if (item) item.setAttribute('aria-checked', String(studyOn()));
+    for (const id of ['notes-export', 'notes-import']) if ($(id)) $(id).disabled = !paper;
+  }
+
+  /** Show the notes of the document just opened (`ghPath`: where on GitHub it came from). */
+  function openNotes(ghPath, name, source) {
+    if (!margin || !NotesSync) return;
+    clearTimeout(notesPushTimer);
+    const key = NotesSync.paperKey({ github: ghPath, name, source });
+    paper = key ? { key, record: readNotes(key) || NotesSync.empty(key, NotesSync.titleOf(source)) } : null;
+    if (paper) showNotes();
+    else margin.setAnnotations([]);
+    updateStudy();
+    if (paper) syncNotes(true);
+  }
+
+  /** Put the open paper's notes in the margin. */
+  function showNotes() {
+    paper.shown = new Set(paper.record.notes.map((a) => a.id));
+    margin.setAnnotations(paper.record.notes);
+  }
+
+  /** The reader changed the notes (margin.js). */
+  function notesChanged(list) {
+    if (!paper) return;
+    // Notes that came in while one was being written are not in the margin yet: keep them.
+    const waiting = paper.record.notes.filter((a) => !paper.shown.has(a.id) && !list.some((b) => b.id === a.id));
+    paper.record = Object.assign(NotesSync.track(paper.record, list.concat(waiting)), { paper: paper.key });
+    paper.shown = new Set(list.map((a) => a.id));
+    writeNotes(paper.key, paper.record);
+    clearTimeout(notesPushTimer);
+    notesPushTimer = setTimeout(() => syncNotes(true), 2500);
+  }
+
+  /** Bring in notes from elsewhere (another tab, device or file) for the open paper. */
+  function takeNotes(record) {
+    if (!paper || !record) return;
+    const merged = NotesSync.merge(paper.record, record);
+    if (NotesSync.equal(merged, paper.record)) return;
+    paper.record = merged;
+    writeNotes(paper.key, merged);
+    // Not while a note is being written: try again a little later.
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.tg-mcard-input');
+    if (typing) setTimeout(() => paper && showNotes(), 4000);
+    else showNotes();
+  }
+
+  // The browser extension: the browser's own sync, one item per paper.
+  async function extSync(key, record) {
+    if (!extApi) return record;
+    const item = 'notes:' + key;
+    try {
+      const got = (await extApi.storage.sync.get(item))[item];
+      const merged = NotesSync.merge(record, got ? Object.assign({}, got, { paper: key }) : null);
+      const slim = { notes: merged.notes, deleted: merged.deleted };
+      if (!got || !NotesSync.equal(merged, Object.assign(NotesSync.empty(key), got))) {
+        if (JSON.stringify(slim).length + item.length < EXT_ITEM_MAX) await extApi.storage.sync.set({ [item]: slim });
+      }
+      return merged;
+    } catch (e) {
+      return record; // over the quota, or sync off: the notes stay in this browser
+    }
+  }
+  if (extApi && extApi.storage.onChanged) {
+    extApi.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'sync' || !paper) return;
+      const c = changes['notes:' + paper.key];
+      if (c && c.newValue) takeNotes(Object.assign(NotesSync.empty(paper.key), c.newValue));
+    });
+  }
+  window.addEventListener('storage', (e) => {
+    if (paper && e.key === NOTES + paper.key) takeNotes(readNotes(paper.key));
+  });
+
+  const gistToken = () => store.get('texglass:gist-token') || '';
+  function gistClient() {
+    return NotesSync.gist(gistToken(), { gistId: store.get('texglass:gist-id') || null });
+  }
+
+  /**
+   * Sync the open paper's notes (or, with all, every paper's) with the browser's
+   * sync and the gist. Quiet: say nothing unless something went wrong.
+   */
+  function syncNotes(quiet, all) {
+    const run = async () => {
+      if (!NotesSync) return;
+      if (!all && !paper) return;
+      const key = paper && paper.key;
+      let rec = paper && paper.record;
+      if (key) rec = await extSync(key, rec);
+      if (gistToken() && navigator.onLine !== false) {
+        try {
+          const g = gistClient();
+          if (all) {
+            const local = allNotes();
+            if (key) local[key] = rec;
+            const merged = await g.sync(null, local);
+            for (const [k, r] of Object.entries(merged)) if (k !== key) writeNotes(k, Object.assign(NotesSync.empty(k), readNotes(k), r));
+            if (key) rec = merged[key];
+            if (!quiet) flashStatus(`Notes synced with GitHub (${Object.keys(merged).length} paper${Object.keys(merged).length === 1 ? '' : 's'})`);
+          } else {
+            rec = await g.sync(key, rec);
+            if (!quiet) flashStatus('Notes synced with GitHub');
+          }
+          if (g.id()) store.set('texglass:gist-id', g.id());
+          store.set('texglass:gist-error', '');
+        } catch (e) {
+          store.set('texglass:gist-error', e.message);
+          if (!quiet || e.auth) flashStatus('Notes not synced: ' + e.message);
+        }
+      } else if (!quiet) {
+        flashStatus(gistToken() ? 'Offline: notes will sync later' : 'Notes saved in this browser');
+      }
+      if (paper && paper.key === key) takeNotes(rec);
+    };
+    notesSyncing = notesSyncing.then(run, run);
+    return notesSyncing;
+  }
+  window.addEventListener('online', () => { if (paper && gistToken()) syncNotes(true); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && paper && gistToken()) syncNotes(true);
+  });
+
+  function exportNotes() {
+    if (!paper) return;
+    const base = (fileName.textContent || 'paper.tex').replace(/\.(tex|ltx|latex)$/i, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([NotesSync.toFile(paper.record)], { type: 'application/json' }));
+    a.download = `${base}.texglass.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    flashStatus(`Exported ${paper.record.notes.length} note${paper.record.notes.length === 1 ? '' : 's'}`);
+  }
+
+  async function importNotes(file) {
+    if (!file || !paper) return;
+    let papers;
+    try {
+      papers = NotesSync.parseFile(await file.text(), paper.key);
+    } catch (e) {
+      flashStatus('Could not import: ' + (e instanceof SyntaxError ? 'not a notes file' : e.message));
+      return;
+    }
+    const keys = Object.keys(papers);
+    // One paper's file goes on the open paper (its notes find their text again);
+    // a file of many papers (the gist's) fills in each of them.
+    const mine = keys.length === 1 ? papers[keys[0]] : papers[paper.key];
+    for (const k of keys) {
+      if (k === paper.key || keys.length === 1) continue;
+      writeNotes(k, NotesSync.merge(readNotes(k) || NotesSync.empty(k), Object.assign({}, papers[k], { paper: k })));
+    }
+    const before = paper.record.notes.length;
+    if (mine) {
+      takeNotes(Object.assign({}, mine, { paper: paper.key }));
+      // keep the paper's own key, and push the imported notes on
+      notesChanged(paper.record.notes);
+    }
+    const added = paper.record.notes.length - before;
+    flashStatus(keys.length > 1
+      ? `Imported notes for ${keys.length} papers${mine ? `, ${added} new here` : ''}`
+      : `Imported ${added} new note${added === 1 ? '' : 's'}`);
+  }
+
+  // The "Sync notes" dialog: a GitHub token that may use gists, kept in this browser only.
+  const syncDialog = $('notes-sync-dialog');
+  function showSyncDialog() {
+    if (!syncDialog) return;
+    const on = !!gistToken();
+    $('notes-sync-token').value = '';
+    $('notes-sync-token').placeholder = on ? 'Signed in. Paste a new token to replace it' : 'ghp_… or github_pat_…';
+    $('notes-sync-signout').hidden = !on;
+    $('notes-sync-go').textContent = on ? 'Sync now' : 'Sign in and sync';
+    const err = store.get('texglass:gist-error');
+    $('notes-sync-message').textContent = on
+      ? (err ? 'Last sync failed: ' + err : 'Your notes sync with a private gist, texglass-notes.json, in your GitHub account.')
+      : '';
+    syncDialog.showModal();
+  }
+  if (syncDialog) {
+    $('notes-sync-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fresh = $('notes-sync-token').value.trim();
+      if (!fresh && !gistToken()) {
+        $('notes-sync-message').textContent = 'Paste a token first.';
+        return;
+      }
+      if (fresh) {
+        store.set('texglass:gist-token', fresh);
+        store.remove('texglass:gist-id');
+      }
+      $('notes-sync-message').textContent = 'Syncing…';
+      $('notes-sync-go').disabled = true;
+      await syncNotes(false, true);
+      $('notes-sync-go').disabled = false;
+      const err = store.get('texglass:gist-error');
+      if (err) {
+        $('notes-sync-message').textContent = 'Could not sync: ' + err;
+        if (fresh) store.remove('texglass:gist-token');
+      } else {
+        syncDialog.close();
+      }
+    });
+    $('notes-sync-cancel').addEventListener('click', () => syncDialog.close());
+    $('notes-sync-signout').addEventListener('click', () => {
+      store.remove('texglass:gist-token');
+      store.remove('texglass:gist-id');
+      store.remove('texglass:gist-error');
+      syncDialog.close();
+      flashStatus('Signed out. Notes stay in this browser.');
+    });
+  }
+
+  if ($('notes-toggle')) {
+    $('notes-toggle').addEventListener('click', () => {
+      store.set('texglass:study', studyOn() ? '0' : '1');
+      updateStudy();
+    });
+    $('notes-export').addEventListener('click', exportNotes);
+    $('notes-import').addEventListener('click', () => $('notes-file').click());
+    $('notes-file').addEventListener('change', (e) => {
+      importNotes(e.target.files[0]);
+      e.target.value = '';
+    });
+    $('notes-sync').addEventListener('click', showSyncDialog);
+  }
+  if (!NotesSync || !margin) for (const id of ['notes-toggle', 'notes-export', 'notes-import', 'notes-sync']) if ($(id)) $(id).hidden = true;
 
   // --- print / save as PDF -----------------------------------------------------
   // The print stylesheet (styles.css) lays the document out like a paper. Before

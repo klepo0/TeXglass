@@ -24,6 +24,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+const NotesSync = require('./shared/notes-sync.js');
 
 /** Hosts the citation previews may ask (see shared/cite.js). */
 const LOOKUP_HOSTS = new Set(['api.datacite.org', 'api.crossref.org']);
@@ -188,6 +189,46 @@ function parseNotes(text) {
   } catch (e) {
     return [];
   }
+}
+
+// --- the reader's notes on every machine -------------------------------------------------
+// Besides paper.texglass.json, each paper's notes are kept in the extension's
+// global state under its paper key (see shared/notes-sync.js), which VS Code's
+// Settings Sync carries to the reader's other machines; and, once they turn it
+// on, in a private gist on their GitHub account (signed in through VS Code's own
+// GitHub sign-in). Copies are merged by note id.
+const NOTES_STATE = 'texglass.notes';
+
+/** Every paper's notes kept in global state: { key: record }. */
+function notesStore(context) {
+  return Object.assign({}, context.globalState.get(NOTES_STATE, {}));
+}
+
+/** Keep one paper's notes in global state. */
+function keepNotes(context, key, record) {
+  if (!key) return Promise.resolve();
+  const all = notesStore(context);
+  if (!record || (!record.notes.length && !Object.keys(record.deleted || {}).length)) delete all[key];
+  else all[key] = { title: record.title || undefined, notes: record.notes, deleted: record.deleted || {} };
+  return context.globalState.update(NOTES_STATE, all);
+}
+
+/** A GitHub session that may use gists: asked for (ask) or only if there already is one. */
+async function gistSession(ask) {
+  try {
+    return await vscode.authentication.getSession('github', ['gist'], ask ? { createIfNone: true } : { silent: true });
+  } catch (e) {
+    if (ask) vscode.window.showWarningMessage(`TeXglass could not sign in to GitHub: ${e.message || e}`);
+    return null;
+  }
+}
+
+/** The notes gist, if syncing is on and there is a session (ask: sign in now). */
+async function notesGist(context, ask) {
+  if (!ask && !context.globalState.get('texglass.gistSync', false)) return null;
+  const session = await gistSession(ask);
+  if (!session) return null;
+  return NotesSync.gist(session.accessToken, { gistId: context.globalState.get('texglass.gistId', null) });
 }
 
 function notationHover() {
@@ -416,6 +457,8 @@ class Preview {
     if (this.notesWatcher) this.notesWatcher.dispose();
     this.notesWatcher = null;
     this.notesText = undefined;
+    this.notesKey = null;
+    this.notesRecord = null;
     try {
       const file = notesUri(this.uri);
       const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.joinPath(file, '..'), path.posix.basename(file.path)));
@@ -429,6 +472,23 @@ class Preview {
     }
   }
 
+  /** The key that names this paper on every machine (shared/notes-sync.js). */
+  async paperKey() {
+    if (this.notesKey) return this.notesKey;
+    let text = '';
+    const d = this.document;
+    if (d) text = d.getText();
+    else {
+      try {
+        text = new TextDecoder().decode(await vscode.workspace.fs.readFile(this.uri));
+      } catch (e) {
+        text = '';
+      }
+    }
+    this.notesKey = NotesSync.paperKey({ name: path.posix.basename(this.uri.path), source: text }) || 'tex:' + path.posix.basename(this.uri.path);
+    return this.notesKey;
+  }
+
   async loadNotes() {
     let text = '';
     try {
@@ -437,13 +497,76 @@ class Preview {
       text = '';
     }
     if (this.disposed || text === this.notesText) return; // our own write coming back
+    const removed = !text && !!this.notesText; // the reader deleted the file: their notes go too
     this.notesText = text;
-    this.post({ type: 'annotations', list: parseNotes(text) });
+    const key = await this.paperKey();
+    if (removed && this.notesRecord) {
+      this.post({ type: 'annotations', list: [] });
+      return this.saveNotes([]);
+    }
+    let rec = NotesSync.empty(key);
+    try {
+      if (text) rec = Object.assign(Object.values(NotesSync.parseFile(text, key))[0] || rec, { paper: key });
+    } catch (e) {
+      rec = Object.assign(NotesSync.empty(key), { notes: parseNotes(text) });
+    }
+    // Notes made on this paper on another machine (Settings Sync) come in too.
+    const kept = notesStore(this.context)[key];
+    const merged = NotesSync.merge(rec, kept ? Object.assign({}, kept, { paper: key }) : null);
+    this.notesRecord = merged;
+    this.post({ type: 'annotations', list: merged.notes });
+    if (!NotesSync.equal(merged, rec) && merged.notes.length) await this.writeNotes(merged);
+    await keepNotes(this.context, key, merged);
+    this.syncGist();
   }
 
+  /** The reader changed the notes in the preview. */
   async saveNotes(list) {
+    const key = await this.paperKey();
+    this.notesRecord = Object.assign(NotesSync.track(this.notesRecord || NotesSync.empty(key), Array.isArray(list) ? list : []), { paper: key });
+    await this.writeNotes(this.notesRecord);
+    await keepNotes(this.context, key, this.notesRecord);
+    clearTimeout(this.gistTimer);
+    this.gistTimer = setTimeout(() => this.syncGist(), 2500);
+  }
+
+  /** Bring in notes from elsewhere (a file, the gist) for this paper. */
+  async takeNotes(record) {
+    const key = await this.paperKey();
+    const before = this.notesRecord || NotesSync.empty(key);
+    const merged = NotesSync.merge(before, Object.assign({}, record, { paper: key }));
+    if (NotesSync.equal(merged, before)) return 0;
+    this.notesRecord = merged;
+    this.post({ type: 'annotations', list: merged.notes });
+    await this.writeNotes(merged);
+    await keepNotes(this.context, key, merged);
+    return merged.notes.length - before.notes.length;
+  }
+
+  /** Sync this paper's notes with the gist, if that is on. Quiet unless asked. */
+  syncGist(loud) {
+    const run = async () => {
+      if (this.disposed) return;
+      const g = await notesGist(this.context, false);
+      if (!g) return;
+      const key = await this.paperKey();
+      try {
+        const rec = await g.sync(key, this.notesRecord || NotesSync.empty(key));
+        if (g.id()) await this.context.globalState.update('texglass.gistId', g.id());
+        if (!this.disposed && key === this.notesKey) await this.takeNotes(rec);
+        if (loud) vscode.window.setStatusBarMessage('TeXglass: notes synced with GitHub', 3000);
+      } catch (e) {
+        if (loud || e.auth) vscode.window.showWarningMessage(`TeXglass could not sync the notes: ${e.message || e}`);
+      }
+    };
+    this.gistSyncing = (this.gistSyncing || Promise.resolve()).then(run, run);
+    return this.gistSyncing;
+  }
+
+  /** Write paperk.texglass.json (or remove it once no notes are left). */
+  async writeNotes(record) {
     const file = notesUri(this.uri);
-    const notes = Array.isArray(list) ? list : [];
+    const notes = record.notes || [];
     try {
       if (!notes.length) {
         // No notes left: no file either (if there was one).
@@ -451,11 +574,9 @@ class Preview {
         this.notesText = '';
         return;
       }
-      const text = JSON.stringify({
-        about: 'Highlights and notes made in the TeXglass preview, anchored to the text of ' + path.posix.basename(this.uri.path) + '.',
-        version: 1,
-        notes,
-      }, null, 2) + '\n';
+      const text = NotesSync.toFile(record,
+        'Highlights and notes made in the TeXglass preview, anchored to the text of ' + path.posix.basename(this.uri.path) + '.');
+      if (text === this.notesText) return;
       this.notesText = text;
       await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(text));
     } catch (e) {
@@ -1083,6 +1204,8 @@ async function migrateOldSettings(context) {
 
 function activate(context) {
   migrateOldSettings(context).catch(() => {});
+  // Each paper's notes travel with VS Code's Settings Sync, when the reader has it on.
+  if (context.globalState.setKeysForSync) context.globalState.setKeysForSync([NOTES_STATE]);
   const converter = new Converter(context.extensionPath);
   context.subscriptions.push(converter);
   let preview = null;
@@ -1179,6 +1302,72 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.toggleHandwriting', () =>
       setConfig('previewStyle', previewLook().look === 'notes' ? 'standard' : 'handwritten')),
     vscode.commands.registerCommand('texglass.toggleStudyTools', () => setConfig('studyTools', !studyTools())),
+    // The reader's notes: to a file and back, and synced through a private gist.
+    vscode.commands.registerCommand('texglass.exportNotes', async () => {
+      if (!preview) return vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
+      const key = await preview.paperKey();
+      const rec = preview.notesRecord || NotesSync.empty(key);
+      if (!rec.notes.length) return vscode.window.showInformationMessage('This paper has no highlights or notes yet.');
+      const base = path.posix.basename(preview.uri.path).replace(/\.(tex|ltx|latex)$/i, '');
+      const home = os && os.homedir ? os.homedir() : null;
+      const dir = home && fs && fs.existsSync(path.join(home, 'Downloads')) ? vscode.Uri.file(path.join(home, 'Downloads')) : vscode.Uri.joinPath(preview.uri, '..');
+      const to = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.joinPath(dir, `${base}-notes.texglass.json`),
+        filters: { 'TeXglass notes': ['json'] },
+        saveLabel: 'Export notes',
+      });
+      if (!to) return;
+      await vscode.workspace.fs.writeFile(to, new TextEncoder().encode(NotesSync.toFile(Object.assign({}, rec, { paper: key }))));
+      vscode.window.showInformationMessage(`Exported ${rec.notes.length} note${rec.notes.length === 1 ? '' : 's'} to ${path.posix.basename(to.path)}.`);
+    }),
+    vscode.commands.registerCommand('texglass.importNotes', async () => {
+      if (!preview) return vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
+      const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: { 'TeXglass notes': ['json'] }, openLabel: 'Import notes' });
+      if (!picked || !picked[0]) return;
+      const key = await preview.paperKey();
+      let papers;
+      try {
+        papers = NotesSync.parseFile(new TextDecoder().decode(await vscode.workspace.fs.readFile(picked[0])), key);
+      } catch (e) {
+        return vscode.window.showWarningMessage('That file is not a TeXglass notes file.');
+      }
+      const keys = Object.keys(papers);
+      // One paper's file goes on this paper; a file of many papers (the gist's) fills in each.
+      if (keys.length > 1) {
+        for (const k of keys) {
+          if (k === key) continue;
+          const had = notesStore(context)[k];
+          await keepNotes(context, k, NotesSync.merge(had ? Object.assign({ paper: k }, had) : NotesSync.empty(k), Object.assign({}, papers[k], { paper: k })));
+        }
+      }
+      const mine = keys.length === 1 ? papers[keys[0]] : papers[key];
+      const added = mine ? await preview.takeNotes(mine) : 0;
+      preview.syncGist();
+      vscode.window.showInformationMessage(keys.length > 1
+        ? `Imported notes for ${keys.length} papers, ${added} new in this one.`
+        : `Imported ${added} new note${added === 1 ? '' : 's'}.`);
+    }),
+    vscode.commands.registerCommand('texglass.syncNotes', async () => {
+      const g = await notesGist(context, true);
+      if (!g) return;
+      await context.globalState.update('texglass.gistSync', true);
+      try {
+        const local = {};
+        for (const [k, r] of Object.entries(notesStore(context))) local[k] = Object.assign({ paper: k }, r);
+        const merged = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'TeXglass: syncing notes with GitHub…' }, () => g.sync(null, local));
+        if (g.id()) await context.globalState.update('texglass.gistId', g.id());
+        for (const [k, r] of Object.entries(merged)) await keepNotes(context, k, r);
+        if (preview) await preview.syncGist(true);
+        const n = Object.keys(merged).length;
+        vscode.window.showInformationMessage(`TeXglass notes are synced with a private gist on your GitHub account (texglass-notes.json, ${n} paper${n === 1 ? '' : 's'}). They sync on their own from now on.`);
+      } catch (e) {
+        vscode.window.showWarningMessage(`TeXglass could not sync the notes: ${e.message || e}`);
+      }
+    }),
+    vscode.commands.registerCommand('texglass.stopSyncingNotes', async () => {
+      await context.globalState.update('texglass.gistSync', false);
+      vscode.window.showInformationMessage('TeXglass no longer syncs notes with GitHub. They stay next to each .tex file, and in the gist as they were.');
+    }),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {
       if (preview) preview.post({ type: 'toggle-theme' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');

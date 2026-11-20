@@ -101,7 +101,9 @@ Install **TeXglass** from the
 - **Highlighter and margin notes** of your own: select text to highlight it
   or write a note on it, or drag the note pad onto a line. They are saved
   beside the `.tex` in `name.texglass.json`, anchored to the text so they
-  survive edits, and the `.tex` is never changed.
+  survive edits, and the `.tex` is never changed. **Export** and **Import**
+  them as a file, and **sync** them between machines (see
+  [Notes on every device](#notes-on-every-device)).
 - **Handwritten notes look** (optional): **TeXglass: Toggle Handwritten
   Notes Look** shows the document in ink on squared, lined or plain paper, or
   as chalk on a board in dark mode. Pick the hand, the pen (ballpoint,
@@ -143,6 +145,11 @@ offline too (arXiv, GitHub and OAI preprints still need a connection).
   **folder** instead (Shift+click *Open*, or Ctrl+Shift+O), or choose several
   files at once; TeXglass finds the main file. In Chrome and Edge a folder
   chosen this way re-renders when you save any of its `.tex` files.
+- **Highlights and notes** of your own, as in VS Code: select text for the
+  highlighter bar, or drag the note pad onto a line. They are kept in this
+  browser for each paper (an arXiv paper keeps its notes across versions).
+  The `…` menu turns them off and on, and has **Export notes**, **Import
+  notes…** and **Sync notes with GitHub…**.
 - The **Contents** button shows the side panel; its **Notation** tab has a
   checkbox that turns notation on hover off and on. The pen button beside the
   light/dark button switches to the handwritten notes look.
@@ -185,6 +192,28 @@ referring site and the screen width, never a paper, file name or arXiv id.
 It sets no cookies, stores nothing on your device, and is skipped when your
 browser sends Do Not Track or Global Privacy Control. Local copies, the arXiv
 browser extension, the VS Code extension and the command line count nothing.
+
+### Notes on every device
+
+Each paper's highlights and notes are a small file (`paper.texglass.json`),
+keyed by the paper: its arXiv id, its GitHub path, or for a `.tex` file its
+name and title. Notes are anchored to the text they mark, so they find their
+place again in a revised paper.
+
+- **Export / Import**: the web viewer's `…` menu, or **TeXglass: Export
+  Highlights and Notes…** / **Import Highlights and Notes…** in VS Code.
+- **Sync through GitHub**: your notes go to a private gist,
+  `texglass-notes.json`, in your own GitHub account, and come back wherever you
+  sign in. There is no TeXglass server. In VS Code, run **TeXglass: Sync
+  Highlights and Notes with GitHub** and sign in with VS Code's own GitHub
+  sign-in. In the web viewer and the browser extension, choose **Sync notes
+  with GitHub…** and paste a token with only the `gist` scope (the dialog links
+  to the page that makes one); it stays in that browser.
+- **Without GitHub**: the browser extension also syncs notes with your
+  browser's own sync (Chrome or Firefox), and VS Code with Settings Sync.
+
+Notes changed on two devices at once are merged by note: the later edit of a
+note wins, and a note deleted on one device stays deleted.
 
 ## arXiv browser extension
 

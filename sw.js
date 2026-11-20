@@ -33,7 +33,7 @@ const PRECACHE = [
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
   ...['arxiv', 'bib', 'cite', 'copytex', 'diagrams', 'editor', 'eps', 'export', 'find', 'github', 'insight', 'local', 'openai-math',
-    'margin', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
+    'margin', 'notes-sync', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
 ];
 
 if (typeof module === 'object' && module.exports) module.exports = { CACHE, PRECACHE };

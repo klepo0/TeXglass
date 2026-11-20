@@ -167,6 +167,11 @@ body {
 }
 .toolbar .more-menu button:hover, .toolbar .more-menu button:focus-visible { background: var(--accent-soft); outline: none; }
 .more-menu kbd { font: inherit; font-size: 12px; color: var(--muted); }
+.more-menu .more-sep { height: 1px; margin: 4px 6px; background: var(--rule); }
+.toolbar .more-menu button[role="menuitemcheckbox"]::after { content: ''; width: 1em; text-align: right; color: var(--accent); }
+.toolbar .more-menu button[role="menuitemcheckbox"][aria-checked="true"]::after { content: '✓'; }
+.toolbar .more-menu button:disabled { opacity: 0.45; cursor: default; background: none; }
+#notes-sync-dialog .local-note { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
 
 /* Import from arXiv */
 .arxiv-dialog {
