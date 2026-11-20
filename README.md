@@ -47,7 +47,10 @@ browser extension:
   paper's macros and defined symbols, and a **Map** of which lemmas each
   theorem uses, read from the `\ref`s in statements and proofs (a reference
   preview also says where a result is used). Rest the pointer on a result in
-  the map, small or large, to preview its statement. Drag its edge to make it wider;
+  the map, small or large, to preview its statement. Press **M** (outside a
+  text field) to open the larger map, which fills the window: drag to move
+  around, Ctrl + scroll or pinch to zoom, or use **−**, **+**, **0** and
+  **F** (fit the whole map). Drag its edge to make it wider;
   the width is remembered, and on a narrow panel the tabs stack.
   The map also reads results named without a link ("Lemma 2.3" typed by
   hand, "the previous lemma"), drawn dashed as guesses, and links a cited

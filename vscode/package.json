@@ -131,6 +131,11 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.showLargerMap",
+        "title": "Show Larger Dependency Map",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.findNext",
         "title": "Find Next in Preview",
         "category": "TeXglass"
@@ -308,6 +313,10 @@
         },
         {
           "command": "texglass.showDependencies",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.showLargerMap",
           "when": "activeWebviewPanelId == 'texglass.preview'"
         },
         {

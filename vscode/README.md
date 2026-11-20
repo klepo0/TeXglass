@@ -51,7 +51,10 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   shown dashed, and from citations, shown as leaves; solid lines are used in a
   proof, dotted ones only named in a statement; results are grouped by section,
   and chains of lemmas serving one result fold into it on big maps); rest the
-  pointer on a result in the map to preview its statement.
+  pointer on a result in the map to preview its statement. Press **M** in the
+  preview (or run **TeXglass: Show Larger Dependency Map**) for the larger map,
+  which fills the panel: drag to move around, Ctrl + scroll or pinch to zoom,
+  or press **−**, **+**, **0** and **F** (fit the whole map).
   **TeXglass: Show Notation Index** and **TeXglass: Show Dependency Map
   of the Results** open those tabs. Drag the sidebar's edge to resize it; the
   width and tab are remembered. Hovering a

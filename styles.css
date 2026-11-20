@@ -715,6 +715,8 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
   font-size: 14px;
 }
 .insight-dialog[open] { display: flex; flex-direction: column; }
+/* The larger map takes nearly the whole window. */
+.insight-dialog.insight-dialog-map { width: calc(100vw - 24px); height: calc(100vh - 24px); max-width: none; max-height: none; }
 /* A result previewed from the map: the text's own font, at the popover's size. */
 .dep-preview-text { font-size: inherit; line-height: 1.55; }
 .dep-preview-text .theorem { margin: 0; }
@@ -748,6 +750,16 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .insight-body:has(.dep-wrap) { display: flex; flex-direction: column; }
 .dep-wrap { flex: 1 1 auto; min-height: 160px; }
 .dep-map { display: block; font-size: 12px; }
+.insight-dialog .dep-wrap { max-height: none; cursor: grab; }
+.insight-dialog .dep-wrap.dep-dragging, .dep-wrap.dep-dragging { cursor: grabbing; user-select: none; }
+.insight-dialog .dep-detail { flex: 0 1 auto; max-height: 30%; overflow: auto; }
+.insight-dialog .insight-lead { margin: 0 0 6px; max-width: none; }
+.dep-zoom { display: inline-flex; align-items: center; margin-left: auto; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.dep-zoom button { font: inherit; font-size: 13px; min-width: 30px; padding: 2px 8px; border: 0; border-left: 1px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer; }
+.dep-zoom button:first-child { border-left: 0; }
+.dep-zoom button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.dep-zoom button:disabled { color: var(--muted); opacity: 0.5; cursor: default; }
+.dep-zoom .dep-zoom-level { min-width: 52px; font-variant-numeric: tabular-nums; }
 .dep-edge { fill: none; stroke: var(--muted); stroke-width: 1.1; opacity: 0.55; }
 .dep-arrowhead { fill: var(--muted); }
 .dep-node { cursor: pointer; outline: none; }

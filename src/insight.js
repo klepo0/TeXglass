@@ -25,6 +25,7 @@
  *   insight.setDefinitions(result.defs);   // after each render: the paper's macros
  *   insight.invalidate();                  // after the page changed
  *   insight.open('notation' | 'deps');     // the panel
+ *   insight.toggleMap();                   // open or close the larger map (also the M key)
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
  *   insight.focus(theoremEl, 'uses' | 'usedBy'); insight.unfocus();
  */
@@ -1203,6 +1204,7 @@
         }
       });
       wirePreviews(view);
+      wireMapMoves(view);
       views.add(view);
     }
 
@@ -1292,18 +1294,132 @@
       if (g.sections.length > 1) opts_.push(box('sections', 'Sections', mapOpts.sections, 'Group the results by the section they sit in'));
       if (g.cites.length) opts_.push(box('cites', 'Citations', mapOpts.cites, 'Show the works cited in statements and proofs'));
       if (foldGroups(g).size) opts_.push(box('fold', 'Fold lemmas', fold, 'Fold chains of lemmas that serve only one result into that result'));
-      const controls = opts_.length ? `<div class="dep-opts">${opts_.join('')}</div>` : '';
+      // the larger map zooms: buttons, Ctrl + wheel or a pinch, and + − 0 F keys
+      const zoomBar = view.zoomable
+        ? '<span class="dep-zoom" role="group" aria-label="Zoom the map">' +
+          '<button type="button" data-zoom="-1" title="Zoom out (−)" aria-label="Zoom out">−</button>' +
+          '<button type="button" data-zoom="0" class="dep-zoom-level" title="Actual size (0)" aria-label="Actual size">100%</button>' +
+          '<button type="button" data-zoom="1" title="Zoom in (+)" aria-label="Zoom in">+</button>' +
+          '<button type="button" data-zoom="fit" title="Fit the whole map in view (F)">Fit</button></span>'
+        : '';
+      const controls = opts_.length || zoomBar ? `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` : '';
+      const oldWrap = body.querySelector('.dep-wrap');
+      const kept = oldWrap ? { l: oldWrap.scrollLeft, t: oldWrap.scrollTop } : null;
       body.innerHTML = view.side
-        ? `<p class="insight-lead">${counts}. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on. <a href="#" class="dep-larger">Larger map</a></p>` +
+        ? `<p class="insight-lead">${counts}. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on. <a href="#" class="dep-larger" title="Open the larger map (M)">Larger map</a></p>` +
           controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`
         : `<p class="insight-lead">${counts}, read from the links in statements and proofs, from results named by hand, and from citations. ` +
-          'Each arrow goes from a result to one that uses it. Pick a result to light up what it rests on and what rests on it.</p>' +
+          'Each arrow goes from a result to one that uses it. Pick a result to light up what it rests on and what rests on it. ' +
+          'Drag to move around; Ctrl + scroll or pinch to zoom.</p>' +
           controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`;
       view.synced = false;
+      if (view.zoomable) zoomTo(view, view.scale || 1);
+      const wrap = body.querySelector('.dep-wrap');
+      if (kept && wrap) { wrap.scrollLeft = kept.l; wrap.scrollTop = kept.t; } // redrawn: stay where it was
       if (focusState && syncMap(view)) return;
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
       else if (view.selectedCite != null && g.cites[view.selectedCite]) selectCite(view, view.selectedCite);
       else body.querySelector('.dep-detail').innerHTML = '<p class="insight-muted">No result picked.</p>';
+    }
+
+    // --- zooming and moving around a map -----------------------------------------
+
+    const ZOOM_MIN = 0.2;
+    const ZOOM_MAX = 3;
+
+    /** The scale at which the whole map fits in its frame (at most 1). */
+    function fitScale(view) {
+      const svg = view.body.querySelector('.dep-map');
+      const wrap = view.body.querySelector('.dep-wrap');
+      if (!svg || !wrap || !wrap.clientWidth) return 1;
+      const w = Number(svg.getAttribute('width'));
+      const h = Number(svg.getAttribute('height'));
+      return Math.min(1, (wrap.clientWidth - 2) / w, (wrap.clientHeight - 2) / h);
+    }
+
+    /**
+     * Draw the map at scale s, keeping the point at (x, y) of the frame (its
+     * middle by default) where it is. The SVG is scaled, so it stays sharp.
+     */
+    function zoomTo(view, s, at) {
+      const svg = view.body.querySelector('.dep-map');
+      const wrap = view.body.querySelector('.dep-wrap');
+      if (!svg || !wrap) return;
+      s = Math.min(ZOOM_MAX, Math.max(Math.min(ZOOM_MIN, fitScale(view)), s));
+      const old = svg.style.width ? view.scale || 1 : 1;
+      const cx = at ? at.x : wrap.clientWidth / 2;
+      const cy = at ? at.y : wrap.clientHeight / 2;
+      const px = (wrap.scrollLeft + cx) / old;
+      const py = (wrap.scrollTop + cy) / old;
+      svg.style.width = `${Number(svg.getAttribute('width')) * s}px`;
+      svg.style.height = `${Number(svg.getAttribute('height')) * s}px`;
+      view.scale = s;
+      wrap.scrollLeft = px * s - cx;
+      wrap.scrollTop = py * s - cy;
+      const label = view.body.querySelector('.dep-zoom-level');
+      if (label) label.textContent = `${Math.round(s * 100)}%`;
+      view.body.querySelectorAll('.dep-zoom [data-zoom="-1"]').forEach((b) => { b.disabled = s <= Math.min(ZOOM_MIN, fitScale(view)) + 1e-3; });
+      view.body.querySelectorAll('.dep-zoom [data-zoom="1"]').forEach((b) => { b.disabled = s >= ZOOM_MAX - 1e-3; });
+    }
+
+    /** One step: 1 in, -1 out, 0 actual size, 'fit' the whole map. False if no map is on show. */
+    function zoomStep(view, dir) {
+      if (!view.zoomable || view.tab !== 'deps' || !view.body.querySelector('.dep-map')) return false;
+      if (dir === 'fit') zoomTo(view, fitScale(view));
+      else if (!dir) zoomTo(view, 1);
+      else zoomTo(view, (view.scale || 1) * (dir > 0 ? 1.25 : 0.8));
+      return true;
+    }
+
+    /** Drag the map's background to move around it; Ctrl + wheel or a pinch zooms (larger map). */
+    function wireMapMoves(view) {
+      const body = view.body;
+      let drag = null;
+      body.addEventListener('pointerdown', (e) => {
+        const wrap = e.target.closest && e.target.closest('.dep-wrap');
+        if (!wrap || e.button !== 0 || e.target.closest('.dep-node, .dep-fold')) return;
+        const r = wrap.getBoundingClientRect();
+        if (e.clientX - r.left > wrap.clientWidth || e.clientY - r.top > wrap.clientHeight) return; // a scroll bar
+        if (wrap.scrollWidth <= wrap.clientWidth && wrap.scrollHeight <= wrap.clientHeight) return;
+        drag = { wrap, x: e.clientX, y: e.clientY, l: wrap.scrollLeft, t: wrap.scrollTop, id: e.pointerId, moved: false };
+      });
+      body.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.x;
+        const dy = e.clientY - drag.y;
+        if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+        if (!drag.moved) {
+          drag.moved = true;
+          drag.wrap.classList.add('dep-dragging');
+          try { drag.wrap.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+          hidePop();
+        }
+        e.preventDefault();
+        drag.wrap.scrollLeft = drag.l - dx;
+        drag.wrap.scrollTop = drag.t - dy;
+      });
+      const end = (e) => {
+        if (!drag || (e && e.pointerId !== drag.id)) return;
+        drag.wrap.classList.remove('dep-dragging');
+        drag = null;
+      };
+      body.addEventListener('pointerup', end);
+      body.addEventListener('pointercancel', end);
+      if (!view.zoomable) return;
+      body.addEventListener('wheel', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || view.tab !== 'deps') return;
+        const wrap = e.target.closest && e.target.closest('.dep-wrap');
+        if (!wrap) return;
+        e.preventDefault();
+        const r = wrap.getBoundingClientRect();
+        zoomTo(view, (view.scale || 1) * Math.exp(-e.deltaY / 300), { x: e.clientX - r.left, y: e.clientY - r.top });
+      }, { passive: false });
+      body.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-zoom]');
+        if (!b) return;
+        e.preventDefault();
+        zoomStep(view, b.dataset.zoom === 'fit' ? 'fit' : Number(b.dataset.zoom));
+      });
     }
 
     /** Fold or unfold the lemmas folded into the result with this id, on one map. */
@@ -1551,11 +1667,27 @@
       dialog.querySelector('.insight-head').addEventListener('change', (e) => {
         if (e.target.matches('.insight-hover input')) setHover(e.target.checked, true);
       });
-      dialogView = { body: dialog.querySelector('.insight-body'), tab: 'notation', selected: null, side: false, leave: () => dialog.close(), isShown: () => dialog.open };
+      dialogView = { body: dialog.querySelector('.insight-body'), tab: 'notation', selected: null, side: false, zoomable: true, leave: () => dialog.close(), isShown: () => dialog.open };
       wire(dialogView);
+      // In the larger map, + − 0 (with Ctrl/Cmd or without) and F zoom the map, not
+      // the page. Listened for on the document: focus falls back to the body when
+      // an option redraws the map.
+      document_.addEventListener('keydown', (e) => {
+        if (!dialog.open || e.altKey || typing(e.target)) return;
+        const key = e.key;
+        let dir = null;
+        if (key === '+' || key === '=') dir = 1;
+        else if (key === '-' || key === '_') dir = -1;
+        else if (key === '0') dir = 0;
+        else if ((key === 'f' || key === 'F') && !e.ctrlKey && !e.metaKey) dir = 'fit';
+        if (dir === null || !zoomStep(dialogView, dir)) return;
+        e.preventDefault();
+        e.stopPropagation();
+      });
     }
 
     function fillDialog() {
+      dialog.classList.toggle('insight-dialog-map', dialogView.tab === 'deps');
       dialog.querySelectorAll('.insight-tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === dialogView.tab)));
       fill(dialogView);
       dialog.dataset.ms = dialogView.body.dataset.ms;
@@ -1567,6 +1699,26 @@
       if (selected != null) dialogView.selected = selected;
       fillDialog();
       if (!dialog.open) dialog.showModal();
+    }
+
+    // M (outside text fields) opens the larger map, and closes it again.
+    const typing = (t) => !!t && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) ||
+      (t.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(t.type)));
+    function toggleMap() {
+      if (dialog && dialog.open && dialogView.tab === 'deps') { dialog.close(); return; }
+      let selected = null;
+      for (const v of views) if (v !== dialogView && v.tab === 'deps' && v.isShown() && v.selected != null) selected = v.selected;
+      open('deps', selected);
+    }
+    if (opts.mapKey !== false) {
+      document_.addEventListener('keydown', (e) => {
+        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat || (e.key !== 'm' && e.key !== 'M')) return;
+        if (typing(e.target)) return;
+        const other = document_.querySelector('dialog[open]');
+        if (other && other !== dialog) return;
+        e.preventDefault();
+        toggleMap();
+      });
     }
 
     /**
@@ -1794,6 +1946,7 @@
 
     return {
       open,
+      toggleMap,
       mount,
       invalidate,
       setDefinitions,

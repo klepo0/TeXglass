@@ -864,6 +864,10 @@
           vscode.postMessage({ type: 'toc', on: true });
         } else if (insight) insight.open(m.tab);
         break;
+      case 'larger-map':
+        // Show Larger Dependency Map (also the M key in the preview)
+        if (insight) insight.open('deps');
+        break;
       case 'notation-hover':
         if (insight) insight.setHover(m.on);
         break;
