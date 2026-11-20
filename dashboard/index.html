@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeXglass render dashboard</title>
+<meta name="description" content="Every night TeXglass renders a fixed set of arXiv papers and lists what broke.">
+<style>
+:root {
+  --bg: #fbfaf7; --paper: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --rule: #e4e1da;
+  --accent: #2f5fb3; --accent-soft: #e8eefa;
+  --ok: #2e7d4f; --ok-soft: #e6f2ea; --issues: #a85d00; --issues-soft: #fbf0df;
+  --broken: #c62828; --broken-soft: #fbe7e7; --none: #8a8a8f; --none-soft: #efefef;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181b; --paper: #1e1f23; --ink: #e6e4df; --muted: #9a9aa2; --rule: #34353b;
+    --accent: #8fb2f0; --accent-soft: #23304a;
+    --ok: #6cc28f; --ok-soft: #1f3327; --issues: #e3a356; --issues-soft: #3a2c19;
+    --broken: #f07b7b; --broken-soft: #3d2222; --none: #8a8a92; --none-soft: #2a2b30;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181b; --paper: #1e1f23; --ink: #e6e4df; --muted: #9a9aa2; --rule: #34353b;
+  --accent: #8fb2f0; --accent-soft: #23304a;
+  --ok: #6cc28f; --ok-soft: #1f3327; --issues: #e3a356; --issues-soft: #3a2c19;
+  --broken: #f07b7b; --broken-soft: #3d2222; --none: #8a8a92; --none-soft: #2a2b30;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 32px 0 10px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 18px; }
+.tile { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; }
+.tile b { display: block; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 0.9rem; }
+.tile.ok b { color: var(--ok); } .tile.issues b { color: var(--issues); } .tile.broken b { color: var(--broken); }
+.trend { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+.trend svg { width: 100%; height: 70px; display: block; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 4px 14px; }
+.changes li { padding: 6px 0; border-bottom: 1px solid var(--rule); list-style: none; }
+.changes li:last-child { border-bottom: 0; }
+.changes ul { margin: 0; padding: 0; }
+.badge { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.issues { background: var(--issues-soft); color: var(--issues); }
+.badge.broken { background: var(--broken-soft); color: var(--broken); }
+.badge.nosource { background: var(--none-soft); color: var(--none); }
+.badge.slow { background: var(--accent-soft); color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.top h3 { font-size: 0.95rem; margin: 10px 0 2px; }
+.top p.hint { margin: 0 0 6px; color: var(--muted); font-size: 0.85rem; }
+.top ol { margin: 0 0 10px; padding: 0; list-style: none; }
+.top li { padding: 3px 0; border-bottom: 1px dashed var(--rule); }
+.top summary { display: flex; gap: 8px; align-items: baseline; cursor: pointer; list-style: none; }
+.top summary::-webkit-details-marker { display: none; }
+.top summary::before { content: '▸'; color: var(--muted); font-size: 0.8em; }
+.top details[open] summary::before { content: '▾'; }
+.top .ids { font-size: 0.85rem; padding: 4px 0 4px 16px; }
+.top li:last-child { border-bottom: 0; }
+.top .key { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.top .n { color: var(--muted); font-size: 0.85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.controls button { font: inherit; font-size: 0.9rem; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.controls button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.controls input { font: inherit; font-size: 0.9rem; flex: 1; min-width: 160px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.table-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 0.8rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+th button { all: unset; cursor: pointer; }
+th button:focus-visible { outline: 2px solid var(--accent); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.paper { cursor: pointer; }
+tr.paper:hover { background: var(--accent-soft); }
+tr.detail td { background: var(--bg); }
+.title { color: var(--muted); font-size: 0.85rem; display: block; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail ul { margin: 4px 0 8px 18px; padding: 0; }
+.detail h4 { margin: 6px 0 0; font-size: 0.85rem; }
+#error { color: var(--broken); }
+footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 600px) { .hide-sm { display: none; } .title { max-width: 26ch; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Render dashboard</h1>
+  <p class="muted" id="when">Loading the last run…</p>
+  <p id="error" hidden></p>
+  <div class="tiles" id="tiles"></div>
+  <div class="trend" id="trend" hidden></div>
+
+  <h2>Changed since the last run</h2>
+  <div class="panel changes" id="changes"><p class="muted">—</p></div>
+
+  <h2>What to support next</h2>
+  <div class="grid top" id="top"></div>
+
+  <h2>All papers</h2>
+  <div class="controls" id="filters" role="group" aria-label="Show"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Paper</th><th class="hide-sm">Field</th><th>Status</th><th>Problems</th>
+        <th class="num"><button data-sort="ms">Load time</button></th><th class="hide-sm">Since</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <footer>
+    Every night a GitHub Actions job opens each paper in the TeXglass web viewer in headless Chromium, the same way
+    <span class="mono">?arxiv=&lt;id&gt;</span> does, and records maths KaTeX could not render, figures that did not show, diagrams and
+    TikZ that were not drawn, commands the viewer does not know, and papers that never finished. The list of papers is fixed
+    (<a href="https://github.com/klepo0/TeXglass/blob/main/dashboard/papers.json">papers.json</a>), so runs compare like with like.
+  </footer>
+</main>
+<script>
+(function () {
+  'use strict';
+  const DATA = new URLSearchParams(location.search).get('data') ||
+    'https://raw.githubusercontent.com/klepo0/TeXglass/render-dashboard/results.json';
+  const VIEWER = '../';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const LABEL = { ok: 'OK', issues: 'Issues', broken: 'Broken', nosource: 'No source' };
+  const KIND = { math: 'maths not rendered', figure: 'figures missing', diagram: 'diagrams not drawn', tikz: 'TikZ partly drawn', command: 'unknown commands' };
+  const secs = (ms) => (ms == null ? '—' : (ms / 1000).toFixed(1) + ' s');
+  const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  const badge = (s) => `<span class="badge ${esc(s)}">${esc(LABEL[s] || s)}</span>`;
+  const paperLink = (id) => `<a class="mono" href="${VIEWER}?arxiv=${encodeURIComponent(id)}" title="Open in TeXglass">${esc(id)}</a>`;
+
+  let data = null;
+  let filter = 'problems';
+  let query = '';
+  let sortBy = 'badness';
+  const open = new Set();
+
+  function problemsText(p) {
+    if (p.status === 'nosource') return `<span class="muted">${esc(p.why)}</span>`;
+    const parts = Object.entries(p.counts || {}).filter(([k, n]) => n && k !== 'command').map(([k, n]) => `${n} ${KIND[k]}`);
+    if (p.status === 'broken') parts.unshift(`<b>${esc(p.why)}</b>`);
+    if (p.slow) parts.push('<span class="badge slow">slow</span>');
+    return parts.join(' · ') || '<span class="muted">none</span>';
+  }
+
+  function detail(p) {
+    let html = `<div class="muted">${esc(p.title)}${p.note ? ' · ' + esc(p.note) : ''} · <a href="https://arxiv.org/abs/${esc(p.id)}">arXiv</a> · <a href="${VIEWER}?arxiv=${encodeURIComponent(p.id)}">open in TeXglass</a></div>`;
+    for (const [kind, keys] of Object.entries(p.problems || {})) {
+      const items = Object.entries(keys).sort((a, b) => b[1] - a[1]);
+      html += `<h4>${esc(KIND[kind] || kind)}</h4><ul>` +
+        items.slice(0, 30).map(([k, n]) => `<li><span class="mono">${esc(k)}</span>${n > 1 ? ` <span class="muted">×${n}</span>` : ''}</li>`).join('') +
+        (items.length > 30 ? `<li class="muted">and ${items.length - 30} more</li>` : '') + '</ul>';
+    }
+    if (p.packages && p.packages.length) html += `<h4>Packages</h4><div class="mono muted">${esc(p.packages.join(', '))}</div>`;
+    return html;
+  }
+
+  function rows() {
+    const q = query.trim().toLowerCase();
+    let list = data.papers.filter((p) => {
+      if (filter === 'problems' && !(p.status === 'broken' || p.status === 'issues' || p.slow)) return false;
+      if (filter === 'slow' && !p.slow) return false;
+      if (['ok', 'issues', 'broken', 'nosource'].includes(filter) && p.status !== filter) return false;
+      if (q && !(p.id + ' ' + p.title + ' ' + (p.field || '') + ' ' + JSON.stringify(p.problems || {})).toLowerCase().includes(q)) return false;
+      return true;
+    });
+    list = list.slice().sort(sortBy === 'ms' ? (a, b) => (b.ms || 0) - (a.ms || 0) : (a, b) => b.badness - a.badness || (b.ms || 0) - (a.ms || 0));
+    $('rows').innerHTML = list.map((p) =>
+      `<tr class="paper" data-id="${esc(p.id)}" aria-expanded="${open.has(p.id)}">` +
+      `<td>${paperLink(p.id)}<span class="title" title="${esc(p.title)}">${esc(p.title)}</span></td>` +
+      `<td class="hide-sm">${esc(p.field || '')}</td><td>${badge(p.status)}</td><td>${problemsText(p)}</td>` +
+      `<td class="num">${secs(p.ms)}</td><td class="hide-sm muted">${esc(day(p.since))}</td></tr>` +
+      (open.has(p.id) ? `<tr class="detail"><td colspan="6">${detail(p)}</td></tr>` : '')
+    ).join('') || '<tr><td colspan="6" class="muted">No papers match.</td></tr>';
+  }
+
+  function filters() {
+    const s = data.summary;
+    const opts = [['problems', `Needs work (${s.issues + s.broken})`], ['broken', `Broken (${s.broken})`], ['issues', `Issues (${s.issues})`],
+      ['slow', `Slow (${s.slow})`], ['ok', `OK (${s.ok})`], ['nosource', `No source (${s.nosource})`], ['all', `All (${s.papers})`]];
+    $('filters').innerHTML = opts.map(([k, t]) => `<button data-filter="${k}" aria-pressed="${k === filter}">${esc(t)}</button>`).join('') +
+      '<input id="q" type="search" placeholder="Search id, title or macro" aria-label="Search papers">';
+    $('q').value = query;
+  }
+
+  function trend(history) {
+    if (!history || history.length < 2) return;
+    const runs = history.slice(-60);
+    const w = 600, h = 70, bw = w / runs.length;
+    const colors = { ok: 'var(--ok)', issues: 'var(--issues)', broken: 'var(--broken)' };
+    let bars = '';
+    runs.forEach((r, i) => {
+      const s = r.summary; const total = s.ok + s.issues + s.broken || 1;
+      let y = h;
+      for (const k of ['ok', 'issues', 'broken']) {
+        const bh = (s[k] / total) * h;
+        y -= bh;
+        bars += `<rect x="${(i * bw + 1).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" fill="${colors[k]}"><title>${esc(day(r.date))}: ${s.ok} OK, ${s.issues} issues, ${s.broken} broken</title></rect>`;
+      }
+    });
+    $('trend').hidden = false;
+    $('trend').innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Status of rendered papers over the last ${runs.length} runs">${bars}</svg>` +
+      `<div class="legend"><span><i style="background:var(--ok)"></i>OK</span><span><i style="background:var(--issues)"></i>Issues</span><span><i style="background:var(--broken)"></i>Broken</span><span>last ${runs.length} runs, oldest on the left</span></div>`;
+  }
+
+  function changes(list) {
+    if (!data.history || data.history.length < 2) { $('changes').innerHTML = '<p class="muted">This is the first run; changes show from the next one.</p>'; return; }
+    if (!list.length) { $('changes').innerHTML = '<p class="muted">Nothing changed.</p>'; return; }
+    const verb = { worse: '<b style="color:var(--broken)">Worse</b>', better: '<b style="color:var(--ok)">Better</b>', new: '<b>New in the list</b>' };
+    $('changes').innerHTML = '<ul>' + list.slice(0, 40).map((c) => {
+      let what = '';
+      if (c.change === 'new') what = badge(c.to);
+      else {
+        what = c.from !== c.to ? `${badge(c.from)} → ${badge(c.to)}` : `${c.problems[0]} → ${c.problems[1]} problems`;
+        if (c.ms && c.ms[0] != null && c.ms[1] != null && Math.abs(c.ms[1] - c.ms[0]) > 3000) what += ` · ${secs(c.ms[0])} → ${secs(c.ms[1])}`;
+        if (c.fresh && c.fresh.length) what += ` · new: <span class="mono">${c.fresh.map(esc).join(', ')}</span>`;
+      }
+      return `<li>${verb[c.change]} ${paperLink(c.id)} ${what}</li>`;
+    }).join('') + (list.length > 40 ? `<li class="muted">and ${list.length - 40} more</li>` : '') + '</ul>';
+  }
+
+  function top(t) {
+    const block = (title, hint, items, fmt) => !items || !items.length ? '' :
+      `<div class="panel"><h3>${title}</h3><p class="hint">${hint}</p><ol>` + items.slice(0, 12).map((e) =>
+        `<li><details><summary><span class="key mono">${esc(e.key)}</span><span class="n">${fmt(e)}</span></summary>` +
+        `<div class="ids">${e.papers.slice(0, 40).map(paperLink).join(', ')}${e.papers.length > 40 ? ' …' : ''}</div></details></li>`).join('') + '</ol></div>';
+    const papers = (e) => `${e.papers.length} paper${e.papers.length > 1 ? 's' : ''}`;
+    $('top').innerHTML =
+      block('Maths KaTeX could not render', 'Undefined macros and other KaTeX errors, by the number of papers they break.', t.math, (e) => `${papers(e)} · ${e.count}×`) +
+      block('Commands the viewer does not know', 'Text-mode commands the converter skipped.', t.command, (e) => `${papers(e)} · ${e.count}×`) +
+      block('Diagrams not drawn', 'Environments shown as a placeholder.', t.diagram, papers) +
+      block('Packages behind the most problems', 'Packages used by at least 3 papers, by the share of those papers with problems.', t.packages, (e) => `${e.papers.length} of ${e.used}`) +
+      block('Figures that did not show', 'By file type: what the viewer would need to show them.', t.figure, (e) => `${papers(e)} · ${e.count}×`) ||
+      '<p class="muted">Nothing failed.</p>';
+  }
+
+  function show() {
+    const s = data.summary;
+    const commit = data.commit ? ` at <a class="mono" href="https://github.com/klepo0/TeXglass/commit/${esc(data.commit)}">${esc(data.commit.slice(0, 7))}</a>` : '';
+    $('when').innerHTML = `Last run ${esc(new Date(data.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}${commit}: ${s.papers} arXiv papers, median load time ${secs(s.medianMs)}.`;
+    $('tiles').innerHTML = [['ok', s.ok, 'render cleanly'], ['issues', s.issues, 'with issues'], ['broken', s.broken, 'broken or frozen'], ['', s.slow, 'slower than 20 s'], ['', s.nosource, 'PDF only, skipped']]
+      .map(([c, n, t]) => `<div class="tile ${c}"><b>${n}</b><span>${t}</span></div>`).join('');
+    trend(data.history);
+    changes(data.changes || []);
+    top(data.top || {});
+    filters();
+    rows();
+  }
+
+  document.addEventListener('click', (e) => {
+    const f = e.target.closest('[data-filter]');
+    if (f) { filter = f.dataset.filter; filters(); rows(); return; }
+    const s = e.target.closest('[data-sort]');
+    if (s) { sortBy = sortBy === 'ms' ? 'badness' : 'ms'; rows(); return; }
+    const tr = e.target.closest('tr.paper');
+    if (tr && !e.target.closest('a')) {
+      const id = tr.dataset.id;
+      if (open.has(id)) open.delete(id); else open.add(id);
+      rows();
+    }
+  });
+  document.addEventListener('input', (e) => { if (e.target.id === 'q') { query = e.target.value; rows(); } });
+
+  fetch(DATA, { cache: 'no-cache' })
+    .then((r) => { if (!r.ok) throw new Error(`the results answered ${r.status}`); return r.json(); })
+    .then((d) => { data = d; show(); })
+    .catch((e) => {
+      $('when').textContent = '';
+      $('error').hidden = false;
+      $('error').textContent = `Could not load the results (${e.message}). The first run may not have happened yet.`;
+    });
+})();
+</script>
+</body>
+</html>

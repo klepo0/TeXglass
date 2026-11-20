@@ -1,3 +1,5 @@
 node_modules/
 *.log
 browser/dist/
+.dashboard-cache/
+dashboard/out/

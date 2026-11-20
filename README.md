@@ -253,6 +253,12 @@ viewer, the CLI and the VS Code extension. Diagrams live in `src/tikz.js` and
 `src/diagrams.js`, editing aids in `src/editor.js`, HTML export in
 `src/export.js`. `npm test` runs the tests.
 
+Every night the [render dashboard](https://klepo0.github.io/TeXglass/dashboard/)
+opens about 200 arXiv papers in the web viewer and lists what broke: maths
+KaTeX could not render, missing figures, undrawn diagrams, papers that froze,
+and slow loads, with what changed since the night before. See
+[dashboard/README.md](dashboard/README.md) to run it yourself.
+
 TeXglass was called TeXdown until November 2026; settings carry over.
 
 ## License

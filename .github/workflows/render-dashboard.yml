@@ -1,0 +1,86 @@
+# Render dashboard: every night, open a fixed set of about 200 arXiv papers
+# (dashboard/papers.json) in the web viewer in headless Chromium and record
+# what broke. Results go to the render-dashboard branch as results.json, which
+# the page at /dashboard/ on GitHub Pages reads. Free: GitHub-hosted runner,
+# GITHUB_TOKEN only, no secrets.
+#
+# Paper sources are kept in the Actions cache, so each paper is downloaded from
+# arXiv only once (politely, 3 s apart); the cache is saved again only when a
+# run downloaded something new.
+name: Render dashboard
+
+on:
+  schedule:
+    - cron: '23 3 * * *' # 03:23 UTC every night
+  workflow_dispatch:
+
+permissions:
+  contents: write # push results.json to the render-dashboard branch
+
+concurrency:
+  group: render-dashboard
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      DASHBOARD_CACHE: ${{ github.workspace }}/.dashboard-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install KaTeX and Playwright's Chromium
+        run: |
+          npm ci
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Restore paper sources
+        uses: actions/cache/restore@v4
+        with:
+          path: .dashboard-cache
+          key: arxiv-src-${{ github.run_id }}
+          restore-keys: arxiv-src-
+
+      - name: Fetch the last run's results
+        run: |
+          if git fetch --depth=1 origin render-dashboard; then
+            git show FETCH_HEAD:results.json > "$RUNNER_TEMP/prev.json" || true
+          fi
+
+      - name: Render the papers
+        id: run
+        run: node dashboard/run.js --out "$RUNNER_TEMP/out" --prev "$RUNNER_TEMP/prev.json"
+
+      - name: Save paper sources
+        if: always() && steps.run.outputs.downloaded != '0'
+        uses: actions/cache/save@v4
+        with:
+          path: .dashboard-cache
+          key: arxiv-src-${{ github.run_id }}
+
+      - name: Publish results to the render-dashboard branch
+        run: |
+          dir="$RUNNER_TEMP/site"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git fetch --depth=1 origin render-dashboard; then
+            git worktree add "$dir" FETCH_HEAD
+            git -C "$dir" checkout -B render-dashboard
+          else
+            git worktree add --detach "$dir"
+            git -C "$dir" checkout --orphan render-dashboard
+            git -C "$dir" rm -rf --quiet .
+          fi
+          cp "$RUNNER_TEMP/out/results.json" "$dir/results.json"
+          printf '%s\n' '# Render dashboard results' '' \
+            'Written every night by .github/workflows/render-dashboard.yml on main.' \
+            'See https://klepo0.github.io/TeXglass/dashboard/' > "$dir/README.md"
+          git -C "$dir" add results.json README.md
+          git -C "$dir" commit --quiet -m "Render dashboard run $(date -u +%Y-%m-%d)"
+          git -C "$dir" push origin render-dashboard
