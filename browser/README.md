@@ -56,6 +56,9 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
     moon button; it follows your system until you choose). Scrolling the
     preview yourself or jumping with these holds it in place until the editor
     scrolls again;
+  - has an adjustable **text width**: drag either edge of the text (the
+    column stays centred), drag to the panel's edge to fill it, or
+    double-click an edge to go back to the usual width; it is remembered;
   - with **Files**, downloads the project's zip from Overleaf (its own
     *Download as zip*, with your login) and pulls in the files the open file
     `\input`s, the main file's preamble when the open file is a chapter (for
