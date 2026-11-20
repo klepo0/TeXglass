@@ -792,7 +792,9 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .dep-map { display: block; font-size: 12px; }
 .insight-dialog .dep-wrap { max-height: none; cursor: grab; }
 .insight-dialog .dep-wrap.dep-dragging, .dep-wrap.dep-dragging { cursor: grabbing; user-select: none; }
-.insight-dialog .dep-detail { flex: 0 1 auto; max-height: 30%; overflow: auto; }
+/* The text around the larger map keeps its full height; the map takes what is left. */
+.insight-dialog .insight-body:has(.dep-wrap) > :not(.dep-wrap) { flex: 0 0 auto; }
+.insight-dialog .dep-wrap { min-height: 120px; }
 .insight-dialog .insight-lead { margin: 0 0 6px; max-width: none; }
 .dep-zoom { display: inline-flex; align-items: center; margin-left: auto; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
 .dep-zoom button { font: inherit; font-size: 13px; min-width: 30px; padding: 2px 8px; border: 0; border-left: 1px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer; }
