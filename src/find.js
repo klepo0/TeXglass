@@ -506,7 +506,10 @@
         if (options.onJump) options.onJump(t.el);
         return;
       }
-      t.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Glide only when it is close; a long smooth scroll sweeps the whole page.
+      const r = t.el.getBoundingClientRect();
+      const far = r.bottom < -innerHeight || r.top > 2 * innerHeight;
+      t.el.scrollIntoView({ behavior: far ? 'auto' : 'smooth', block: 'center' });
       const flash = t.block || t.el;
       flash.classList.remove('flash');
       void flash.offsetWidth;

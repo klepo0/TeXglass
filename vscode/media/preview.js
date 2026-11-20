@@ -475,12 +475,9 @@
       if (syncMark === mark) syncMark = null;
       mark.remove();
     }, 5000);
-    // Glide when it is near; far away, a glide would cross blocks whose
-    // heights are only estimates and keep re-aiming, so go straight there.
-    const far = Math.abs(mark.getBoundingClientRect().top - pane.getBoundingClientRect().top) > 2 * pane.clientHeight;
+    // (A far target is jumped to, with only a short glide at the end.)
     TeXglassScroll.to(pane, mark, {
       align: 'center',
-      smooth: !far,
       done() {
         if (syncMark === mark) ignoreScrollUntil = Date.now() + 150;
       },
