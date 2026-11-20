@@ -1659,6 +1659,9 @@
       scroller: previewPane,
       reveal,
       onJump: hidePopover,
+      // Trace: pick a result, see only what it uses and what uses it
+      onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
+      related: (el) => (insight ? insight.related(el) : null),
     });
     window.TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));

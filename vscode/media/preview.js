@@ -740,7 +740,15 @@
   // Opened by the texglass.find / texglass.goTo commands (Ctrl+F, Ctrl+G), which
   // VS Code runs for keys pressed in here too, so no key handling of our own.
   const finder = window.TeXglassFind
-    ? window.TeXglassFind.attach({ root: preview, scroller: pane, reveal, onJump: hidePopover })
+    ? window.TeXglassFind.attach({
+      root: preview,
+      scroller: pane,
+      reveal,
+      onJump: hidePopover,
+      // Trace: pick a result, see only what it uses and what uses it
+      onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
+      related: (el) => (insight ? insight.related(el) : null),
+    })
     : null;
 
   function selectedText() {

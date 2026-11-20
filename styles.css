@@ -1152,6 +1152,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .goto-list li[aria-selected="true"] { background: var(--accent-soft); }
 .goto-name { flex: none; font-weight: 600; }
 .goto-title { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.goto-rel { flex: none; margin-left: auto; padding-left: 8px; font-size: 0.9em; color: var(--muted); }
 .goto-list li.goto-empty { color: var(--muted); cursor: default; white-space: normal; }
 ::highlight(texglass-find) { background-color: rgba(255, 200, 0, 0.35); color: inherit; }
 ::highlight(texglass-find-current) { background-color: rgba(255, 150, 0, 0.75); color: inherit; }

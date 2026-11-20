@@ -810,7 +810,15 @@
 
   // Ctrl+F searches the preview; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2" (src/find.js).
   if (window.TeXglassFind) {
-    const finder = TeXglassFind.attach({ root: preview, scroller: pane, reveal, onJump: () => { hold(); hidePopover(); } });
+    const finder = TeXglassFind.attach({
+      root: preview,
+      scroller: pane,
+      reveal,
+      onJump: () => { hold(); hidePopover(); },
+      // Trace: pick a result, see only what it uses and what uses it
+      onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
+      related: (el) => (insight ? insight.related(el) : null),
+    });
     TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));
   } else {
