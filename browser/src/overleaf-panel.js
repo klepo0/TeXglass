@@ -895,6 +895,108 @@
   }
   $('close').addEventListener('click', () => post({ type: 'close' }));
 
+  // --- text width --------------------------------------------------------------------
+  //
+  // Grips on both edges of the text: dragging one widens or narrows the column (it stays
+  // centred), double-click goes back to the usual width, and dragging to the panel's edge
+  // lets the text fill the panel. Remembered (in px at 100% zoom, so zooming scales it).
+
+  const TEXT_KEY = 'texglass:overleaf-text-width';
+  const TEXT_MIN = 240; // px on screen
+  const zoomNow = () => parseFloat(getComputedStyle(rootEl).getPropertyValue('--zoom')) || 1;
+  const grips = ['left', 'right'].map((side) => {
+    const g = document.createElement('div');
+    g.className = 'text-resizer text-resizer-' + side;
+    g.dataset.side = side;
+    g.setAttribute('role', 'separator');
+    g.setAttribute('aria-orientation', 'vertical');
+    g.setAttribute('aria-label', 'Text width');
+    g.tabIndex = 0;
+    g.title = 'Drag to change the text width · double-click for the usual width';
+    pane.appendChild(g);
+    return g;
+  });
+
+  /** Apply a width: a number (px at 100% zoom), 'full', or null for the usual width. */
+  function setTextWidth(w, save) {
+    const full = w === 'full';
+    if (typeof w === 'number' && isFinite(w)) rootEl.style.setProperty('--ol-text-width', Math.round(w) + 'px');
+    else rootEl.style.removeProperty('--ol-text-width');
+    document.body.classList.toggle('ol-text-full', full);
+    if (save) store.set(TEXT_KEY, full ? 'full' : typeof w === 'number' ? String(Math.round(w)) : '');
+    placeGrips();
+  }
+
+  /** The width the text would get for a drag to `px` on screen: a number, or 'full'. */
+  function widthFor(px) {
+    const room = pane.clientWidth;
+    if (px >= room - 24) return 'full'; // close to the panel's edges: fill it
+    return Math.max(Math.min(TEXT_MIN, room), px) / zoomNow();
+  }
+
+  function placeGrips() {
+    const r = preview.getBoundingClientRect();
+    const p = pane.getBoundingClientRect();
+    const right = p.left + pane.clientLeft + pane.clientWidth; // the scrollbar is not text
+    const show = r.width > 0 && !preview.hidden;
+    grips.forEach((g) => {
+      g.hidden = !show;
+      if (!show) return;
+      // Inside the text's padding, so the grip never covers the scrollbar or the side panel.
+      const x = g.dataset.side === 'left' ? Math.max(r.left, p.left) : Math.min(r.right, right) - 10;
+      g.style.left = Math.round(x) + 'px';
+      g.style.top = Math.round(p.top) + 'px';
+      g.style.height = Math.round(p.height) + 'px';
+      g.setAttribute('aria-valuenow', String(Math.round(r.width)));
+    });
+  }
+
+  grips.forEach((g) => {
+    const sign = g.dataset.side === 'left' ? -1 : 1;
+    g.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      g.setPointerCapture(e.pointerId);
+      const start = e.clientX;
+      const width = preview.getBoundingClientRect().width;
+      document.body.classList.add('text-resizing');
+      // The column stays centred, so each edge moves by half the change.
+      const move = (ev) => setTextWidth(widthFor(width + 2 * sign * (ev.clientX - start)), false);
+      const up = () => {
+        g.removeEventListener('pointermove', move);
+        g.removeEventListener('pointerup', up);
+        g.removeEventListener('pointercancel', up);
+        document.body.classList.remove('text-resizing');
+        const full = document.body.classList.contains('ol-text-full');
+        setTextWidth(full ? 'full' : preview.getBoundingClientRect().width / zoomNow(), true);
+      };
+      g.addEventListener('pointermove', move);
+      g.addEventListener('pointerup', up);
+      g.addEventListener('pointercancel', up);
+    });
+    g.addEventListener('dblclick', () => setTextWidth(null, true));
+    g.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const grow = (e.key === 'ArrowRight') === (sign > 0);
+      setTextWidth(widthFor(preview.getBoundingClientRect().width + (grow ? 40 : -40)), true);
+    });
+  });
+
+  const savedWidth = store.get(TEXT_KEY);
+  setTextWidth(savedWidth === 'full' ? 'full' : parseFloat(savedWidth) > 0 ? parseFloat(savedWidth) : null, false);
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => placeGrips());
+    ro.observe(pane);
+    ro.observe(preview);
+  }
+  window.addEventListener('resize', placeGrips);
+  window.addEventListener('storage', (e) => {
+    if (e.key !== TEXT_KEY) return;
+    const v = e.newValue;
+    setTextWidth(v === 'full' ? 'full' : parseFloat(v) > 0 ? parseFloat(v) : null, false);
+  });
+
   // --- messages from the Overleaf page --------------------------------------------------
 
   let renderTimer = null;
