@@ -45,3 +45,24 @@ test('centres the element when asked', async () => {
   const r = el.getBoundingClientRect();
   assert.strictEqual(r.top + r.height / 2 - 50, 400);
 });
+
+test('a far smooth scroll jumps most of the way and glides only the end', async () => {
+  const { pane, el } = fakePane();
+  const glides = [];
+  const plain = pane.scrollTo.bind(pane);
+  pane.scrollTo = (opts) => { if (opts.behavior === 'smooth') glides.push({ from: pane.scrollTop, to: opts.top }); plain(opts); };
+  S.to(pane, el, { smooth: true });
+  assert.ok(glides.length >= 1);
+  assert.ok(Math.abs(glides[0].to - glides[0].from) <= pane.clientHeight, 'glide is short');
+  await new Promise((r) => setTimeout(r, 600));
+  assert.strictEqual(el.getBoundingClientRect().top - 50, 16);
+});
+
+test('a near smooth scroll glides all the way', () => {
+  const { pane, el } = fakePane();
+  pane.scrollTop = 4600;
+  const glides = [];
+  pane.scrollTo = (opts) => { if (opts.behavior === 'smooth') glides.push(pane.scrollTop); };
+  S.to(pane, el, { smooth: true })();
+  assert.deepStrictEqual(glides, [4600]);
+});

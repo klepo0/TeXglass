@@ -9,6 +9,11 @@
  *   TeXglassScroll.to(pane, el, { align: 'start' | 'center', offset: 16, smooth: true, done() {} });
  *
  * `done` runs once the scroll has finished, or the reader has taken over.
+ *
+ * A smooth scroll to something far away would sweep through the whole
+ * document on the way, which is slow and hard to watch. So a far target is
+ * reached by jumping (instantly) to just short of it, then gliding the last
+ * stretch, which keeps a sense of direction without the long ride.
  */
 (function (root) {
   'use strict';
@@ -28,6 +33,12 @@
     };
 
     let aim = dest();
+    const gap = aim - pane.scrollTop;
+    const near = pane.clientHeight * 0.75; // how much of the way to glide
+    if (o.smooth && Math.abs(gap) > near * 2) {
+      pane.scrollTop = Math.round(aim - Math.sign(gap) * near);
+      aim = dest(); // blocks around the new spot now have their real heights
+    }
     pane.scrollTo({ top: aim, behavior: o.smooth ? 'smooth' : 'auto' });
 
     const start = Date.now();
