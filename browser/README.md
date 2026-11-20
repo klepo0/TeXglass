@@ -95,7 +95,7 @@ The viewer downloads the source from `arxiv.org/src/<id>` (a gzipped tar
 archive or a single gzipped `.tex` file), picks the main file, inlines its
 `\input`/`\include` files and the authors' own `.sty` macros, builds the
 bibliography from the `.bbl` (or else the `.bib` files), and shows PNG/JPEG
-figures. This is the same code as the **arXiv** button of the web viewer.
+figures. This is the same code as the **Open** dialog of the web viewer.
 
 By default papers open in a copy of the viewer bundled with the extension, so
 nothing else needs to be online apart from arxiv.org. The extension's options

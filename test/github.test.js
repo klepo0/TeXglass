@@ -141,3 +141,22 @@ test('importFile follows % !TEX root and subfiles, and guesses the main file whe
   assert.equal(own.path, 'doc/main.tex');
   assert.equal(own.start, null);
 });
+
+test('search asks GitHub for LaTeX repositories, then any repository if none match', async () => {
+  const asked = [];
+  const answer = (items, total) => ({ ok: true, status: 200, json: async () => ({ total_count: total, items }) });
+  const repo = { name: 'notes', full_name: 'ada/notes', owner: { login: 'ada' }, description: 'Notes', stargazers_count: 3, pushed_at: '2026-01-02T00:00:00Z', html_url: 'https://github.com/ada/notes' };
+  const fetch = async (url) => {
+    const q = new URL(url).searchParams.get('q');
+    asked.push(q);
+    return /language:TeX/.test(q) ? answer([], 0) : answer([repo], 1);
+  };
+  const res = await G.search('rough paths', { fetch });
+  assert.deepEqual(asked, ['rough paths language:TeX', 'rough paths']);
+  assert.equal(res.anyLanguage, true);
+  assert.equal(res.more, false);
+  assert.deepEqual(res.results[0], { owner: 'ada', repo: 'notes', name: 'ada/notes', description: 'Notes', stars: 3, updated: '2026-01-02T00:00:00Z', url: 'https://github.com/ada/notes' });
+
+  await assert.rejects(G.search('x', { fetch: async () => ({ ok: false, status: 403 }) }), /few searches a minute/);
+  assert.deepEqual((await G.search('  ', { fetch })).results, []);
+});

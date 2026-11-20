@@ -402,5 +402,49 @@
     return `javascript:(function(){window.open(${JSON.stringify(target + '?gh=')}+encodeURIComponent(location.href),'_blank')})()`;
   }
 
-  return { parseUrl, splits, importFile, links, bookmarklet };
+  /**
+   * Search public repositories that hold LaTeX (GitHub's language:TeX), best match first.
+   * options: { fetch, page (from 1), perPage (default 20), anyLanguage }.
+   * Returns { results: [{ owner, repo, name, description, stars, updated, url }], total, more, anyLanguage }
+   * (anyLanguage: nothing matched among LaTeX repositories, so these are any repositories).
+   * Without signing in GitHub allows about ten searches a minute.
+   */
+  async function search(query, options) {
+    options = options || {};
+    const doFetch = options.fetch || fetch;
+    const page = options.page || 1;
+    const perPage = options.perPage || 20;
+    const q = String(query || '').trim();
+    if (!q) return { results: [], total: 0, more: false };
+    // LaTeX repositories first; if none match, any repository (its LaTeX may not be its main language).
+    const anyLanguage = !!options.anyLanguage;
+    const url = `${API}/search/repositories?q=${encodeURIComponent(anyLanguage ? q : q + ' language:TeX')}&per_page=${perPage}&page=${page}`;
+    let res;
+    try {
+      res = await doFetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+    } catch (e) {
+      throw new Error(`Could not reach GitHub (${e.message}). Check your connection.`);
+    }
+    if (res.status === 403 || res.status === 429) {
+      throw new Error('GitHub allows only a few searches a minute without signing in. Wait a minute and try again.');
+    }
+    if (res.status === 422) return { results: [], total: 0, more: false };
+    if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
+    const data = await res.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    const results = items.map((r) => ({
+      owner: (r.owner && r.owner.login) || String(r.full_name || '').split('/')[0],
+      repo: r.name,
+      name: r.full_name,
+      description: r.description || '',
+      stars: r.stargazers_count || 0,
+      updated: r.pushed_at || r.updated_at || '',
+      url: r.html_url || `https://github.com/${r.full_name}`,
+    }));
+    if (!results.length && page === 1 && !anyLanguage) return search(q, Object.assign({}, options, { anyLanguage: true }));
+    const total = Math.min(data.total_count || 0, 1000); // GitHub serves the first 1000 only
+    return { results, total: data.total_count || 0, more: page * perPage < total && items.length === perPage, anyLanguage };
+  }
+
+  return { parseUrl, splits, importFile, links, bookmarklet, search };
 });

@@ -1411,10 +1411,43 @@
     }
   }, 1500);
 
-  // Open: a .tex file (several files are put together like a folder); Shift+click opens a folder.
-  $('open').addEventListener('click', (e) => (e.shiftKey ? openFolder() : openWithPicker()));
+  // Open: the Open dialog (arXiv, GitHub, or this computer); Shift+click opens a folder.
+  $('open').addEventListener('click', (e) => (e.shiftKey ? openFolder() : showArxivDialog()));
   $('save').addEventListener('click', save);
   $('export').addEventListener('click', exportHtml);
+
+  // --- the "…" menu: Save, Export, Print ---------------------------------------
+  const moreBtn = $('more');
+  const moreMenu = $('more-menu');
+  const menuItems = () => [...moreMenu.querySelectorAll('[role="menuitem"]')];
+  function setMenu(open, focusFirst) {
+    moreMenu.hidden = !open;
+    moreBtn.setAttribute('aria-expanded', String(open));
+    if (open && focusFirst) menuItems()[0].focus();
+  }
+  moreBtn.addEventListener('click', () => setMenu(moreMenu.hidden, false));
+  moreBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setMenu(true, true); }
+  });
+  // Choosing an item closes the menu first (its own listener above does the work).
+  moreMenu.addEventListener('click', (e) => { if (e.target.closest('[role="menuitem"]')) setMenu(false); });
+  moreMenu.addEventListener('keydown', (e) => {
+    const items = menuItems();
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setMenu(false);
+      moreBtn.focus();
+    } else if (e.key === 'Tab') {
+      setMenu(false);
+    }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!moreMenu.hidden && !e.target.closest('.more-group')) setMenu(false);
+  });
 
   // --- print / save as PDF -----------------------------------------------------
   // The print stylesheet (styles.css) lays the document out like a paper. Before
@@ -1800,6 +1833,7 @@
   const arxivGo = $('arxiv-go');
   const arxivResults = $('arxiv-results');
   let arxivBusy = false;
+  let ghBusy = false; // opening from GitHub, in the same dialog
 
   function arxivSay(text, warn) {
     arxivMessage.textContent = text;
@@ -1866,9 +1900,28 @@
     }).join('');
   }
 
+  /**
+   * What the Open dialog's box asks for: 'github <words>' searches GitHub
+   * ('github owner/repo', or a GitHub link, opens it), an arXiv id or link
+   * imports that paper, and anything else searches arXiv.
+   */
+  function classifyQuery(v) {
+    const gh = window.TeXglassGitHub;
+    const m = /^github(?:[:\s]+|$)([\s\S]*)$/i.exec(v);
+    if (m) {
+      const rest = m[1].trim();
+      if (gh && rest.includes('/') && !/\s/.test(rest) && gh.parseUrl(rest)) return { kind: 'gh-open', value: rest };
+      return { kind: 'gh-search', value: rest };
+    }
+    if (gh && /github\.(?:com|dev)|githubusercontent\.com/i.test(v) && gh.parseUrl(v)) return { kind: 'gh-open', value: v };
+    if (TeXglassArxiv.parseId(v)) return { kind: 'arxiv-open', value: v };
+    return { kind: 'arxiv-search', value: v };
+  }
+
   function updateArxivButton() {
     const v = arxivInput.value.trim();
-    arxivGo.textContent = !v || TeXglassArxiv.parseId(v) ? 'Import' : 'Search';
+    const kind = v ? classifyQuery(v).kind : 'arxiv-search';
+    arxivGo.textContent = kind === 'arxiv-open' ? 'Import' : kind === 'gh-open' ? 'Open' : 'Search';
   }
 
   function showResults(on) {
@@ -1876,11 +1929,38 @@
     arxivDialog.classList.toggle('has-results', on);
   }
 
+  /** One GitHub repository in the results: click to open its main .tex file. */
+  function githubResult(r) {
+    const li = document.createElement('li');
+    li.className = 'preprint';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preprint-open';
+    btn.title = `Open the LaTeX document in ${r.name}`;
+    const year = r.updated ? r.updated.slice(0, 4) : '';
+    const meta = [`★ ${r.stars.toLocaleString()}`, year && `updated ${year}`, 'GitHub'].filter(Boolean).join(' · ');
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    btn.innerHTML = `<span class="preprint-title">${esc(r.name)}</span>` +
+      `<span class="arxiv-result-meta">${esc(meta)}</span>` +
+      (r.description ? `<span class="preprint-abstract">${mathText(r.description)}</span>` : '');
+    btn.addEventListener('click', () => importGitHub(r.url));
+    const link = document.createElement('a');
+    link.className = 'preprint-pdf';
+    link.href = r.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'GitHub';
+    link.title = 'The repository on github.com';
+    li.append(btn, link);
+    return li;
+  }
+
   function renderSearch() {
     const st = searchState;
     arxivResults.textContent = '';
     const frag = document.createDocumentFragment();
     for (const r of st.results) {
+      if (st.source === 'github') { frag.appendChild(githubResult(r)); continue; }
       const li = document.createElement('li');
       li.className = 'preprint';
       const btn = document.createElement('button');
@@ -1908,7 +1988,7 @@
       more.type = 'button';
       more.className = 'preprints-more';
       more.textContent = 'Show more';
-      more.addEventListener('click', () => searchArxiv(st.query, st.page + 1));
+      more.addEventListener('click', () => (st.source === 'github' ? searchGitHub(st.query, st.page + 1) : searchArxiv(st.query, st.page + 1)));
       const li = document.createElement('li');
       li.appendChild(more);
       frag.appendChild(li);
@@ -1926,7 +2006,7 @@
     try {
       const res = await TeXglassArxiv.search(query, { page });
       if (run !== searchRun) return;
-      if (page === 1 || !searchState || searchState.query !== query) searchState = { query, results: [] };
+      if (page === 1 || !searchState || searchState.source !== 'arxiv' || searchState.query !== query) searchState = { source: 'arxiv', query, results: [] };
       const seen = new Set(searchState.results.map((r) => r.id));
       searchState.results.push(...res.results.filter((r) => !seen.has(r.id)));
       Object.assign(searchState, { page, total: res.total, more: res.more });
@@ -1946,12 +2026,42 @@
     }
   }
 
+  async function searchGitHub(query, page) {
+    const run = ++searchRun;
+    page = page || 1;
+    if (!query) {
+      arxivSay('Type what to look for after github, e.g. github thesis template.', true);
+      return;
+    }
+    if (page === 1) arxivResults.scrollTop = 0;
+    arxivSay(page === 1 ? 'Searching GitHub…' : 'Loading more…');
+    arxivGo.disabled = true;
+    try {
+      const res = await TeXglassGitHub.search(query, { page, anyLanguage: page > 1 && searchState && searchState.anyLanguage });
+      if (run !== searchRun) return;
+      if (page === 1 || !searchState || searchState.source !== 'github' || searchState.query !== query) searchState = { source: 'github', query, results: [] };
+      const seen = new Set(searchState.results.map((r) => r.name));
+      searchState.results.push(...res.results.filter((r) => !seen.has(r.name)));
+      Object.assign(searchState, { page, total: res.total, more: res.more, anyLanguage: res.anyLanguage });
+      renderSearch();
+      const n = searchState.total;
+      arxivSay(searchState.results.length
+        ? `${n.toLocaleString()} ${res.anyLanguage ? '' : 'LaTeX '}repositor${n === 1 ? 'y' : 'ies'} on GitHub. Click one to open its main .tex file.`
+        : 'No GitHub repositories match that search.', !searchState.results.length);
+    } catch (e) {
+      if (run !== searchRun) return;
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      arxivSay(offline ? 'Searching needs an internet connection.' : `Search failed: ${e.message || e}`, true);
+    } finally {
+      if (run === searchRun) arxivGo.disabled = false;
+    }
+  }
+
   function showArxivDialog() {
-    if (!searchState && !arxivBusy) arxivSay('Search arXiv, or paste a link to download the source; figures in PNG or JPEG are shown too.');
+    if (!searchState && !arxivBusy && !ghBusy) arxivSay('Search arXiv, or type github and words to search GitHub. Included files, the bibliography and PNG or JPEG figures come along.');
     openArxivDialog();
     updateArxivButton();
   }
-  $('arxiv').addEventListener('click', showArxivDialog);
   // Ctrl+K (Cmd+K on a Mac), the usual search shortcut, opens the arXiv dialog
   // from anywhere in the page, the editor included. Browsers let pages take it
   // over; it is left alone while another dialog is open.
@@ -1968,7 +2078,10 @@
     e.preventDefault();
     const v = arxivInput.value.trim();
     if (!v) return;
-    if (TeXglassArxiv.parseId(v)) importArxiv(v);
+    const q = classifyQuery(v);
+    if (q.kind === 'arxiv-open') importArxiv(v);
+    else if (q.kind === 'gh-open') importGitHub(q.value);
+    else if (q.kind === 'gh-search') searchGitHub(q.value, 1);
     else searchArxiv(v, 1);
   });
 
@@ -1986,35 +2099,26 @@
     }
   });
 
-  // --- opening files from GitHub ---------------------------------------------
+  // --- opening files from GitHub (in the Open dialog) ----------------------------
 
-  const ghDialog = $('github-dialog');
-  const ghInput = $('github-input');
-  const ghMessage = $('github-message');
-  const ghGo = $('github-go');
-  let ghBusy = false;
-
-  function ghSay(text, warn) {
-    ghMessage.textContent = text;
-    ghMessage.classList.toggle('warn', !!warn);
-  }
+  const ghSay = arxivSay;
 
   async function importGitHub(input) {
     if (ghBusy || !window.TeXglassGitHub) return false;
     if (!TeXglassGitHub.parseUrl(input)) {
       ghSay('That does not look like a GitHub link, e.g. https://github.com/owner/repo/blob/main/paper.tex.', true);
-      if (!ghDialog.open) openGitHubDialog(input);
+      if (!arxivDialog.open) openArxivDialog(input);
       return false;
     }
     ghBusy = true;
-    ghGo.disabled = true;
+    arxivGo.disabled = true;
     ghSay('Downloading from GitHub…');
     showStatus('Opening from GitHub…');
     try {
       const file = await TeXglassGitHub.importFile(input);
       fileHandle = null;
       const shown = load(file.source, file.name, file.images, { links: file.links, path: `${file.owner}/${file.repo}/${file.opened || file.path}` });
-      if (ghDialog.open) ghDialog.close();
+      if (arxivDialog.open) arxivDialog.close();
       const more = file.files.length > 1 ? ` with ${file.files.length - 1} included file${file.files.length > 2 ? 's' : ''}` : '';
       if (file.opened && file.opened !== file.path) {
         // A chapter: the whole document is shown, scrolled to where the chapter begins.
@@ -2027,22 +2131,12 @@
     } catch (e) {
       ghSay(e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message, true);
       showStatus(warningsText);
-      if (!ghDialog.open) openGitHubDialog(input);
+      if (!arxivDialog.open) openArxivDialog(input);
       return false;
     } finally {
       ghBusy = false;
-      ghGo.disabled = false;
+      arxivGo.disabled = false;
     }
-  }
-
-  function openGitHubDialog(value) {
-    if (value != null) ghInput.value = value;
-    if (!ghDialog.open) {
-      if (ghDialog.showModal) ghDialog.showModal();
-      else ghDialog.setAttribute('open', '');
-    }
-    ghInput.focus();
-    ghInput.select();
   }
 
   const bookmarkletLink = $('bookmarklet');
@@ -2056,15 +2150,6 @@
     ghSay('Drag the button to your bookmarks bar instead of clicking it here.');
   });
 
-  $('github').addEventListener('click', () => {
-    ghSay('Public repositories only. Included files, the bibliography and PNG or JPEG figures are fetched too.');
-    openGitHubDialog();
-  });
-  $('github-cancel').addEventListener('click', () => ghDialog.close());
-  $('github-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    importGitHub(ghInput.value);
-  });
 
   // --- browsing OpenAI's math preprints -------------------------------------
 
@@ -2280,8 +2365,8 @@
     fileHandle = null;
     load(
       '\\section*{Welcome to TeXglass}\n' +
-        'Open a \\texttt{.tex} file with the \\textbf{Open} button above, or drop one on this page. ' +
-        'You can also import a paper from \\textbf{arXiv}, open a file from \\textbf{GitHub}, ' +
+        'Press \\textbf{Open} above (Ctrl+K) to search arXiv, type \\texttt{github} and words to search GitHub, ' +
+        'paste an arXiv id or a GitHub link, or open a \\texttt{.tex} file from this computer. You can also drop one on this page, ' +
         'or browse OpenAI\'s mathematical \\textbf{Preprints} and read one here.\n\n' +
         'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
       'welcome.tex'
