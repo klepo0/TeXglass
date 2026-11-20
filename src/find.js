@@ -276,7 +276,10 @@
   /**
    * Add the find bar to a preview.
    * options: { root: the rendered document, scroller: the element that scrolls it,
-   *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target }
+   *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target,
+   *   onFocus(el): optional; adds a Trace tab to pick a theorem, lemma, definition…
+   *     and show only what it uses and what uses it (TeXglassInsight focus),
+   *   related(el): optional, { uses, usedBy } counts shown in that list }
    * Returns { open(mode, text), close(), next(), prev(), refresh(), state() }.
    */
   function attach(options) {
@@ -296,6 +299,7 @@
       '<div class="find-modes" role="tablist" aria-label="Search or go to">' +
       '<button type="button" role="tab" data-mode="find" title="Search the text (Ctrl+F)">Find</button>' +
       '<button type="button" role="tab" data-mode="goto" title="Go to a theorem, equation or section by its number (Ctrl+G)">Go to</button>' +
+      (options.onFocus ? '<button type="button" role="tab" data-mode="trace" title="Pick a theorem, lemma or definition and show only what it uses and what uses it">Trace</button>' : '') +
       '</div>' +
       '<input class="find-input" type="text" spellcheck="false" autocomplete="off" aria-label="Search">' +
       '<span class="find-count" aria-live="polite"></span>' +
@@ -317,7 +321,7 @@
     let capped = false;
     let results = []; // Go to: targets shown in the list
     let selected = 0;
-    let queries = { find: '', goto: '' };
+    let queries = { find: '', goto: '', trace: '' };
     let searchTimer = 0;
     let stale = false;
     let lastQuery = '';
@@ -447,17 +451,34 @@
     function escapeHtml(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     }
+    /** "uses 3 · used in 5" for the Trace list, or '' when unknown. */
+    function relatedNote(t) {
+      let c = null;
+      try { c = options.related ? options.related(t.el) : null; } catch (e) { c = null; }
+      if (!c) return '';
+      const parts = [];
+      if (c.uses) parts.push(`uses ${c.uses}`);
+      if (c.usedBy) parts.push(`used in ${c.usedBy}`);
+      return `<span class="goto-rel">${parts.length ? parts.join(' · ') : 'stands alone'}</span>`;
+    }
     function showGoto() {
-      results = rankTargets(collectTargets(rootEl), input.value, 200);
+      const related = mode === 'trace';
+      let targets = collectTargets(rootEl);
+      if (related) targets = targets.filter((t) => t.type === 'theorem' && t.el.id);
+      results = rankTargets(targets, input.value, 200);
       selected = 0;
       const q = input.value.trim();
+      const empty = related
+        ? (q ? 'No theorem, lemma or definition matches “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, lemmas or definitions.')
+        : (q ? 'Nothing numbered or named “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, equations or sections.');
       list.innerHTML = results.length
         ? results.map((t, k) =>
           `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}"${k === 0 ? ' aria-selected="true"' : ''}>` +
           `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
           (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
+          (related ? relatedNote(t) : '') +
           '</li>').join('')
-        : `<li class="goto-empty">${q ? 'Nothing numbered or named “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, equations or sections.'}</li>`;
+        : `<li class="goto-empty">${empty}</li>`;
       list.hidden = false;
       count.textContent = '';
       bar.classList.toggle('no-match', !!q && !results.length);
@@ -479,6 +500,12 @@
       if (!t || !t.el.isConnected) return;
       close();
       reveal(t.el);
+      if (mode === 'trace') {
+        // light up what it uses and what uses it, and hide the rest
+        options.onFocus(t.el);
+        if (options.onJump) options.onJump(t.el);
+        return;
+      }
       // Glide only when it is close; a long smooth scroll sweeps the whole page.
       const r = t.el.getBoundingClientRect();
       const far = r.bottom < -innerHeight || r.top > 2 * innerHeight;
@@ -492,15 +519,17 @@
 
     // --- modes, opening and closing ---
     function setMode(m) {
-      queries[mode] = input.value;
+      // (same mode: open() may have just put new text in queries[m])
+      if (m !== mode) queries[mode] = input.value;
       mode = m;
       bar.dataset.mode = m;
       bar.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
       input.value = queries[m];
-      input.placeholder = m === 'find' ? 'Find in document' : 'Lemma 4.1, (3.2), §2, or a name';
-      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : 'Go to a theorem, equation or section');
-      input.setAttribute('role', m === 'goto' ? 'combobox' : 'searchbox');
-      if (m === 'goto') input.setAttribute('aria-expanded', 'true');
+      input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : 'Pick a result: Lemma 4.1, or a name';
+      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : 'Pick a result to show what it uses and what uses it');
+      input.setAttribute('role', m === 'find' ? 'searchbox' : 'combobox');
+      list.setAttribute('aria-label', m === 'trace' ? 'Results' : 'Places to go to');
+      if (m !== 'find') input.setAttribute('aria-expanded', 'true');
       else input.removeAttribute('aria-expanded');
       prevBtn.hidden = nextBtn.hidden = m !== 'find';
       if (m === 'find') {
@@ -515,6 +544,7 @@
     }
 
     function open(m, text) {
+      if (m === 'trace' && !options.onFocus) m = 'goto';
       const wasOpen = !bar.hidden;
       bar.hidden = false;
       place();
@@ -547,7 +577,7 @@
     // --- events ---
     input.addEventListener('input', () => {
       queries[mode] = input.value;
-      if (mode === 'goto') return showGoto();
+      if (mode !== 'find') return showGoto();
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => {
         search(false);
@@ -556,6 +586,7 @@
     });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (bar.hidden) return; // closed already (the focus stayed here): Esc is for the page
         e.preventDefault();
         e.stopPropagation();
         close();
@@ -573,7 +604,7 @@
         } else {
           go(selected);
         }
-      } else if (mode === 'goto' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      } else if (mode !== 'find' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
         select(selected + (e.key === 'ArrowDown' ? 1 : -1));
       }
@@ -619,7 +650,7 @@
         refreshTimer = setTimeout(() => { if (!bar.hidden && mode === 'find') search(true); }, 200);
       } else {
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { if (!bar.hidden && mode === 'goto') { const k = selected; showGoto(); select(Math.min(k, results.length - 1)); } }, 200);
+        refreshTimer = setTimeout(() => { if (!bar.hidden && mode !== 'find') { const k = selected; showGoto(); select(Math.min(k, results.length - 1)); } }, 200);
       }
     }
     if (win.MutationObserver) {

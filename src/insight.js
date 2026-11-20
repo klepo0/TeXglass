@@ -26,7 +26,7 @@
  *   insight.invalidate();                  // after the page changed
  *   insight.open('notation' | 'deps');     // the panel
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
- *   insight.focus(theoremEl, 'uses' | 'usedBy'); insight.unfocus();
+ *   insight.focus(theoremEl, 'uses' | 'usedBy' | 'both', { scroll, collapse }); insight.unfocus();
  */
 (function (root) {
   'use strict';
@@ -825,8 +825,12 @@
     return items.length ? `<div class="dep-legend">${items.map((i) => `<span>${i}</span>`).join('')}</div>` : '';
   }
 
-  /** Everything n uses, directly or not (dir 'uses'), or everything that uses it ('usedBy'). */
+  /**
+   * Everything n uses, directly or not (dir 'uses'), everything that uses it
+   * ('usedBy'), or both ('both').
+   */
   function closure(n, dir) {
+    if (dir === 'both') return new Set([...closure(n, 'uses'), ...closure(n, 'usedBy')]);
     const out = new Set();
     const stack = [n];
     while (stack.length) {
@@ -837,6 +841,7 @@
 
   /** As closure(), but only along links written in the text, not guessed ones. */
   function explicitClosure(n, dir) {
+    if (dir === 'both') return new Set([...explicitClosure(n, 'uses'), ...explicitClosure(n, 'usedBy')]);
     const out = new Set();
     const stack = [n];
     const sure = (a, b) => { const e = a.edges && a.edges.get(b); return e && !e.guessed; }; // a uses b
@@ -1658,9 +1663,13 @@
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
 
-    /** Light up what el uses (dir 'uses') or what uses it ('usedBy'). */
-    function focus(el, dir, scroll) {
+    /**
+     * Light up what el uses (dir 'uses'), what uses it ('usedBy'), or both
+     * ('both'). collapse: also switch on "Hide the rest".
+     */
+    function focus(el, dir, scroll, collapse) {
       if (!el || !doc.contains(el)) return;
+      if (collapse) collapseRest = true;
       clearMarks();
       hidePop();
       const g = getGraph();
@@ -1673,7 +1682,7 @@
       keep.set(el, 'uses-sel');
       for (const p of n.proofs) keep.set(p, 'uses-sel');
       for (const m of others) if (!keep.has(m.el)) keep.set(m.el, sure.has(m) ? 'uses-on' : 'uses-on uses-guess');
-      if (dir === 'uses') {
+      if (dir !== 'usedBy') {
         const refs = new Set([...n.refs.statement, ...n.refs.proof]);
         for (const m of others) for (const r of m.refs.statement) refs.add(r);
         // the works it cites, and those cited in the statements of what it uses
@@ -1705,7 +1714,8 @@
       doc.classList.add('uses-focus');
       doc.classList.toggle('uses-collapse', collapseRest);
       const stops = [el].concat(others.map((m) => m.el));
-      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, guessed: guessed.length };
+      const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
+      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       showBar();
       syncMaps();
@@ -1762,9 +1772,14 @@
         document_.body.appendChild(bar);
       }
       const f = focusState;
+      const results = (k) => `${k} result${k > 1 ? 's' : ''}`;
       const what = f.dir === 'uses'
-        ? (f.count ? `uses ${f.count} result${f.count > 1 ? 's' : ''}` : 'uses no other numbered result')
-        : (f.count ? `is used in ${f.count} result${f.count > 1 ? 's' : ''}` : 'is not used in any numbered result');
+        ? (f.count ? `uses ${results(f.count)}` : 'uses no other numbered result')
+        : f.dir === 'usedBy'
+          ? (f.count ? `is used in ${results(f.count)}` : 'is not used in any numbered result')
+          : (f.count
+            ? `uses ${f.counts.up ? results(f.counts.up) : 'none'}, is used in ${f.counts.down ? results(f.counts.down) : 'none'}`
+            : 'neither uses nor is used in any numbered result');
       const guess = f.guessed ? ` <span class="uses-guessed" title="Named in the text without a link (“the previous lemma”, “Lemma 2.3”), so TeXglass guessed which result is meant. These have a dashed outline.">(${f.guessed} guessed)</span>` : '';
       const step = f.stops.length > 1
         ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
@@ -1772,7 +1787,8 @@
       bar.innerHTML =
         `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}${guess}</span>` +
         `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
-        `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button></span>` +
+        `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button>` +
+        `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
         step +
         `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
         '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
@@ -1799,7 +1815,13 @@
       setDefinitions,
       usedByNote,
       setHover: (on) => setHover(on, false),
-      focus: (el, dir) => focus(el, dir || 'uses'),
+      // o: { scroll, collapse } (collapse switches on "Hide the rest")
+      focus: (el, dir, o) => focus(el, dir || 'uses', !!(o && o.scroll), !!(o && o.collapse)),
+      /** How many results el uses and is used in, directly or not, or null if it is not a result. */
+      related: (el) => {
+        const n = getGraph().byEl.get(el);
+        return n ? { uses: closure(n, 'uses').size, usedBy: closure(n, 'usedBy').size } : null;
+      },
       unfocus,
       focused: () => (focusState ? { id: focusState.id, dir: focusState.dir } : null),
       graph: getGraph,

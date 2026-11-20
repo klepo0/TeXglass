@@ -53,7 +53,7 @@ test('typing words in the arXiv dialog searches, and a result opens the paper', 
       headers: { 'access-control-allow-origin': '*' }, contentType: 'application/gzip', body: zlib.gzipSync(Buffer.from(tex)),
     }));
     await page.goto('http://texglass.test/index.html');
-    await page.click('#arxiv');
+    await page.click('#open');
     await page.fill('#arxiv-input', 'p-variation signatures');
     assert.equal(await page.textContent('#arxiv-go'), 'Search');
     await page.press('#arxiv-input', 'Enter');

@@ -108,6 +108,8 @@ body {
   background: var(--toolbar);
   backdrop-filter: blur(6px);
   flex-wrap: wrap;
+  position: relative;
+  z-index: 25; /* above the panes, so that the "…" menu opens over the document */
 }
 
 .brand {
@@ -131,6 +133,41 @@ body {
 .toolbar button:hover { border-color: var(--accent); }
 .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 
+/* The "…" menu: Save, Export, Print */
+.more-group { position: relative; display: inline-flex; }
+.toolbar .more-button { padding: 5px 10px; font-weight: 600; letter-spacing: 0.05em; line-height: 1.2; }
+.toolbar .more-button[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.more-menu[hidden] { display: none; }
+.toolbar .more-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.toolbar .more-menu button:hover, .toolbar .more-menu button:focus-visible { background: var(--accent-soft); outline: none; }
+.more-menu kbd { font: inherit; font-size: 12px; color: var(--muted); }
+
 /* Import from arXiv */
 .arxiv-dialog {
   width: min(460px, calc(100vw - 32px));
@@ -144,6 +181,7 @@ body {
 .arxiv-dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
 .arxiv-dialog h2 { margin: 0 0 12px; font-size: 17px; }
 .arxiv-dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.arxiv-dialog label code { font-size: 12px; padding: 0 3px; border-radius: 3px; background: var(--accent-soft); color: var(--ink); }
 .arxiv-dialog input {
   width: 100%;
   font: inherit;
@@ -608,6 +646,8 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 
 .abstract { margin: 0 2.5em 2em; font-size: 0.93em; }
 .abstract-title { text-align: center; font-weight: 600; font-variant: small-caps; margin-bottom: 0.4em; }
+.keywords { margin: 0 2.5em 0.4em; font-size: 0.93em; }
+.keywords-head { font-variant: small-caps; margin-right: 0.3em; }
 
 .toc { margin: 0 0 2em; padding: 0.8em 1.2em; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); }
 .toc h2 { font-size: 1.05em; margin: 0 0 0.4em; }
@@ -1112,6 +1152,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .goto-list li[aria-selected="true"] { background: var(--accent-soft); }
 .goto-name { flex: none; font-weight: 600; }
 .goto-title { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.goto-rel { flex: none; margin-left: auto; padding-left: 8px; font-size: 0.9em; color: var(--muted); }
 .goto-list li.goto-empty { color: var(--muted); cursor: default; white-space: normal; }
 ::highlight(texglass-find) { background-color: rgba(255, 200, 0, 0.35); color: inherit; }
 ::highlight(texglass-find-current) { background-color: rgba(255, 150, 0, 0.75); color: inherit; }

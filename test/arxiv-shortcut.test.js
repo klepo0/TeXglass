@@ -32,7 +32,7 @@ test('Ctrl+K and Cmd+K open the arXiv dialog; a bare ?arxiv opens it on load', {
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
     assert.equal(await isOpen(page), false);
-    assert.match(await page.getAttribute('#arxiv', 'title'), /Ctrl\+K/);
+    assert.match(await page.getAttribute('#open', 'title'), /Ctrl\+K/);
 
     await page.keyboard.press('Control+k');
     assert.equal(await isOpen(page), true);
@@ -52,7 +52,7 @@ test('Ctrl+K and Cmd+K open the arXiv dialog; a bare ?arxiv opens it on load', {
     await page.keyboard.press('Escape');
 
     // Not while another dialog is open.
-    await page.click('#github');
+    await page.click('#preprints');
     await page.keyboard.press('Control+k');
     assert.equal(await isOpen(page), false);
     await page.keyboard.press('Escape');

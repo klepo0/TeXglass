@@ -375,6 +375,24 @@
   // \newcommand\dotop{\mathpalette\dotop@{.6}}; \m@th only resets \mathsurround.
   MATH_MACROS['\\mathpalette'] = '\\mathchoice{#1\\displaystyle{#2}}{#1\\textstyle{#2}}{#1\\scriptstyle{#2}}{#1\\scriptscriptstyle{#2}}';
   MATH_MACROS['\\m@th'] = '';
+  // upgreek: upright Greek letters (\uptau, \Upgamma)
+  for (const g of ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
+    'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'varpi', 'rho', 'varrho', 'sigma', 'varsigma', 'tau',
+    'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega']) {
+    MATH_MACROS['\\up' + g] = `\\mathrm{\\${g}}`;
+  }
+  for (const g of ['Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega']) {
+    MATH_MACROS['\\Up' + g.toLowerCase()] = `\\${g}`;
+    MATH_MACROS['\\Up' + g] = `\\${g}`;
+  }
+  // stmaryrd's tall white bar ⫾ (KaTeX's fonts lack it; drawn as a double bar)
+  MATH_MACROS['\\talloblong'] = '\\mathbin{\\Vert}';
+  // \protect only matters to LaTeX's moving arguments
+  MATH_MACROS['\\protect'] = '';
+  // mathabx / MnSymbol double angle brackets ⟪ ⟫, which KaTeX lacks: two
+  // angles (see doubleAngles for \left\llangle, \big\llangle, …)
+  MATH_MACROS['\\llangle'] = '\\langle\\mkern-4mu\\langle';
+  MATH_MACROS['\\rrangle'] = '\\rangle\\mkern-4mu\\rangle';
   // The triple-bar norm delimiter ⦀ (fourier's \VERT, \vvvert), which KaTeX lacks:
   // drawn as three bars (see TRIPLE_BAR and tripleBars).
   const TRIPLE_BAR = '\\vert\\mkern-2mu\\vert\\mkern-2mu\\vert';
@@ -393,6 +411,31 @@
   function sizedDelim(wrap, d, triple) {
     if (!triple.includes(d.trim())) return wrap(d);
     return [0, 1, 2].map(() => wrap('\\vert')).join('\\mkern-2mu');
+  }
+
+  /**
+   * \left\llangle … \right\rrangle, \big\llangle, …: KaTeX sizes one delimiter
+   * at a time, so size both angles.
+   */
+  function doubleAngles(tex) {
+    if (!/\\(ll|rr)angle/.test(tex)) return tex;
+    return tex.replace(/(\\(?:left|right|middle|[bB]igg?[lrm]?))\s*\\(ll|rr)angle(?![A-Za-z@])/g, (_, pre, d) => {
+      const a = d === 'll' ? '\\langle' : '\\rangle';
+      return `${pre}${a}\\mkern-4mu${pre}${a}`;
+    });
+  }
+
+  /**
+   * Write KaTeX's empty MathML elements (<mspace/>, …) with an end tag. KaTeX
+   * sometimes nests them inside <mo> or <mi> (\mathrel{\rlap{…}\mkern2mu…}),
+   * where the HTML parser reads tags as HTML, so `<mspace/>` opens an element
+   * that is never closed: it swallows the rest of the page, which nests deeper
+   * at every formula and makes the page take seconds to parse.
+   */
+  function closeEmptyMathml(html) {
+    return typeof html === 'string' && html.includes('/>')
+      ? html.replace(/<(mspace|mglyph|malignmark|mprescripts|none)\b([^<>]*?)\s*\/>/g, '<$1$2></$1>')
+      : html;
   }
 
   /**
@@ -750,6 +793,8 @@
     'frontmatter', 'backmatter', 'printbibliography', 'listoffigures', 'listoftables', 'qedhere', 'xspace',
     'ignorespaces', 'unskip', 'allowbreak', 'break', 'nolinebreak', 'leavevmode', 'displaybreak',
     'long', 'outer', 'listoftodos', 'reversemarginpar', 'normalmarginpar',
+    // imsart (IMS journals) wraps the preamble's definitions in these
+    'startlocaldefs', 'endlocaldefs',
   ]);
 
   /** Commands whose arguments are dropped entirely. */
@@ -766,6 +811,8 @@
     'DeclareFontEncoding', 'DeclareFontSubstitution', 'DeclareSymbolFont', 'SetSymbolFont', 'DeclareFontFamily',
     'DeclareFontShape', 'DeclareMathAlphabet', 'SetMathAlphabet', 'DeclareSymbolFontAlphabet',
     'setuptodonotes', 'presetkeys',
+    // imsart / elsarticle front matter: running heads, e-mail labels, affiliations
+    'runtitle', 'runauthor', 'affiliation', 'ead', 'printead', 'printaddresses', 'ead_',
   ]);
 
   const TEXT_STYLES = {
@@ -777,6 +824,8 @@
     // ulem (and soul's \ul)
     uuline: ['u', 'uuline'], uwave: ['u', 'uwave'], dashuline: ['u', 'dashuline'], dotuline: ['u', 'dotuline'],
     xout: ['s', 'xout'], ul: ['u'],
+    // imsart author names: \fnms{first} \snm{last}
+    fnms: ['span'], snm: ['span'],
   };
 
   const DECLARATIONS = {
@@ -864,6 +913,8 @@
       this.listDepth = 0;
       this.floatKind = null;
       this.meta = { title: null, author: null, date: null };
+      this.titleShown = false;
+      this.thanksTexts = Object.create(null); // imsart \thankstext / elsarticle \fntext, by key
       this.srcMap = null; // original-source offsets, set when options.sourceMap is on
       this.trackDepth = -1;
     }
@@ -926,7 +977,8 @@
     }
 
     refHtml(cmd, keys) {
-      const parts = keys.split(',').map((k) => k.trim()).filter(Boolean);
+      // \cref{a,b} refers to two labels, but a label may hold commas itself
+      const parts = this.lookup(keys) ? [keys.trim()] : keys.split(',').map((k) => k.trim()).filter(Boolean);
       return parts
         .map((key) => {
           const info = this.lookup(key);
@@ -971,9 +1023,11 @@
     }
 
     renderMath(tex, display) {
-      tex = tripleBars(arraySpecs(this.mathRefs(tex)), this.triple).replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
+      tex = tripleBars(arraySpecs(this.mathRefs(tex)), this.triple);
+      if (!this.macros.llangle && !this.macros.rrangle) tex = doubleAngles(tex);
+      tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
       try {
-        const html = this.renderMathFn(tex, display, this.katexMacros(tex));
+        const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
         return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>`;
@@ -1448,7 +1502,22 @@
           return res('', a.end);
         }
         case 'maketitle':
+          this.titleShown = true;
           return res(this.titleBlock(), i, { block: true });
+        case 'thankstext': case 'tnotetext': case 'fntext': case 'cortext': {
+          // imsart \thankstext{key}{text}, elsarticle \fntext[key]{text}: the
+          // note that \thanksref{key} / \fnref{key} attach to a name
+          const o = readOpt(src, i);
+          const k = o ? null : readArg(src, i);
+          const a = readArg(src, o ? o.end : k.end);
+          this.thanksTexts[(o ? o.content : k.content).trim()] = a.content;
+          return res('', a.end);
+        }
+        case 'thanksref': case 'tnoteref': case 'fnref': case 'corref': {
+          const a = readArg(src, i);
+          const notes = a.content.split(',').map((k) => this.thanksTexts[k.trim()]).filter((t) => t !== undefined);
+          return res(notes.map((t) => this.footnote(t)).join(''), a.end);
+        }
         case 'tableofcontents':
           return res(this.tocHtml(), i, { block: true });
         case 'appendix':
@@ -1528,7 +1597,9 @@
         case 'let': {
           const m = /^\s*\\([A-Za-z@]+)\s*=?\s*(\\[A-Za-z@]+|.)/.exec(src.slice(i));
           if (!m) return res('', i);
-          this.macros[m[1]] = { nargs: 0, def: null, body: m[2] };
+          // \let\cmd\@undefined (or \undefined) forgets \cmd, as before redefining it
+          if (/^\\(@undefined|undefined)$/.test(m[2])) delete this.macros[m[1]];
+          else this.macros[m[1]] = { nargs: 0, def: null, body: m[2] };
           this._katexMacros = null;
           return res('', i + m[0].length);
         }
@@ -1951,6 +2022,38 @@
       switch (name) {
         case 'document':
           return this.flow(body, false);
+        case 'frontmatter': {
+          // imsart, elsarticle: \title, \author, … and the abstract inside, with
+          // no \maketitle (the class sets the title at the end of the environment)
+          const html = this.flow(body, false);
+          if (this.titleShown) return html;
+          this.titleShown = true;
+          if (this.meta.date === null) this.meta.date = ''; // these classes print no date
+          return this.titleBlock() + html;
+        }
+        case 'keyword': {
+          // imsart: \begin{keyword}[class=MSC] \kwd[Primary ]{60H10} \kwd{60G99} \end{keyword};
+          // elsarticle: \begin{keyword} a \sep b \MSC[2010] 60H10 \end{keyword}
+          const o = readOpt(body, 0);
+          const cls = o && /class\s*=\s*([A-Za-z]+)/.exec(o.content);
+          let rest = o ? body.slice(o.end) : body;
+          const items = [];
+          if (/\\kwd(?![A-Za-z])/.test(rest)) {
+            const re = /\\kwd(?![A-Za-z])/g;
+            let m;
+            while ((m = re.exec(rest))) {
+              const p = readOpt(rest, m.index + 4);
+              const a = readArg(rest, p ? p.end : m.index + 4);
+              items.push((p ? p.content : '') + a.content.trim());
+              re.lastIndex = a.end;
+            }
+          } else {
+            rest = rest.replace(/\\(?:MSC|PACS|JEL)\s*(\[[^\]]*\])?/g, (t) => `\\sep ${t.replace(/^\\/, '').replace(/[\[\]]/g, ' ').trim()} `);
+            for (const t of splitTop(rest, commandSep('sep'))) if (t.trim()) items.push(t.trim());
+          }
+          const head = cls ? `${cls[1]} subject classifications` : 'Keywords';
+          return `<div class="keywords"><span class="keywords-head">${escapeHtml(head)}:</span> ${items.map((t) => this.flow(t, true)).join(', ')}</div>`;
+        }
         case 'abstract':
           return `<div class="abstract"><div class="abstract-title">Abstract</div>${this.flow(body, false)}</div>`;
         case 'itemize': case 'enumerate': case 'description': case 'compactitem': case 'compactenum':
