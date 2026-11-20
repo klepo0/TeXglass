@@ -2367,7 +2367,7 @@
       '\\section*{Welcome to TeXglass}\n' +
         'Press \\textbf{Open} above (Ctrl+K) to search arXiv, type \\texttt{github} and words to search GitHub, ' +
         'paste an arXiv id or a GitHub link, or open a \\texttt{.tex} file from this computer. You can also drop one on this page, ' +
-        'or browse OpenAI\'s mathematical \\textbf{Preprints} and read one here.\n\n' +
+        'or browse \\textbf{OAI preprints}, OpenAI\'s mathematical preprints, and read one here.\n\n' +
         'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
       'welcome.tex'
     );

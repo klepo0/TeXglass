@@ -118,7 +118,7 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
 drop a `.tex` file, search arXiv, paste an arXiv or GitHub link, or browse OpenAI's math
 preprints. Nothing to install, and after your first visit it opens and renders
-offline too (arXiv, GitHub and Preprints still need a connection).
+offline too (arXiv, GitHub and OAI preprints still need a connection).
 
 <table>
   <tr>
@@ -155,7 +155,7 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   them, then click one; or paste a link to a file, folder or repo of a public
   repository (`github owner/repo` works too); the main file, included files, `.bbl` or `.bib` and figures are found for
   you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
-- **OpenAI math preprints**: the **Preprints** button lists the manuscripts in
+- **OpenAI math preprints**: the **OAI preprints** button lists the manuscripts in
   [openai/math](https://github.com/openai/math), searchable and filtered by
   discipline; click one to read its LaTeX source. Also `?preprint=<folder>`.
 - **Three modes**: **Preview**, **Edit** (click any paragraph, theorem or
