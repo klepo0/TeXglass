@@ -277,7 +277,7 @@
    * Add the find bar to a preview.
    * options: { root: the rendered document, scroller: the element that scrolls it,
    *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target,
-   *   onFocus(el): optional; adds a Related tab to pick a theorem, lemma, definition…
+   *   onFocus(el): optional; adds a Trace tab to pick a theorem, lemma, definition…
    *     and show only what it uses and what uses it (TeXglassInsight focus),
    *   related(el): optional, { uses, usedBy } counts shown in that list }
    * Returns { open(mode, text), close(), next(), prev(), refresh(), state() }.
@@ -299,7 +299,7 @@
       '<div class="find-modes" role="tablist" aria-label="Search or go to">' +
       '<button type="button" role="tab" data-mode="find" title="Search the text (Ctrl+F)">Find</button>' +
       '<button type="button" role="tab" data-mode="goto" title="Go to a theorem, equation or section by its number (Ctrl+G)">Go to</button>' +
-      (options.onFocus ? '<button type="button" role="tab" data-mode="related" title="Pick a theorem, lemma or definition and show only what it uses and what uses it">Related</button>' : '') +
+      (options.onFocus ? '<button type="button" role="tab" data-mode="trace" title="Pick a theorem, lemma or definition and show only what it uses and what uses it">Trace</button>' : '') +
       '</div>' +
       '<input class="find-input" type="text" spellcheck="false" autocomplete="off" aria-label="Search">' +
       '<span class="find-count" aria-live="polite"></span>' +
@@ -321,7 +321,7 @@
     let capped = false;
     let results = []; // Go to: targets shown in the list
     let selected = 0;
-    let queries = { find: '', goto: '', related: '' };
+    let queries = { find: '', goto: '', trace: '' };
     let searchTimer = 0;
     let stale = false;
     let lastQuery = '';
@@ -451,7 +451,7 @@
     function escapeHtml(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     }
-    /** "uses 3 · used in 5" for the Related list, or '' when unknown. */
+    /** "uses 3 · used in 5" for the Trace list, or '' when unknown. */
     function relatedNote(t) {
       let c = null;
       try { c = options.related ? options.related(t.el) : null; } catch (e) { c = null; }
@@ -462,7 +462,7 @@
       return `<span class="goto-rel">${parts.length ? parts.join(' · ') : 'stands alone'}</span>`;
     }
     function showGoto() {
-      const related = mode === 'related';
+      const related = mode === 'trace';
       let targets = collectTargets(rootEl);
       if (related) targets = targets.filter((t) => t.type === 'theorem' && t.el.id);
       results = rankTargets(targets, input.value, 200);
@@ -500,7 +500,7 @@
       if (!t || !t.el.isConnected) return;
       close();
       reveal(t.el);
-      if (mode === 'related') {
+      if (mode === 'trace') {
         // light up what it uses and what uses it, and hide the rest
         options.onFocus(t.el);
         if (options.onJump) options.onJump(t.el);
@@ -525,7 +525,7 @@
       input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : 'Pick a result: Lemma 4.1, or a name';
       input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : 'Pick a result to show what it uses and what uses it');
       input.setAttribute('role', m === 'find' ? 'searchbox' : 'combobox');
-      list.setAttribute('aria-label', m === 'related' ? 'Results' : 'Places to go to');
+      list.setAttribute('aria-label', m === 'trace' ? 'Results' : 'Places to go to');
       if (m !== 'find') input.setAttribute('aria-expanded', 'true');
       else input.removeAttribute('aria-expanded');
       prevBtn.hidden = nextBtn.hidden = m !== 'find';
@@ -541,7 +541,7 @@
     }
 
     function open(m, text) {
-      if (m === 'related' && !options.onFocus) m = 'goto';
+      if (m === 'trace' && !options.onFocus) m = 'goto';
       const wasOpen = !bar.hidden;
       bar.hidden = false;
       place();

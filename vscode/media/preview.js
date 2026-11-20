@@ -745,7 +745,7 @@
       scroller: pane,
       reveal,
       onJump: hidePopover,
-      // Related: pick a result, see only what it uses and what uses it
+      // Trace: pick a result, see only what it uses and what uses it
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
     })

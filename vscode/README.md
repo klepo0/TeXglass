@@ -124,7 +124,7 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   or **TeXglass: Go to Theorem, Equation or Section…**): type `Lemma 4.1`,
   `(3.2)`, `§2` or just `3.2` and press Enter. A kind (`lemma`) or a title
   lists those too.
-- **Related** (the third tab of the same bar): pick a theorem, lemma,
+- **Trace** (the third tab of the same bar): pick a theorem, lemma,
   definition or proposition, and the preview hides everything except the
   results it uses and the results that use it. The bar at the bottom switches
   to one side (Uses, Used in), brings the rest back (Hide the rest) or ends it (Done, Esc).

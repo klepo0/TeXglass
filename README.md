@@ -40,7 +40,7 @@ browser extension:
   cited works light up in the bibliography. The Map tab has the
   same thing as **Show what it uses**.
 - **Go to** any theorem, equation or section by number (Ctrl+G).
-- **Related** (a tab of the same bar): pick a theorem, lemma or definition and see only what it uses and what uses it.
+- **Trace** (a tab of the same bar): pick a theorem, lemma or definition and see only what it uses and what uses it.
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined
   with `:=`, with a link to the first use or the definition.

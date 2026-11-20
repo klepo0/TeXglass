@@ -1,5 +1,5 @@
 'use strict';
-// The find bar's Related tab: pick a result and see only what it uses and
+// The find bar's Trace tab: pick a result and see only what it uses and
 // what uses it (src/find.js + src/insight.js). Runs in a real browser and is
 // skipped where Playwright and a browser are not installed.
 const test = require('node:test');
@@ -35,7 +35,7 @@ A paragraph of text.
 \begin{proof} From Theorem~\ref{t:main}. \end{proof}
 \end{document}`;
 
-test('the Related tab picks a result and hides all but what it uses and what uses it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('the Trace tab picks a result and hides all but what it uses and what uses it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -56,7 +56,7 @@ test('the Related tab picks a result and hides all but what it uses and what use
         onFocus: (el) => insight.focus(el, 'both', { scroll: true, collapse: true }),
         related: (el) => insight.related(el),
       });
-      window.finder.open('related');
+      window.finder.open('trace');
     });
     // Only results are listed, with how many they use and are used in.
     const items = () => p.evaluate(() => Array.from(document.querySelectorAll('.goto-list li')).map((li) => li.textContent));
@@ -95,7 +95,7 @@ test('the Related tab picks a result and hides all but what it uses and what use
     s = await state();
     assert.deepEqual(s.shown, ['Lemma 1.1', 'Lemma 1.2', 'Theorem 2.1', 'Corollary 2.2']);
     // A result on its own.
-    await p.evaluate(() => window.finder.open('related', 'lemma 1.3'));
+    await p.evaluate(() => window.finder.open('trace', 'lemma 1.3'));
     await p.keyboard.press('Enter');
     s = await state();
     assert.deepEqual(s.shown, ['Lemma 1.3']);
@@ -109,7 +109,7 @@ test('the Related tab picks a result and hides all but what it uses and what use
   }
 });
 
-test('without onFocus there is no Related tab', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('without onFocus there is no Trace tab', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -118,7 +118,7 @@ test('without onFocus there is no Related tab', { skip: !chromium && 'Playwright
     await p.addScriptTag({ path: path.join(ROOT, 'src/find.js') });
     const out = await p.evaluate(() => {
       const f = TeXglassFind.attach({ root: document.getElementById('doc'), scroller: document.getElementById('pane') });
-      f.open('related');
+      f.open('trace');
       return { tabs: document.querySelectorAll('.find-modes button').length, mode: f.state().mode };
     });
     assert.deepEqual(out, { tabs: 2, mode: 'goto' });
