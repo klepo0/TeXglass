@@ -25,6 +25,7 @@
   <script defer src="src/scroll.js"></script>
   <script defer src="src/copytex.js"></script>
   <script defer src="src/margin.js"></script>
+  <script defer src="src/notes-sync.js"></script>
   <script defer src="src/insight.js"></script>
   <script defer src="src/cite.js"></script>
   <script defer src="vscode/ink.js"></script>
@@ -43,12 +44,18 @@
     <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">OAI preprints</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory hidden>
+    <input id="notes-file" type="file" accept=".json,application/json" hidden>
     <div class="more-group">
-      <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: save, export, print" title="Save, export or print">…</button>
+      <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: save, export, print, notes" title="Save, export or print; your highlights and notes">…</button>
       <div id="more-menu" class="more-menu" role="menu" aria-labelledby="more" hidden>
         <button id="save" type="button" role="menuitem" title="Save your changes (Ctrl+S)">Save<kbd>Ctrl+S</kbd></button>
         <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
         <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
+        <div class="more-sep" role="separator"></div>
+        <button id="notes-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="Select text in the preview to highlight it or write a note beside it">Highlights and notes</button>
+        <button id="notes-export" type="button" role="menuitem" title="Download this paper's highlights and notes as a file (paper.texglass.json)">Export notes</button>
+        <button id="notes-import" type="button" role="menuitem" title="Add the highlights and notes from an exported file to this paper">Import notes…</button>
+        <button id="notes-sync" type="button" role="menuitem" title="Keep your highlights and notes in step on all your devices, through a private gist on your GitHub account">Sync notes with GitHub…</button>
       </div>
     </div>
     <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which">Contents</button>
@@ -108,6 +115,21 @@
       <div class="arxiv-actions">
         <button type="button" id="arxiv-cancel">Cancel</button>
         <button type="submit" id="arxiv-go" class="primary">Search</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="notes-sync-dialog" class="arxiv-dialog" aria-labelledby="notes-sync-title">
+    <form id="notes-sync-form" method="dialog">
+      <h2 id="notes-sync-title">Sync notes with GitHub</h2>
+      <p class="local-note">Your highlights and notes go to a private gist, <code>texglass-notes.json</code>, in your own GitHub account, and come back on every device where you sign in. Nothing passes through any other server. Notes made on two devices at once are merged.</p>
+      <label for="notes-sync-token">A GitHub token that may use gists: <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=TeXglass%20notes" target="_blank" rel="noopener">make one</a> with only the <code>gist</code> scope, and paste it here. It is kept in this browser only.</label>
+      <input id="notes-sync-token" type="password" autocomplete="off" spellcheck="false">
+      <p id="notes-sync-message" class="arxiv-message" role="status"></p>
+      <div class="arxiv-actions">
+        <button type="button" id="notes-sync-signout" hidden>Sign out</button>
+        <button type="button" id="notes-sync-cancel">Cancel</button>
+        <button type="submit" id="notes-sync-go" class="primary">Sign in and sync</button>
       </div>
     </form>
   </dialog>

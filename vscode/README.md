@@ -111,6 +111,13 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   whose text has gone shows as "Text not found" near where it was. Hide them
   all with **TeXglass: Show or Hide Highlights and Notes** (or
   `texglass.studyTools`).
+- **Your notes on every machine**: **TeXglass: Export Highlights and Notes…**
+  and **Import Highlights and Notes…** move them as a file (the web viewer and
+  browser extension read the same file). **TeXglass: Sync Highlights and Notes
+  with GitHub** keeps them in a private gist on your GitHub account, using
+  VS Code's own GitHub sign-in, so they follow you to every machine and to the
+  web viewer; there is no TeXglass server. With Settings Sync on, they also
+  follow you without GitHub. Notes edited on two machines at once are merged.
 - **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
   mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**
   in the preview's `…` menu. The level shows at the bottom left (click it to
