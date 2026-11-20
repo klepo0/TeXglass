@@ -1,0 +1,1355 @@
+[
+ {
+  "id": "2609.02755",
+  "field": "maths",
+  "note": "regularity structures trees, local .sty files"
+ },
+ {
+  "id": "2611.22175",
+  "field": "maths",
+  "note": "heavy TikZ"
+ },
+ {
+  "id": "1410.3394",
+  "field": "maths",
+  "note": "reported 2026-11-20"
+ },
+ {
+  "id": "1907.00578",
+  "field": "maths",
+  "note": "reported 2026-11-20"
+ },
+ {
+  "id": "2106.10340",
+  "field": "maths",
+  "note": "known hard"
+ },
+ {
+  "id": "2611.25547",
+  "field": "maths",
+  "note": "known hard"
+ },
+ {
+  "id": "q-bio/0403002",
+  "field": "maths",
+  "cat": "math.PR",
+  "year": 2004,
+  "title": "A generalized model of mutation-selection balance with applications to aging"
+ },
+ {
+  "id": "1103.0060",
+  "field": "maths",
+  "cat": "math.PR",
+  "year": 2011,
+  "title": "Large deviations of the limiting distribution in the Shanks-Rényi prime number race"
+ },
+ {
+  "id": "1703.00137",
+  "field": "maths",
+  "cat": "math.PR",
+  "year": 2017,
+  "title": "Spatial asymptotic of the stochastic heat equation with compactly supported initial data"
+ },
+ {
+  "id": "2203.00159",
+  "field": "maths",
+  "cat": "math.PR",
+  "year": 2022,
+  "title": "Limit distribution theory for smooth $p$-Wasserstein distances"
+ },
+ {
+  "id": "2603.00929",
+  "field": "maths",
+  "cat": "math.PR",
+  "year": 2026,
+  "title": "Quadratic Wiener functionals -- transformations and quadratic forms"
+ },
+ {
+  "id": "math/0403047",
+  "field": "maths",
+  "cat": "math.AP",
+  "year": 2004,
+  "title": "On the Blow-up for a Discrete Boltzmann Equation in the Plane"
+ },
+ {
+  "id": "1103.0061",
+  "field": "maths",
+  "cat": "math.AP",
+  "year": 2011,
+  "title": "The sine-Gordon equation in the semiclassical limit: dynamics of fluxon condensates"
+ },
+ {
+  "id": "1703.00172",
+  "field": "maths",
+  "cat": "math.AP",
+  "year": 2017,
+  "title": "Behaviors of the energy of solutions of two coupled wave equations with nonlinear damping on a compact manifold with boundary"
+ },
+ {
+  "id": "2203.00153",
+  "field": "maths",
+  "cat": "math.AP",
+  "year": 2022,
+  "title": "Partial Regularity for $\\mathbb{A}$-quasiconvex Functionals"
+ },
+ {
+  "id": "2603.00894",
+  "field": "maths",
+  "cat": "math.AP",
+  "year": 2026,
+  "title": "Low Mach number limit of the compressible Navier-Stokes system for large initial date with critical regularity on the torus"
+ },
+ {
+  "id": "math/0403018",
+  "field": "maths",
+  "cat": "math.AG",
+  "year": 2004,
+  "title": "Cusps and Codes"
+ },
+ {
+  "id": "1103.0088",
+  "field": "maths",
+  "cat": "math.AG",
+  "year": 2011,
+  "title": "Wildly Ramified Actions and Surfaces of General Type Arising from Artin-Schreier Curves"
+ },
+ {
+  "id": "1703.00230",
+  "field": "maths",
+  "cat": "math.AG",
+  "year": 2017,
+  "title": "Birational geometry of the moduli space of pure sheaves on quadric surface"
+ },
+ {
+  "id": "2203.00152",
+  "field": "maths",
+  "cat": "math.AG",
+  "year": 2022,
+  "title": "The Harbourne-Hirschowitz condition and the Anticanonical Orthogonal Property for surfaces"
+ },
+ {
+  "id": "2603.00886",
+  "field": "maths",
+  "cat": "math.AG",
+  "year": 2026,
+  "title": "Explicit deformation of a spider algebra to a curvilinear scheme via Möbius generators"
+ },
+ {
+  "id": "math/0403017",
+  "field": "maths",
+  "cat": "math.CO",
+  "year": 2004,
+  "title": "Combinatorial interpretation of the recurrence relation for fibonomial coefficients"
+ },
+ {
+  "id": "1103.0062",
+  "field": "maths",
+  "cat": "math.CO",
+  "year": 2011,
+  "title": "The Elementary Divisors of the Incidence Matrix of Skew Lines in PG(3,q)"
+ },
+ {
+  "id": "1703.00139",
+  "field": "maths",
+  "cat": "math.CO",
+  "year": 2017,
+  "title": "The weighted poset metrics and directed graph metrics"
+ },
+ {
+  "id": "2203.00169",
+  "field": "maths",
+  "cat": "math.CO",
+  "year": 2022,
+  "title": "Infinite-dimensional Ramsey theory for homogeneous structures with SDAP$^+$"
+ },
+ {
+  "id": "2603.00899",
+  "field": "maths",
+  "cat": "math.CO",
+  "year": 2026,
+  "title": "A strong nullity parameter for rooted graphs"
+ },
+ {
+  "id": "math/0403027",
+  "field": "maths",
+  "cat": "math.NT",
+  "year": 2004,
+  "title": "Continued Fractions with Multiple Limits"
+ },
+ {
+  "id": "1103.0103",
+  "field": "maths",
+  "cat": "math.NT",
+  "year": 2011,
+  "title": "Classification of Convex lattice polytopes"
+ },
+ {
+  "id": "1703.00108",
+  "field": "maths",
+  "cat": "math.NT",
+  "year": 2017,
+  "title": "Statistics of $K$-groups modulo $p$ for the ring of integers of a varying quadratic number field"
+ },
+ {
+  "id": "2203.00207",
+  "field": "maths",
+  "cat": "math.NT",
+  "year": 2022,
+  "title": "Generalized hypergeometric $G$-functions take linear independent values"
+ },
+ {
+  "id": "2603.01018",
+  "field": "maths",
+  "cat": "math.NT",
+  "year": 2026,
+  "title": "A note on the Möbius uncertainty principle for posets"
+ },
+ {
+  "id": "hep-th/0403002",
+  "field": "maths",
+  "cat": "math.DG",
+  "year": 2004,
+  "title": "Sasaki-Einstein Metrics on S^2 x S^3"
+ },
+ {
+  "id": "1103.0099",
+  "field": "maths",
+  "cat": "math.DG",
+  "year": 2011,
+  "title": "A classification of 5-dimensional manifolds, souls of codimension two and non-diffeomorphic pairs"
+ },
+ {
+  "id": "1703.00118",
+  "field": "maths",
+  "cat": "math.DG",
+  "year": 2017,
+  "title": "Emergence of Apparent Horizon in Gravitational Collapse"
+ },
+ {
+  "id": "2203.00220",
+  "field": "maths",
+  "cat": "math.DG",
+  "year": 2022,
+  "title": "On Minimal Surfaces of Revolutions Immersed in Deformed Hyperbolic Kropina Space"
+ },
+ {
+  "id": "2603.00942",
+  "field": "maths",
+  "cat": "math.DG",
+  "year": 2026,
+  "title": "Weighted heat kernel comparison theorems and its applications in spectral geometry"
+ },
+ {
+  "id": "math/0403042",
+  "field": "maths",
+  "cat": "math.AT",
+  "year": 2004,
+  "title": "Subgroup families controlling p-local finite groups"
+ },
+ {
+  "id": "1103.0151",
+  "field": "maths",
+  "cat": "math.AT",
+  "year": 2011,
+  "title": "The orbifold cohomology of moduli of genus 3 curves"
+ },
+ {
+  "id": "1703.00107",
+  "field": "maths",
+  "cat": "math.AT",
+  "year": 2017,
+  "title": "Vanishing of $L^{2}$-Betti numbers and failure of acylindrical hyperbolicity of matrix groups over rings"
+ },
+ {
+  "id": "2203.00496",
+  "field": "maths",
+  "cat": "math.AT",
+  "year": 2022,
+  "title": "Lifting recollements of abelian categories and model structures"
+ },
+ {
+  "id": "2603.00914",
+  "field": "maths",
+  "cat": "math.AT",
+  "year": 2026,
+  "title": "Persistent Combinatorial Model of the Restricted Second Configuration Space of Metric Star Graphs"
+ },
+ {
+  "id": "math/0403025",
+  "field": "maths",
+  "cat": "math.FA",
+  "year": 2004,
+  "title": "Operators on Spaces Generated by Infinite Dimensional Appell Polynomials"
+ },
+ {
+  "id": "1103.0090",
+  "field": "maths",
+  "cat": "math.FA",
+  "year": 2011,
+  "title": "Wavelet packets and wavelet frame packets on local fields"
+ },
+ {
+  "id": "1703.00094",
+  "field": "maths",
+  "cat": "math.FA",
+  "year": 2017,
+  "title": "Extreme points and saturated polynomials"
+ },
+ {
+  "id": "2203.00166",
+  "field": "maths",
+  "cat": "math.FA",
+  "year": 2022,
+  "title": "Dvoretzky-type theorem for locally finite subsets of a Hilbert space"
+ },
+ {
+  "id": "2603.01046",
+  "field": "maths",
+  "cat": "math.FA",
+  "year": 2026,
+  "title": "Operator symmetric moduli and sharp triangle inequalities"
+ },
+ {
+  "id": "math/0403057",
+  "field": "maths",
+  "cat": "math.OA",
+  "year": 2004,
+  "title": "The complete dimension theory of partially ordered systems with equivalence and orthogonality"
+ },
+ {
+  "id": "1103.0264",
+  "field": "maths",
+  "cat": "math.OA",
+  "year": 2011,
+  "title": "Approximation properties for free orthogonal and free unitary quantum groups"
+ },
+ {
+  "id": "1703.00105",
+  "field": "maths",
+  "cat": "math.OA",
+  "year": 2017,
+  "title": "Bosonic symmetries of the extended fermionic $(2N,2M)$-Toda hierarchy"
+ },
+ {
+  "id": "2203.00179",
+  "field": "maths",
+  "cat": "math.OA",
+  "year": 2022,
+  "title": "A Steinberg algebra approach to étale groupoid C*-algebras"
+ },
+ {
+  "id": "2603.01466",
+  "field": "maths",
+  "cat": "math.OA",
+  "year": 2026,
+  "title": "Violation of Bell-type Inequalities on Mutually-commuting von Neumann Algebra Models of Entanglement Swapping Networks"
+ },
+ {
+  "id": "math/0403037",
+  "field": "maths",
+  "cat": "math.RT",
+  "year": 2004,
+  "title": "Dixmier's Problem 5 for the Weyl Algebra"
+ },
+ {
+  "id": "1103.0068",
+  "field": "maths",
+  "cat": "math.RT",
+  "year": 2011,
+  "title": "Linear characters and block algebra"
+ },
+ {
+  "id": "1703.00271",
+  "field": "maths",
+  "cat": "math.RT",
+  "year": 2017,
+  "title": "Non-Semisimple Planar Algebras from the Representation Theory of $\\bar{U}_{q}(\\mathfrak{sl}_{2})$"
+ },
+ {
+  "id": "2203.00223",
+  "field": "maths",
+  "cat": "math.RT",
+  "year": 2022,
+  "title": "From boxes to polynomials: a story of generalisation"
+ },
+ {
+  "id": "2603.00928",
+  "field": "maths",
+  "cat": "math.RT",
+  "year": 2026,
+  "title": "Borel and shifted category O"
+ },
+ {
+  "id": "math/0403165",
+  "field": "maths",
+  "cat": "math.LO",
+  "year": 2004,
+  "title": "The Necessary Maximality Principle for c.c.c. forcing is equiconsistent with a weakly compact cardinal"
+ },
+ {
+  "id": "1103.0206",
+  "field": "maths",
+  "cat": "math.LO",
+  "year": 2011,
+  "title": "Adding linear orders"
+ },
+ {
+  "id": "1703.02890",
+  "field": "maths",
+  "cat": "math.LO",
+  "year": 2017,
+  "title": "Differential fields and Geodesic flows II : Geodesic flows of pseudo-Riemannian algebraic varieties"
+ },
+ {
+  "id": "2203.00165",
+  "field": "maths",
+  "cat": "math.LO",
+  "year": 2022,
+  "title": "A descriptive approach to higher derived limits"
+ },
+ {
+  "id": "2603.01056",
+  "field": "maths",
+  "cat": "math.LO",
+  "year": 2026,
+  "title": "A Classifying Topos for the Spectrum of Equivalences"
+ },
+ {
+  "id": "math/0403030",
+  "field": "maths",
+  "cat": "math.CA",
+  "year": 2004,
+  "title": "Distributions and Analytic Continuation of Dirichlet Series"
+ },
+ {
+  "id": "1103.0058",
+  "field": "maths",
+  "cat": "math.CA",
+  "year": 2011,
+  "title": "A Remarkable Identity Involving Bessel Functions"
+ },
+ {
+  "id": "1703.00100",
+  "field": "maths",
+  "cat": "math.CA",
+  "year": 2017,
+  "title": "Asymptotic behaviour of the fifth Painlevé transcendents in the space of initial values"
+ },
+ {
+  "id": "2203.00243",
+  "field": "maths",
+  "cat": "math.CA",
+  "year": 2022,
+  "title": "Lattice paths, vector continued fractions, and resolvents of banded Hessenberg operators"
+ },
+ {
+  "id": "2603.01132",
+  "field": "maths",
+  "cat": "math.CA",
+  "year": 2026,
+  "title": "Krall-Type Orthogonal Polynomials and Integrable Isomonodromic Deformations"
+ },
+ {
+  "id": "math/0403035",
+  "field": "maths",
+  "cat": "math.DS",
+  "year": 2004,
+  "title": "An extension of the characterization of the domain of attraction of an asymptotically stable fixed point in the case of a nonlinear discrete dynamical system"
+ },
+ {
+  "id": "1103.0169",
+  "field": "maths",
+  "cat": "math.DS",
+  "year": 2011,
+  "title": "Tipping points in open systems: bifurcation, noise-induced and rate-dependent examples in the climate system"
+ },
+ {
+  "id": "1703.00092",
+  "field": "maths",
+  "cat": "math.DS",
+  "year": 2017,
+  "title": "Lectures on Structural Stability in Dynamics"
+ },
+ {
+  "id": "2203.00163",
+  "field": "maths",
+  "cat": "math.DS",
+  "year": 2022,
+  "title": "Symmetry and Asymmetry in the 1+N Coorbital Problem"
+ },
+ {
+  "id": "2603.01077",
+  "field": "maths",
+  "cat": "math.DS",
+  "year": 2026,
+  "title": "Kernel Methods for Stochastic Dynamical Systems with Application to Koopman Eigenfunctions: Feynman-Kac Representations and RKHS Approximation"
+ },
+ {
+  "id": "math/0403024",
+  "field": "maths",
+  "cat": "math.GT",
+  "year": 2004,
+  "title": "Knot adjacency, genus and essential tori"
+ },
+ {
+  "id": "1103.0072",
+  "field": "maths",
+  "cat": "math.GT",
+  "year": 2011,
+  "title": "The clock number of a knot"
+ },
+ {
+  "id": "1703.00335",
+  "field": "maths",
+  "cat": "math.GT",
+  "year": 2017,
+  "title": "Rack invariants of links in $L(p,1)$"
+ },
+ {
+  "id": "2203.00841",
+  "field": "maths",
+  "cat": "math.GT",
+  "year": 2022,
+  "title": "A Zero Lyapunov Exponent in Genus $3$ Implies the Eierlegende Wollmilchsau"
+ },
+ {
+  "id": "2603.01079",
+  "field": "maths",
+  "cat": "math.GT",
+  "year": 2026,
+  "title": "Affine transverse foliations in sphere bundles"
+ },
+ {
+  "id": "cs/0403025",
+  "field": "maths",
+  "cat": "math.ST",
+  "year": 2004,
+  "title": "Distribution of Mutual Information from Complete and Incomplete Data"
+ },
+ {
+  "id": "1103.0153",
+  "field": "maths",
+  "cat": "math.ST",
+  "year": 2011,
+  "title": "Binary Cumulant Varieties"
+ },
+ {
+  "id": "1703.00167",
+  "field": "maths",
+  "cat": "math.ST",
+  "year": 2017,
+  "title": "Adaptive estimation of the sparsity in the Gaussian vector model"
+ },
+ {
+  "id": "2203.00155",
+  "field": "maths",
+  "cat": "math.ST",
+  "year": 2022,
+  "title": "Performance of Distribution Regression with Doubling Measure under the seek of Closest Point"
+ },
+ {
+  "id": "2603.00849",
+  "field": "maths",
+  "cat": "math.ST",
+  "year": 2026,
+  "title": "A new kernel-based approach for the global sensitivity analysis of models with correlated inputs"
+ },
+ {
+  "id": "math/0403021",
+  "field": "maths",
+  "cat": "math.QA",
+  "year": 2004,
+  "title": "Quantum graded algebras with a straightening law and the AS-Cohen-Macaulay property for quantum determinantal rings and quantum grassmannians"
+ },
+ {
+  "id": "1103.0149",
+  "field": "maths",
+  "cat": "math.QA",
+  "year": 2011,
+  "title": "On the quantum 'ax+b'group"
+ },
+ {
+  "id": "1703.00101",
+  "field": "maths",
+  "cat": "math.QA",
+  "year": 2017,
+  "title": "Dispersionless and multicomponent BKP hierarchies with quantum torus symmetries"
+ },
+ {
+  "id": "2203.00208",
+  "field": "maths",
+  "cat": "math.QA",
+  "year": 2022,
+  "title": "Automorphisms and representations of quasi Laurent polynomial algebras"
+ },
+ {
+  "id": "2603.01303",
+  "field": "maths",
+  "cat": "math.QA",
+  "year": 2026,
+  "title": "A Geometric Approach to the Links-Quivers Correspondence I: Rational Tangles"
+ },
+ {
+  "id": "math/0403081",
+  "field": "maths",
+  "cat": "math.CT",
+  "year": 2004,
+  "title": "Comparison of Abelian categories recollements"
+ },
+ {
+  "id": "1103.0600",
+  "field": "maths",
+  "cat": "math.CT",
+  "year": 2011,
+  "title": "An embedding theorem for adhesive categories"
+ },
+ {
+  "id": "1703.00150",
+  "field": "maths",
+  "cat": "math.CT",
+  "year": 2017,
+  "title": "Projective objects and the modified trace in factorisable finite tensor categories"
+ },
+ {
+  "id": "2203.00792",
+  "field": "maths",
+  "cat": "math.CT",
+  "year": 2022,
+  "title": "Equivalent definitions of the preprojective algebra"
+ },
+ {
+  "id": "2603.00896",
+  "field": "maths",
+  "cat": "math.CT",
+  "year": 2026,
+  "title": "Unbiasing symmetric monoidal categories in Lean"
+ },
+ {
+  "id": "math/0403297",
+  "field": "maths",
+  "cat": "math.NA",
+  "year": 2004,
+  "title": "A time domain method for modeling viscoacoustic wave propagation"
+ },
+ {
+  "id": "1103.0066",
+  "field": "maths",
+  "cat": "math.NA",
+  "year": 2011,
+  "title": "Finite Element Integration on GPUs"
+ },
+ {
+  "id": "1703.00093",
+  "field": "maths",
+  "cat": "math.NA",
+  "year": 2017,
+  "title": "Accurate gradient computations at interfaces using finite element methods"
+ },
+ {
+  "id": "2203.00167",
+  "field": "maths",
+  "cat": "math.NA",
+  "year": 2022,
+  "title": "Nonlocal diffusion models with consistent local and fractional limits"
+ },
+ {
+  "id": "2603.00843",
+  "field": "maths",
+  "cat": "math.NA",
+  "year": 2026,
+  "title": "Uncertainty quantification using importance-sampled quasi-Monte Carlo with dimension-independent convergence rates"
+ },
+ {
+  "id": "physics/0403009",
+  "field": "physics",
+  "cat": "hep-th",
+  "year": 2004,
+  "title": "Cosmological Variation of the Fine Structure Constant versus a new Interaction"
+ },
+ {
+  "id": "1103.0073",
+  "field": "physics",
+  "cat": "hep-th",
+  "year": 2011,
+  "title": "Quark-hadron phase transition in Brans-Dicke brane gravity"
+ },
+ {
+  "id": "1703.00142",
+  "field": "physics",
+  "cat": "hep-th",
+  "year": 2017,
+  "title": "Entropy corresponding to the interior of a Schwarzschild black hole"
+ },
+ {
+  "id": "2203.00195",
+  "field": "physics",
+  "cat": "hep-th",
+  "year": 2022,
+  "title": "Do Atoms Age?"
+ },
+ {
+  "id": "2603.00844",
+  "field": "physics",
+  "cat": "hep-th",
+  "year": 2026,
+  "title": "Covariant diffusion tensor for jet momentum broadening out of equilibrium"
+ },
+ {
+  "id": "quant-ph/0403008",
+  "field": "physics",
+  "cat": "quant-ph",
+  "year": 2004,
+  "title": "Explicit Form of Solution of Two Atoms Tavis-Cummings Model"
+ },
+ {
+  "id": "1103.0063",
+  "field": "physics",
+  "cat": "quant-ph",
+  "year": 2011,
+  "title": "Atom-molecule conversion with particle losses"
+ },
+ {
+  "id": "1703.00109",
+  "field": "physics",
+  "cat": "quant-ph",
+  "year": 2017,
+  "title": "Higher-order modes of vacuum-clad ultrathin optical fibers"
+ },
+ {
+  "id": "2203.00182",
+  "field": "physics",
+  "cat": "quant-ph",
+  "year": 2022,
+  "title": "Generation of Maximally Entangled States by Lyapunov Control Based on Entanglement Measure"
+ },
+ {
+  "id": "2603.00845",
+  "field": "physics",
+  "cat": "quant-ph",
+  "year": 2026,
+  "title": "Three-Qubit State Preparation: Classification and Explicit Circuits"
+ },
+ {
+  "id": "astro-ph/0403019",
+  "field": "physics",
+  "cat": "gr-qc",
+  "year": 2004,
+  "title": "Skewness as a test of the equivalence principle"
+ },
+ {
+  "id": "1103.0075",
+  "field": "physics",
+  "cat": "gr-qc",
+  "year": 2011,
+  "title": "Anisotropy in Born-Infeld brane cosmology"
+ },
+ {
+  "id": "1703.00166",
+  "field": "physics",
+  "cat": "gr-qc",
+  "year": 2017,
+  "title": "Cylindrically symmetric, Asymptotically flat, Petrov Type D spacetime with a Naked Curvature Singularity and Matter Collapse"
+ },
+ {
+  "id": "2203.00277",
+  "field": "physics",
+  "cat": "gr-qc",
+  "year": 2022,
+  "title": "Evolution of scalar field resonances in a braneworld"
+ },
+ {
+  "id": "2603.00850",
+  "field": "physics",
+  "cat": "gr-qc",
+  "year": 2026,
+  "title": "Casimir phenomena in bumblebee gravity"
+ },
+ {
+  "id": "cond-mat/0403025",
+  "field": "physics",
+  "cat": "cond-mat.stat-mech",
+  "year": 2004,
+  "title": "The Writhe Distribution Of Stretched Polymers"
+ },
+ {
+  "id": "1103.0097",
+  "field": "physics",
+  "cat": "cond-mat.stat-mech",
+  "year": 2011,
+  "title": "Nonlinear deterministic equations in biological evolution"
+ },
+ {
+  "id": "1703.00791",
+  "field": "physics",
+  "cat": "cond-mat.stat-mech",
+  "year": 2017,
+  "title": "Isotropic Lifshitz point in the O(N) Theory"
+ },
+ {
+  "id": "2203.01805",
+  "field": "physics",
+  "cat": "cond-mat.stat-mech",
+  "year": 2022,
+  "title": "Multi-Radical Lipkin-Meshkov-Glick Model for Avian Navigation"
+ },
+ {
+  "id": "2603.01008",
+  "field": "physics",
+  "cat": "cond-mat.stat-mech",
+  "year": 2026,
+  "title": "Fixed points of Boolean networks with sparse connections"
+ },
+ {
+  "id": "cond-mat/0403029",
+  "field": "physics",
+  "cat": "math-ph",
+  "year": 2004,
+  "title": "Ratchets in homogeneous extended systems: internal modes and the role of noise"
+ },
+ {
+  "id": "1103.0064",
+  "field": "physics",
+  "cat": "math-ph",
+  "year": 2011,
+  "title": "Resonant alteration of propagation in guiding structures with complex Robin parameter and its magnetic-field-induced restoration"
+ },
+ {
+  "id": "1703.00201",
+  "field": "physics",
+  "cat": "math-ph",
+  "year": 2017,
+  "title": "A new signature of quantum phase transitions from the numerical range"
+ },
+ {
+  "id": "2203.00178",
+  "field": "physics",
+  "cat": "math-ph",
+  "year": 2022,
+  "title": "Essential self-adjointness for the Klein-Gordon type operators on asymptotically static spacetime"
+ },
+ {
+  "id": "2603.00861",
+  "field": "physics",
+  "cat": "math-ph",
+  "year": 2026,
+  "title": "Unbounded length minimal synchronizing words for quantum channels over qutrits"
+ },
+ {
+  "id": "astro-ph/0403545",
+  "field": "physics",
+  "cat": "astro-ph.CO",
+  "year": 2004,
+  "title": "The LEDA galaxy distribution: I. Maps of the Local Universe"
+ },
+ {
+  "id": "1103.0525",
+  "field": "physics",
+  "cat": "astro-ph.CO",
+  "year": 2011,
+  "title": "Comments on Kormendy, Bender &amp; Cornell (2011, Nature, 469, 374)"
+ },
+ {
+  "id": "1703.00169",
+  "field": "physics",
+  "cat": "astro-ph.CO",
+  "year": 2017,
+  "title": "CMB internal delensing with general optimal estimator for higher-order correlations"
+ },
+ {
+  "id": "2203.01124",
+  "field": "physics",
+  "cat": "astro-ph.CO",
+  "year": 2022,
+  "title": "Lunar Orbit Measurement of Cosmic Dawn 21 cm Global Spectrum"
+ },
+ {
+  "id": "2603.01118",
+  "field": "physics",
+  "cat": "astro-ph.CO",
+  "year": 2026,
+  "title": "The effect of photon re-scattering due to cosmic reionization on 21-cm images and power spectra"
+ },
+ {
+  "id": "hep-ph/0403011",
+  "field": "physics",
+  "cat": "hep-ph",
+  "year": 2004,
+  "title": "Constraints on Topological Defect Formation in First-order Superconducting Phase Transitions"
+ },
+ {
+  "id": "1103.0069",
+  "field": "physics",
+  "cat": "hep-ph",
+  "year": 2011,
+  "title": "Supersymmetry Breaking Scalar Masses and Trilinear Soft Terms From High-Dimensional Operators in E_6 SUSY GUT"
+ },
+ {
+  "id": "1703.00116",
+  "field": "physics",
+  "cat": "hep-ph",
+  "year": 2017,
+  "title": "Photons from the Early Stages of Relativistic Heavy Ion Collisions"
+ },
+ {
+  "id": "2203.00168",
+  "field": "physics",
+  "cat": "hep-ph",
+  "year": 2022,
+  "title": "Aspects of $Z_{cs}(3985)$ and $Z_{cs}(4000)$"
+ },
+ {
+  "id": "2603.00864",
+  "field": "physics",
+  "cat": "hep-ph",
+  "year": 2026,
+  "title": "Yukawa Textures with Enhanced Symmetries in Heterotic Calabi-Yau Compactifications"
+ },
+ {
+  "id": "physics/0403011",
+  "field": "physics",
+  "cat": "physics.flu-dyn",
+  "year": 2004,
+  "title": "Power-Law Slip Profile of the Moving Contact Line in Two-Phase Immiscible Flows"
+ },
+ {
+  "id": "1103.0082",
+  "field": "physics",
+  "cat": "physics.flu-dyn",
+  "year": 2011,
+  "title": "A Dynamic-Order Fractional Dynamic System"
+ },
+ {
+  "id": "1703.00225",
+  "field": "physics",
+  "cat": "physics.flu-dyn",
+  "year": 2017,
+  "title": "Boundary induced convection in a collection of polar self-propelled particles"
+ },
+ {
+  "id": "2203.00879",
+  "field": "physics",
+  "cat": "physics.flu-dyn",
+  "year": 2022,
+  "title": "Ultrasound Triggering of Rayleigh-Taylor Instability: Solution of Compressible Navier-Stokes Equation by a Non-Overlapping Parallel Compact Scheme"
+ },
+ {
+  "id": "2603.01001",
+  "field": "physics",
+  "cat": "physics.flu-dyn",
+  "year": 2026,
+  "title": "Data-Free Finite-Volume Convolutional Neural Networks for Steady Compressible Euler Flow around a Circular Cylinder"
+ },
+ {
+  "id": "cond-mat/0403028",
+  "field": "physics",
+  "cat": "cond-mat.str-el",
+  "year": 2004,
+  "title": "Mass-Enhanced Fermi Liquid Ground State in Na$_{1.5}$Co$_2$O$_4$"
+ },
+ {
+  "id": "1103.0076",
+  "field": "physics",
+  "cat": "cond-mat.str-el",
+  "year": 2011,
+  "title": "Magnetic behavior of curium dioxide with non-magnetic ground state"
+ },
+ {
+  "id": "1703.00161",
+  "field": "physics",
+  "cat": "cond-mat.str-el",
+  "year": 2017,
+  "title": "Instability of Fulde-Ferrell-Larkin-Ovchinnikov states in three and two dimensions"
+ },
+ {
+  "id": "2203.00227",
+  "field": "physics",
+  "cat": "cond-mat.str-el",
+  "year": 2022,
+  "title": "$C_3$ symmetry breaking metal-insulator transitions in a flat band in the half-filled Hubbard model on the decorated honeycomb lattice"
+ },
+ {
+  "id": "2603.01004",
+  "field": "physics",
+  "cat": "cond-mat.str-el",
+  "year": 2026,
+  "title": "Magnetic fluctuations near the Van Hove singularity in the kagome-lattice Hubbard model at finite doping"
+ },
+ {
+  "id": "nlin/0403001",
+  "field": "physics",
+  "cat": "nlin.SI",
+  "year": 2004,
+  "title": "Affine Lie group approach to a derivative nonlinear Schrödinger equatoin and its similarity reduction"
+ },
+ {
+  "id": "1103.0417",
+  "field": "physics",
+  "cat": "nlin.SI",
+  "year": 2011,
+  "title": "Opinion dynamics as a movement in a bistable potential"
+ },
+ {
+  "id": "1703.00462",
+  "field": "physics",
+  "cat": "nlin.SI",
+  "year": 2017,
+  "title": "Quantum aspects of doubly deformed CFTs"
+ },
+ {
+  "id": "2203.00273",
+  "field": "physics",
+  "cat": "nlin.SI",
+  "year": 2022,
+  "title": "Generalised point vortices on a plane"
+ },
+ {
+  "id": "2603.01087",
+  "field": "physics",
+  "cat": "nlin.SI",
+  "year": 2026,
+  "title": "Special solutions to five autonomous integrable partial difference equations via the third and sixth Painlevé equations and the Garnier system in two variables"
+ },
+ {
+  "id": "cs/0403031",
+  "field": "cs",
+  "cat": "cs.LG",
+  "year": 2004,
+  "title": "Concept of E-machine: How does a \"dynamical\" brain learn to process \"symbolic\" information? Part I"
+ },
+ {
+  "id": "1103.0086",
+  "field": "cs",
+  "cat": "cs.LG",
+  "year": 2011,
+  "title": "A generic trust framework for large-scale open systems using machine learning"
+ },
+ {
+  "id": "1703.00096",
+  "field": "cs",
+  "cat": "cs.LG",
+  "year": 2017,
+  "title": "Gram-CTC: Automatic Unit Selection and Target Decomposition for Sequence Labelling"
+ },
+ {
+  "id": "2203.00156",
+  "field": "cs",
+  "cat": "cs.LG",
+  "year": 2022,
+  "title": "Preemptive Motion Planning for Human-to-Robot Indirect Placement Handovers"
+ },
+ {
+  "id": "2603.00846",
+  "field": "cs",
+  "cat": "cs.LG",
+  "year": 2026,
+  "title": "Tiny-Critic RAG: Empowering Agentic Fallback with Parameter-Efficient Small Language Models"
+ },
+ {
+  "id": "cond-mat/0403233",
+  "field": "cs",
+  "cat": "cs.CL",
+  "year": 2004,
+  "title": "Artificial Sequences and Complexity Measures"
+ },
+ {
+  "id": "1103.0398",
+  "field": "cs",
+  "cat": "cs.CL",
+  "year": 2011,
+  "title": "Natural Language Processing (almost) from Scratch"
+ },
+ {
+  "id": "1703.00099",
+  "field": "cs",
+  "cat": "cs.CL",
+  "year": 2017,
+  "title": "Learning Conversational Systems that Interleave Task and Non-Task Content"
+ },
+ {
+  "id": "2203.00201",
+  "field": "cs",
+  "cat": "cs.CL",
+  "year": 2022,
+  "title": "RMBR: A Regularized Minimum Bayes Risk Reranking Framework for Machine Translation"
+ },
+ {
+  "id": "2603.00842",
+  "field": "cs",
+  "cat": "cs.CL",
+  "year": 2026,
+  "title": "MedGPT-oss: Training a General-Purpose Vision-Language Model for Biomedicine"
+ },
+ {
+  "id": "cs/0403022",
+  "field": "cs",
+  "cat": "cs.DS",
+  "year": 2004,
+  "title": "Fast Multipoint-Evaluation of Bivariate Polynomials"
+ },
+ {
+  "id": "1103.0260",
+  "field": "cs",
+  "cat": "cs.DS",
+  "year": 2011,
+  "title": "A Linear Approximation Algorithm for 2-Dimensional Vector Packing"
+ },
+ {
+  "id": "1703.00236",
+  "field": "cs",
+  "cat": "cs.DS",
+  "year": 2017,
+  "title": "Algorithms and Bounds for Very Strong Rainbow Coloring"
+ },
+ {
+  "id": "2203.00164",
+  "field": "cs",
+  "cat": "cs.DS",
+  "year": 2022,
+  "title": "Quantum jumbled pattern matching"
+ },
+ {
+  "id": "2603.00898",
+  "field": "cs",
+  "cat": "cs.DS",
+  "year": 2026,
+  "title": "High Probability Work Efficient Parallel Algorithms"
+ },
+ {
+  "id": "math/0403548",
+  "field": "cs",
+  "cat": "cs.IT",
+  "year": 2004,
+  "title": "Remarks on codes from modular curves: MAGMA applications"
+ },
+ {
+  "id": "1103.0089",
+  "field": "cs",
+  "cat": "cs.IT",
+  "year": 2011,
+  "title": "Capacity Bounds for Relay Channels with Inter-symbol Interference and Colored Gaussian Noise"
+ },
+ {
+  "id": "1703.00104",
+  "field": "cs",
+  "cat": "cs.IT",
+  "year": 2017,
+  "title": "Joint Beamforming and Antenna Selection for Sum Rate Maximization in Cognitive Radio Networks"
+ },
+ {
+  "id": "2203.00213",
+  "field": "cs",
+  "cat": "cs.IT",
+  "year": 2022,
+  "title": "Optimal Routing for Multi-user Multi-hop Relay Networks via Dynamic Programming"
+ },
+ {
+  "id": "2603.00858",
+  "field": "cs",
+  "cat": "cs.IT",
+  "year": 2026,
+  "title": "Artificial Superintelligence May be Useless: Equilibria in the Economy of Multiple AI Agents"
+ },
+ {
+  "id": "cs/0403010",
+  "field": "cs",
+  "cat": "cs.LO",
+  "year": 2004,
+  "title": "Polymorphic lemmas and definitions in Lambda Prolog and Twelf"
+ },
+ {
+  "id": "1103.0217",
+  "field": "cs",
+  "cat": "cs.LO",
+  "year": 2011,
+  "title": "A New Representation Theorem for Many-valued Modal Logics"
+ },
+ {
+  "id": "1703.00159",
+  "field": "cs",
+  "cat": "cs.LO",
+  "year": 2017,
+  "title": "A Calculus for True Concurrency"
+ },
+ {
+  "id": "2203.00362",
+  "field": "cs",
+  "cat": "cs.LO",
+  "year": 2022,
+  "title": "Reasonable Space for the $λ$-Calculus, Logarithmically"
+ },
+ {
+  "id": "2603.01146",
+  "field": "cs",
+  "cat": "cs.LO",
+  "year": 2026,
+  "title": "Uniform Agent-interpolation of Distributed Knowledge"
+ },
+ {
+  "id": "quant-ph/0403056",
+  "field": "cs",
+  "cat": "cs.CC",
+  "year": 2004,
+  "title": "Quantum Identification of Boolean Oracles"
+ },
+ {
+  "id": "1103.0853",
+  "field": "cs",
+  "cat": "cs.CC",
+  "year": 2011,
+  "title": "Generalized Satisfiability for the Description Logic ALC"
+ },
+ {
+  "id": "1703.00242",
+  "field": "cs",
+  "cat": "cs.CC",
+  "year": 2017,
+  "title": "Reordering Method and Hierarchies for Quantum and Classical Ordered Binary Decision Diagrams"
+ },
+ {
+  "id": "2203.00212",
+  "field": "cs",
+  "cat": "cs.CC",
+  "year": 2022,
+  "title": "Influence in Completely Bounded Block-multilinear Forms and Classical Simulation of Quantum Algorithms"
+ },
+ {
+  "id": "2603.01171",
+  "field": "cs",
+  "cat": "cs.CC",
+  "year": 2026,
+  "title": "PARWiS: Winner determination under shoestring budgets using active pairwise comparisons"
+ },
+ {
+  "id": "1103.0738",
+  "field": "cs",
+  "cat": "cs.CV",
+  "year": 2011,
+  "title": "A Medial Axis Based Thinning Strategy for Character Images"
+ },
+ {
+  "id": "1703.00144",
+  "field": "cs",
+  "cat": "cs.CV",
+  "year": 2017,
+  "title": "Theoretical Properties for Neural Networks with Weight Matrices of Low Displacement Rank"
+ },
+ {
+  "id": "2203.00157",
+  "field": "cs",
+  "cat": "cs.CV",
+  "year": 2022,
+  "title": "Simultaneous Semantic and Instance Segmentation for Colon Nuclei Identification and Counting"
+ },
+ {
+  "id": "2603.00853",
+  "field": "cs",
+  "cat": "cs.CV",
+  "year": 2026,
+  "title": "Neural Discrimination-Prompted Transformers for Efficient UHD Image Restoration and Enhancement"
+ },
+ {
+  "id": "quant-ph/0403069",
+  "field": "cs",
+  "cat": "cs.CR",
+  "year": 2004,
+  "title": "Computational Indistinguishability between Quantum States and Its Cryptographic Application"
+ },
+ {
+  "id": "1103.0220",
+  "field": "cs",
+  "cat": "cs.CR",
+  "year": 2011,
+  "title": "Satisfiability of General Intruder Constraints with and without a Set Constructor"
+ },
+ {
+  "id": "1703.00207",
+  "field": "cs",
+  "cat": "cs.CR",
+  "year": 2017,
+  "title": "A Quantum-Classical Scheme towards Quantum Functional Encryption"
+ },
+ {
+  "id": "2203.00150",
+  "field": "cs",
+  "cat": "cs.CR",
+  "year": 2022,
+  "title": "Explaining RADAR features for detecting spoofing attacks in Connected Autonomous Vehicles"
+ },
+ {
+  "id": "2603.00859",
+  "field": "cs",
+  "cat": "cs.CR",
+  "year": 2026,
+  "title": "AMDS: Attack-Aware Multi-Stage Defense System for Network Intrusion Detection with Two-Stage Adaptive Weight Learning"
+ },
+ {
+  "id": "cs/0403011",
+  "field": "cs",
+  "cat": "cs.PL",
+  "year": 2004,
+  "title": "Specialization of Functional Logic Programs Based on Needed Narrowing"
+ },
+ {
+  "id": "1103.0510",
+  "field": "cs",
+  "cat": "cs.PL",
+  "year": 2011,
+  "title": "Logical Step-Indexed Logical Relations"
+ },
+ {
+  "id": "1703.00659",
+  "field": "cs",
+  "cat": "cs.PL",
+  "year": 2017,
+  "title": "On the Boundary between Decidability and Undecidability of Asynchronous Session Subtyping"
+ },
+ {
+  "id": "2203.00218",
+  "field": "cs",
+  "cat": "cs.PL",
+  "year": 2022,
+  "title": "Application-Level Validation of Accelerator Designs Using a Formal Software/Hardware Interface"
+ },
+ {
+  "id": "2603.00991",
+  "field": "cs",
+  "cat": "cs.PL",
+  "year": 2026,
+  "title": "Tracking Capabilities for Safer Agents"
+ },
+ {
+  "id": "cs/0403012",
+  "field": "cs",
+  "cat": "cs.GT",
+  "year": 2004,
+  "title": "Distributed Control by Lagrangian Steepest Descent"
+ },
+ {
+  "id": "1103.0868",
+  "field": "cs",
+  "cat": "cs.GT",
+  "year": 2011,
+  "title": "On minimum integer representations of weighted games"
+ },
+ {
+  "id": "1703.00216",
+  "field": "cs",
+  "cat": "cs.GT",
+  "year": 2017,
+  "title": "Congestion-Aware Distributed Network Selection for Integrated Cellular and Wi-Fi Networks"
+ },
+ {
+  "id": "2203.00233",
+  "field": "cs",
+  "cat": "cs.GT",
+  "year": 2022,
+  "title": "Ordered Submodularity and its Applications to Diversifying Recommendations"
+ },
+ {
+  "id": "2603.01002",
+  "field": "cs",
+  "cat": "cs.GT",
+  "year": 2026,
+  "title": "Optimal strategy in the game Risk or Safety"
+ }
+]
