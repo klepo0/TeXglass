@@ -1166,6 +1166,7 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
     vscode.commands.registerCommand('texglass.showNotation', () => preview && preview.post({ type: 'insight', tab: 'notation' })),
     vscode.commands.registerCommand('texglass.showDependencies', () => preview && preview.post({ type: 'insight', tab: 'deps' })),
+    vscode.commands.registerCommand('texglass.showLargerMap', () => preview && preview.post({ type: 'larger-map' })),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
     // Zoom the document in the preview (Ctrl/Cmd +, - and 0 while it has focus).
     vscode.commands.registerCommand('texglass.zoomIn', () => preview && preview.post({ type: 'zoom-step', dir: 1 })),
