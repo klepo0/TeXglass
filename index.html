@@ -39,15 +39,18 @@
       <button id="mode-edit" type="button" aria-pressed="false" title="Click any part of the document to edit it (Ctrl+E)">Edit</button>
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
-    <button id="open" type="button" title="Open a .tex file (Ctrl+O). Shift+click, or Ctrl+Shift+O, opens a folder with its \input files and figures">Open</button>
-    <button id="arxiv" type="button" title="Search arXiv or import a paper's LaTeX source (Ctrl+K)" aria-keyshortcuts="Control+K Meta+K">arXiv</button>
-    <button id="github" type="button" title="Open a .tex file from a public GitHub repository">GitHub</button>
-    <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">Preprints</button>
+    <button id="open" type="button" title="Open a paper from arXiv, a repository from GitHub, or a .tex file from this computer (Ctrl+K). Ctrl+O picks a .tex file; Shift+click or Ctrl+Shift+O, a folder" aria-keyshortcuts="Control+K Meta+K">Open</button>
+    <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">OAI preprints</button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory hidden>
-    <button id="save" type="button" title="Save your changes (Ctrl+S)">Save</button>
-    <button id="export" type="button" title="Download the document as a standalone HTML page, math and numbering included">Export</button>
-    <button id="print" type="button" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print</button>
+    <div class="more-group">
+      <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: save, export, print" title="Save, export or print">…</button>
+      <div id="more-menu" class="more-menu" role="menu" aria-labelledby="more" hidden>
+        <button id="save" type="button" role="menuitem" title="Save your changes (Ctrl+S)">Save<kbd>Ctrl+S</kbd></button>
+        <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
+        <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
+      </div>
+    </div>
     <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which">Contents</button>
     <div class="zoom-group" role="group" aria-label="Zoom">
       <button id="zoom-out" type="button" aria-label="Zoom out" title="Make the document smaller (Ctrl+−)">−</button>
@@ -95,15 +98,16 @@
 
   <dialog id="arxiv-dialog" class="arxiv-dialog" aria-labelledby="arxiv-title">
     <form id="arxiv-form" method="dialog">
-      <h2 id="arxiv-title">Open from arXiv</h2>
-      <label for="arxiv-input">Paste an arXiv link or id, or search by title, author or keywords</label>
-      <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="2301.00001, or rough paths signature">
+      <h2 id="arxiv-title">Open a document</h2>
+      <label for="arxiv-input">Search arXiv, or start with <code>github</code> to search GitHub. Paste an arXiv id or a GitHub link to open it.</label>
+      <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="rough paths signature, github thesis template, 2301.00001">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
       <p class="local-hint">Or open a document on this computer: <button type="button" id="arxiv-local-file" class="link-button">a .tex file</button> or <button type="button" id="arxiv-local-folder" class="link-button">its folder</button>, with its <code>\input</code> files and figures.</p>
+      <p class="bookmarklet-hint">Drag <a id="bookmarklet" class="bookmarklet" href="#" title="Drag me to your bookmarks bar">Open in TeXglass</a> to your bookmarks bar. Click it on any GitHub page to open that file here.</p>
       <div class="arxiv-actions">
         <button type="button" id="arxiv-cancel">Cancel</button>
-        <button type="submit" id="arxiv-go" class="primary">Import</button>
+        <button type="submit" id="arxiv-go" class="primary">Search</button>
       </div>
     </form>
   </dialog>
@@ -119,20 +123,6 @@
         <button type="button" id="local-file" class="primary">Choose a .tex file</button>
       </div>
     </div>
-  </dialog>
-
-  <dialog id="github-dialog" class="arxiv-dialog" aria-labelledby="github-title">
-    <form id="github-form" method="dialog">
-      <h2 id="github-title">Open from GitHub</h2>
-      <label for="github-input">Paste a link to a .tex file, a folder or a repository</label>
-      <input id="github-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo/blob/main/paper.tex">
-      <p id="github-message" class="arxiv-message" role="status"></p>
-      <p class="bookmarklet-hint">Drag <a id="bookmarklet" class="bookmarklet" href="#" title="Drag me to your bookmarks bar">Open in TeXglass</a> to your bookmarks bar. Click it on any GitHub page to open that file here.</p>
-      <div class="arxiv-actions">
-        <button type="button" id="github-cancel">Cancel</button>
-        <button type="submit" id="github-go" class="primary">Open</button>
-      </div>
-    </form>
   </dialog>
 
   <dialog id="preprints-dialog" class="arxiv-dialog preprints-dialog" aria-labelledby="preprints-title">

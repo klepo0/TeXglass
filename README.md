@@ -118,7 +118,7 @@ has a `.vsix` (**Extensions: Install from VSIX…**). More in
 **[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/)**: open or
 drop a `.tex` file, search arXiv, paste an arXiv or GitHub link, or browse OpenAI's math
 preprints. Nothing to install, and after your first visit it opens and renders
-offline too (arXiv, GitHub and Preprints still need a connection).
+offline too (arXiv, GitHub and OAI preprints still need a connection).
 
 <table>
   <tr>
@@ -131,7 +131,10 @@ offline too (arXiv, GitHub and Preprints still need a connection).
   </tr>
 </table>
 
-- **Open** a file (Ctrl+O) or drag it onto the page. To bring in its
+- **Open** (Ctrl+K, Cmd+K on a Mac) is one dialog for everything: search
+  arXiv, type `github` and words to search GitHub, paste an arXiv id or a
+  GitHub link, or pick a file from this computer.
+- **Open** a file from this computer (Ctrl+O) or drag it onto the page. To bring in its
   `\input` files, local packages, bibliography and figures, open or drop its
   **folder** instead (Shift+click *Open*, or Ctrl+Shift+O), or choose several
   files at once; TeXglass finds the main file. In Chrome and Edge a folder
@@ -139,19 +142,20 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 - The **Contents** button shows the side panel; its **Notation** tab has a
   checkbox that turns notation on hover off and on. The pen button beside the
   light/dark button switches to the handwritten notes look.
-- **arXiv search and import**: type words, a title or an author in the arXiv
+- **arXiv search and import**: type words, a title or an author in the Open
   dialog to search arXiv (through [DataCite](https://datacite.org), which holds
   every arXiv DOI, with OpenAlex and Semantic Scholar as fallbacks, since
   arXiv's own search API can't be called from a web page), then click a result
-  to open it. Or paste `2301.00001` or any arXiv link. **Ctrl+K** (Cmd+K on a
-  Mac) opens the dialog. Included files, the authors' own `.sty` macros, the
+  to open it. Or paste `2301.00001` or any arXiv link. Included files, the authors' own `.sty` macros, the
   bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
   files) and figures come along. `.eps` figures (common in older papers) are
   drawn as SVG by a small PostScript interpreter. Also `?arxiv=2301.00001`.
-- **GitHub import**: paste a link to a file, folder or repo of a public
-  repository; the main file, included files, `.bbl` or `.bib` and figures are found for
+- **GitHub search and import**: type `github` and words (`github thesis
+  template`) in the Open dialog to search public repositories with LaTeX in
+  them, then click one; or paste a link to a file, folder or repo of a public
+  repository (`github owner/repo` works too); the main file, included files, `.bbl` or `.bib` and figures are found for
   you. Also `?gh=<link>`, a bookmarklet, and **Edit on GitHub**.
-- **OpenAI math preprints**: the **Preprints** button lists the manuscripts in
+- **OpenAI math preprints**: the **OAI preprints** button lists the manuscripts in
   [openai/math](https://github.com/openai/math), searchable and filtered by
   discipline; click one to read its LaTeX source. Also `?preprint=<folder>`.
 - **Three modes**: **Preview**, **Edit** (click any paragraph, theorem or
@@ -160,6 +164,7 @@ offline too (arXiv, GitHub and Preprints still need a connection).
 - **Editor**: LaTeX syntax colouring, autocomplete for commands, snippets,
   environments (your `\newtheorem`s too) and labels with their numbers,
   auto-closing math delimiters, and Tab to step out of brackets.
+- The **…** button holds **Save**, **Export** and **Print**.
 - **Save** back to the file (Ctrl+S) and **live reload** when the file changes
   on disk (Chrome and Edge).
 - **Export** a standalone offline `.html` page.
