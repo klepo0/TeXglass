@@ -29,6 +29,17 @@
 
   const ID = '(?:\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[A-Z]{2})?\\/\\d{7})(?:v\\d+)?';
 
+  const WEB_VIEWER = 'https://klepo0.github.io/TeXglass/';
+
+  /** Whether this script can still talk to the extension (not after an update or reload). */
+  const connected = () => {
+    try {
+      return !!(api && api.runtime && api.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  };
+
   function send(msg) {
     try {
       return Promise.resolve(api.runtime.sendMessage(msg));
@@ -94,18 +105,23 @@
     if (!document.body) return;
     if (!button) {
       button = document.createElement('a');
-      button.href = '#';
+      button.target = '_blank';
+      button.rel = 'noopener';
       button.className = 'texglass-float';
       button.textContent = 'View in TeXglass';
       const go = (e) => {
         if (e.type === 'auxclick' && e.button !== 1) return;
+        // When the extension was updated or reloaded since this page loaded, it
+        // can't be reached and the link opens the paper in the web viewer instead.
+        if (!button.dataset.arxivId || !connected()) return;
         e.preventDefault();
-        if (button.dataset.arxivId) send({ type: 'texglass-open', id: button.dataset.arxivId });
+        send({ type: 'texglass-open', id: button.dataset.arxivId });
       };
       button.addEventListener('click', go);
       button.addEventListener('auxclick', go);
     }
     button.dataset.arxivId = id;
+    button.href = `${WEB_VIEWER}?arxiv=${encodeURIComponent(id)}`;
     button.title = `${TITLE}: arXiv:${id}`;
     if (!button.isConnected) document.body.appendChild(button);
   }
