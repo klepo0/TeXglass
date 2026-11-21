@@ -37,3 +37,25 @@ test('images: figure names and a resolver over known files', () => {
   assert.strictEqual(find('plot.pdf'), 'url:figs/plot.png');
   assert.strictEqual(find('../up'), null);
 });
+
+test('a .pdf or .eps figure with no picture of the same name is used as it is, for the preview to draw', () => {
+  const text = String.raw`\graphicspath{{figs/}}`;
+  const files = new Set(['figs/plot.pdf', 'figs/old.eps', 'figs/both.pdf', 'figs/both.png']);
+  const find = imageResolver(text, (rel) => files.has(rel), (rel) => 'url:' + rel);
+  assert.strictEqual(find('plot.pdf'), 'url:figs/plot.pdf');
+  assert.strictEqual(find('plot'), 'url:figs/plot.pdf');
+  assert.strictEqual(find('old'), 'url:figs/old.eps');
+  assert.strictEqual(find('both.pdf'), 'url:figs/both.png');
+  assert.strictEqual(find('missing'), null);
+});
+
+test('the preview may load pdf.js and its worker, and shows PDF and EPS figures', () => {
+  const ext = require('fs').readFileSync(require('path').join(__dirname, '..', 'extension.js'), 'utf8');
+  assert.match(ext, /script-src 'nonce-\$\{nonce\}' \$\{webview\.cspSource\}/);
+  assert.match(ext, /worker-src blob:/);
+  assert.match(ext, /img-src [^`]*blob:/);
+  assert.match(ext, /res\('shared', 'pdf\.js'\)/);
+  assert.match(ext, /res\('shared', 'eps\.js'\)/);
+  const copy = require('fs').readFileSync(require('path').join(__dirname, '..', 'scripts', 'copy-shared.js'), 'utf8');
+  assert.match(copy, /pdf\.worker\.min\.js/);
+});

@@ -619,6 +619,39 @@
       openLink: (href) => vscode.postMessage({ type: 'open-link', href }),
     })
     : null;
+  // .pdf and .eps figures, which the webview cannot show as they are: drawn (PDF
+  // with pdf.js, EPS with the PostScript interpreter) and kept per file version.
+  const drawnFigures = new Map(); // figure URL -> Promise of an object URL, or null
+  const latin1 = (bytes) => {
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    return out;
+  };
+  async function drawFigure(src, kind) {
+    try {
+      const blob = await (await fetch(src)).blob();
+      if (kind === 'pdf') {
+        const image = window.TeXglassPdf ? await window.TeXglassPdf.toImage(blob) : null;
+        return image ? URL.createObjectURL(image) : null;
+      }
+      const r = window.TeXglassEps ? window.TeXglassEps.toSvg(latin1(new Uint8Array(await blob.arrayBuffer()))) : null;
+      return r ? URL.createObjectURL(new Blob([r.svg], { type: 'image/svg+xml' })) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function drawFigures() {
+    for (const img of preview.querySelectorAll('img.graphic')) {
+      const src = img.getAttribute('src') || '';
+      const kind = /\.pdf(\?|$)/i.test(src) ? 'pdf' : /\.e?ps(\?|$)/i.test(src) ? 'eps' : null;
+      if (!kind) continue;
+      if (!drawnFigures.has(src)) drawnFigures.set(src, drawFigure(src, kind));
+      drawnFigures.get(src).then((url) => {
+        if (url && img.getAttribute('src') === src) img.src = url;
+      });
+    }
+  }
+
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || m.type !== 'json' || !pendingJson.has(m.id)) return;
@@ -776,6 +809,7 @@
         sourceFiles = m.files || [];
         if (insight && m.defs !== undefined) insight.setDefinitions(m.defs);
         show(m.blocks, m.lines);
+        drawFigures();
         if (insight) insight.invalidate();
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);

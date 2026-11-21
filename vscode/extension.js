@@ -612,11 +612,14 @@ class Preview {
     const nonce = Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
     const csp = [
       "default-src 'none'",
-      `img-src ${webview.cspSource} https: data:`,
+      `img-src ${webview.cspSource} https: data: blob:`,
       // KaTeX positions glyphs with inline style attributes.
       `style-src ${webview.cspSource} 'unsafe-inline'`,
       `font-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`,
+      // pdf.js (for PDF figures) is a module loaded when needed, and its worker starts from a blob
+      `script-src 'nonce-${nonce}' ${webview.cspSource}`,
+      `connect-src ${webview.cspSource}`,
+      `worker-src blob:`,
     ].join('; ');
     const look = previewLook();
     return `<!doctype html>
@@ -644,6 +647,8 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;

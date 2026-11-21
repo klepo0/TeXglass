@@ -4,3 +4,4 @@ shared/
 *.vsix
 dist/
 .vscode-test-web/
+vendor/

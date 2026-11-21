@@ -26,8 +26,18 @@
   let lib = null;
   function load() {
     if (!lib) {
-      lib = import(VENDOR + 'pdf.min.js').then((m) => {
-        m.GlobalWorkerOptions.workerSrc = VENDOR + 'pdf.worker.min.js';
+      lib = import(VENDOR + 'pdf.min.js').then(async (m) => {
+        const worker = VENDOR + 'pdf.worker.min.js';
+        if (typeof location !== 'undefined' && new URL(worker).origin !== location.origin) {
+          // A page may not start a worker from another origin (VS Code serves the
+          // extension's files from one): start it from a copy of its code instead.
+          try {
+            const code = await (await fetch(worker)).blob();
+            m.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })), { type: 'module' });
+            return m;
+          } catch (e) { /* pdf.js then runs without a worker */ }
+        }
+        m.GlobalWorkerOptions.workerSrc = worker;
         return m;
       });
       lib.catch(() => { lib = null; });
