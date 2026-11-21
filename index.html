@@ -156,14 +156,19 @@
   <dialog id="notes-sync-dialog" class="arxiv-dialog" aria-labelledby="notes-sync-title">
     <form id="notes-sync-form" method="dialog">
       <h2 id="notes-sync-title">Sync notes with GitHub</h2>
-      <p class="local-note">Your highlights and notes go to a private gist, <code>texglass-notes.json</code>, in your own GitHub account, and come back on every device where you sign in. Nothing passes through any other server. Notes made on two devices at once are merged.</p>
-      <label for="notes-sync-token">A GitHub token that may use gists: <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=TeXglass%20notes" target="_blank" rel="noopener">make one</a> with only the <code>gist</code> scope, and paste it here. It is kept in this browser only.</label>
-      <input id="notes-sync-token" type="password" autocomplete="off" spellcheck="false">
+      <p id="notes-sync-state" class="notes-sync-state" role="status" hidden></p>
+      <p id="notes-sync-about" class="local-note">Your highlights, notes, reading progress and list of saved papers go to a private gist, <code>texglass-notes.json</code>, in your own GitHub account, and come back on every device where you sign in. Nothing passes through any other server. Notes made on two devices at once are merged. <strong>You sign in once</strong>: after that everything syncs automatically.</p>
+      <div id="notes-sync-token-box">
+        <label for="notes-sync-token">A GitHub token that may use gists: <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=TeXglass%20notes" target="_blank" rel="noopener">make one</a> with only the <code>gist</code> scope, and paste it here. It is kept in this browser only.</label>
+        <input id="notes-sync-token" type="password" autocomplete="off" spellcheck="false">
+      </div>
       <p id="notes-sync-message" class="arxiv-message" role="status"></p>
       <div class="arxiv-actions">
         <button type="button" id="notes-sync-signout" hidden>Sign out</button>
+        <button type="button" id="notes-sync-replace" class="link-button" hidden>Use another token</button>
+        <button type="button" id="notes-sync-now" class="link-button" hidden title="Not needed: syncing happens on its own. Use it to pull in a change from another device right away">Sync now</button>
         <button type="button" id="notes-sync-cancel">Cancel</button>
-        <button type="submit" id="notes-sync-go" class="primary">Sign in and sync</button>
+        <button type="submit" id="notes-sync-go" class="primary">Sign in</button>
       </div>
     </form>
   </dialog>

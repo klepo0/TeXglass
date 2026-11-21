@@ -120,7 +120,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   browser extension read the same file). **TeXglass: Sync Highlights and Notes
   with GitHub** keeps them in a private gist on your GitHub account, using
   VS Code's own GitHub sign-in, so they follow you to every machine and to the
-  web viewer; there is no TeXglass server. With Settings Sync on, they also
+  web viewer; there is no TeXglass server. Run it once: from then on they sync
+  automatically, and the status bar shows **Notes sync on** while a preview is
+  open. With Settings Sync on, they also
   follow you without GitHub. Notes edited on two machines at once are merged.
 - **Zoom** the document with Ctrl/Cmd + and − (Ctrl/Cmd 0 resets) or Ctrl +
   mouse wheel while the preview has focus, or **Zoom In / Zoom Out / Reset Zoom**

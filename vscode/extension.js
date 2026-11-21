@@ -264,6 +264,51 @@ async function notesGist(context, ask) {
   return NotesSync.gist(session.accessToken, { gistId: context.globalState.get('texglass.gistId', null) });
 }
 
+// Once GitHub sync is on it runs by itself (on opening a paper, a moment after
+// each change), so a status bar item says so while a preview is open, with when
+// it last synced; clicking it offers Sync now (rarely needed) or Stop.
+let syncItem = null;
+let syncHasPreview = () => false;
+
+/** "just now", "5 min ago", "3 h ago", or the date. */
+function syncedAgo(iso) {
+  const t = Date.parse(iso || '');
+  if (!t) return '';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 45) return 'just now';
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return 'on ' + new Date(t).toLocaleDateString();
+}
+
+/** One line on the state of GitHub sync. */
+function syncStateLine(context) {
+  const err = context.globalState.get('texglass.gistError', '');
+  if (err) return `Syncing automatically · last try failed: ${err}`;
+  const ago = syncedAgo(context.globalState.get('texglass.gistSynced', ''));
+  return 'Syncing automatically' + (ago ? ` · last synced ${ago}` : '');
+}
+
+function updateSyncItem(context) {
+  if (!syncItem) return;
+  if (!context.globalState.get('texglass.gistSync', false) || !syncHasPreview()) {
+    syncItem.hide();
+    return;
+  }
+  const err = context.globalState.get('texglass.gistError', '');
+  syncItem.text = err ? '$(warning) Notes not synced' : '$(sync) Notes sync on';
+  syncItem.tooltip = `TeXglass highlights and notes: ${syncStateLine(context)} with a private gist on your GitHub account. ` +
+    'They sync on their own when you open a paper and a few seconds after each change, so there is nothing to do. Click to sync now or stop.';
+  syncItem.show();
+}
+
+/** Remember how the last gist sync went (err: its message, or '' when it worked). */
+async function recordSync(context, err) {
+  await context.globalState.update('texglass.gistError', err || '');
+  if (!err) await context.globalState.update('texglass.gistSynced', new Date().toISOString());
+  updateSyncItem(context);
+}
+
 function notationHover() {
   return vscode.workspace.getConfiguration('texglass').get('notationHover', true) !== false;
 }
@@ -631,8 +676,10 @@ class Preview {
         const rec = await g.sync(key, this.notesRecord || NotesSync.empty(key));
         if (g.id()) await this.context.globalState.update('texglass.gistId', g.id());
         if (!this.disposed && key === this.notesKey) await this.takeNotes(rec);
+        await recordSync(this.context, '');
         if (loud) vscode.window.setStatusBarMessage('TeXglass: notes synced with GitHub', 3000);
       } catch (e) {
+        await recordSync(this.context, String(e.message || e));
         if (loud || e.auth) vscode.window.showWarningMessage(`TeXglass could not sync the notes: ${e.message || e}`);
       }
     };
@@ -1339,10 +1386,18 @@ function activate(context) {
 
   const attach = (p) => {
     preview = p;
+    updateSyncItem(context);
     p.onDispose = () => {
       if (preview === p) preview = null;
+      updateSyncItem(context);
     };
   };
+  syncItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
+  syncItem.name = 'TeXglass notes sync';
+  syncItem.command = 'texglass.notesSyncStatus';
+  syncHasPreview = () => !!preview;
+  const syncTick = setInterval(() => updateSyncItem(context), 60000); // keep "last synced" fresh
+  context.subscriptions.push(syncItem, { dispose: () => clearInterval(syncTick) });
 
   async function open(uri, column) {
     if (!uri) {
@@ -1495,6 +1550,7 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.syncNotes', async () => {
       const g = await notesGist(context, true);
       if (!g) return;
+      const was = context.globalState.get('texglass.gistSync', false);
       await context.globalState.update('texglass.gistSync', true);
       try {
         const local = {};
@@ -1503,14 +1559,29 @@ function activate(context) {
         if (g.id()) await context.globalState.update('texglass.gistId', g.id());
         for (const [k, r] of Object.entries(merged)) await keepNotes(context, k, r);
         if (preview) await preview.syncGist(true);
+        await recordSync(context, '');
         const n = Object.keys(merged).length;
-        vscode.window.showInformationMessage(`TeXglass notes are synced with a private gist on your GitHub account (texglass-notes.json, ${n} paper${n === 1 ? '' : 's'}). They sync on their own from now on.`);
+        vscode.window.showInformationMessage(was
+          ? `TeXglass notes synced (${n} paper${n === 1 ? '' : 's'}). They already sync automatically, so you don't need this command.`
+          : `TeXglass notes now sync automatically with a private gist on your GitHub account (texglass-notes.json, ${n} paper${n === 1 ? '' : 's'}): when you open a paper and a few seconds after each change. You don't need to run this command again.`);
       } catch (e) {
+        await recordSync(context, String(e.message || e));
         vscode.window.showWarningMessage(`TeXglass could not sync the notes: ${e.message || e}`);
       }
     }),
+    // The status bar item: sync now (rarely needed) or stop.
+    vscode.commands.registerCommand('texglass.notesSyncStatus', async () => {
+      const pick = await vscode.window.showQuickPick([
+        { label: '$(check) Keep syncing automatically', description: 'nothing to do', id: 'ok' },
+        { label: '$(sync) Sync now', description: 'not needed, it happens on its own', id: 'now' },
+        { label: '$(circle-slash) Stop syncing with GitHub', id: 'stop' },
+      ], { placeHolder: `TeXglass notes: ${syncStateLine(context)}` });
+      if (pick && pick.id === 'now') vscode.commands.executeCommand('texglass.syncNotes');
+      if (pick && pick.id === 'stop') vscode.commands.executeCommand('texglass.stopSyncingNotes');
+    }),
     vscode.commands.registerCommand('texglass.stopSyncingNotes', async () => {
       await context.globalState.update('texglass.gistSync', false);
+      updateSyncItem(context);
       vscode.window.showInformationMessage('TeXglass no longer syncs notes with GitHub. They stay next to each .tex file, and in the gist as they were.');
     }),
     vscode.commands.registerCommand('texglass.toggleTheme', () => {

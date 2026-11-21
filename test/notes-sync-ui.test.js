@@ -119,7 +119,25 @@ test('notes in the web viewer: kept per paper, exported, imported and synced thr
     await page.click('#notes-sync');
     await page.fill('#notes-sync-token', 'tok');
     await page.click('#notes-sync-go');
+    // The dialog stays to say that, from now on, syncing is automatic.
+    await page.waitForFunction(() => !document.getElementById('notes-sync-state').hidden);
+    assert.match(await page.textContent('#notes-sync-state'), /^Syncing automatically · last synced just now$/);
+    assert.match(await page.textContent('#notes-sync-message'), /Signed in/);
+    assert.equal(await page.textContent('#notes-sync-go'), 'Done');
+    assert.equal(await page.isVisible('#notes-sync-token'), false);
+    assert.equal(await page.isVisible('#notes-sync-now'), true);
+    await page.click('#notes-sync-go');
     await page.waitForFunction(() => !document.getElementById('notes-sync-dialog').open);
+    // The … menu shows it is on, and its tooltip when it last synced.
+    assert.match(await page.textContent('#notes-sync'), /Syncing with GitHub/);
+    assert.match(await page.getAttribute('#notes-sync', 'title'), /^Syncing automatically · last synced just now/);
+    // Opening the dialog again shows the state, not a sign-in form.
+    await page.click('#more');
+    await page.click('#notes-sync');
+    assert.equal(await page.textContent('#notes-sync-title'), 'Syncing with GitHub');
+    await page.click('#notes-sync-now');
+    await page.waitForFunction(() => document.getElementById('notes-sync-message').textContent === 'Up to date.');
+    await page.click('#notes-sync-go');
     assert.equal(gists.size, 1);
     const g = [...gists.values()][0];
     assert.ok(g.files['texglass-notes.json'].content.includes('main difficulty'));
