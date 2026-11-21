@@ -966,7 +966,7 @@
     })
     : null;
 
-  // The side panel's tabs (Contents, Notation, Map) and its draggable divider;
+  // The side panel's tabs (Contents, Map, Notation) and its draggable divider;
   // the extension keeps the tab and the width (prefs: sideTab, sideWidth).
   const side = window.TeXglassInsight
     ? window.TeXglassInsight.sidePanel({

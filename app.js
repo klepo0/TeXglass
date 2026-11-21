@@ -2031,7 +2031,7 @@
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
     })
     : null;
-  // The side panel's tabs (Contents, Notation, Map) and its draggable divider.
+  // The side panel's tabs (Contents, Map, Notation) and its draggable divider.
   if (window.TeXglassInsight) {
     TeXglassInsight.sidePanel({
       pane: tocPane,

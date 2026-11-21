@@ -687,7 +687,7 @@
   }
 
   function showToc() {
-    // With the Notation and Map tabs the panel has something to show even without sections.
+    // With the Map and Notation tabs the panel has something to show even without sections.
     const has = tocLinks.length > 0 || (!!insight && preview.childElementCount > 0);
     tocPane.hidden = !(tocWanted && has);
     tocToggle.disabled = !has;
@@ -786,7 +786,7 @@
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
     })
     : null;
-  // The side panel's tabs (Contents, Notation, Map) and its divider. The panel's tab and
+  // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
   // width are kept apart from the full viewer's, since this panel is usually narrower.
   if (insight) {
     const sideStore = {

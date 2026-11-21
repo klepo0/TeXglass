@@ -1617,7 +1617,7 @@
       return div;
     }
 
-    // --- views: the side panel's Notation and Map tabs, and the large dialog --------
+    // --- views: the side panel's Map and Notation tabs, and the large dialog --------
 
     // A view is a place the notation index or the map is drawn in:
     // { body, tab, selected, side, leave() } where leave() runs before a jump.
@@ -2123,8 +2123,8 @@
       dialog.innerHTML =
         '<div class="insight-head">' +
         '<div class="insight-tabs" role="tablist">' +
-        '<button type="button" role="tab" data-tab="notation">Notation</button>' +
         '<button type="button" role="tab" data-tab="deps">Map</button>' +
+        '<button type="button" role="tab" data-tab="notation">Notation</button>' +
         '</div>' +
         hoverBox() +
         '<button type="button" class="insight-close" aria-label="Close">×</button>' +
@@ -2454,7 +2454,7 @@
   }
 
   /**
-   * The side panel: tabs Contents, Notation and Map over the table of
+   * The side panel: tabs Contents, Map and Notation over the table of
    * contents, and a divider that drags to resize it (the width is remembered).
    *
    *   TeXglassInsight.sidePanel({
@@ -2469,7 +2469,7 @@
     const tabs = doc.createElement('div');
     tabs.className = 'side-tabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = [['toc', 'Contents'], ['notation', 'Notation'], ['deps', 'Map']]
+    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation']]
       .map(([k, label]) => `<button type="button" role="tab" data-side-tab="${k}">${label}</button>`).join('');
     const title = o.head.querySelector('.toc-pane-title');
     if (title) title.replaceWith(tabs);

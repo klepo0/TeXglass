@@ -44,10 +44,10 @@ browser extension:
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined
   with `:=`, with a link to the first use or the definition.
-- **Side panel** with three tabs: **Contents**, a **Notation** index of the
-  paper's macros and defined symbols, and a **Map** of which lemmas each
+- **Side panel** with three tabs: **Contents**, a **Map** of which lemmas each
   theorem uses, read from the `\ref`s in statements and proofs (a reference
-  preview also says where a result is used). Rest the pointer on a result in
+  preview also says where a result is used), and a **Notation** index of the
+  paper's macros and defined symbols. Rest the pointer on a result in
   the map, small or large, to preview its statement. Press **M** (outside a
   text field) to open the larger map, which fills the window: drag to move
   around, Ctrl + scroll or pinch to zoom, or use **−**, **+**, **0** and
