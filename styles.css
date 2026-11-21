@@ -759,6 +759,38 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .ref-popover .fn-preview > p:first-child { margin-top: 0; }
 .ref-popover .fn-preview > p:last-child { margin-bottom: 0; }
 
+/* The hypothesis checker (src/hypotheses.js): a result cited in a proof, split
+   into its hypotheses (with boxes to tick) and its conclusion. */
+.hyp-check { border-left: 3px solid var(--thm-border); background: var(--thm-bg); padding: 8px 12px 6px; border-radius: 0 4px 4px 0; }
+.hyp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; margin-bottom: 4px; }
+.hyp-note { font-style: italic; }
+.hyp-count { color: var(--muted); font-size: 0.85em; }
+.hyp-all-done .hyp-count { color: var(--hl-math); }
+.hyp-switch { margin-left: auto; font: inherit; font-size: 0.8em; padding: 1px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--accent); cursor: pointer; }
+.hyp-switch:hover, .hyp-switch:focus-visible { border-color: var(--accent); outline: none; }
+.hyp-switch-back { display: block; margin: 6px 0 0 auto; }
+.hyp-switch[hidden] { display: none; }
+.hyp-sec { margin: 6px 0 2px; font-size: 0.75em; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.hyp-list { list-style: none; margin: 0; padding: 0; }
+.hyp-item { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
+.hyp-box { flex: none; margin: 0.3em 0 0; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.hyp-text { flex: 1; min-width: 0; }
+.hyp-text p, .hyp-concl p, .hyp-from + * p { display: inline; margin: 0; }
+.hyp-text .math-display, .hyp-concl .math-display { margin: 4px 0; }
+.hyp-done .hyp-text { color: var(--muted); }
+.hyp-label { font-weight: 600; }
+.hyp-from { font-weight: 600; font-size: 0.92em; }
+.hyp-from + .theorem, .hyp-from + .item-body { display: inline; margin: 0; padding: 0; border: 0; background: none; }
+.hyp-hint { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 0.75em; font-style: normal; color: var(--warn); border: 1px solid currentColor; white-space: nowrap; cursor: help; }
+.hyp-done .hyp-hint { display: none; }
+.hyp-concl { padding-left: 23px; }
+.hyp-concl-part + .hyp-concl-part { margin-top: 2px; }
+.hyp-standing { margin-top: 6px; }
+.hyp-standing > summary { cursor: pointer; font-size: 0.75em; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.hyp-standing > .hyp-list { margin-top: 2px; }
+.hyp-written[hidden], .hyp-check[hidden] { display: none; }
+@media print { .hyp-switch { display: none; } }
+
 /* Notation on hover, the notation index and the dependency map (src/insight.js). */
 .insight-pop-body { font-size: 0.9em; }
 .insight-pop-title, .insight-usedby-k {
@@ -1761,7 +1793,22 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6, .uses-head) { opacity: 0.5; }
 .uses-focus .uses-fade:hover { opacity: 0.6; }
 /* "Hide the rest": unrelated blocks fold away; headings of sections with something lit stay */
-@media screen { .uses-focus.uses-collapse .uses-fade:not(.uses-head) { display: none; } }
+@media screen {
+  .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof) { display: none; }
+  /* the proofs of the results shown stay, folded to their first line until clicked */
+  .uses-focus.uses-collapse .uses-proof { opacity: 1; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > :not(:first-child) { display: none; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child .qed { display: none; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle { opacity: 1; color: var(--accent); }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle svg { transform: rotate(-90deg); }
+}
 .uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }

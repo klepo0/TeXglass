@@ -576,6 +576,16 @@ class Preview {
     this.gistTimer = setTimeout(() => this.syncGist(), 2500);
   }
 
+  /** The reader ticked (or unticked) a hypothesis: kept with the notes, so it syncs with them. */
+  async saveCheck(id, on, info) {
+    const key = await this.paperKey();
+    this.notesRecord = Object.assign(NotesSync.setCheck(this.notesRecord || NotesSync.empty(key), id, on, info), { paper: key });
+    await this.writeNotes(this.notesRecord);
+    await keepNotes(this.context, key, this.notesRecord);
+    clearTimeout(this.gistTimer);
+    this.gistTimer = setTimeout(() => this.syncGist(), 2500);
+  }
+
   /** Bring in notes from elsewhere (a file, the gist) for this paper. */
   async takeNotes(record) {
     const key = await this.paperKey();
@@ -694,6 +704,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
@@ -908,6 +919,10 @@ ${INK_FILTERS}
         break;
       case 'progress':
         if (m.map && typeof m.map === 'object') this.saveProgress(m.map);
+        break;
+      case 'check':
+        // a hypothesis ticked in a preview of a cited result (shared/hypotheses.js)
+        if (typeof m.id === 'string') this.saveCheck(m.id, !!m.on, m.info);
         break;
       case 'render-note':
         this.renderNote(m.id, m.text);

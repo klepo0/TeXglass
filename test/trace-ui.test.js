@@ -87,6 +87,28 @@ test('the Trace tab picks a result and hides all but what it uses and what uses 
     assert.match(s.bar, /Lemma 1\.2 uses 1 result, is used in 2 results/);
     assert.equal(s.both, 'true');
     assert.equal(s.collapse, 'true');
+    // The proofs of the other results stay, folded to their first line; a click opens one, its arrow folds it again.
+    const proofs = () => p.evaluate(() => Array.from(document.querySelectorAll('#preview .proof')).map((el) => {
+      if (!el.offsetParent) return 'hidden';
+      const rest = Array.from(el.children).slice(1);
+      return rest.length && rest.every((c) => !c.offsetParent) || getComputedStyle(el.firstElementChild).whiteSpace === 'nowrap' ? 'folded' : 'open';
+    }));
+    // Lemma 1.2's own proof is open; Theorem 2.1's and Corollary 2.2's are folded.
+    assert.deepEqual(await proofs(), ['open', 'folded', 'folded']);
+    await p.click('#preview .proof.uses-proof >> nth=0');
+    assert.deepEqual(await proofs(), ['open', 'open', 'folded']);
+    await p.evaluate(() => {
+      const b = document.createElement('button');
+      b.className = 'fold-toggle';
+      b.textContent = 'v';
+      document.querySelectorAll('#preview .proof')[1].firstElementChild.prepend(b);
+    });
+    await p.click('#preview .proof.uses-proof >> nth=0 >> .fold-toggle');
+    assert.deepEqual(await proofs(), ['open', 'folded', 'folded']);
+    // Faded instead of hidden, they are not folded.
+    await p.click('.uses-bar [data-act="collapse"]');
+    assert.deepEqual(await proofs(), ['open', 'open', 'open']);
+    await p.click('.uses-bar [data-act="collapse"]');
     // The bar switches to one side.
     await p.click('.uses-bar [data-dir="uses"]');
     s = await state();

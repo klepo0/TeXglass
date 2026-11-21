@@ -163,8 +163,41 @@
       else notes.push(Object.assign({}, a, { updated: t }));
       delete deleted[a.id];
     }
-    for (const id of prev.keys()) deleted[id] = t;
+    for (const [id, a] of prev) {
+      // ticks of the hypothesis checker are not the margin's to remove (see setCheck)
+      if (isCheck(a)) notes.push(a);
+      else deleted[id] = t;
+    }
     return Object.assign({}, record || empty(), { notes, deleted });
+  }
+
+  /** A tick of the hypothesis checker (src/hypotheses.js), kept with the notes so it syncs with them. */
+  const isCheck = (a) => !!(a && a.kind === 'check');
+
+  /**
+   * The paper's record with one hypothesis ticked (on) or unticked. A tick is
+   * a note { id, kind: 'check', anchor: { result, quote, at }, created }: the
+   * margin leaves it alone, and it merges and syncs like any note. `info`:
+   * { result, text, at } from the checker, to read the file by.
+   */
+  function setCheck(record, id, on, info, now) {
+    const t = (now || new Date()).toISOString();
+    const r = Object.assign({}, record || empty());
+    const notes = (r.notes || []).filter((a) => a.id !== id);
+    const deleted = Object.assign({}, r.deleted || {});
+    const had = (r.notes || []).some((a) => a.id === id);
+    if (on) {
+      const i = info || {};
+      notes.push({ id, kind: 'check', anchor: { result: String(i.result || ''), quote: String(i.text || '').slice(0, 300), at: String(i.at || '') }, created: t, updated: t });
+      delete deleted[id];
+    } else if (had) deleted[id] = t;
+    return Object.assign(r, { notes, deleted });
+  }
+
+  /** The ids of the ticks in a record (or a list of notes). */
+  function checks(record) {
+    const list = Array.isArray(record) ? record : (record && record.notes) || [];
+    return new Set(list.filter(isCheck).map((a) => a.id));
   }
 
   /** Forget deletions older than KEEP_DELETED_DAYS. */
@@ -390,5 +423,5 @@
     return { find, read, write, sync, id: () => id };
   }
 
-  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, merge, mergeProgress, cleanProgress, isEmpty, equal, toFile, parseFile, toStore, gist };
+  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, isEmpty, equal, toFile, parseFile, toStore, gist };
 });
