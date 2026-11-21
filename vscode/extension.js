@@ -61,6 +61,34 @@ function fetchJson(url) {
 }
 const INK_FILTERS = require('./ink.js');
 
+/**
+ * An arXiv paper's source, fetched from arxiv.org/src (shared/arxiv.js) and
+ * converted to HTML, for previews of the results a document cites. Kept for a
+ * while, so hovering more citations of the paper costs nothing.
+ */
+const citedPapers = new Map(); // arXiv id -> Promise of HTML
+function citedPaper(converter, input) {
+  const Arxiv = require('./shared/arxiv.js');
+  const id = Arxiv.parseId(String(input || ''));
+  if (!id) return Promise.reject(new Error('Not an arXiv id'));
+  let p = citedPapers.get(id);
+  if (!p) {
+    if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') {
+      return Promise.reject(new Error('this version of VS Code cannot fetch from arXiv'));
+    }
+    p = Arxiv.importPaper(id)
+      .then((paper) => converter.render({ text: paper.source, plain: true }))
+      .then((r) => {
+        if (!r.result) throw new Error(r.error ? String(r.error).split('\n')[0] : 'conversion failed');
+        return r.result.html;
+      });
+    citedPapers.set(id, p);
+    p.catch(() => { if (citedPapers.get(id) === p) citedPapers.delete(id); });
+    while (citedPapers.size > 6) citedPapers.delete(citedPapers.keys().next().value);
+  }
+  return p;
+}
+
 const VIEW_TYPE = 'texglass.preview';
 
 function isTex(doc) {
@@ -646,6 +674,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
@@ -892,10 +921,18 @@ ${INK_FILTERS}
           (e) => this.post({ type: 'json', id: m.id, ok: false, error: String((e && e.message) || e), status: (e && e.status) || 0 })
         );
         break;
+      case 'cited-paper':
+        // "[12, Theorem 4.1]": the cited paper's source, from arXiv, converted for the webview to find the theorem in.
+        citedPaper(this.converter, m.arxiv).then(
+          (html) => this.post({ type: 'cited-paper', id: m.id, ok: true, html }),
+          (e) => this.post({ type: 'cited-paper', id: m.id, ok: false, error: String((e && e.message) || e) })
+        );
+        break;
       case 'open-arxiv':
-        // A cited paper on arXiv: open it in the TeXglass web viewer.
+        // A cited paper on arXiv: open it in the TeXglass web viewer (at a cited result, given goto).
         if (/^[\w.\/-]+$/.test(String(m.id || ''))) {
-          vscode.env.openExternal(vscode.Uri.parse(`https://klepo0.github.io/TeXglass/?arxiv=${encodeURIComponent(m.id)}`));
+          const goto = typeof m.goto === 'string' && m.goto.length < 80 ? `&goto=${encodeURIComponent(m.goto)}` : '';
+          vscode.env.openExternal(vscode.Uri.parse(`https://klepo0.github.io/TeXglass/?arxiv=${encodeURIComponent(m.id)}${goto}`));
         }
         break;
       default:

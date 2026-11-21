@@ -5,6 +5,10 @@
  * The page sends { katex: url } once, then { id, source, images } for each
  * render; images is an optional { path: objectURL } map from an arXiv import.
  * Replies are { id, result } or { id, error }.
+ *
+ * { id, arxiv } fetches arXiv paper `arxiv` and converts it, for previews of
+ * the results a document cites (src/cited.js); the reply is { id, html } or
+ * { id, error } with a message fit to show.
  */
 /* global importScripts, TeXglass, TeXglassArxiv */
 'use strict';
@@ -25,6 +29,12 @@ self.onmessage = (e) => {
   }
   if (!ready) {
     self.postMessage({ id: msg.id, error: 'not ready' });
+    return;
+  }
+  if (msg.arxiv) {
+    TeXglassArxiv.importPaper(msg.arxiv)
+      .then((paper) => self.postMessage({ id: msg.id, html: TeXglass.render(paper.source, {}).html }))
+      .catch((err) => self.postMessage({ id: msg.id, error: String((err && err.message) || err) }));
     return;
   }
   try {

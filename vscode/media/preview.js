@@ -615,8 +615,14 @@
         pendingJson.set(id, { resolve, reject });
         vscode.postMessage({ type: 'fetch-json', id, url });
       }),
-      openArxiv: (id) => vscode.postMessage({ type: 'open-arxiv', id }),
+      openArxiv: (id, goto) => vscode.postMessage({ type: 'open-arxiv', id, goto }),
       openLink: (href) => vscode.postMessage({ type: 'open-link', href }),
+      // "[12, Theorem 4.1]": the extension fetches the cited paper from arXiv and converts it
+      loadPaper: (arxiv) => new Promise((resolve, reject) => {
+        const id = ++jsonId;
+        pendingJson.set(id, { resolve, reject });
+        vscode.postMessage({ type: 'cited-paper', id, arxiv });
+      }),
     })
     : null;
   // .pdf and .eps figures, which the webview cannot show as they are: drawn (PDF
@@ -654,10 +660,10 @@
 
   window.addEventListener('message', (e) => {
     const m = e.data;
-    if (!m || m.type !== 'json' || !pendingJson.has(m.id)) return;
+    if (!m || (m.type !== 'json' && m.type !== 'cited-paper') || !pendingJson.has(m.id)) return;
     const p = pendingJson.get(m.id);
     pendingJson.delete(m.id);
-    if (m.ok) p.resolve(m.json);
+    if (m.ok) p.resolve(m.type === 'json' ? m.json : m.html);
     else p.reject(Object.assign(new Error(m.error || 'Request failed'), m.status ? { status: m.status } : {}));
   });
 
@@ -713,7 +719,7 @@
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up by the extension now.
-    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    const cited = cites && cites.noteFor(target, { link: a, onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;

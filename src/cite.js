@@ -15,8 +15,11 @@
  *     online() { ... },            // optional: false when offline (default: navigator.onLine)
  *     openArxiv(id) { ... },       // open an arXiv paper in TeXglass
  *     openLink(href) { ... },      // optional: open an outside link
+ *     loadPaper(id) { ... },       // optional: Promise of arXiv paper `id` converted to HTML,
+ *                                  //   for previews of cited results (src/cited.js)
  *   });
- *   const note = cites.noteFor(li, { onChange() { ... } });   // the <li> of a bibliography entry, or null
+ *   const note = cites.noteFor(li, { onChange() { ... }, link });   // the <li> of a bibliography entry, or null;
+ *                                  //   link: the citation's <a>, whose "[12, Theorem 4.1]" shows that theorem
  *   cites.decorate(preview);     // after a render: an "Open in TeXglass" button on entries on arXiv
  *
  * Finding a paper on arXiv: an arXiv id in the entry (arXiv:…, an eprint
@@ -35,6 +38,12 @@
  */
 (function (root) {
   'use strict';
+
+  // Previews of cited results ("[12, Theorem 4.1]"), where src/cited.js is loaded.
+  let Cited = root.TeXglassCited || null;
+  if (!Cited && typeof module === 'object' && module.exports && typeof require === 'function') {
+    try { Cited = require('./cited.js'); } catch (e) { Cited = null; }
+  }
 
   const esc = (s) =>
     String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -438,12 +447,14 @@
   }
 
   const ABSTRACT_MAX = 1500;
+  const abstractText = (a) => (a.length > ABSTRACT_MAX ? a.slice(0, ABSTRACT_MAX - 1).replace(/\s+\S*$/, '') + ' …' : a);
 
   function create(opts) {
     opts = opts || {};
     const getJson = opts.getJson || fetchJson;
     const online = opts.online || (() => typeof navigator === 'undefined' || navigator.onLine !== false);
     const cache = new Map(); // entry text -> Promise of the lookup
+    const results = opts.loadPaper && Cited ? Cited.create({ loadPaper: opts.loadPaper, storage: opts.storage }) : null;
 
     function find(entry) {
       let p = cache.get(entry.key);
@@ -466,13 +477,43 @@
       }).join('');
     }
 
-    function html(info, entry) {
+    /** The cited results, rendered: [{ pin, html, name, found, other }] from src/cited.js. */
+    function resultsHtml(found, id) {
+      return found.filter((r) => r.found).map((r) => {
+        const there = r.other ? ` <span class="insight-muted">(numbered ${esc(r.name)} there)</span>` : '';
+        return `<div class="cited-result"><div class="cited-head"><span class="insight-usedby-k">${esc(r.pin.name)}</span> in ` +
+          `<button type="button" class="cite-open cited-open" data-arxiv="${esc(id)}" data-goto="${esc(r.name)}" title="Open the paper in TeXglass at ${esc(r.name)}">arXiv:${esc(id)}</button>${there}</div>` +
+          `<div class="cited-body">${r.html}</div></div>`;
+      }).join('');
+    }
+
+    /** A line on the results that could not be shown, or ''. */
+    function missingHtml(pins, found, id, why) {
+      const missing = found ? found.filter((r) => !r.found).map((r) => r.pin) : pins;
+      if (!missing.length) return '';
+      const names = missing.map((p) => esc(p.name)).join(', ');
+      if (why) return `<div class="insight-muted cited-missing">${names}: ${why}</div>`;
+      return `<div class="insight-muted cited-missing">arXiv:${esc(id)} has no ${names}; its arXiv version may number results differently.</div>`;
+    }
+
+    function html(info, entry, cited) {
+      cited = cited || {};
       const parts = [];
       const same = info.title && titleInEntry(info.title, entry.text);
       if (info.title && !same) parts.push(`<div class="cite-title">${withMath(info.title)}</div>`);
-      if (info.abstract) {
-        const a = info.abstract.length > ABSTRACT_MAX ? info.abstract.slice(0, ABSTRACT_MAX - 1).replace(/\s+\S*$/, '') + ' …' : info.abstract;
-        parts.push(`<div class="cite-abstract"><span class="insight-usedby-k">Abstract</span> ${withMath(a)}</div>`);
+      const shown = cited.found ? cited.found.filter((r) => r.found) : [];
+      if (shown.length) parts.push(resultsHtml(cited.found, info.arxiv));
+      if (cited.wait) parts.push(`<div class="insight-muted cite-wait cited-wait">Finding ${cited.pins.map((p) => esc(p.name)).join(', ')} in arXiv:${esc(info.arxiv)}…</div>`);
+      if (cited.pins && cited.pins.length && !cited.wait) {
+        if (!info.arxiv) parts.push(missingHtml(cited.pins, null, null, info.found ? 'this paper is not on arXiv, so its statement cannot be shown.' : 'the paper was not found on arXiv.'));
+        else if (cited.error) parts.push(missingHtml(cited.pins, null, info.arxiv, esc(cited.error)));
+        else parts.push(missingHtml(cited.pins, cited.found, info.arxiv));
+      }
+      if (shown.length) {
+        // the statement is what was asked for: the abstract waits behind a click
+        if (info.abstract) parts.push(`<details class="cite-more"><summary>Abstract</summary><div class="cite-abstract">${withMath(abstractText(info.abstract))}</div></details>`);
+      } else if (info.abstract) {
+        parts.push(`<div class="cite-abstract"><span class="insight-usedby-k">Abstract</span> ${withMath(abstractText(info.abstract))}</div>`);
       } else if (info.found) {
         parts.push('<div class="insight-muted">No abstract is on record for this paper.</div>');
       } else {
@@ -493,6 +534,8 @@
       nopts = nopts || {};
       if (!li || !li.closest || !li.closest('.bibliography')) return null;
       const entry = entryOf(li);
+      // "[12, Theorem 4.1]": that theorem itself, once the paper is found on arXiv
+      const pins = results && nopts.link ? Cited.pinpointsOf(nopts.link) : [];
       const div = (li.ownerDocument || document).createElement('div');
       div.className = 'cite-note';
       div.addEventListener('click', (e) => {
@@ -500,7 +543,7 @@
         if (open) {
           e.preventDefault();
           e.stopPropagation();
-          if (opts.openArxiv) opts.openArxiv(open.dataset.arxiv);
+          if (opts.openArxiv) opts.openArxiv(open.dataset.arxiv, open.dataset.goto || undefined);
           return;
         }
         const out = e.target.closest('a.cite-out');
@@ -511,22 +554,40 @@
         }
       });
       const done = () => { if (nopts.onChange) nopts.onChange(div); };
+      const openOnly = entry.arxiv ? `<div class="cite-actions"><button type="button" class="cite-open" data-arxiv="${esc(entry.arxiv)}">Open in TeXglass</button></div>` : '';
+      // statements seen before come back from storage, offline too
+      const kept = pins.length && entry.arxiv ? results.stored(entry.arxiv, pins) : null;
       if (!online()) {
-        div.innerHTML = '<div class="insight-muted">Offline: showing the entry from the bibliography.</div>' +
-          (entry.arxiv ? `<div class="cite-actions"><button type="button" class="cite-open" data-arxiv="${esc(entry.arxiv)}">Open in TeXglass</button></div>` : '');
+        div.innerHTML = (kept ? resultsHtml(kept, entry.arxiv) : '') +
+          '<div class="insight-muted">Offline: showing the entry from the bibliography.</div>' + openOnly;
         return div;
       }
-      div.innerHTML = '<div class="insight-muted cite-wait">Looking up the abstract…</div>';
+      if (pins.length && entry.arxiv && !kept) results.prefetch(entry.arxiv); // convert the paper while the lookup runs
+      div.innerHTML = kept
+        ? resultsHtml(kept, entry.arxiv)
+        : `<div class="insight-muted cite-wait">${pins.length ? `Looking up ${pins.map((p) => esc(p.name)).join(', ')} in the cited paper…` : 'Looking up the abstract…'}</div>`;
       find(entry).then(
         (info) => {
-          div.innerHTML = html(info, entry);
+          const show = (cited) => { div.innerHTML = html(info, entry, cited); done(); };
+          if (pins.length && info.arxiv) {
+            const now = results.stored(info.arxiv, pins);
+            if (now) show({ pins, found: now });
+            else {
+              show({ pins, wait: true });
+              results.statements(info.arxiv, pins).then(
+                (found) => show({ pins, found }),
+                (e) => show({ pins, error: `could not read the paper's source (${(e && e.message) || e}).` })
+              );
+            }
+          } else {
+            show(pins.length ? { pins } : null);
+          }
           // found on arXiv by the lookup: the entry in the bibliography gets its button too
           if (info.arxiv && li.isConnected && !li.closest('.ref-popover')) { li.dataset.tgArxiv = info.arxiv; openButton(li, info.arxiv); }
-          done();
         },
         () => {
-          div.innerHTML = '<div class="insight-muted">Could not reach arXiv or Crossref; showing the entry from the bibliography.</div>' +
-            (entry.arxiv ? `<div class="cite-actions"><button type="button" class="cite-open" data-arxiv="${esc(entry.arxiv)}">Open in TeXglass</button></div>` : '');
+          div.innerHTML = (kept ? resultsHtml(kept, entry.arxiv) : '') +
+            '<div class="insight-muted">Could not reach arXiv or Crossref; showing the entry from the bibliography.</div>' + openOnly;
           done();
         }
       );
