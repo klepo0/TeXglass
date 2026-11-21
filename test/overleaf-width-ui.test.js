@@ -69,3 +69,30 @@ test('the text width grips widen, narrow, fill, reset and are remembered', { ski
     await browser.close();
   }
 });
+
+test('the text width grips never sit inside the side panel', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    for (const width of [520, 1200]) {
+      const page = await browser.newPage({ viewport: { width, height: 600 } });
+      await openPanel(page);
+      await page.click('#toc-toggle');
+      await page.waitForSelector('#toc-pane:not([hidden])');
+      await page.waitForTimeout(400);
+      const inside = await page.evaluate(() => {
+        const toc = document.getElementById('toc-pane').getBoundingClientRect();
+        return [...document.querySelectorAll('.text-resizer')].filter((g) => {
+          if (g.hidden) return false;
+          const r = g.getBoundingClientRect();
+          return r.left < toc.right && r.right > toc.left;
+        }).length;
+      });
+      assert.equal(inside, 0, `no grip inside the side panel at ${width}px`);
+      if (width > 1000) assert.equal(await page.locator('.text-resizer-left').isVisible(), true, 'beside the side panel, the grips stay');
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+});

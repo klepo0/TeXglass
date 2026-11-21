@@ -70,7 +70,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Diagrams drawn**: `tikz-cd`, `xymatrix` and TikZ pictures.
 - **Hover previews** of references, footnotes, citations (with the cited paper's abstract) and cited theorems.
 - **Go to** any theorem, equation or section by number, and **Back** to where you were after any jump.
-- **Contents** that follows you, folding sections and proofs, search, zoom, light and dark.
+- **Contents** that follows you, folding sections and proofs, search, zoom, a text width you drag, light and dark.
 - **Open anything**: arXiv search, GitHub repositories, OpenAI's math preprints, or local files and folders.
 
 ### Understand

@@ -52,32 +52,9 @@
   text-decoration: underline;
 }
 
-#preview { padding: 24px 18px 40vh; max-width: calc(var(--ol-text-width, 760px) * var(--zoom, 1)); }
-body.ol-text-full #preview { max-width: none; }
+#preview { padding: 24px 18px 40vh; }
+/* Its width: --tg-text-width and the grips on its edges (src/textwidth.js, styles.css). */
 
-/* The grips on the text's edges that change its width (overleaf-panel.js). */
-.text-resizer {
-  position: fixed;
-  width: 10px;
-  z-index: 3;
-  cursor: ew-resize;
-  touch-action: none;
-}
-.text-resizer[hidden] { display: none; }
-.text-resizer::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 4px;
-  width: 2px;
-  background: transparent;
-  transition: background 0.15s;
-}
-.text-resizer:hover::after, .text-resizer:focus-visible::after, body.text-resizing .text-resizer::after { background: var(--accent); }
-.text-resizer:focus { outline: none; }
-body.text-resizing { cursor: ew-resize; user-select: none; }
-body.text-resizing #preview { transition: none; }
 /* The handwritten look (notes.css) sets its own padding; keep the room to scroll the end to the top. */
 :root[data-look="notes"] #preview.document { padding-bottom: 40vh; }
 

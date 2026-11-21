@@ -55,7 +55,7 @@ letters are ignored while you type in a text field.
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
 | Click a formula | Copy its LaTeX. |
-| <kbd>←</kbd> <kbd>→</kbd> on a divider | Resize the side panel or the margin column from the keyboard. |
+| <kbd>←</kbd> <kbd>→</kbd> on a divider | Resize the side panel, the margin column or the [text width](#looks-themes-handwritten-notes-zoom) from the keyboard. |
 
 ### Web viewer
 
@@ -349,6 +349,14 @@ Overleaf panel).
   ink (see [VS Code settings](#settings)). Print and HTML export keep the look.
 - **Zoom**: the **− 100% +** buttons, <kbd>Ctrl+=</kbd> <kbd>Ctrl+-</kbd>
   <kbd>Ctrl+0</kbd>, or Ctrl + scroll / pinch. Remembered.
+- **Text width**: hover either edge of the text until the pointer becomes
+  ↔, then drag it to make the column wider or narrower (it stays centred).
+  Drag it to the edge of the window to let the text fill it; double-click an
+  edge for the usual width; <kbd>←</kbd> <kbd>→</kbd> move a focused edge. The
+  margin notes keep their column beside the text, and the width scales with
+  zoom. Remembered: in the web viewer and browser extension per browser, in
+  VS Code for every preview, and in the Overleaf view on its own (that panel is
+  usually narrower). Not on phones, where the text always takes the screen.
 
 ## Settings: switching features on or off
 
@@ -504,7 +512,8 @@ editor.
   <kbd>Ctrl+G</kbd>), [Back](#back-to-where-you-were) after a jump
   (<kbd>Alt+Left</kbd>), the map and notation, light and dark.
 - **Text width**: drag either edge of the text (double-click for the usual
-  width); drag the panel's left edge to resize the panel.
+  width; see [Looks](#looks-themes-handwritten-notes-zoom)); remembered apart
+  from the viewer's. Drag the panel's left edge to resize the panel.
 - **Files** downloads the project's zip with your login and pulls in
   `\input` files, the main preamble, `.bib` references and figures (a
   snapshot; **Reload** refreshes it).
@@ -640,7 +649,8 @@ GitHub** move to the top of the **…** menu. They move back when the window is
 wider.
 
 **Drawers you swipe in.** On a narrow screen the side panel and the margin notes
-are drawers over the text, so the text keeps the whole width:
+are drawers over the text, so the text keeps the whole width (a text width set
+on a computer does not apply on a phone):
 
 - Swipe in from the left edge to open the side panel (from the right edge if you
   moved it to the right). Its button opens it too.
