@@ -827,14 +827,17 @@
     const m = e.data;
     switch (m.type) {
       case 'doc':
-        if ((vscode.getState() || {}).uri !== m.uri) {
+        const sameDoc = (vscode.getState() || {}).uri === m.uri;
+        if (!sameDoc) {
           if (viewHistory) viewHistory.clear();
           shown = [];
           allAnchors = [];
           anchors = [];
           preview.replaceChildren();
         }
-        vscode.setState({ uri: m.uri });
+        // the same document keeps what the preview remembers about it (pinned notation, …)
+        vscode.setState(sameDoc ? Object.assign({}, vscode.getState(), { uri: m.uri }) : { uri: m.uri });
+        if (insight && insight.refreshPins && !sameDoc) insight.refreshPins();
         break;
       case 'render': {
         sourceFiles = m.files || [];
@@ -871,6 +874,7 @@
         if (textWidth) textWidth.set(window.TeXglassTextWidth.parse(m.textWidth), false);
         if (margin && m.notePad) margin.setPadAt(m.notePad);
         if (insight && m.notationOrder) insight.setNotationOrder(m.notationOrder);
+        if (insight && typeof m.notationUsedPinned === 'boolean') insight.setUsedPinned(m.notationUsedPinned);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);
@@ -1030,6 +1034,12 @@
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
       onNotationOrder: (order) => vscode.postMessage({ type: 'side-pref', key: 'texglass:notation-order', value: order }),
+      // pinned notation rows, kept with this preview's document
+      pins: {
+        get: () => ((vscode.getState && vscode.getState()) || {}).notationPins || [],
+        set: (keys) => { if (vscode.setState) vscode.setState(Object.assign({}, vscode.getState() || {}, { notationPins: keys })); },
+      },
+      onUsedPinned: (on) => vscode.postMessage({ type: 'side-pref', key: 'texglass:notation-used-pinned', value: on }),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => vscode.postMessage({ type: 'print-request' }),
       onFocusStart: () => { if (picker) picker.stop(); },

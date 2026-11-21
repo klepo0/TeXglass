@@ -2521,6 +2521,13 @@
       onHoverChange: (on) => setFeature('notationHover', on),
       notationOrder: store.get('texglass:notation-order'),
       onNotationOrder: (order) => store.set('texglass:notation-order', order),
+      // pinned notation rows, kept per paper (or per file name)
+      pins: {
+        get: () => { try { return JSON.parse(store.get('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent)) || '[]'); } catch (e) { return []; } },
+        set: (keys) => store.set('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent), JSON.stringify(keys)),
+      },
+      usedPinned: store.get('texglass:notation-used-pinned') === '1',
+      onUsedPinned: (on) => store.set('texglass:notation-used-pinned', on ? '1' : ''),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => window.print(),
       onFocusStart: () => { if (picker) picker.stop(); },

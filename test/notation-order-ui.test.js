@@ -1,7 +1,7 @@
 'use strict';
 // The Notation tab arranged for easy access (src/insight.js): a search by
 // symbol or meaning, a switch between Section, Kind and A–Z (remembered),
-// and the symbols of the section being read at the top. A made-up paper.
+// the symbols of the section being read at the top, and rows pinned there. A made-up paper.
 // The browser part is skipped where Playwright and a browser are not installed.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -129,10 +129,39 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     await page.click('.side-insight [data-order="section"]');
     assert.equal(await page.locator('.side-insight [data-group="sec-1"]').evaluate((d) => d.open), false);
 
-    // The order is kept for the next visit.
+    // Pins: a pinned row shows at the top and stays in view while the list scrolls.
+    assert.equal(await page.locator('.side-insight .insight-pinned').count(), 0);
+    await page.click('.side-insight .insight-group:not(.insight-group-pinned) [data-pin="m:Var"]');
+    await page.waitForSelector('.side-insight .insight-stuck .insight-group-pinned');
+    assert.match(await page.locator('.side-insight .insight-group-pinned').textContent(), /\\Var/);
+    assert.equal(await page.locator('.side-insight .insight-group:not(.insight-group-pinned) [data-pin="m:Var"]').getAttribute('aria-pressed'), 'true');
+    const stuckTop = () => page.evaluate(() => {
+      const pane = document.getElementById('toc-pane');
+      return Math.round(document.querySelector('.side-insight .insight-stuck').getBoundingClientRect().top - pane.getBoundingClientRect().top);
+    });
+    await page.evaluate(() => { document.getElementById('toc-pane').scrollTop = 0; });
+    const before = await stuckTop();
+    await page.evaluate(() => { document.getElementById('toc-pane').scrollTop = 400; });
+    const after = await stuckTop();
+    assert.ok(after > 0 && after < before, `the pinned rows stick under the tabs (${before} → ${after})`);
+    // the search leaves pinned rows alone
+    await page.fill('.side-insight .insight-filter', 'measure');
+    assert.ok(await page.locator('.side-insight .insight-group-pinned tr').isVisible());
+    await page.fill('.side-insight .insight-filter', '');
+    // "Used in …" can be pinned too
+    assert.equal(await page.locator('.side-insight .insight-stuck .insight-used').count(), 0);
+    await page.click('.side-insight [data-pin-used]');
+    await page.waitForSelector('.side-insight .insight-stuck .insight-used .insight-chip');
+
+    // The order and the pins are kept for the next visit.
     await page.click('.side-insight [data-order="kind"]');
     await load();
     assert.equal(await page.locator('.side-insight [data-order="kind"]').getAttribute('aria-checked'), 'true');
+    assert.equal(await page.locator('.side-insight .insight-group-pinned [data-pin="m:Var"]').count(), 1);
+    assert.equal(await page.locator('.side-insight .insight-stuck .insight-used').count(), 1);
+    // unpinning takes the row out of the pinned block
+    await page.click('.side-insight .insight-group-pinned [data-pin="m:Var"]');
+    await page.waitForFunction(() => !document.querySelector('.side-insight .insight-group-pinned'));
   } finally {
     await browser.close();
   }
