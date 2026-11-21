@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://klepo0.github.io/TeXglass/?arxiv=1907.00578"><b>▶ Try it now</b></a>: a rough-paths paper from arXiv, opened in the web viewer.
+  <a href="https://klepo0.github.io/TeXglass/?arxiv=2106.10340"><b>▶ Try it now</b></a>: <i>Rough stochastic differential equations</i> from arXiv, opened in the web viewer.
 </p>
 
 <p align="center">
