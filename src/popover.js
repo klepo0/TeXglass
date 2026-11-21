@@ -10,6 +10,11 @@
  * room and the card is capped to that room, so it scrolls instead of running
  * off the window. Left and right, it is kept inside the window too.
  *
+ * A bar across the top of the window (the viewer's toolbar, the Overleaf
+ * panel's toolbar) is drawn over the document, so it is not room: the popover
+ * stays below it. Bars are found with `opts.bars` (a selector; default
+ * BARS below), or `opts.top` gives that edge in pixels.
+ *
  * The popover's own vertical padding is the gap between the anchor and the card,
  * so the pointer can cross it into the card (to scroll it) without the popover
  * closing. That padding is counted in, so the bridge stays on the anchor's side.
@@ -25,6 +30,21 @@
   'use strict';
 
   const MIN_HEIGHT = 80; // never squash the card below this, even on a tiny window
+  // bars across the top of the window that a popover must not slide under
+  const BARS = '.toolbar, .ol-toolbar, [data-popover-bar]';
+
+  /** The bottom of the bars across the top of the window (0 when there are none). */
+  function barsBottom(doc, selector, vh) {
+    let bottom = 0;
+    if (!doc || !selector) return 0;
+    for (const bar of doc.querySelectorAll(selector)) {
+      const r = bar.getBoundingClientRect();
+      // only a visible bar that starts at the top of the window and is not most of it
+      if (!r.height || r.top > 4 || r.bottom > vh / 2) continue;
+      bottom = Math.max(bottom, r.bottom);
+    }
+    return bottom;
+  }
 
   function viewport(pop) {
     const win = (pop.ownerDocument && pop.ownerDocument.defaultView) || root;
@@ -41,10 +61,14 @@
     return rects.length > 1 ? rects[0] : anchor.getBoundingClientRect();
   }
 
-  /** The vertical place for a popover of natural height `h` (padding included). */
-  function layout(r, h, vh, margin) {
+  /**
+   * The vertical place for a popover of natural height `h` (padding included),
+   * in a window `vh` high whose top `top` pixels are covered by bars.
+   */
+  function layout(r, h, vh, margin, top) {
+    const minTop = Math.max(margin, top || 0);
     const below = vh - margin - r.bottom; // room under the anchor
-    const above = r.top - margin; // room over it
+    const above = r.top - minTop; // room over it, below the bars
     if (h <= below) return { top: r.bottom, cap: null };
     if (h <= above) return { top: r.top - h, cap: null };
     const down = below >= above;
@@ -121,14 +145,17 @@
       return;
     }
     const card = pop.firstElementChild;
-    const r = rectOf(anchor);
     const v = viewport(pop);
+    const barTop = o.top != null ? o.top : barsBottom(pop.ownerDocument, o.bars === undefined ? BARS : o.bars, v.h);
+    const a = rectOf(anchor);
+    // an anchor scrolled up under a bar counts as just below it
+    const r = { left: a.left, top: Math.max(a.top, barTop), bottom: Math.max(a.bottom, barTop) };
     if (card) card.style.maxHeight = '';
     const width = pop.offsetWidth;
     const left = Math.max(o.margin, Math.min(r.left, v.w - width - o.margin));
     pop.style.left = Math.max(0, left) + 'px';
     let h = pop.offsetHeight;
-    const at = layout(r, h, v.h, o.margin);
+    const at = layout(r, h, v.h, o.margin, barTop);
     let top = at.top;
     if (at.cap !== null) {
       const pad = h - (card ? card.offsetHeight : h); // the popover's own padding (the bridge)
@@ -137,8 +164,9 @@
       h = pop.offsetHeight;
       top = at.down ? r.bottom : r.top - h;
     }
-    // An anchor partly off the window (scrolled to an edge): keep the card on screen.
-    top = Math.max(0, Math.min(top, v.h - h));
+    // An anchor partly off the window (scrolled to an edge, or under the toolbar):
+    // keep the card on screen, below the bars.
+    top = Math.max(barTop, Math.min(top, v.h - h));
     pop.style.top = top + 'px';
   }
 

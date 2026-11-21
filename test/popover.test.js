@@ -23,6 +23,15 @@ test('layout: below when it fits, then above, then the roomier side capped', () 
   assert.deepEqual(layout({ top: 400, bottom: 420 }, 500, vh, 8), { down: false, room: 392, cap: 392 });
 });
 
+test('layout: a bar across the top of the window is not room above the anchor', () => {
+  const vh = 600;
+  // 350px fits above a link at 400 in a bare window, but not under a 150px bar
+  assert.deepEqual(layout({ top: 400, bottom: 420 }, 350, vh, 8), { top: 50, cap: null });
+  assert.deepEqual(layout({ top: 400, bottom: 420 }, 350, vh, 8, 150), { down: false, room: 250, cap: 250 });
+  assert.deepEqual(layout({ top: 500, bottom: 520 }, 420, vh, 8, 70), { top: 80, cap: null });
+  assert.deepEqual(layout({ top: 500, bottom: 520 }, 440, vh, 8, 70), { down: false, room: 430, cap: 430 });
+});
+
 const lines = Array.from({ length: 60 }, (_, k) => `Line ${k + 1} of a long statement, $x_{${k}} = y^{${k}}$.`).join('\n');
 const DOC = String.raw`\documentclass{article}
 \begin{document}
@@ -68,9 +77,11 @@ test('a tall reference preview stays inside a small window and scrolls', { skip:
         const card = p.firstElementChild;
         const r = p.getBoundingClientRect();
         return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, vw: document.documentElement.clientWidth,
-          vh: document.documentElement.clientHeight, scrolls: card.scrollHeight > card.clientHeight + 1 };
+          vh: document.documentElement.clientHeight, scrolls: card.scrollHeight > card.clientHeight + 1,
+          bar: document.querySelector('.toolbar').getBoundingClientRect().bottom };
       });
       assert.ok(box.top >= 0 && box.bottom <= box.vh, `${at}: vertically inside (${box.top}..${box.bottom} of ${box.vh})`);
+      assert.ok(box.top >= box.bar - 0.5, `${at}: below the toolbar (${box.top} vs ${box.bar})`);
       assert.ok(box.left >= 0 && box.right <= box.vw, `${at}: horizontally inside`);
       assert.ok(box.scrolls, `${at}: the card scrolls`);
       // the pointer can move into it and it stays open
