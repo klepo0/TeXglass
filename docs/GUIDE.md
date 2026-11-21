@@ -453,7 +453,9 @@ standalone page that works offline), **Show selected results…** (see
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
 rest** prints as shown), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
-notes with GitHub…** and **Reading progress**.
+notes with GitHub…** and **Reading progress**. At the very end, **Support
+TeXglass ☕** opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
+page.
 
 **Status** at the top counts undefined references and duplicate labels.
 
@@ -481,6 +483,9 @@ For Chrome, Edge (111 or later) and Firefox (128 or later). Install steps:
 - **Options**: open papers in the bundled viewer or the TeXglass website, and
   (Chrome and Edge, with *Allow access to file URLs*) show `.tex` files you
   open in the browser in TeXglass, live as you save them.
+- **Support TeXglass ☕** on the toolbar button's right-click menu (and a
+  link in Options) opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
+  page.
 
 ### Overleaf view
 
@@ -571,6 +576,7 @@ All in the Command Palette under **TeXglass:**.
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |
+| Support TeXglass ☕ | Opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass) page (also at the end of the preview's `…` menu). |
 
 ### Settings
 

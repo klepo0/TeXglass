@@ -292,6 +292,9 @@ api.action.onClicked.addListener((tab) => {
 
 // --- right-click menu ----------------------------------------------------------
 
+/** TeXglass's Buy Me a Coffee page, from the toolbar button's right-click menu. */
+const SUPPORT_URL = 'https://buymeacoffee.com/texglass';
+
 function createMenus() {
   api.contextMenus.removeAll(() => {
     api.contextMenus.create({
@@ -312,6 +315,11 @@ function createMenus() {
       title: 'Open a .tex file from this computer…',
       contexts: ['action'],
     });
+    api.contextMenus.create({
+      id: 'texglass-support',
+      title: 'Support TeXglass ☕',
+      contexts: ['action'],
+    });
   });
 }
 
@@ -320,6 +328,7 @@ if (api.runtime.onStartup) api.runtime.onStartup.addListener(createMenus);
 
 api.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'texglass-local') return openViewer(null, tab, await viewerWith('?open'));
+  if (info.menuItemId === 'texglass-support') return openViewer(null, tab, SUPPORT_URL);
   const url = info.menuItemId === 'texglass-link' ? info.linkUrl : info.frameUrl || info.pageUrl;
   const id = url && arxivId(url);
   if (id) openViewer(id, tab);
