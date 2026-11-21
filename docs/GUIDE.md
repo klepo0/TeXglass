@@ -364,7 +364,7 @@ Overleaf panel).
 
 ## Settings: switching features on or off
 
-The **gear** button opens Settings, a list of TeXglass's reading aids with a
+The **gear** button (on a phone, **Settings** in the **…** menu) opens Settings, a list of TeXglass's reading aids with a
 switch for each. Turn off what you don't use; **Turn everything back on**
 restores them. Choices apply to every paper at once.
 
@@ -430,11 +430,13 @@ install; after the first visit it opens and renders offline.
 
 **Saving papers for offline reading**
 
-- **Save for offline** in the **…** menu keeps the open paper on this device:
-  its source, figures and where it came from. Choose it again (it reads
-  **Saved for offline**, ticked) to remove it.
-- **Saved papers…** in the **…** menu (also linked from the Open dialog) lists
-  them with their size. Tap one to open it, with or without a connection;
+- **Save offline** (the bookmark in the toolbar, also **Save for offline** in
+  the **…** menu) keeps the open paper on this device: its source, figures and
+  where it came from. Once saved the bookmark fills in and reads **Saved
+  offline**; press it again to remove the paper.
+- The **Open** dialog lists your five most recently saved or opened saved
+  papers, with **All saved papers** for the rest.
+- **Saved papers…** in the **…** menu lists them all with their size. Tap one to open it, with or without a connection;
   **Remove** deletes it. A search box appears once there are several.
 - An arXiv paper you saved opens from its saved copy when you are offline or
   arXiv can't be reached, from Open, a `?arxiv=` link or a reload.
@@ -640,16 +642,17 @@ Share, then **Add to Home Screen**. On Android, or in Chrome or Edge, choose
 from the home screen it has no browser bars and works offline after the first
 visit, like the web viewer anywhere.
 
-**Papers to read offline.** Before a trip, open each paper and choose **Save
-for offline** in the **…** menu. **Saved papers…** in the same menu lists them,
-and they open with no connection, figures included (see [Saving papers for
+**Papers to read offline.** Before a trip, open each paper and tap the bookmark
+in the toolbar (**Save offline**). The **Open** dialog lists the recent ones and
+**Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Open**, the side panel (the three lines), **Navigate** (the
-magnifier), the handwritten and theme toggles, and **…**. The mode switch
-(Preview, Edit, Split), **OAI preprints**, zoom, **Hide proofs** and **Edit on
-GitHub** move to the top of the **…** menu. They move back when the window is
+magnifier), **Save offline** (the bookmark), the handwritten and theme toggles,
+and **…**. The mode switch (Preview, Edit, Split), **OAI preprints**, zoom,
+**Hide proofs**, **Edit on GitHub** and **Settings** move to the top of the
+**…** menu. They move back when the window is
 wider.
 
 **Drawers you swipe in.** On a narrow screen the side panel and the margin notes

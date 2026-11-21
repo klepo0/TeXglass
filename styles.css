@@ -419,6 +419,17 @@ img.graphic { max-width: 100%; height: auto; }
 .preprint-pdf { font-size: 12px; color: var(--muted); white-space: nowrap; padding-top: 2px; }
 .preprint-pdf:hover { color: var(--accent); }
 /* Saved papers, for offline reading (app.js, src/library.js) */
+.library-recent { margin: 2px 0 12px; }
+.library-recent[hidden] { display: none; }
+.library-recent-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.library-recent-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: 6px; }
+.library-recent-list li + li { border-top: 1px solid var(--rule); }
+.library-recent-open { display: block; width: 100%; text-align: left; font: inherit; padding: 6px 10px; border: 0; background: none; color: var(--ink); cursor: pointer; }
+.library-recent-open:hover, .library-recent-open:focus-visible { background: var(--accent-soft); outline: none; }
+.library-recent-open:disabled { opacity: 0.55; cursor: default; }
+.library-recent-title { display: block; color: var(--accent); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-recent-open.library-elsewhere .library-recent-title { color: var(--muted); }
+@media (max-width: 760px) { .library-recent-open { padding: 9px 10px; } }
 .library-dialog { width: min(640px, calc(100vw - 32px)); height: auto; max-height: min(86vh, 900px); }
 .library-intro { margin: 0 20px 8px; font-size: 13px; color: var(--muted); }
 .library-dialog .preprints-filters[hidden] { display: none; }
@@ -2028,6 +2039,16 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
    tap, as a sheet at the bottom (src/popover.js). */
 
 .tb-icon { display: none; width: 20px; height: 20px; flex: none; }
+/* Save for offline: a bookmark, filled once the paper is saved */
+#save-offline { display: inline-flex; align-items: center; gap: 5px; }
+#save-offline .tb-icon { display: block; width: 16px; height: 16px; }
+#save-offline[aria-pressed="true"] .save-offline-mark { fill: currentColor; }
+#save-offline[aria-pressed="true"] { color: var(--accent); }
+#save-offline[hidden] { display: none; }
+#settings .tb-label { display: none; }
+.toolbar .more-compact #settings { display: inline-flex; gap: 6px; padding: 6px 12px; }
+.more-compact #settings .tb-label { display: inline; }
+.toolbar .more-compact #settings svg { width: 18px; height: 18px; }
 .more-compact[hidden] { display: none; }
 .more-compact {
   display: flex;
@@ -2069,8 +2090,9 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   .toolbar button { min-height: 44px; min-width: 44px; font-size: 15px; padding: 6px 12px; }
   .toolbar .icon-button svg, .tb-icon { width: 22px; height: 22px; }
   .tb-icon { display: block; }
-  #toc-toggle .tb-label, #find .tb-label { display: none; }
-  #toc-toggle, #find { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
+  #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label { display: none; }
+  #save-offline .tb-icon { width: 22px; height: 22px; }
+  #toc-toggle, #find, #save-offline { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
   .toolbar .more-button { padding: 6px 12px; font-size: 18px; line-height: 1; }
   .more-group { order: 10; }
   .file-name { flex: 1 1 0; font-size: 13px; }

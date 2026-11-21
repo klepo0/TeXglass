@@ -1539,12 +1539,12 @@
 
   // --- phones and tablets ---------------------------------------------------------
   // A narrow window keeps a few large buttons in the toolbar (Open, Contents,
-  // Navigate, the looks, "…"); the others move to the top of the "…" menu and back
+  // Navigate, Save for offline, the looks, "…"); the others, Settings too, move to the top of the "…" menu and back
   // again when the window widens. The side panel and the margin notes become
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link']
+  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link', '#settings']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
@@ -1950,6 +1950,15 @@
       ? 'This paper is kept on this device and opens with no connection. Click to remove it'
       : 'Keep this paper on this device, figures and all, to read it with no connection';
     btn.disabled = !paper;
+    const tb = $('save-offline');
+    if (tb) {
+      tb.setAttribute('aria-pressed', String(saved));
+      tb.disabled = !paper;
+      tb.title = btn.title;
+      tb.setAttribute('aria-label', saved ? 'Saved for offline' : 'Save for offline');
+      tb.querySelector('.tb-label').textContent = saved ? 'Saved offline' : 'Save offline';
+    }
+    if (saved && store.get('texglass:last-saved') !== paper.key) markOpened(paper.key);
     store.set('texglass:last-saved', saved ? paper.key : '');
   }
 
@@ -1997,6 +2006,7 @@
   /** Open a saved paper from this device. */
   function openSaved(rec, quiet) {
     fileHandle = null;
+    markOpened(rec.key);
     const shown = load(rec.source, rec.name, rec.images, rec.gh || null);
     opened.arxiv = rec.arxiv || null;
     if (rec.nameTitle) fileName.title = rec.nameTitle;
@@ -2026,6 +2036,7 @@
         if (g.id()) store.set('texglass:gist-id', g.id());
         if (merged) writeLibraryList(Object.assign(Library.emptyList(), merged));
         if (libraryDialog && libraryDialog.open) renderLibrary();
+        if (arxivDialog.open) renderRecentSaved();
       } catch (e) {
         /* the notes' own sync reports problems with the gist */
       } finally {
@@ -2043,16 +2054,65 @@
     $('library-message').textContent = text;
     $('library-message').classList.toggle('warn', !!warn);
   }
-  async function renderLibrary() {
+  // When each saved paper was last opened here, so the Open dialog lists the recent ones first.
+  const LIBRARY_OPENED = 'texglass:library-opened';
+  function openedTimes() {
+    try { return JSON.parse(store.get(LIBRARY_OPENED) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function markOpened(key) {
+    const t = openedTimes();
+    t[key] = new Date().toISOString();
+    // keep the 200 most recent
+    const keep = Object.entries(t).sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, 200);
+    store.set(LIBRARY_OPENED, JSON.stringify(Object.fromEntries(keep)));
+  }
+
+  /**
+   * Every saved paper: those on this device, then those saved on other devices
+   * (from the synced list); most recently saved first. `here`: the records on this device.
+   */
+  async function libraryRows() {
     const db = await libraryDb;
     const here = db ? await db.all().catch(() => []) : [];
     libraryHere.clear();
     for (const r of here) libraryHere.add(r.key);
-    const list = readLibraryList();
-    // every paper on this device, then those saved on other devices (from the synced list)
     const rows = here.map((r) => ({ key: r.key, title: r.title, arxiv: r.arxiv, gh: r.gh && r.gh.links && r.gh.links.view, saved: r.saved, bytes: r.bytes, here: true }));
-    for (const e of Library.entries(list)) if (!libraryHere.has(e.key)) rows.push(Object.assign({}, e, { here: false }));
+    for (const e of Library.entries(readLibraryList())) if (!libraryHere.has(e.key)) rows.push(Object.assign({}, e, { here: false }));
     rows.sort((a, b) => (Date.parse(b.saved) || 0) - (Date.parse(a.saved) || 0));
+    return { rows, here };
+  }
+  const whereOf = (r) => (r.arxiv ? 'arXiv:' + r.arxiv : r.key.startsWith('github:') ? r.key.slice(7) : r.key.replace(/^tex:/, '').replace(/#.*/, ''));
+
+  /** The Open dialog's short list: the 5 saved papers saved or opened most recently. */
+  async function renderRecentSaved() {
+    const box = $('library-recent');
+    if (!box || !Library) return;
+    const { rows } = await libraryRows();
+    const opened = openedTimes();
+    const last = (r) => Math.max(Date.parse(r.saved) || 0, Date.parse(opened[r.key]) || 0);
+    const recent = rows.slice().sort((a, b) => last(b) - last(a)).slice(0, 5);
+    const ol = $('library-recent-list');
+    ol.textContent = '';
+    for (const r of recent) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'library-recent-open' + (r.here ? '' : ' library-elsewhere');
+      b.dataset.key = r.key;
+      const meta = r.here ? whereOf(r) : whereOf(r) + ' · on another device';
+      b.innerHTML = `<span class="library-recent-title">${mathText(r.title || whereOf(r))}</span><span class="arxiv-result-meta">${mathText(meta)}</span>`;
+      b.title = r.here ? 'Open this saved paper (offline too)' : 'Download this paper and keep it on this device too';
+      if (!r.here && !(r.arxiv || r.gh)) b.disabled = true;
+      b.addEventListener('click', () => openFromLibrary(r));
+      li.appendChild(b);
+      ol.appendChild(li);
+    }
+    $('arxiv-library').textContent = rows.length > recent.length ? `All saved papers (${rows.length})` : 'All saved papers';
+    box.hidden = !rows.length;
+  }
+
+  async function renderLibrary() {
+    const { rows, here } = await libraryRows();
     const q = libraryFilter.trim().toLowerCase();
     const shown = q ? rows.filter((r) => `${r.title} ${r.arxiv || ''} ${r.key}`.toLowerCase().includes(q)) : rows;
     $('library-filters').hidden = rows.length < 7;
@@ -2066,7 +2126,7 @@
       const open = document.createElement('button');
       open.type = 'button';
       open.className = 'preprint-open';
-      const where = r.arxiv ? 'arXiv:' + r.arxiv : r.key.startsWith('github:') ? r.key.slice(7) : (r.key.replace(/^tex:/, '').replace(/#.*/, ''));
+      const where = whereOf(r);
       const meta = r.here
         ? [where, Library.formatSize(r.bytes || 0), r.saved && 'saved ' + fmtDate(r.saved)]
         : [where, 'saved on another device'];
@@ -2101,13 +2161,13 @@
     if (rows.length && gistToken()) foot += ' The list syncs with your notes on GitHub.';
     else if (rows.length && NotesSync) foot += ' Sign in under Sync notes with GitHub to see this list on your other devices.';
     $('library-foot').textContent = foot;
-    $('library-hint').hidden = !rows.length;
     updateLibraryButton();
   }
 
   async function openFromLibrary(r) {
     if (r.here) {
       libraryDialog.close();
+      if (arxivDialog.open) arxivDialog.close();
       await openSavedKey(r.key);
       return;
     }
@@ -2145,6 +2205,7 @@
 
   if (Library && NotesSync && libraryDialog) {
     $('library-save').addEventListener('click', () => { saveForOffline(); setMenu(false); });
+    $('save-offline').addEventListener('click', () => saveForOffline());
     $('library-open').addEventListener('click', () => { setMenu(false); showLibrary(); });
     $('arxiv-library').addEventListener('click', showLibrary);
     $('library-close').addEventListener('click', () => libraryDialog.close());
@@ -2152,14 +2213,13 @@
     $('library-search').addEventListener('input', (e) => { libraryFilter = e.target.value; renderLibrary(); });
     libraryDb.then((db) => (db ? db.keys() : [])).then((keys) => {
       for (const k of keys) libraryHere.add(k);
-      $('library-hint').hidden = !keys.length && !Library.entries(readLibraryList()).length;
       updateLibraryButton();
     }).catch(() => {});
     window.addEventListener('online', () => syncLibrary());
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncLibrary(); });
     setTimeout(syncLibrary, 1500);
   } else {
-    for (const id of ['library-save', 'library-open']) if ($(id)) $(id).hidden = true;
+    for (const id of ['library-save', 'library-open', 'save-offline']) if ($(id)) $(id).hidden = true;
   }
 
   // --- reading progress -------------------------------------------------------------
@@ -2812,6 +2872,7 @@
 
   function openArxivDialog(value) {
     if (value != null) arxivInput.value = value;
+    if (Library && NotesSync) renderRecentSaved();
     if (!arxivDialog.open) {
       if (arxivDialog.showModal) arxivDialog.showModal();
       else arxivDialog.setAttribute('open', '');
