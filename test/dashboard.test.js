@@ -27,6 +27,15 @@ test('figures that did not show are counted by file type', () => {
   assert.equal(report.figureKind('(image did not load)'), '(image did not load)');
 });
 
+test('papers are grouped by year, read from the corpus or the arXiv id', () => {
+  assert.equal(report.yearOf({ id: '2609.02755' }), 2026);
+  assert.equal(report.yearOf({ id: 'math/0403047' }), 2004);
+  assert.equal(report.yearOf({ id: 'hep-th/9711200' }), 1997);
+  assert.equal(report.yearOf({ id: 'x', year: 2011 }), 2011);
+  assert.equal(report.yearBucket(2004), 'before 2008');
+  assert.equal(report.yearBucket(2026), '2024 on');
+});
+
 test('a paper is OK, has issues, is broken, or has no source', () => {
   assert.equal(report.classify({ id: 'a', kind: 'tex', blocks: 5, ms: 1000 }).status, 'ok');
   const p = report.classify({ id: 'b', kind: 'tex', blocks: 5, ms: 25000, mathErrors: ['Undefined control sequence: \\foo', 'Undefined control sequence: \\foo'], placeholders: ['[image: fig1]', '[axis diagram]'], warnings: ['Unknown command \\frob.', 'Undefined reference "x".'] });
@@ -47,7 +56,11 @@ test('a run lists what got worse, what got better, and the macros behind the mos
     { id: 'b', kind: 'tex', blocks: 3, ms: 1000, mathErrors: ['Undefined control sequence: \\foo'], packages: ['amsmath'] },
     { id: 'c', kind: 'tex', blocks: 3, ms: 1000, packages: ['amsmath'] },
   ], corpus, null, { date: '2026-11-20T02:00:00Z' });
-  assert.deepEqual(night1.summary, { papers: 3, ok: 2, issues: 1, broken: 0, nosource: 0, slow: 0, medianMs: 1000 });
+  assert.equal(night1.summary.ok, 2);
+  assert.equal(night1.summary.issues, 1);
+  assert.equal(night1.summary.medianMs, 1000);
+  assert.equal(night1.summary.clean, 2 / 3);
+  assert.equal(night1.summary.byType.math, 1);
   assert.deepEqual(night1.changes, []);
   assert.equal(night1.history.length, 1);
 
@@ -65,6 +78,11 @@ test('a run lists what got worse, what got better, and the macros behind the mos
   assert.equal(night2.changes[night2.changes.length - 1].id, 'b', 'worse news first');
   assert.equal(night2.papers.find((p) => p.id === 'a').since, '2026-11-21T02:00:00Z');
   assert.equal(night2.history.length, 2);
+  assert.equal(night2.history[1].worse, 2);
+  assert.equal(night2.history[1].better, 1);
+  assert.equal(night2.summary.byType.timeout, 1);
+  assert.equal(night2.slowest[0].id, 'c');
+  assert.deepEqual(night2.groups.field.map((g) => [g.key, g.papers, g.broken]).sort(), [['cs', 1, 0], ['maths', 1, 0], ['physics', 1, 1]]);
   assert.deepEqual(night2.top.math.map((e) => [e.key, e.papers.length]).sort(), [['\\bar', 1], ['\\foo', 1]]);
   assert.equal(night2.top.packages[0].key, 'amsmath');
   assert.equal(night2.top.packages[0].used, 3);

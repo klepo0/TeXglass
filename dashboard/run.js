@@ -150,13 +150,15 @@ async function renderOne(browser, paper, src, timeoutMs, shots) {
 function stepSummary(r) {
   const s = r.summary;
   const lines = [`## Render dashboard`, '',
-    `${s.papers} papers: **${s.ok} OK**, **${s.issues} with issues**, **${s.broken} broken**, ${s.slow} slow, ${s.nosource} without source. Median load ${((s.medianMs || 0) / 1000).toFixed(1)} s.`, ''];
+    `Clean-render rate **${Math.round((s.clean || 0) * 100)}%**. ${s.papers} papers: **${s.ok} OK**, **${s.issues} with issues**, **${s.broken} broken**, ${s.slow} slow, ${s.nosource} without source. Median load ${((s.medianMs || 0) / 1000).toFixed(1)} s.`, ''];
   const worse = r.changes.filter((c) => c.change === 'worse');
   if (worse.length) {
     lines.push(`### Worse than the last run (${worse.length})`, '');
     for (const c of worse.slice(0, 30)) lines.push(`- ${c.id}: ${c.from} → ${c.to}${c.fresh && c.fresh.length ? ', new: `' + c.fresh.join('`, `') + '`' : ''}`);
     lines.push('');
   }
+  const better = r.changes.filter((c) => c.change === 'better');
+  if (better.length) lines.push(`${better.length} papers better than the last run, ${better.filter((c) => c.to === 'ok').length} of them now OK.`, '');
   if (r.top.math.length) lines.push('### Most common maths errors', '', ...r.top.math.slice(0, 10).map((e) => `- \`${e.key}\`: ${e.papers.length} papers`), '');
   lines.push('Full results: https://klepo0.github.io/TeXglass/dashboard/', '');
   return lines.join('\n');
