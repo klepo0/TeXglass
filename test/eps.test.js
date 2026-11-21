@@ -102,3 +102,69 @@ test('arXiv import draws .eps figures as SVG unless a picture of the same name i
   assert.equal(resolve('hex'), 'blob:hex');
   assert.equal(resolve('plot'), 'blob:plot');
 });
+
+test('pictures inside EPS files: image data in the file itself, colour images, masks and JPEGs', () => {
+  const pngOf = (svg) => {
+    const m = /href="data:image\/png;base64,([^"]+)"/.exec(svg);
+    return m ? Buffer.from(m[1], 'base64') : null;
+  };
+  // a 2×2 grey image, read with readhexstring as Level 1 programs do
+  const grey = Eps.toSvg(`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 0 20 20
+/picstr 2 string def
+20 20 scale
+2 2 8 [2 0 0 -2 0 2] { currentfile picstr readhexstring pop } image
+00ff
+ff00
+showpage
+`);
+  assert.ok(grey && !grey.partial, 'drawn in full');
+  const png = pngOf(grey.svg);
+  assert.ok(png && png.slice(1, 4).toString() === 'PNG', 'a PNG inside');
+  assert.match(grey.svg, /<image width="2" height="2" preserveAspectRatio="none" transform="matrix\(10 0 0 10 0 -20\)"/);
+  // the drawing after the data still runs
+  const after = Eps.toSvg(`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 0 20 20
+gsave 1 1 8 [1 0 0 1 0 0] currentfile /ASCII85Decode filter false 3 colorimage
+s8W-!~>
+grestore
+0 0 moveto 20 20 lineto stroke
+`);
+  assert.ok(after && !after.partial);
+  assert.match(after.svg, /<image /);
+  assert.match(after.svg, /<path d="M0,0L20,-20"/);
+  // a Level 2 image dictionary with a mask in the current colour
+  const mask = Eps.toSvg(`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 0 8 1
+1 0 0 setrgbcolor 8 1 scale
+<< /ImageType 1 /Width 8 /Height 1 /BitsPerComponent 1 /ImageMatrix [8 0 0 -1 0 1] /Decode [0 1]
+   /DataSource currentfile /ASCIIHexDecode filter >> imagemask
+0f>
+`);
+  assert.ok(mask && !mask.partial);
+  assert.ok(pngOf(mask.svg));
+  // a JPEG goes in as it is
+  const jpeg = Eps.toSvg(`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 0 4 4
+/DeviceRGB setcolorspace
+<< /ImageType 1 /Width 4 /Height 4 /BitsPerComponent 8 /ImageMatrix [1 0 0 -1 0 4] /Decode [0 1 0 1 0 1]
+   /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter >> image
+FFD8FFE000104A464946FFD9>
+`);
+  assert.ok(jpeg);
+  assert.match(jpeg.svg, /href="data:image\/jpeg;base64,\/9j\/4AAQSkZJRv\/Z"/);
+});
+
+test('printer state queries, StandardEncoding, resources and //immediate names', () => {
+  const r = Eps.toSvg(`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 0 10 10
+currentglobal false setglobal pop currentpacking pop currentscreen pop pop pop
+/F /Times-Roman findfont dup length dict copy def
+StandardEncoding 65 get /A eq { 0 0 moveto 10 10 lineto stroke } if
+/MyProcs 5 dict dup begin /go { 0 10 moveto 10 0 lineto stroke } def end /ProcSet defineresource pop
+/MyProcs /ProcSet findresource begin go end
+/x { 1 } def /y { //x } def
+`);
+  assert.ok(r && !r.partial, 'nothing failed');
+  assert.equal((r.svg.match(/<path /g) || []).length, 2);
+});

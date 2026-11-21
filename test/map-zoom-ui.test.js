@@ -78,7 +78,15 @@ test('M opens the larger map, which zooms and pans', { skip: !chromium && 'Playw
     assert.equal((await state()).level, '100%');
 
     // Ctrl + wheel zooms out at the pointer.
-    const box = await page.locator('.insight-dialog .dep-wrap').boundingBox();
+    // (the map may be redrawn just after a zoom; wait until it is on screen again)
+    const wrap = page.locator('.insight-dialog .dep-wrap');
+    let box = null;
+    for (let tries = 0; !box && tries < 50; tries++) {
+      await wrap.waitFor({ state: 'visible' });
+      box = await wrap.boundingBox();
+      if (!box) await page.waitForTimeout(100);
+    }
+    assert.ok(box, 'the map is on screen');
     await page.mouse.move(box.x + 300, box.y + 100);
     await page.keyboard.down('Control');
     await page.mouse.wheel(0, 200);

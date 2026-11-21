@@ -95,8 +95,9 @@ async function renderOne(browser, paper, src, timeoutMs, shots) {
       const msg = document.getElementById('arxiv-message');
       if (msg && msg.classList.contains('warn') && msg.textContent) return true;
       const named = /^arXiv-/.test(document.getElementById('file-name').textContent);
-      const rendered = document.querySelector('#preview .src-block, #preview .render-error');
-      return named && rendered && performance.now() - window.__changed > 1500;
+      const rendered = document.querySelector('#preview .src-block, #preview .render-error, #preview .empty-doc');
+      const drawing = document.documentElement.dataset.pdfFigures; // PDF figures still being drawn
+      return named && rendered && !drawing && performance.now() - window.__changed > 1500;
     }, null, { timeout: timeoutMs, polling: 250 }).then(() => 'done', () => 'timeout'), timeoutMs + 5000);
     raw.ms = Date.now() - started - 1500; // less the quiet time waited for
     if (done === 'timeout') {
@@ -134,6 +135,7 @@ async function renderOne(browser, paper, src, timeoutMs, shots) {
     if (shots) await withTimeout(page.screenshot({ path: path.join(shots, paper.id.replace(/\//g, '_') + '.png'), fullPage: false }), 15000);
     if (seen.error) raw.error = seen.error.slice(0, 300);
     if (!raw.blocks && pageErrors.length) raw.error = 'Script error: ' + pageErrors[0].slice(0, 200);
+    if (!raw.blocks && !raw.error) raw.error = 'Nothing was rendered: the page is empty';
     return raw;
   } catch (e) {
     raw.error = 'Run error: ' + e.message.split('\n')[0].slice(0, 200);
