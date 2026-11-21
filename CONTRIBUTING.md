@@ -1,5 +1,14 @@
 # Contributing
 
+## Where the code is
+
+The converter is `src/texglass.js`, dependency-free and shared by the web
+viewer, the CLI and the VS Code extension. Diagrams live in `src/tikz.js` and
+`src/diagrams.js`, editing aids in `src/editor.js`, HTML export in
+`src/export.js`. `npm start` serves the web viewer (a static page, no build
+step) and `npm test` runs the tests. The render dashboard is described in
+[dashboard/README.md](dashboard/README.md).
+
 ## Keep the guide up to date
 
 [docs/GUIDE.md](docs/GUIDE.md) describes every user-visible feature, keyboard
