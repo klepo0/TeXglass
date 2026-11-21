@@ -17,6 +17,7 @@ for (const [from, to] of [
   ['src/find.js', 'find.js'],
   ['src/zoom.js', 'zoom.js'],
   ['src/scroll.js', 'scroll.js'],
+  ['src/popover.js', 'popover.js'],
   ['src/copytex.js', 'copytex.js'],
   ['src/margin.js', 'margin.js'],
   ['src/notes-sync.js', 'notes-sync.js'],

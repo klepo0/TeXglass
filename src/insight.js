@@ -1390,6 +1390,17 @@
     let popView = null; // the map view whose node the popover previews
     let under = null; // the formula the pointer is on
 
+    /** Put the popover by `el`, all of it inside the window (src/popover.js when loaded). */
+    function placePop(el) {
+      const P = (document_.defaultView || {}).TeXglassPopover;
+      if (P) return P.place(pop, el);
+      const r = el.getBoundingClientRect();
+      const width = pop.offsetWidth;
+      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
+      const h = pop.offsetHeight;
+      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+    }
+
     /** Hide the popover. A timer that hides it late leaves a pending show alone. */
     function hidePop(late) {
       if (late !== true) clearTimeout(showTimer);
@@ -1454,12 +1465,10 @@
       pop.replaceChildren(body);
       pop.hidden = false;
       popFor = el;
-      const r = el.getBoundingClientRect();
       const width = Math.min(520, window.innerWidth - 32);
       pop.style.width = width + 'px';
-      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-      const h = pop.offsetHeight;
-      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+      // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+      placePop(el);
     }
 
     doc.addEventListener('mouseover', (e) => {
@@ -1536,7 +1545,6 @@
       pop.hidden = false;
       popFor = g;
       popView = view;
-      const r = g.getBoundingClientRect();
       let width = Math.min(560, window.innerWidth - 32);
       pop.style.width = width + 'px';
       let extra = 0;
@@ -1547,9 +1555,8 @@
         width = Math.min(width + extra + 2, window.innerWidth - 32);
         pop.style.width = width + 'px';
       }
-      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-      const h = pop.offsetHeight;
-      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+      // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+      placePop(g);
     }
 
     function wirePreviews(view) {
