@@ -135,8 +135,6 @@ with its arXiv id. To work on the code, see [CONTRIBUTING.md](CONTRIBUTING.md);
 `npm start` serves the web viewer at http://localhost:8000 and `npm test` runs
 the tests.
 
-TeXglass was called TeXdown until November 2026; settings carry over.
-
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE): free for any noncommercial use,
