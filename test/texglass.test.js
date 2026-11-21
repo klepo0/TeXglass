@@ -702,3 +702,37 @@ test('a paper\'s own \\text made of \\mbox, and its own \\char, do not send KaTe
 \newcommand{\top}{\mbox{\footnotesize$\Lambda$}}\begin{document}$\top + \text{a} \neq b$\end{document}`);
   assert.doesNotMatch(r.html, /math-error|katex-error/);
 });
+
+test('enumitem labels with commands, nested braces, \\ref, ref=, start= and resume render cleanly', () => {
+  const { html, warnings } = plain(String.raw`
+\begin{theorem}\label{thm:x} Claim.\end{theorem}
+\begin{enumerate}[wide,itemsep=2pt,label={\upshape(\ref{thm:x}\alph*)}]
+\item\label{p1} first
+\item second
+\end{enumerate}
+\begin{enumerate}[resume*]
+\item\label{p3} third
+\end{enumerate}
+\begin{enumerate}[label=\textbf{Step \arabic*.}, ref=S\arabic*, start=4]
+\item\label{s4} go
+\end{enumerate}
+\begin{enumerate}[label={\upshape(\roman*)}]
+\item\label{r1} one
+\item two
+\end{enumerate}
+\begin{enumerate}[resume]
+\item\label{r3} three
+\end{enumerate}
+See \ref{p1}, \ref{p3}, \ref{s4}, \ref{r1}, \ref{r3}.`);
+  const t = text(html);
+  assert.doesNotMatch(t, /upshape|textbf|alph|roman/);
+  assert.match(t, /\(1a\)\s*first/);
+  assert.match(t, /\(1b\)\s*second/);
+  assert.match(t, /\(1c\)\s*third/);
+  assert.match(html, /<strong>Step 4\.<\/strong>/);
+  assert.match(t, /\(i\)\s*one/);
+  assert.match(t, /\(ii\)\s*two/);
+  assert.match(t, /3\.\s*three/); // plain resume keeps the count, not the label
+  assert.match(t, /See \(1a\), \(1c\), S4, \(i\), 3\./);
+  assert.deepEqual(warnings, []);
+});

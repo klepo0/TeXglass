@@ -575,7 +575,6 @@
     placePopover(a, body);
   }
   function placePopover(a, body) {
-    const r = a.getBoundingClientRect();
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
     let extra = 0;
@@ -586,9 +585,8 @@
       width = Math.min(width + extra + 2, window.innerWidth - 32);
       popover.style.width = width + 'px';
     }
-    popover.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-    const h = popover.offsetHeight;
-    popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+    // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+    TeXglassPopover.place(popover, a);
   }
   preview.addEventListener('mouseover', (e) => {
     const a = e.target.closest('a.ref, .cite a');
@@ -689,7 +687,7 @@
   }
 
   function showToc() {
-    // With the Notation and Map tabs the panel has something to show even without sections.
+    // With the Map and Notation tabs the panel has something to show even without sections.
     const has = tocLinks.length > 0 || (!!insight && preview.childElementCount > 0);
     tocPane.hidden = !(tocWanted && has);
     tocToggle.disabled = !has;
@@ -788,7 +786,7 @@
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
     })
     : null;
-  // The side panel's tabs (Contents, Notation, Map) and its divider. The panel's tab and
+  // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
   // width are kept apart from the full viewer's, since this panel is usually narrower.
   if (insight) {
     const sideStore = {

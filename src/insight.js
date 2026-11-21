@@ -3,7 +3,8 @@
  * preview:
  *
  *   - notation on hover: resting the pointer on a formula shows where its
- *     notation comes from (the paper's own macros, and symbols defined with :=);
+ *     notation comes from (the paper's own macros, symbols defined with :=, and
+ *     symbols the text introduces in words: "let X be", "denote by X", "where X is");
  *   - a dependency map: which results each theorem's statement and proof refer to;
  *   - a notation index: the paper's macros and defined symbols, with first uses;
  *   - "What does this use?": a button by each result's heading lights up the
@@ -103,8 +104,7 @@
     return depth === 0 ? s : '';
   }
 
-  /** A key for matching a symbol inside other formulas: no spaces, no optional braces around one token. */
-  const keyOf = (s) => s.replace(/\s+/g, '').replace(/\{(\\?[A-Za-z0-9]+)\}/g, '$1');
+
 
   /**
    * The symbol a formula defines, as in "A := B", "B =: A" or "A \coloneqq B",
@@ -117,6 +117,422 @@
     const s = reversed ? cleanSymbol(tex.slice(m.index + m[0].length, pieceEnd(tex, m.index + m[0].length))) : cleanSymbol(tex.slice(pieceStart(tex, m.index), m.index));
     if (!s || s.length > 60 || /[=<>]|\\(le|ge|leq|geq|in|subset|to)\b/.test(s)) return null;
     return s;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Symbols the text introduces: "let X be", "denote by X", "where X is"
+  // ---------------------------------------------------------------------------
+
+  const SKIP_TOKENS = /^\\(left|right|[bB]ig+[lr]?|middle|displaystyle|textstyle|scriptstyle|limits|nolimits|[,;:! ]|quad|qquad|thinspace|medspace|thickspace|enspace|nonumber|notag)$/;
+  // commands whose braced argument is words, not symbols: kept whole as one token
+  const WORD_ARGS = /^\\(text[a-z]*|mbox|hbox|operatorname\*?|mathrm|label|tag|begin|end|eqref|ref)$/;
+  // commands that make a different symbol out of the one they decorate
+  const DECOR = /^\\(math[a-z]+|bm|boldsymbol|pmb|hat|widehat|tilde|widetilde|bar|overline|underline|vec|overrightarrow|dot|ddot|check|breve|acute|grave|mathring|Bbb|frak|cal|scr|bf|it|sf|rm)$/;
+
+  /** A formula's TeX as tokens: spacing dropped, braces around a single token removed. */
+  function texTokens(tex) {
+    const raw = String(tex).match(/\\[A-Za-z@]+\*?|\\.|\S/g) || [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const t = raw[i];
+      if (SKIP_TOKENS.test(t)) continue;
+      if (WORD_ARGS.test(t) && raw[i + 1] === '{') {
+        let depth = 0;
+        let j = i + 1;
+        for (; j < raw.length; j++) {
+          if (raw[j] === '{') depth++;
+          else if (raw[j] === '}' && --depth === 0) break;
+        }
+        out.push(raw.slice(i, j + 1).join(''));
+        i = j;
+        continue;
+      }
+      out.push(t);
+    }
+    // {x} -> x, repeatedly ({{x}} too)
+    for (let changed = true; changed;) {
+      changed = false;
+      for (let i = 0; i + 2 < out.length; i++) {
+        if (out[i] === '{' && out[i + 2] === '}' && out[i + 1] !== '{' && out[i + 1] !== '}') {
+          out.splice(i, 3, out[i + 1]);
+          changed = true;
+        }
+      }
+    }
+    return out;
+  }
+
+  const SLOT = { slot: true }; // stands for any argument
+  const ANY = { any: true }; // stands for any index
+
+  /**
+   * What to look for when a symbol is used later, as tokens: "\Phi(x)" is looked
+   * for as \Phi; "X_t" as X_ with any index, since X_s is the same process; and a
+   * small letter inside delimiters is an argument, so \|u\|_{H^1} also matches
+   * \|f + g\|_{H^1}.
+   */
+  function patternOf(sym) {
+    let t = texTokens(sym);
+    // drop an argument list of letters: f(x), \Phi(x, y)
+    const open = t.indexOf('(');
+    if (open > 0 && t[t.length - 1] === ')' && t.slice(open + 1, -1).every((x) => /^[a-z,]$|^\\[a-z]+$/.test(x))) t = t.slice(0, open);
+    t = t.slice();
+    // a single-letter index is a variable: X_t also matches X_s and X_{t+1}
+    if (t.length >= 3 && t[t.length - 2] === '_' && /^[a-z]$/.test(t[t.length - 1])) t[t.length - 1] = ANY;
+    // one small letter between other tokens, not an index or a power: an argument
+    const small = t.map((x, k) => (typeof x === 'string' && /^[a-z]$/.test(x) && k > 0 && k < t.length - 1 && t[k - 1] !== '_' && t[k - 1] !== '^' ? k : -1)).filter((k) => k >= 0);
+    if (small.length === 1 && t.filter((x) => typeof x === 'string').length >= 3) t[small[0]] = SLOT;
+    return { toks: t };
+  }
+
+  /** The end of one argument starting at f[i]: a token, or a braced group. */
+  function argEnd(f, i) {
+    if (f[i] !== '{') return i + 1;
+    let depth = 0;
+    for (let k = i; k < f.length; k++) {
+      if (f[k] === '{') depth++;
+      else if (f[k] === '}' && --depth === 0) return k + 1;
+    }
+    return -1;
+  }
+
+  /** Where pattern toks (from k on) matches f from i: the end, or -1. */
+  function matchFrom(f, i, toks, k) {
+    for (; k < toks.length; k++) {
+      const p = toks[k];
+      if (p === ANY) {
+        if (i >= f.length || /^[)\]},;=]$/.test(f[i])) return -1;
+        i = argEnd(f, i);
+        if (i < 0) return -1;
+      } else if (p === SLOT) {
+        // one argument or more, up to the rest of the pattern, braces balanced
+        let j = i;
+        for (let n = 0; n < 24 && j >= 0 && j < f.length; n++) {
+          j = argEnd(f, j);
+          if (j < 0) return -1;
+          const e = matchFrom(f, j, toks, k + 1);
+          if (e >= 0) return e;
+        }
+        return -1;
+      } else {
+        if (f[i] !== p) return -1;
+        i++;
+      }
+    }
+    return i;
+  }
+
+  /** Where symbol pattern p occurs in token list f: [start, end) pairs. */
+  function occurrences(f, p) {
+    const out = [];
+    if (!p.toks.length || typeof p.toks[0] !== 'string') return out;
+    for (let i = 0; i < f.length; i++) {
+      if (f[i] !== p.toks[0]) continue;
+      const end = matchFrom(f, i, p.toks, 0);
+      if (end < 0) continue;
+      // not when it is the argument of \mathcal, \hat and the like: \mathcal X is another symbol
+      let j = i - 1;
+      while (j >= 0 && f[j] === '{') j--;
+      if (j >= 0 && DECOR.test(f[j])) continue;
+      out.push([i, end]);
+      i = end - 1;
+    }
+    return out;
+  }
+
+  const RELATIONS = /^(=|<|>|:|\\in|\\subset|\\subseteq|\\subsetneq|\\colon|\\le|\\leq|\\ge|\\geq|\\leqslant|\\geqslant|\\sim|\\equiv|\\coloneqq|\\coloneq|\\eqqcolon|\\to|\\mapsto|\\ni|\\notin|\\neq|\\ne|\\approx|\\simeq|\\cong|\\supset|\\supseteq|\\triangleq|\\defeq|\\stackrel|\\overset|\\sqsubset|\\prec|\\succ)$/;
+
+  /**
+   * The symbols on the left of a formula that a sentence introduces:
+   * "X" from "X = …", "x, y" from "x, y \in X", "X_t" from "(X_t)_{t \ge 0}".
+   * Returns { syms, rel } where rel is the first relation ('' if none).
+   */
+  function leftSymbols(tex) {
+    // a displayed environment: its first row
+    const s = String(tex).trim().replace(/^\\begin\s*\{[A-Za-z*]+\}(\s*\{[^{}]*\})*/, '').replace(/[.,;]\s*$/, '');
+    let depth = 0;
+    let cut = s.length;
+    let rel = '';
+    const re = /\\[A-Za-z@]+\*?|\\.|:=|[^\s]/g;
+    let m;
+    while ((m = re.exec(s))) {
+      const t = m[0];
+      if (t === '{' || t === '(' || t === '[' || t === '\\{' || t === '\\langle') depth++;
+      else if (t === '}' || t === ')' || t === ']' || t === '\\}' || t === '\\rangle') depth--;
+      else if (depth === 0 && (t === ':=' || t === '&' || t === '\\\\' || RELATIONS.test(t))) {
+        cut = m.index;
+        rel = t;
+        break;
+      }
+    }
+    const lhs = s.slice(0, cut);
+    const pieces = [];
+    depth = 0;
+    let from = 0;
+    for (let i = 0; i < lhs.length; i++) {
+      const c = lhs[i];
+      if (c === '{' || c === '(' || c === '[') depth++;
+      else if (c === '}' || c === ')' || c === ']') depth--;
+      else if (c === ',' && depth === 0) { pieces.push(lhs.slice(from, i)); from = i + 1; }
+    }
+    pieces.push(lhs.slice(from));
+    const syms = [];
+    for (let p of pieces) {
+      p = cleanSymbol(p);
+      // a family (X_t)_{t \ge 0} names X_t
+      const fam = /^\((.+)\)\s*_\s*(\{.*\}|\\?[A-Za-z0-9])$/.exec(p);
+      if (fam) p = cleanSymbol(fam[1]);
+      // a pair (\gamma, \eta) names both
+      const pair = /^\((.+)\)$/.exec(p);
+      if (pair && pair[1].includes(',')) {
+        const inner = leftSymbols(pair[1]).syms;
+        syms.push(...inner);
+        continue;
+      }
+      if (!p || p.length > 40) continue;
+      const toks = texTokens(p);
+      // an expression, not a name: X + Y, 2, \sum ..., a sentence in \text
+      if (!toks.length || toks.length > 10) continue;
+      if (toks.some((t) => /^[+\-*/=|]$|^\\(cdot|times|sum|int|prod|frac|sqrt|lim|sup|inf|max|min|circ|otimes|oplus|cup|cap|setminus|wedge|vee|ldots|dots|cdots|infty)$/.test(t) || /^\\(text|mbox|operatorname)/.test(t))) continue;
+      if (/^[0-9.]+$/.test(toks.join(''))) continue;
+      if (!toks.some((t) => /[A-Za-z]/.test(t))) continue;
+      if (STANDARD.test(toks.join(''))) continue;
+      syms.push(p);
+    }
+    return { syms, rel };
+  }
+
+  // symbols every paper uses the same way: "we write \partial for …" must not tag every derivative
+  const STANDARD = /^(\\(partial|nabla|infty|emptyset|varnothing|ell|hbar|imath|jmath|Re|Im|forall|exists|cdot|dots|ldots)|\\mathbb[A-Z]|\\mathbb\{[A-Z]\}|[deio])$/;
+
+  /** One plain letter (x, A, \mu): the kind of symbol papers reuse for anything. */
+  const isLetter = (sym) => {
+    const t = texTokens(sym);
+    return t.length === 1 && /^[A-Za-z]$|^\\(alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|ell)$/.test(t[0]);
+  };
+  const isLatinLetter = (sym) => /^[A-Za-z]$/.test(texTokens(sym).join(''));
+  const isSmallLatin = (sym) => /^[a-z]$/.test(texTokens(sym).join(''));
+
+  /*
+   * How strongly a phrase introduces the symbol next to it:
+   *   'strong'  "denote by X", "X denotes", "we write X for", "set X = …", "define X …"
+   *   'let'     "let X be …", "let X = …"
+   *   'weak'    "where X is …", "called X"
+   * A plain small letter (x, n, t) counts only when the phrase is strong, and a
+   * single Latin letter (x, C) not when it is weak: papers reuse those for anything.
+   */
+  const ABBREV = /(?:\b(?:e\.g|i\.e|cf|resp|etc|vs|viz|fig|figs|eq|eqs|thm|lem|prop|cor|def|sec|ch|no|ref|refs|al|approx|esp|resp)|\b[A-Z])\.$/i;
+
+  function cueOf(before, after, tex) {
+    const b = before.replace(/\s+/g, ' ').toLowerCase().replace(/[\s(]+$/, '');
+    const a = after.replace(/\s+/g, ' ').toLowerCase().replace(/^[\s)]+/, '');
+    const { syms, rel } = leftSymbols(tex);
+    if (!syms.length) return null;
+    const hasEq = rel === '=' || rel === ':=' || /^\\(coloneqq|coloneq|triangleq|defeq|stackrel|overset)$/.test(rel);
+    const ifNext = /^(if|iff|when|whenever|provided|in case)\b/.test(a);
+    let tier = null;
+    if (/\b(denote|denoted|denotes|denoting)\s+by$|\b(is|are|be|will be|shall be)\s+(denoted|written|abbreviated)(\s+by)?$|\bdenote it by$|\bnotation$/.test(b)) tier = 'strong';
+    else if (/\b(we|i|let us|one can|and|then|to|now|also|shall|will|first|here|finally|simply)\s+(write|use|define|introduce)$|^(write|define|introduce)$|[.,;:]\s*(write|define)$/.test(b) && !ifNext) tier = 'strong';
+    else if (/(^|\b(we|and|now|then|also|first|here|finally|let us|us|to)\s+|[.,;:]\s*)(set|put)$/.test(b) && hasEq) tier = 'strong';
+    else if (/^(denotes|denote|will denote|shall denote|stands for|stand for|will stand for|is defined|are defined|is given by|is shorthand|is short for|is an abbreviation)\b/.test(a) && !/\b(if|whether|that|since|because)$/.test(b)) tier = 'strong';
+    else if (/(^|[^a-z])let$/.test(b)) tier = hasEq ? 'strong' : 'let';
+    else if (/(^|[^a-z])(where|here|with)$/.test(b) && (/^(denotes|denote|stands for|stand for)\b/.test(a))) tier = 'strong';
+    else if (/(^|[^a-z])(where|here)$/.test(b) && !/\b(case|cases|situation|setting|regime|one|those|ones|points?|times?)\s+where$/.test(b) && (/^(is|are)\s+(the|a|an|some|our|given|defined|fixed)\b/.test(a) || hasEq)) tier = 'weak';
+    else if (/\b(which|that) we (call|denote)$|\b(we|and) call$|\b(called|named|denoted)$/.test(b) && !/^-/.test(a)) tier = 'weak';
+    if (!tier) return null;
+    const keep = syms.filter((s) => (tier === 'strong' ? true : tier === 'let' ? !isSmallLatin(s) : !isLatinLetter(s)));
+    return keep.length ? { tier, syms: keep } : null;
+  }
+
+  /**
+   * The symbols a run of text introduces. parts: text strings and { tex } for
+   * the formulas in it, in reading order. Returns [{ at, tier, syms }] with at
+   * the index of the formula in parts.
+   */
+  function proseDefinitions(parts) {
+    const out = [];
+    let lastTier = null; // "let X, Y and Z be": the cue carries over a list
+    const fits = (tier, s) => (tier === 'strong' ? true : tier === 'let' ? !isSmallLatin(s) : !isLatinLetter(s));
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (!p || typeof p !== 'object' || p.tex == null) continue;
+      const before = typeof parts[i - 1] === 'string' ? parts[i - 1] : '';
+      const after = typeof parts[i + 1] === 'string' ? parts[i + 1] : '';
+      const tier0 = lastTier;
+      lastTier = null;
+      if (definedSymbol(p.tex)) continue; // := says it already
+      let cue = cueOf(before.slice(-80), after.slice(0, 80), p.tex);
+      if (!cue && tier0 && /^\s*(,|,?\s*and|,?\s*or)?\s*$/i.test(before)) {
+        const keep = leftSymbols(p.tex).syms.filter((s) => fits(tier0, s));
+        if (keep.length) cue = { tier: tier0, syms: keep };
+      }
+      if (cue) out.push({ at: i, tier: cue.tier, syms: cue.syms });
+      lastTier = cue ? cue.tier : /(^|[^a-z])let\s*$/i.test(before) ? 'let' : (tier0 && /^\s*(,|,?\s*and|,?\s*or)?\s*$/i.test(before) ? tier0 : null);
+    }
+    return out;
+  }
+
+  // Parts of a paragraph that are not its running text.
+  const NOT_TEXT = '.thm-head, .proof-head, .item-label, sup.fn, .footnote, .footnotes, .tg-margin, .marginnote, .uses-btn, script, style, .katex-mathml';
+  const HARD = '\u0001'; // a paragraph break: no sentence runs across it
+  const MATH = ''; // a formula, in the flat text of a run
+
+  /**
+   * The runs of running text on the page: paragraphs and the displayed formulas
+   * between them, in order, each as { items, text } where items are
+   * { node, at } (text nodes), { math, at } (formulas) or { gap, at }, and text is
+   * the run flattened (a formula as one character).
+   */
+  function textRuns(doc) {
+    const containers = new Set();
+    doc.querySelectorAll('p, .math-display[data-tex]').forEach((el) => {
+      if (el.parentElement && !el.closest(INSIDE_POPOVER) && !el.parentElement.closest('.math, .katex')) containers.add(el.parentElement);
+    });
+    const runs = [];
+    for (const box of containers) {
+      let run = null;
+      const flush = () => { if (run && run.items.some((x) => x.math)) runs.push(run); run = null; };
+      for (const child of box.children) {
+        const isP = child.tagName === 'P';
+        const isMath = child.matches('.math-display[data-tex]');
+        if (!isP && !isMath) { flush(); continue; }
+        if (!run) run = { items: [], text: '' };
+        const add = (item, s) => { item.at = run.text.length; run.items.push(item); run.text += s; };
+        if (isMath) { add({ math: child }, MATH); continue; }
+        if (run.text) add({ gap: true }, run.items.length && run.items[run.items.length - 1].math ? ' ' : HARD);
+        const walk = (n) => {
+          for (const c of n.childNodes) {
+            if (c.nodeType === 3) add({ node: c }, c.nodeValue);
+            else if (c.nodeType === 1) {
+              if (c.matches('.math[data-tex]')) add({ math: c }, MATH);
+              else if (!c.matches(NOT_TEXT)) walk(c);
+            }
+          }
+        };
+        walk(child);
+      }
+      flush();
+    }
+    return runs;
+  }
+
+  /** [start, end) of the sentence around position i of a run's flat text. */
+  function sentenceAround(text, i) {
+    const ends = (k) => {
+      const c = text[k];
+      if (c === HARD) return true;
+      if (c !== '.' && c !== '?' && c !== '!') return false;
+      if (k + 1 < text.length && !/\s/.test(text[k + 1])) return false;
+      return !ABBREV.test(text.slice(Math.max(0, k - 6), k + 1));
+    };
+    let s = i;
+    while (s > 0 && !ends(s - 1)) s--;
+    while (s < i && /\s/.test(text[s])) s++;
+    let e = i + 1;
+    while (e < text.length && !ends(e)) e++;
+    if (e < text.length && text[e] !== HARD) e++;
+    return [s, e];
+  }
+
+  /** A copy of part of a run, [s, e) of its flat text, with the formula `mark` marked. */
+  function copyRange(run, s, e, marks) {
+    const owner = marks[0].ownerDocument;
+    const boundary = (pos) => {
+      for (const it of run.items) {
+        if (it.node && it.at <= pos && pos <= it.at + it.node.nodeValue.length) return [it.node, pos - it.at];
+        if (it.math && it.at === pos) return ['before', it.math];
+        if (it.math && it.at + 1 === pos) return ['after', it.math];
+      }
+      return null;
+    };
+    const a = boundary(s);
+    const b = boundary(e);
+    if (!a || !b) return null;
+    const range = owner.createRange();
+    try {
+      if (a[0] === 'before') range.setStartBefore(a[1]); else if (a[0] === 'after') range.setStartAfter(a[1]); else range.setStart(a[0], a[1]);
+      if (b[0] === 'before') range.setEndBefore(b[1]); else if (b[0] === 'after') range.setEndAfter(b[1]); else range.setEnd(b[0], b[1]);
+    } catch (err) { return null; }
+    marks.forEach((m) => m.setAttribute('data-insight-def', ''));
+    const frag = range.cloneContents();
+    marks.forEach((m) => m.removeAttribute('data-insight-def'));
+    const box = owner.createElement('div');
+    box.className = 'insight-sentence';
+    box.appendChild(frag);
+    box.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+    box.querySelectorAll(NOT_TEXT.replace(', .katex-mathml', '')).forEach((x) => x.remove());
+    box.querySelectorAll('[data-insight-def]').forEach((x) => { x.removeAttribute('data-insight-def'); x.classList.add('insight-defined'); });
+    return box;
+  }
+
+  /** The words of the sentence that introduces a symbol, for filtering. */
+  function sentenceText(d) {
+    const [a, b] = sentenceAround(d.run.text, d.at);
+    return d.run.text.slice(a, b).replace(/[\uE000\u0001]/g, ' ');
+  }
+
+  /** The sentence that introduces a symbol, as a copy to show (clipped when long), marking `marks` (default: its formula). */
+  function sentenceOf(d, marks) {
+    const text = d.run.text;
+    let [s, e] = sentenceAround(text, d.at);
+    let pre = false;
+    let post = false;
+    if (e - s > 360) {
+      if (d.at - s > 160) { s = text.indexOf(' ', d.at - 160) + 1 || s; pre = true; }
+      if (e - d.at > 200) { const k = text.lastIndexOf(' ', d.at + 200); if (k > d.at) { e = k; post = true; } }
+    }
+    const box = copyRange(d.run, s, e, marks || [d.el]);
+    if (!box) return null;
+    if (pre) box.insertBefore(box.ownerDocument.createTextNode('… '), box.firstChild);
+    if (post) box.appendChild(box.ownerDocument.createTextNode(' …'));
+    return box;
+  }
+
+  /** Where a definition holds: { within, until } (an element it stays inside, the heading it stops at). */
+  function scopeOf(el, sym, heads) {
+    const single = isLetter(sym);
+    const proof = el.closest('.proof');
+    if (proof) return { within: proof, until: null };
+    const thm = el.closest('.theorem');
+    // inside a theorem's statement a plain letter is the theorem's own; a definition's is the paper's
+    if (thm && single && !/^(definition|notation|convention|assumption|assumptions|setting|setup|hypothesis|standing)/i.test(thmName(thm))) return { within: thm, until: null };
+    if (!isSmallLatin(sym)) return { within: null, until: null }; // until the paper says otherwise
+    // a small letter (x, n, t) holds until the next heading of its section's level or above
+    let level = 9;
+    let until = null;
+    for (const h of heads) {
+      const before = !!(h.compareDocumentPosition(el) & 4);
+      if (before) level = Number(h.tagName[1]) || level;
+      else if ((Number(h.tagName[1]) || 9) <= level) { until = h; break; }
+    }
+    return { within: null, until };
+  }
+
+  /** The symbols the text introduces, as index entries, in document order. */
+  function textDefinitions(doc) {
+    const heads = Array.from(doc.querySelectorAll('h1, h2, h3, h4')).filter((h) => !h.closest(INSIDE_POPOVER));
+    const out = [];
+    for (const run of textRuns(doc)) {
+      // the parts proseDefinitions reads: text between formulas, and the formulas
+      const parts = [];
+      const maths = [];
+      let text = '';
+      for (const it of run.items) {
+        if (it.math) {
+          parts.push(text, { tex: it.math.dataset.tex || '', display: it.math.classList.contains('math-display') });
+          maths.push(it);
+          text = '';
+        } else text += it.node ? it.node.nodeValue : ' ';
+      }
+      parts.push(text);
+      for (const d of proseDefinitions(parts)) {
+        const it = maths[(d.at - 1) / 2];
+        for (const tex of d.syms) {
+          out.push({ tex, key: texTokens(tex).join(' '), el: it.math, run, at: it.at, tier: d.tier, text: true, scope: scopeOf(it.math, tex, heads), pat: patternOf(tex) });
+        }
+      }
+    }
+    return out;
   }
 
   /** The name a theorem-like block goes by on the page: "Lemma 2.3". */
@@ -459,15 +875,18 @@
   }
 
   /**
-   * The paper's notation: { macros, symbols, byName }.
+   * The paper's notation: { macros, symbols, defs, byName }.
    * macros: [{ name, mac, first, count }] for the macros its formulas use;
-   * symbols: [{ tex, key, el }] for the symbols defined with := and the like.
+   * defs: every symbol the paper defines, in document order, with :=  and the
+   * like or in words ("let X be", "denote by X"): [{ tex, key, el, pat, scope, text }];
+   * symbols: the ones the index lists (each once, leaving out those a proof or a
+   * statement keeps to itself).
    */
   function notationIndex(doc, definitions) {
     const macros = (definitions && definitions.macros) || {};
     const byName = new Map();
-    const symbols = [];
-    const seen = new Set();
+    const heads = Array.from(doc.querySelectorAll('h1, h2, h3, h4')).filter((h) => !h.closest(INSIDE_POPOVER));
+    const defs = [];
     for (const el of formulas(doc)) {
       const tex = el.dataset.tex;
       for (const name of commandsIn(tex)) {
@@ -481,17 +900,53 @@
       }
       if (tex.length < 400) {
         const s = definedSymbol(tex);
-        if (s) {
-          const key = keyOf(s);
-          if (!seen.has(key)) {
-            seen.add(key);
-            symbols.push({ tex: s, key, el });
-          }
-        }
+        if (s) defs.push({ tex: s, key: texTokens(s).join(' '), el, pat: patternOf(s), scope: scopeOf(el, s, heads), text: false });
       }
     }
+    let inText = [];
+    try { inText = textDefinitions(doc); } catch (e) { /* never let a reading aid break the page */ }
+    if (inText.length) {
+      defs.push(...inText);
+      defs.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
+    }
+    const symbols = [];
+    const seen = new Set();
+    for (const d of defs) {
+      if (d.scope.within || seen.has(d.key)) continue;
+      seen.add(d.key);
+      symbols.push(d);
+    }
     // in the order a reader meets them
-    return { macros: Array.from(byName.values()), symbols, byName };
+    return { macros: Array.from(byName.values()), symbols, defs, byName };
+  }
+
+  /** Whether definition d holds at formula el (which comes after it). */
+  function holdsAt(d, el) {
+    if (d.el === el || !(d.el.compareDocumentPosition(el) & 4)) return false;
+    if (d.scope.within && !d.scope.within.contains(el)) return false;
+    if (d.scope.until && !(el.compareDocumentPosition(d.scope.until) & 4)) return false;
+    return true;
+  }
+
+  /**
+   * The definitions a formula uses: for each symbol, the latest definition that
+   * holds there; a symbol inside a longer one found too (X in X_t) is left out, unless it
+   * sits in the longer one's argument.
+   */
+  function definitionsUsed(defs, el) {
+    const f = texTokens(el.dataset.tex || '');
+    const own = definedSymbol(el.dataset.tex || '');
+    const ownKey = own ? texTokens(own).join(' ') : null;
+    const best = new Map(); // key -> { d, spans }
+    for (const d of defs) {
+      if (d.key === ownKey || !holdsAt(d, el)) continue;
+      const spans = occurrences(f, d.pat);
+      if (spans.length) best.set(d.key, { d, spans });
+    }
+    const found = Array.from(best.values());
+    return found
+      .filter((x) => !found.some((y) => y !== x && !y.d.pat.toks.includes(SLOT) && x.spans.every(([a, b]) => y.spans.some(([c, e]) => c <= a && b <= e && e - c > b - a))))
+      .map((x) => x.d);
   }
 
   /** "\name{·}{·}": a macro the way the index shows it, arguments as dots. */
@@ -551,6 +1006,15 @@
     c.removeAttribute('id');
     c.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
     return c;
+  }
+
+  /** What shows a definition: the sentence that introduces the symbol, or the formula with :=. */
+  function shownOf(d, marks) {
+    if (d.text) {
+      const box = sentenceOf(d, marks);
+      if (box) return box;
+    }
+    return copyOf(d.el);
   }
 
   // ---------------------------------------------------------------------------
@@ -926,6 +1390,17 @@
     let popView = null; // the map view whose node the popover previews
     let under = null; // the formula the pointer is on
 
+    /** Put the popover by `el`, all of it inside the window (src/popover.js when loaded). */
+    function placePop(el) {
+      const P = (document_.defaultView || {}).TeXglassPopover;
+      if (P) return P.place(pop, el);
+      const r = el.getBoundingClientRect();
+      const width = pop.offsetWidth;
+      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
+      const h = pop.offsetHeight;
+      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+    }
+
     /** Hide the popover. A timer that hides it late leaves a pending show alone. */
     function hidePop(late) {
       if (late !== true) clearTimeout(showTimer);
@@ -940,16 +1415,15 @@
       const tex = el.dataset.tex || '';
       const idx = getIndex();
       const out = [];
-      const key = keyOf(tex);
-      const own = definedSymbol(tex);
-      for (const s of idx.symbols) {
-        if (s.el === el || s.key.length < 2 || (own && keyOf(own) === s.key)) continue;
-        if (!key.includes(s.key)) continue;
-        // a one-letter command like \phi must not match inside \phi_n's neighbour \varphi
-        const at = key.indexOf(s.key);
-        const after = key[at + s.key.length];
-        if (/^\\[A-Za-z]+$/.test(s.key) && after && /[A-Za-z]/.test(after)) continue;
-        out.push({ kind: 'symbol', s });
+      // symbols one sentence introduces together share one note
+      const bySentence = new Map();
+      for (const d of definitionsUsed(idx.defs, el)) {
+        const at = d.text ? sentenceAround(d.run.text, d.at)[0] : -1;
+        const same = d.text && out.find((n) => n.s.run === d.run && bySentence.get(n) === at);
+        if (same) { same.group.push(d); continue; }
+        const n = { kind: 'symbol', s: d, group: [d] };
+        bySentence.set(n, at);
+        out.push(n);
       }
       const macros = [];
       for (const name of commandsIn(tex)) {
@@ -964,7 +1438,7 @@
     function noteHtml(n, el) {
       if (n.kind === 'symbol') {
         return `<div class="insight-note"><div class="insight-note-what"></div>` +
-          `<div class="insight-note-where">Defined in <a href="#" data-go="s">${esc(where(n.s.el))}</a></div></div>`;
+          `<div class="insight-note-where">${n.s.text ? `${n.group.map((d) => `<span class="insight-sym" data-sym="${esc(d.tex)}"><code>${esc(d.tex)}</code></span>`).join(', ')} introduced in` : 'Defined in'} <a href="#" data-go="s">${esc(where(n.s.el))}</a></div></div>`;
       }
       const e = n.e;
       const sample = sampleOf(e);
@@ -982,7 +1456,7 @@
       const boxes = body.querySelectorAll('.insight-note');
       notes.forEach((n, k) => {
         const box = boxes[k];
-        if (n.kind === 'symbol') box.querySelector('.insight-note-what').appendChild(copyOf(n.s.el));
+        if (n.kind === 'symbol') box.querySelector('.insight-note-what').appendChild(shownOf(n.s, n.group.map((d) => d.el)));
         const go = box.querySelector('a[data-go]');
         if (go) go._target = n.kind === 'symbol' ? n.s.el : n.e.first;
       });
@@ -991,12 +1465,10 @@
       pop.replaceChildren(body);
       pop.hidden = false;
       popFor = el;
-      const r = el.getBoundingClientRect();
       const width = Math.min(520, window.innerWidth - 32);
       pop.style.width = width + 'px';
-      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-      const h = pop.offsetHeight;
-      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+      // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+      placePop(el);
     }
 
     doc.addEventListener('mouseover', (e) => {
@@ -1073,7 +1545,6 @@
       pop.hidden = false;
       popFor = g;
       popView = view;
-      const r = g.getBoundingClientRect();
       let width = Math.min(560, window.innerWidth - 32);
       pop.style.width = width + 'px';
       let extra = 0;
@@ -1084,9 +1555,8 @@
         width = Math.min(width + extra + 2, window.innerWidth - 32);
         pop.style.width = width + 'px';
       }
-      pop.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-      const h = pop.offsetHeight;
-      pop.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+      // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+      placePop(g);
     }
 
     function wirePreviews(view) {
@@ -1147,7 +1617,7 @@
       return div;
     }
 
-    // --- views: the side panel's Notation and Map tabs, and the large dialog --------
+    // --- views: the side panel's Map and Notation tabs, and the large dialog --------
 
     // A view is a place the notation index or the map is drawn in:
     // { body, tab, selected, side, leave() } where leave() runs before a jump.
@@ -1227,7 +1697,7 @@
       const body = view.body;
       const idx = getIndex();
       if (!idx.macros.length && !idx.symbols.length) {
-        body.innerHTML = '<p class="insight-empty">This document defines no notation of its own: no macros used in its formulas, and no symbols defined with := .</p>' + (view.side ? hoverBox() : '');
+        body.innerHTML = '<p class="insight-empty">This document defines no notation of its own: no macros used in its formulas, and no symbols defined with := or in words such as "let X denote".</p>' + (view.side ? hoverBox() : '');
         return;
       }
       let html = '<input class="insight-filter" type="search" placeholder="Filter by command or text" aria-label="Filter the notation">';
@@ -1245,7 +1715,7 @@
       if (idx.symbols.length) {
         html += `<h3>Defined in the text <span class="insight-count">${idx.symbols.length}</span></h3><ol class="insight-symbols">`;
         idx.symbols.forEach((s, k) => {
-          html += `<li data-k="s${k}" data-text="${esc(s.el.dataset.tex.toLowerCase())}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><a href="#" data-s="${k}">${esc(where(s.el))}</a></li>`;
+          html += `<li data-k="s${k}" data-text="${esc((s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase())}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><a href="#" data-s="${k}">${esc(where(s.el))}</a></li>`;
         });
         html += '</ol>';
       }
@@ -1256,7 +1726,7 @@
         const s = idx.symbols[Number(a.dataset.s)];
         a.dataset.go = '';
         a._target = s.el;
-        a.previousElementSibling.appendChild(copyOf(s.el));
+        a.previousElementSibling.appendChild(shownOf(s));
       });
       renderSymbols(body);
     }
@@ -1653,8 +2123,8 @@
       dialog.innerHTML =
         '<div class="insight-head">' +
         '<div class="insight-tabs" role="tablist">' +
-        '<button type="button" role="tab" data-tab="notation">Notation</button>' +
         '<button type="button" role="tab" data-tab="deps">Map</button>' +
+        '<button type="button" role="tab" data-tab="notation">Notation</button>' +
         '</div>' +
         hoverBox() +
         '<button type="button" class="insight-close" aria-label="Close">×</button>' +
@@ -1979,11 +2449,12 @@
       focused: () => (focusState ? { id: focusState.id, dir: focusState.dir } : null),
       graph: getGraph,
       index: getIndex,
+      notesFor,
     };
   }
 
   /**
-   * The side panel: tabs Contents, Notation and Map over the table of
+   * The side panel: tabs Contents, Map and Notation over the table of
    * contents, and a divider that drags to resize it (the width is remembered).
    *
    *   TeXglassInsight.sidePanel({
@@ -1998,7 +2469,7 @@
     const tabs = doc.createElement('div');
     tabs.className = 'side-tabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = [['toc', 'Contents'], ['notation', 'Notation'], ['deps', 'Map']]
+    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation']]
       .map(([k, label]) => `<button type="button" role="tab" data-side-tab="${k}">${label}</button>`).join('');
     const title = o.head.querySelector('.toc-pane-title');
     if (title) title.replaceWith(tabs);
@@ -2099,7 +2570,7 @@
     };
   }
 
-  const api = { attach, sidePanel, dependencyGraph, notationIndex, definedSymbol, layout, foldGroups, mentionsIn };
+  const api = { attach, sidePanel, dependencyGraph, notationIndex, definedSymbol, proseDefinitions, texTokens, patternOf, occurrences, layout, foldGroups, mentionsIn };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassInsight = api;
 })(typeof self !== 'undefined' ? self : this);
