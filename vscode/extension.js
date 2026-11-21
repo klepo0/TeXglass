@@ -1395,6 +1395,9 @@ function activate(context) {
     // The Contents and Hide/Show proofs buttons in the preview's title bar.
     vscode.commands.registerCommand('texglass.find', () => preview && preview.post({ type: 'find', mode: 'find' })),
     vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
+    // Back to where the preview was before a jump, and forward again (Alt+Left / Alt+Right).
+    vscode.commands.registerCommand('texglass.back', () => preview && preview.post({ type: 'history', dir: -1 })),
+    vscode.commands.registerCommand('texglass.forward', () => preview && preview.post({ type: 'history', dir: 1 })),
     vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
     vscode.commands.registerCommand('texglass.showNotation', () => preview && preview.post({ type: 'insight', tab: 'notation' })),
