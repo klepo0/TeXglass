@@ -1792,10 +1792,12 @@
           }
           if (g.id()) store.set('texglass:gist-id', g.id());
           store.set('texglass:gist-error', '');
+          store.set('texglass:gist-synced', new Date().toISOString());
         } catch (e) {
           store.set('texglass:gist-error', e.message);
           if (!quiet || e.auth) flashStatus('Notes not synced: ' + e.message);
         }
+        updateSyncMenu();
       } else if (!quiet) {
         flashStatus(gistToken() ? 'Offline: notes will sync later' : 'Notes saved in this browser');
       }
@@ -1851,54 +1853,133 @@
   }
 
   // The "Sync notes" dialog: a GitHub token that may use gists, kept in this browser only.
+  // Once it is given, syncing is automatic (on opening a paper, a moment after each
+  // change, on coming back to the tab), and the dialog and menu say so: "Sync now"
+  // is only a quiet extra.
   const syncDialog = $('notes-sync-dialog');
+  /** "just now", "5 min ago", "3 h ago", or the date. */
+  function syncedAgo(iso) {
+    const t = Date.parse(iso || '');
+    if (!t) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 45) return 'just now';
+    if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min ago`;
+    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+    return 'on ' + new Date(t).toLocaleDateString();
+  }
+  /** One line on the state of GitHub sync, or '' when not signed in. */
+  function syncStateLine() {
+    if (!gistToken()) return '';
+    const err = store.get('texglass:gist-error');
+    if (err) return 'Syncing automatically · last try failed: ' + err;
+    const ago = syncedAgo(store.get('texglass:gist-synced'));
+    return 'Syncing automatically' + (ago ? ' · last synced ' + ago : '');
+  }
+  /** The … menu item reads "Syncing with GitHub" once signed in, its tooltip the state line. */
+  function updateSyncMenu() {
+    const item = $('notes-sync');
+    if (!item) return;
+    const on = !!gistToken();
+    item.textContent = on ? 'Syncing with GitHub…' : 'Sync notes with GitHub…';
+    if (on) {
+      const hint = document.createElement('span');
+      hint.className = 'more-hint';
+      hint.textContent = 'automatic';
+      item.appendChild(hint);
+    }
+    item.title = on
+      ? syncStateLine() + '. Notes and saved papers sync on their own; click for details or to sign out'
+      : 'Keep your highlights and notes in step on all your devices, through a private gist on your GitHub account. Sign in once; after that it is automatic';
+  }
+  function renderSyncDialog(note) {
+    const on = !!gistToken();
+    const err = store.get('texglass:gist-error');
+    $('notes-sync-title').textContent = on ? 'Syncing with GitHub' : 'Sync notes with GitHub';
+    const state = $('notes-sync-state');
+    state.hidden = !on;
+    state.textContent = syncStateLine();
+    state.classList.toggle('failed', !!(on && err));
+    $('notes-sync-about').innerHTML = on
+      ? 'Your highlights, notes, reading progress and list of saved papers sync <strong>on their own</strong> with the private gist <code>texglass-notes.json</code> in your GitHub account: when you open a paper, a few seconds after each change, and when you come back to this tab. There is nothing more to do here.'
+      : 'Your highlights, notes, reading progress and list of saved papers go to a private gist, <code>texglass-notes.json</code>, in your own GitHub account, and come back on every device where you sign in. Nothing passes through any other server. Notes made on two devices at once are merged. <strong>You sign in once</strong>: after that everything syncs automatically.';
+    $('notes-sync-token-box').hidden = on;
+    $('notes-sync-token').value = '';
+    $('notes-sync-token').placeholder = 'ghp_… or github_pat_…';
+    $('notes-sync-signout').hidden = !on;
+    $('notes-sync-replace').hidden = !on;
+    $('notes-sync-now').hidden = !on;
+    $('notes-sync-cancel').hidden = on;
+    $('notes-sync-go').textContent = on ? 'Done' : 'Sign in';
+    $('notes-sync-message').textContent = note || '';
+  }
   function showSyncDialog() {
     if (!syncDialog) return;
-    const on = !!gistToken();
-    $('notes-sync-token').value = '';
-    $('notes-sync-token').placeholder = on ? 'Signed in. Paste a new token to replace it' : 'ghp_… or github_pat_…';
-    $('notes-sync-signout').hidden = !on;
-    $('notes-sync-go').textContent = on ? 'Sync now' : 'Sign in and sync';
-    const err = store.get('texglass:gist-error');
-    $('notes-sync-message').textContent = on
-      ? (err ? 'Last sync failed: ' + err : 'Your notes sync with a private gist, texglass-notes.json, in your GitHub account.')
-      : '';
+    renderSyncDialog();
     syncDialog.showModal();
+  }
+  /** Sync everything now (notes of every paper, the saved list); '' or the error. */
+  async function syncAll() {
+    if (navigator.onLine === false) return 'you are offline; it will sync once you are back online';
+    await syncNotes(true, true);
+    await syncLibrary();
+    updateSyncMenu();
+    return store.get('texglass:gist-error') || '';
   }
   if (syncDialog) {
     $('notes-sync-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fresh = $('notes-sync-token').value.trim();
-      if (!fresh && !gistToken()) {
-        $('notes-sync-message').textContent = 'Paste a token first.';
+      if (!fresh) {
+        if (gistToken()) syncDialog.close(); // Done
+        else $('notes-sync-message').textContent = 'Paste a token first.';
         return;
       }
-      if (fresh) {
-        store.set('texglass:gist-token', fresh);
-        store.remove('texglass:gist-id');
-      }
-      $('notes-sync-message').textContent = 'Syncing…';
+      const had = gistToken();
+      store.set('texglass:gist-token', fresh);
+      store.remove('texglass:gist-id');
+      store.set('texglass:gist-error', '');
+      $('notes-sync-message').textContent = 'Signing in and syncing…';
       $('notes-sync-go').disabled = true;
-      await syncNotes(false, true);
-      await syncLibrary();
+      const err = await syncAll();
       $('notes-sync-go').disabled = false;
-      const err = store.get('texglass:gist-error');
       if (err) {
+        if (had) store.set('texglass:gist-token', had);
+        else store.remove('texglass:gist-token');
+        store.set('texglass:gist-error', '');
+        updateSyncMenu();
         $('notes-sync-message').textContent = 'Could not sync: ' + err;
-        if (fresh) store.remove('texglass:gist-token');
-      } else {
-        syncDialog.close();
+        return;
       }
+      // Stay open a moment to say the one thing readers miss: it is automatic from now on.
+      renderSyncDialog('Signed in. You won’t need to come back here: syncing just happens.');
+      flashStatus('Signed in to GitHub: notes now sync automatically');
     });
     $('notes-sync-cancel').addEventListener('click', () => syncDialog.close());
+    $('notes-sync-replace').addEventListener('click', () => {
+      $('notes-sync-token-box').hidden = false;
+      $('notes-sync-replace').hidden = true;
+      $('notes-sync-go').textContent = 'Use this token';
+      $('notes-sync-token').focus();
+    });
+    $('notes-sync-now').addEventListener('click', async () => {
+      $('notes-sync-now').disabled = true;
+      $('notes-sync-message').textContent = 'Syncing…';
+      const err = await syncAll();
+      $('notes-sync-now').disabled = false;
+      renderSyncDialog(err ? 'Could not sync: ' + err : 'Up to date.');
+    });
     $('notes-sync-signout').addEventListener('click', () => {
       store.remove('texglass:gist-token');
       store.remove('texglass:gist-id');
       store.remove('texglass:gist-error');
+      store.remove('texglass:gist-synced');
       syncDialog.close();
+      updateSyncMenu();
       flashStatus('Signed out. Notes stay in this browser.');
     });
   }
+  updateSyncMenu();
+  if ($('more')) $('more').addEventListener('click', updateSyncMenu); // keep "last synced" fresh
 
   if ($('notes-toggle')) {
     $('notes-toggle').addEventListener('click', () => {
@@ -2035,6 +2116,7 @@
         const merged = await g.sync(Library.LIST_KEY, readLibraryList());
         if (g.id()) store.set('texglass:gist-id', g.id());
         if (merged) writeLibraryList(Object.assign(Library.emptyList(), merged));
+        store.set('texglass:gist-synced', new Date().toISOString());
         if (libraryDialog && libraryDialog.open) renderLibrary();
         if (arxivDialog.open) renderRecentSaved();
       } catch (e) {
@@ -2158,7 +2240,7 @@
     else if (!shown.length) librarySay('No saved paper matches.');
     else librarySay('');
     let foot = rows.length ? `${here.length} paper${here.length === 1 ? '' : 's'} on this device, ${Library.formatSize(here.reduce((n, r) => n + (r.bytes || 0), 0))}.` : '';
-    if (rows.length && gistToken()) foot += ' The list syncs with your notes on GitHub.';
+    if (rows.length && gistToken()) foot += ' The list syncs automatically with your notes on GitHub.';
     else if (rows.length && NotesSync) foot += ' Sign in under Sync notes with GitHub to see this list on your other devices.';
     $('library-foot').textContent = foot;
     updateLibraryButton();

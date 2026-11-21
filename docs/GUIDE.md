@@ -327,14 +327,20 @@ Overleaf panel).
   Highlights and Notes…**. All of them read the same `paper.texglass.json`.
 - **Sync through GitHub**: notes go to a private gist, `texglass-notes.json`,
   in your own GitHub account (there is no TeXglass server), and come back
-  wherever you sign in. After one sign-in it syncs by itself: on opening a
-  paper, a few seconds after an edit, and when you come back to the tab.
-  - VS Code: **TeXglass: Sync Highlights and Notes with GitHub** uses VS
-    Code's GitHub sign-in; **Stop Syncing Highlights and Notes with GitHub**
-    ends it.
+  wherever you sign in. **You sign in once, and from then on it is
+  automatic**: it syncs on opening a paper, a few seconds after an edit, and
+  when you come back to the tab. There is no button you need to press.
+  - VS Code: run **TeXglass: Sync Highlights and Notes with GitHub** once; it
+    uses VS Code's GitHub sign-in. While a preview is open, the status bar
+    shows **Notes sync on** (its tooltip says when it last synced); click it
+    to sync right away or stop. **Stop Syncing Highlights and Notes with
+    GitHub** ends it.
   - Web viewer and browser extension: **Sync notes with GitHub…** in the
     **…** menu, then paste a token with only the `gist` scope (the dialog links
-    to the page that makes one). **Sign out** in the same dialog.
+    to the page that makes one). Once signed in, the menu item reads
+    **Syncing with GitHub… automatic**, and the dialog shows *Syncing automatically ·
+    last synced …*, a **Sync now** link (only to pull in another device's
+    change at once) and **Sign out**.
 - **Without GitHub**: the browser extension also syncs with your browser's own
   sync, and VS Code with Settings Sync.
 - Changes on two devices are merged note by note: the later edit wins, and a
@@ -441,7 +447,7 @@ install; after the first visit it opens and renders offline.
 - An arXiv paper you saved opens from its saved copy when you are offline or
   arXiv can't be reached, from Open, a `?arxiv=` link or a reload.
 - Signed in under **Sync notes with GitHub…**, the list (titles and links, not
-  the papers) travels with your notes. A paper saved on another device shows
+  the papers) travels with your notes, automatically. A paper saved on another device shows
   as *saved on another device*; **Download** fetches it from arXiv or GitHub
   and keeps it here too. Removing a paper takes it off the list everywhere.
 - Works for any open document (arXiv, GitHub, OAI preprints, your own files).
@@ -467,7 +473,7 @@ standalone page that works offline), **Show selected results…** (see
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
 rest** prints as shown), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
-notes with GitHub…** and **Reading progress**. At the very end, **Support
+notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Support
 TeXglass ☕** opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
 page.
 

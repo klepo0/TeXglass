@@ -43,7 +43,7 @@
   home-screen app that works offline.
 - **Your notes go with you.** Highlights, margin notes, reading progress and
   your list of saved papers sync through your own GitHub gist, with no
-  TeXglass server.
+  TeXglass server. Sign in once; after that it syncs automatically.
 - **Works offline and stays private.** Save papers for a train or a plane and
   read them with no connection. Your files never leave your browser or editor.
 
@@ -88,7 +88,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Write with a pen** in the margin on a tablet.
 - **Show selected results** and **print** exactly that view.
 - **Save for offline**: keep papers on your device and find them under **Saved papers**.
-- **Sync** notes through a private GitHub gist, your browser's sync or VS Code Settings Sync.
+- **Sync** notes automatically through a private GitHub gist (sign in once), your browser's sync or VS Code Settings Sync.
 
 ### Write
 

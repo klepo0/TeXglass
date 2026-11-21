@@ -560,7 +560,7 @@
         "texglass.studyTools": {
           "type": "boolean",
           "default": true,
-          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed. Export and import them with the TeXglass: Export/Import Highlights and Notes commands, and sync them between machines with TeXglass: Sync Highlights and Notes with GitHub (a private gist on your account); with VS Code's Settings Sync on, they also follow you to your other machines."
+          "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed. Export and import them with the TeXglass: Export/Import Highlights and Notes commands, and sync them between machines with TeXglass: Sync Highlights and Notes with GitHub (a private gist on your account; run it once and it syncs automatically from then on); with VS Code's Settings Sync on, they also follow you to your other machines."
         },
         "texglass.readingProgress": {
           "type": "boolean",
