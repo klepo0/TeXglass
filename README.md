@@ -21,6 +21,9 @@
 
 ## Key features
 
+Every feature, keyboard shortcut, VS Code command and setting is in the
+**[TeXglass guide](docs/GUIDE.md)**.
+
 The same reader runs in the VS Code extension, the web viewer and the arXiv
 browser extension:
 
