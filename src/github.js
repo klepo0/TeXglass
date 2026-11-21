@@ -299,6 +299,14 @@
             if (r) { images[p] = new Blob([r.svg], { type: 'image/svg+xml' }); break search; }
           }
         }
+        // a .pdf figure, drawn in the viewer by src/pdf.js
+        const isPdf = /\.pdf$/i.test(rel);
+        if (isPdf || !/\.[a-z]+$/i.test(rel)) {
+          for (const p of isPdf ? [rel] : [rel + '.pdf']) {
+            const blob = await get(rawUrl(ref, full(p)), 'blob');
+            if (blob) { images[p] = new Blob([blob], { type: 'application/pdf' }); break search; }
+          }
+        }
       }
     }
 

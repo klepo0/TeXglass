@@ -5,7 +5,8 @@
  *
  * The viewer's files are fetched from the network first, so a new version of
  * the site shows up on the next visit; the cache is only the fallback. KaTeX
- * never changes for a given version, so it comes from the cache first.
+ * never changes for a given version, so it comes from the cache first (and so
+ * does pdf.js, which is cached the first time a paper with PDF figures needs it).
  * Requests to other sites (arXiv, GitHub) are left alone.
  */
 'use strict';
@@ -33,7 +34,7 @@ const PRECACHE = [
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
   ...['arxiv', 'bib', 'cite', 'copytex', 'diagrams', 'editor', 'eps', 'export', 'find', 'github', 'insight', 'local', 'openai-math',
-    'margin', 'notes-sync', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
+    'margin', 'notes-sync', 'pdf', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
 ];
 
 if (typeof module === 'object' && module.exports) module.exports = { CACHE, PRECACHE };
@@ -57,7 +58,9 @@ if (typeof self !== 'undefined' && self.registration) {
     const url = new URL(req.url);
     if (url.origin !== self.location.origin) return;
 
-    if (url.pathname.includes('/vendor/katex/')) {
+    // pdf.js (vendor/pdfjs) is large and only needed for papers with PDF figures,
+    // so it is not fetched up front; once a paper has used it, it is kept like KaTeX.
+    if (url.pathname.includes('/vendor/katex/') || url.pathname.includes('/vendor/pdfjs/')) {
       event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => keep(req, res))));
       return;
     }

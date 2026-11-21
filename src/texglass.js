@@ -331,6 +331,16 @@
     '\\xspace': '',
     '\\MoveEqLeft': '',
     '\\intertext': '\\text{#1}',
+    // \mbox{…} in a formula is a box of text, which may hold maths of its own
+    // ($x = \mbox{$y$ if $z>0$}$); KaTeX has no \mbox, but its \text works the same.
+    '\\mbox': '\\text{#1}',
+    // \boldmath switches the maths inside a box to bold; KaTeX has no such switch.
+    '\\boldmath': '',
+    '\\unboldmath': '',
+    // dsfont's double-struck letters; KaTeX's \mathbb is the closest.
+    '\\mathds': '\\mathbb{#1}',
+    // \lefteqn{…}: its content takes no width, so the next line can start further left.
+    '\\lefteqn': '\\mathrlap{\\displaystyle #1}',
     '\\shortintertext': '\\text{#1}',
     // esint: the averaged integral ⨏
     '\\fint': '\\mathop{\\rlap{\\hspace{0.32em}\\raisebox{0.05em}{\\text{-}}}{\\int}}\\nolimits',
@@ -1061,13 +1071,13 @@
       let pre = '';
       let body = src;
       let bodyStart = 0;
-      const b = src.search(/\\begin\s*\{document\}/);
-      if (b >= 0) {
-        pre = src.slice(0, b);
-        bodyStart = src.indexOf('}', b) + 1;
+      const begin = documentMark(src, 'begin');
+      if (begin) {
+        pre = src.slice(0, begin.at);
+        bodyStart = begin.at + begin.length;
         body = src.slice(bodyStart);
-        const e = body.search(/\\end\s*\{document\}/);
-        if (e >= 0) body = body.slice(0, e);
+        const end = documentMark(body, 'end');
+        if (end) body = body.slice(0, end.at);
       }
       this.preamble = pre;
       this.ulemEmph = /\\usepackage\s*(?:\[(?![^\]]*\bnormalem\b)[^\]]*\])?\s*\{[^}]*\bulem\b[^}]*\}/.test(pre);
@@ -2501,6 +2511,25 @@
   // ---------------------------------------------------------------------------
   // More helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Where \begin{document} (or \end{document}) is: { at, length }, or null.
+   * Some papers hide it behind a macro of their own, as in
+   * \newcommand{\bd}{\begin{document}} … \bd, so the first use of such a macro counts too.
+   */
+  function documentMark(src, which) {
+    // the first one that is not inside such a definition
+    for (const m of src.matchAll(new RegExp(String.raw`\\${which}\s*\{document\}`, 'g'))) {
+      const line = src.slice(src.lastIndexOf('\n', m.index) + 1, m.index);
+      if (!/\\(?:(?:re)?newcommand|providecommand|[gex]?def)(?![A-Za-z@])/.test(line)) return { at: m.index, length: m[0].length };
+    }
+    const def = new RegExp(String.raw`\\(?:(?:re)?newcommand\*?\s*\{?\s*|def\s*)\\([A-Za-z]+)\s*\}?\s*\{\s*\\${which}\s*\{document\}\s*\}`).exec(src);
+    if (!def) return null;
+    const use = new RegExp(String.raw`\\${def[1]}(?![A-Za-z@])`, 'g');
+    use.lastIndex = def.index + def[0].length;
+    const m = use.exec(src);
+    return m ? { at: m.index, length: m[0].length } : null;
+  }
 
   function attachHead(head, content) {
     // Put a run-in heading ("Theorem 1.2.") inside the first paragraph.

@@ -658,3 +658,41 @@ Text.
   assert.match(els, /Note one\./);
   assert.match(els, /Keywords: alpha, beta/);
 });
+
+test('\\mbox in maths is a text box that may hold maths of its own; \\boldmath, \\mathds and \\lefteqn render', () => {
+  const cases = [
+    [String.raw`f(x)=1 \mbox{ if $x>0$, and } \mbox{0 otherwise}`, String.raw`f(x)=1 \text{ if $x>0$, and } \text{0 otherwise}`],
+    [String.raw`x_{\mbox{\scriptsize max}}`, String.raw`x_{\text{\scriptsize max}}`],
+    [String.raw`\mbox{\boldmath $v$}\cdot w`, String.raw`\text{$v$}\cdot w`],
+    [String.raw`\mathds{1}_A`, String.raw`\mathbb{1}_A`],
+    [String.raw`\lefteqn{a+b}`, String.raw`\mathrlap{\displaystyle a+b}`],
+  ];
+  for (const [src, hand] of cases) {
+    const r = realMath(String.raw`\begin{document}$` + src + String.raw`$\end{document}`);
+    assert.doesNotMatch(r.html, /math-error|katex-error/, src);
+    assert.ok(r.html.includes(handMath(hand)), src);
+  }
+  // the $ inside the box does not end the formula around it
+  const d = realMath(String.raw`\begin{document}\[ |x| = \mbox{$x$ for $x\ge 0$} \]\end{document}`);
+  assert.doesNotMatch(d.html, /math-error|katex-error/);
+  assert.equal((d.html.match(/class="katex-display"/g) || []).length, 1);
+});
+
+test('\\begin{document} inside a macro definition is not where the document starts; the macro is', () => {
+  const r = plain(String.raw`\documentclass{article}
+\newcommand{\bd}{\begin{document}}
+\newcommand{\ed}{\end{document}}
+\newcommand{\R}{\mathbb{R}}
+\begin{document}
+Hello $\R$.
+\end{document}`);
+  assert.match(text(r.html), /Hello \[I:\\R\]\./);
+  // and a paper that only ever starts it through the macro
+  const s = plain(String.raw`\def\bd{\begin{document}}
+\title{T}
+\bd
+Body text.
+\end{document}`);
+  assert.match(text(s.html), /Body text\./);
+  assert.doesNotMatch(text(s.html), /\\bd/);
+});

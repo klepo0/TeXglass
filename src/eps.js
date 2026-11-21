@@ -76,7 +76,14 @@
       }
       if (c === '{' || c === '}' || c === '[' || c === ']') { i++; return c === '[' || c === ']' ? name(c) : { t: 'brace', v: c }; }
       let j = i + 1;
-      if (c === '/') { if (src[j] === '/') j++; while (j < n && !DELIM.test(src[j])) j++; const v = src.slice(i, j).replace(/^\/+/, ''); i = j; return name(v, true); }
+      if (c === '/') {
+        const immediate = src[j] === '/'; // //name: the value the name has, not the name
+        if (immediate) j++;
+        while (j < n && !DELIM.test(src[j])) j++;
+        const v = src.slice(i, j).replace(/^\/+/, '');
+        i = j;
+        return immediate ? { t: 'name', v, lit: true, imm: true } : name(v, true);
+      }
       while (j < n && !DELIM.test(src[j])) j++;
       const w = src.slice(i, j);
       i = j;
@@ -97,11 +104,31 @@
       }
     }
     // procedures need the whole program; the top level runs token by token
-    return { next() {
-      const t = token();
-      if (t && t.t === 'brace') return t.v === '{' ? { t: 'proc', v: group() } : null;
-      return t;
-    } };
+    return {
+      next() {
+        const t = token();
+        if (t && t.t === 'brace') return t.v === '{' ? { t: 'proc', v: group() } : null;
+        return t;
+      },
+      // the program as a file (currentfile): data right after the token just read,
+      // less the one white-space character that ended that token
+      byte() {
+        return i >= n ? -1 : src.charCodeAt(i++);
+      },
+      skipSeparator() {
+        if (src[i] === '\r' && src[i + 1] === '\n') i += 2;
+        else if (/\s/.test(src[i] || '')) i++;
+      },
+      peek() {
+        return i >= n ? -1 : src.charCodeAt(i);
+      },
+      readLine() {
+        const e = src.slice(i).search(/\r\n?|\n/);
+        const line = e < 0 ? src.slice(i) : src.slice(i, i + e);
+        i = e < 0 ? n : i + e + (src[i + e] === '\r' && src[i + e + 1] === '\n' ? 2 : 1);
+        return line;
+      },
+    };
   }
 
   // --- matrices -----------------------------------------------------------------
@@ -132,9 +159,21 @@
   // Latin-1 characters PostScript names differently from Unicode in StandardEncoding
   const STD = { '\x27': '’', '\x60': '‘' };
 
+  // the glyph names of printable ASCII, for StandardEncoding (the rest are .notdef here)
+  const ENCODING = (() => {
+    const names = ('space exclam quotedbl numbersign dollar percent ampersand quoteright parenleft parenright asterisk plus comma ' +
+      'hyphen period slash zero one two three four five six seven eight nine colon semicolon less equal greater question at ' +
+      'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z bracketleft backslash bracketright asciicircum underscore quoteleft ' +
+      'a b c d e f g h i j k l m n o p q r s t u v w x y z braceleft bar braceright asciitilde').split(' ');
+    const out = new Array(256).fill('.notdef');
+    names.forEach((n, k) => { out[32 + k] = n; });
+    return out;
+  })();
+
   // --- the interpreter ------------------------------------------------------------
 
   function run(src) {
+    const sc = scan(src);
     const os = [];
     const gstack = [];
     const out = []; // SVG elements
@@ -244,6 +283,7 @@
     };
     function execToken(tok) {
       if (--budget < 0) throw new Quit('budget');
+      if (tok && tok.imm) { const v = lookup(tok); if (v === undefined) throw new Error('undefined ' + tok.v); os.push(v); return; }
       if (tok && tok.t === 'name' && !tok.lit) {
         const v = lookup(tok);
         if (v === undefined) {
@@ -373,7 +413,7 @@
     // arrays, strings, dictionaries
     def('array', () => { const n = num(); os.push({ t: 'arr', v: new Array(n).fill(NULL) }); });
     def('string', () => { const n = num(); os.push(str('\0'.repeat(n))); });
-    def('length', () => { const a = pop(); os.push(a.t === 'dict' ? a.m.size : a.t === 'name' ? a.v.length : a.v.length); });
+    def('length', () => { const a = pop(); os.push(a.t === 'font' ? 0 : a.t === 'dict' ? a.m.size : a.t === 'name' ? a.v.length : a.v.length); });
     def('get', () => {
       const k = pop(); const a = pop();
       if (a.t === 'dict') { const v = a.m.get(key(k)); if (v === undefined) throw new Error('undefined'); os.push(v); } else if (a.t === 'str') os.push(a.v.charCodeAt(k)); else os.push(a.v[k]);
@@ -401,6 +441,8 @@
     systemdict.m.set('/systemdict', systemdict);
     systemdict.m.set('/userdict', userdict);
     for (const n of ['statusdict', 'errordict', 'globaldict', '$error']) systemdict.m.set('/' + n, dict());
+    systemdict.m.set('/StandardEncoding', { t: 'arr', v: ENCODING.map((n) => name(n, true)) });
+    systemdict.m.set('/ISOLatin1Encoding', { t: 'arr', v: ENCODING.map((n) => name(n, true)) });
 
     // VM and graphics state
     def('save', () => { gstack.push(cloneGs(gs)); os.push({ t: 'save', depth: gstack.length }); });
@@ -415,8 +457,39 @@
     def('setlinejoin', () => { gs.join = num(); });
     def('setdash', () => { gs.dashOff = num(); const a = pop(); gs.dash = a.v.slice(); });
     def('currentdash', () => os.push({ t: 'arr', v: (gs.dash || []).slice() }, gs.dashOff));
-    for (const n of ['setmiterlimit', 'setflat', 'setstrokeadjust', 'setoverprint', 'setsmoothness', 'setpagedevice', 'setcolorspace', 'setscreen',
+    for (const n of ['setmiterlimit', 'setflat', 'setstrokeadjust', 'setoverprint', 'setsmoothness', 'setpagedevice', 'setscreen',
       'settransfer', 'setblackgeneration', 'setundercolorremoval', 'sethalftone', 'setcolorrendering', 'setglobal', 'setpacking', 'setshared']) def(n, () => { pop(); });
+    // state that only matters to a printer: report the defaults
+    def('currentglobal', () => os.push(false));
+    def('currentpacking', () => os.push(false));
+    def('currentshared', () => os.push(false));
+    def('currentoverprint', () => os.push(false));
+    def('currentstrokeadjust', () => os.push(false));
+    def('currentflat', () => os.push(1));
+    def('currentmiterlimit', () => os.push(10));
+    def('currentlinecap', () => os.push(gs.cap));
+    def('currentlinejoin', () => os.push(gs.join));
+    def('currentscreen', () => os.push(60, 45, { t: 'proc', v: [name('pop'), name('pop'), 0] }));
+    for (const n of ['currenttransfer', 'currentblackgeneration', 'currentundercolorremoval']) def(n, () => os.push({ t: 'proc', v: [] }));
+    def('currentcolortransfer', () => { for (let k = 0; k < 4; k++) os.push({ t: 'proc', v: [] }); });
+    def('setcolortransfer', () => { for (let k = 0; k < 4; k++) pop(); });
+    def('currentcolorscreen', () => { for (let k = 0; k < 4; k++) os.push(60, 45, { t: 'proc', v: [name('pop'), name('pop'), 0] }); });
+    def('setcolorscreen', () => { for (let k = 0; k < 12; k++) pop(); });
+    def('currenthalftone', () => os.push(dict()));
+    def('currentcolorrendering', () => os.push(dict()));
+    def('currentpagedevice', () => os.push(dict()));
+    def('currentcolorspace', () => os.push({ t: 'arr', v: [name('DeviceRGB', true)] }));
+    def('gstate', () => os.push({ t: 'gstate', g: cloneGs(gs) }));
+    def('currentgstate', () => { pop(); os.push({ t: 'gstate', g: cloneGs(gs) }); });
+    def('setgstate', () => { const g = pop(); if (g && g.t === 'gstate') gs = cloneGs(g.g); });
+    def('currentcmykcolor', () => { const [r, g, b] = gs.color; const k = 1 - Math.max(r, g, b); os.push(...(k >= 1 ? [0, 0, 0, 1] : [(1 - r - k) / (1 - k), (1 - g - k) / (1 - k), (1 - b - k) / (1 - k), k])); });
+    // resources (Level 2 procsets and categories): kept in a dictionary per category
+    const resources = new Map();
+    const category = (c) => { const k = key(c); if (!resources.has(k)) resources.set(k, dict()); return resources.get(k); };
+    def('findresource', () => { const c = pop(); const k = pop(); const v = category(c).m.get(key(k)); os.push(v === undefined ? (key(c) === '/Font' ? { t: 'font', name: k.v, matrix: [1, 0, 0, 1, 0, 0] } : dict()) : v); });
+    def('defineresource', () => { const c = pop(); const v = pop(); const k = pop(); category(c).m.set(key(k), v); os.push(v); });
+    def('undefineresource', () => { const c = pop(); const k = pop(); category(c).m.delete(key(k)); });
+    def('resourcestatus', () => { const c = pop(); const k = pop(); if (category(c).m.has(key(k))) os.push(0, 0, true); else os.push(false); });
     def('setgray', () => { const g = num(); gs.color = [g, g, g]; });
     def('setrgbcolor', () => { const b = num(); const g = num(); const r = num(); gs.color = [r, g, b]; });
     def('setcmykcolor', () => { const k = num(); const y = num(); const m = num(); const c = num(); gs.color = [(1 - c) * (1 - k), (1 - m) * (1 - k), (1 - y) * (1 - k)]; });
@@ -507,9 +580,250 @@
     def('showpage', () => {});
     def('copypage', () => {});
     def('erasepage', () => {});
-    def('image', () => { partial = true; for (let k = 0; k < 5; k++) pop(); });
-    def('colorimage', () => { partial = true; const ncomp = num(); const multi = pop(); const procs = multi === true ? ncomp : 1; for (let k = 0; k < procs + 5; k++) pop(); });
-    def('imagemask', () => { partial = true; for (let k = 0; k < 5; k++) pop(); });
+    // --- files and filters (image data that follows in the program itself)
+    let afterToken = true; // the first read from currentfile skips the separator after the token
+    const programFile = {
+      t: 'file', program: true,
+      byte: () => { if (afterToken) { afterToken = false; sc.skipSeparator(); } return sc.byte(); },
+      peek: () => { if (afterToken) { afterToken = false; sc.skipSeparator(); } return sc.peek(); },
+    };
+    // one byte of look-ahead on a filter, to see its end-of-data marker before it is asked for more
+    const peekable = (f) => {
+      let next = null;
+      const byte = f.byte;
+      f.byte = () => { if (next !== null) { const b = next; next = null; return b; } return byte(); };
+      f.peek = () => { if (next === null) next = byte(); return next; };
+      return f;
+    };
+    def('currentfile', () => { afterToken = true; os.push(programFile); });
+    const readBytes = (f, count) => { let out = ''; for (let k = 0; k < count; k++) { const b = f.byte(); if (b < 0) break; out += String.fromCharCode(b); } return out; };
+    const hexFile = (f) => peekable({ t: 'file', ends: true, byte() {
+      let hi = -1;
+      for (;;) {
+        const b = f.byte();
+        if (b < 0 || b === 62) return -1; // '>' ends the data
+        const v = b >= 48 && b <= 57 ? b - 48 : b >= 65 && b <= 70 ? b - 55 : b >= 97 && b <= 102 ? b - 87 : -1;
+        if (v < 0) continue;
+        if (hi < 0) hi = v; else return hi * 16 + v;
+      }
+    } });
+    // white space, then perhaps the end-of-data marker: read it now (as printers, which read ahead, do)
+    const markerNext = (f, marker) => {
+      if (!f.peek) return false;
+      while ([9, 10, 12, 13, 32, 0].includes(f.peek())) f.byte();
+      if (f.peek() !== marker.charCodeAt(0)) return false;
+      for (let k = 0; k < marker.length; k++) f.byte();
+      return true;
+    };
+    const a85File = (f) => {
+      let buf = []; let done = false;
+      return peekable({ t: 'file', ends: true, byte() {
+        while (!buf.length && !done) {
+          const group = [];
+          while (group.length < 5) {
+            const b = f.byte();
+            if (b < 0 || b === 126) { if (b === 126) f.byte(); done = true; break; } // '~>' ends the data
+            if (b === 122 && !group.length) { buf = [0, 0, 0, 0]; break; }
+            if (b >= 33 && b <= 117) group.push(b - 33);
+          }
+          if (buf.length || !group.length) continue;
+          const len = group.length;
+          while (group.length < 5) group.push(84);
+          let v = 0;
+          for (const g of group) v = v * 85 + g;
+          buf = [v >>> 24 & 255, v >>> 16 & 255, v >>> 8 & 255, v & 255].slice(0, len - 1);
+          if (markerNext(f, '~>')) done = true;
+        }
+        return buf.length ? buf.shift() : -1;
+      } });
+    };
+    const rleFile = (f) => {
+      let buf = [];
+      let done = false;
+      return peekable({ t: 'file', ends: true, byte() {
+        while (!buf.length && !done) {
+          const len = f.byte();
+          if (len < 0 || len === 128) return -1;
+          if (len < 128) { for (let k = 0; k <= len; k++) buf.push(f.byte()); } else { const b = f.byte(); for (let k = 0; k < 257 - len; k++) buf.push(b); }
+          if (f.peek && f.peek() === 128) { f.byte(); done = true; }
+        }
+        return buf.length ? buf.shift() : -1;
+      } });
+    };
+    const asFile = (src) => {
+      if (src && src.t === 'file') return src;
+      if (src && src.t === 'str') { let k = 0; return { t: 'file', byte: () => (k < src.v.length ? src.v.charCodeAt(k++) & 255 : -1) }; }
+      if (src && src.t === 'proc') {
+        let chunk = ''; let k = 0;
+        return { t: 'file', byte() {
+          while (k >= chunk.length) { execObj(src); const r = pop(); chunk = r && r.t === 'str' ? r.v : ''; k = 0; if (!chunk.length) return -1; }
+          return chunk.charCodeAt(k++) & 255;
+        } };
+      }
+      throw new Error('typecheck');
+    };
+    def('filter', () => {
+      const n = pop().v;
+      if (os.length && os[os.length - 1] && os[os.length - 1].t === 'dict' && !/^(ASCIIHex|ASCII85|RunLength)Decode$/.test(n)) pop(); // parameters
+      if (n === 'SubFileDecode') { pop(); pop(); }
+      const f = asFile(pop());
+      if (n === 'ASCIIHexDecode') os.push(hexFile(f));
+      else if (n === 'ASCII85Decode') os.push(a85File(f));
+      else if (n === 'RunLengthDecode') os.push(rleFile(f));
+      else if (n === 'DCTDecode') os.push({ t: 'file', byte: f.byte, dct: f, ends: f.ends, under: f });
+      else if (n === 'SubFileDecode' || n === 'NullEncode') os.push(f);
+      else throw new Error('unsupported filter ' + n);
+    });
+    def('readhexstring', () => { const s = pop(); const f = asFile(pop()); const h = hexFile(f); const r = readBytes(h, s.v.length); os.push(str(r), r.length === s.v.length); });
+    def('readstring', () => { const s = pop(); const f = asFile(pop()); const r = readBytes(f, s.v.length); os.push(str(r), r.length === s.v.length); });
+    def('readline', () => { const s = pop(); pop(); if (afterToken) { afterToken = false; sc.skipSeparator(); } const r = sc.readLine(); os.push(str(r.slice(0, s.v.length)), true); });
+    def('read', () => { const f = asFile(pop()); const b = f.byte(); if (b < 0) os.push(false); else os.push(b, true); });
+    def('closefile', () => { pop(); });
+    def('flushfile', () => { const f = pop(); if (f && f.t === 'file' && !f.program) while (f.byte() >= 0); });
+
+    // --- images
+    gs.cs = { n: 1 };
+    const colorSpace = (c) => {
+      const nm = c && c.t === 'arr' ? c.v[0] && c.v[0].v : c && c.v;
+      if (nm === 'DeviceRGB' || nm === 'CalRGB') return { n: 3 };
+      if (nm === 'DeviceCMYK') return { n: 4, cmyk: true };
+      if (nm === 'Indexed' && c.t === 'arr') {
+        const base = colorSpace(c.v[1]);
+        const look = c.v[3];
+        return { n: 1, indexed: { base, table: look && look.t === 'str' ? look.v : '' } };
+      }
+      return { n: 1 }; // DeviceGray, CalGray, and anything else drawn as grey
+    };
+    def('setcolorspace', () => { gs.cs = colorSpace(pop()); });
+    const crcTable = [];
+    for (let k = 0; k < 256; k++) { let c = k; for (let q = 0; q < 8; q++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcTable[k] = c >>> 0; }
+    const be32 = (v) => String.fromCharCode(v >>> 24 & 255, v >>> 16 & 255, v >>> 8 & 255, v & 255);
+    const chunk = (type, data) => {
+      let c = 0xffffffff;
+      const body = type + data;
+      for (let k = 0; k < body.length; k++) c = crcTable[(c ^ body.charCodeAt(k)) & 255] ^ (c >>> 8);
+      return be32(data.length) + body + be32((c ^ 0xffffffff) >>> 0);
+    };
+    /** An uncompressed PNG (stored deflate blocks) of RGBA rows, as a binary string. */
+    function png(w, h, rgba) {
+      const rows = [];
+      for (let y = 0; y < h; y++) rows.push('\0' + rgba.slice(y * w * 4, (y + 1) * w * 4));
+      const raw = rows.join('');
+      let a = 1; let b = 0;
+      for (let k = 0; k < raw.length; k++) { a = (a + raw.charCodeAt(k)) % 65521; b = (b + a) % 65521; }
+      let z = '\x78\x01';
+      for (let k = 0; k < raw.length || k === 0; k += 65535) {
+        const part = raw.slice(k, k + 65535);
+        const last = k + 65535 >= raw.length ? 1 : 0;
+        z += String.fromCharCode(last, part.length & 255, part.length >>> 8, ~part.length & 255, (~part.length >>> 8) & 255) + part;
+      }
+      z += be32(((b << 16) | a) >>> 0);
+      return '\x89PNG\r\n\x1a\n' + chunk('IHDR', be32(w) + be32(h) + '\x08\x06\x00\x00\x00') + chunk('IDAT', z) + chunk('IEND', '');
+    }
+    const base64 = (bin) => (typeof btoa === 'function' ? btoa(bin) : Buffer.from(bin, 'latin1').toString('base64'));
+    function placeImage(w, h, matrix, href) {
+      // image space (w × h, first row first) -> user space -> device
+      const m = mul(invert(matrix), gs.ctm);
+      const svgM = [m[0], -m[1], m[2], -m[3], m[4], -m[5]];
+      out.push(`<image width="${w}" height="${h}" preserveAspectRatio="none" transform="matrix(${svgM.map((x) => String(Math.round(x * 1e4) / 1e4)).join(' ')})" href="${href}"${clipAttr()}/>`);
+    }
+    const MAX_PIXELS = 4e6;
+    /** Read and draw an image: { w, h, bits, matrix, files: [file], cs, decode, mask }. */
+    function drawImage(o) {
+      try { paintImage(o); } finally {
+        // data that ends with a marker (~> or >) is read to its end, so the program goes on after it
+        for (const f of o.files) { const e = f.under || f; if (e.ends) while (e.byte() >= 0); }
+      }
+    }
+    function paintImage(o) {
+      const { w, h, bits } = o;
+      if (!(w > 0 && h > 0) || w * h > MAX_PIXELS) { partial = true; return; }
+      if (o.files[0].dct) {
+        // a JPEG: hand the bytes over as they are, from the start marker to the end marker
+        const f = o.files[0].dct;
+        let jpg = ''; let prev = -1;
+        for (let b = f.byte(); b >= 0; b = f.byte()) { jpg += String.fromCharCode(b); if (prev === 0xff && b === 0xd9) break; prev = b; }
+        const at = jpg.indexOf('\xff\xd8');
+        if (at < 0) { partial = true; return; }
+        placeImage(w, h, o.matrix, 'data:image/jpeg;base64,' + base64(jpg.slice(at)));
+        return;
+      }
+      const ncomp = o.mask ? 1 : o.cs.n;
+      const perRow = o.files.length > 1 ? Math.ceil(w * bits / 8) : Math.ceil(w * ncomp * bits / 8);
+      // one source per colour (colorimage with multi true) is read a row of each in turn
+      const parts = o.files.map(() => []);
+      for (let y = 0; y < h; y++) o.files.forEach((f, q) => parts[q].push(readBytes(f, perRow).padEnd(perRow, '\0')));
+      const planes = parts.map((p) => p.join(''));
+      const max = (1 << bits) - 1;
+      const dec = o.decode || null;
+      const sample = (plane, row, k) => {
+        if (bits === 8) return plane.charCodeAt(row * perRow + k);
+        const bit = k * bits;
+        const byte = plane.charCodeAt(row * perRow + (bit >> 3)) || 0;
+        return bits >= 8 ? byte : (byte >> (8 - bits - (bit & 7))) & max;
+      };
+      const color = o.mask ? gs.color.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255)) : null;
+      const px = [];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const c = [];
+          for (let q = 0; q < ncomp; q++) {
+            const s0 = o.files.length > 1 ? sample(planes[q], y, x) : sample(planes[0], y, x * ncomp + q);
+            c.push(s0 === undefined || Number.isNaN(s0) ? 0 : s0);
+          }
+          if (o.mask) {
+            // imagemask: paint where the sample is 1 (or 0 with the decode inverted)
+            const on = (c[0] === 1) !== !!o.invert;
+            px.push(String.fromCharCode(color[0], color[1], color[2], on ? 255 : 0));
+            continue;
+          }
+          let v = c.map((s1, q) => { const d0 = dec ? dec[2 * q] : 0; const d1 = dec ? dec[2 * q + 1] : 1; return d0 + (s1 / max) * (d1 - d0); });
+          let cs = o.cs;
+          if (cs.indexed) {
+            const i0 = Math.round(v[0] * (dec ? 1 : max));
+            const bn = cs.indexed.base.n;
+            v = []; for (let q = 0; q < bn; q++) v.push((cs.indexed.table.charCodeAt(i0 * bn + q) || 0) / 255);
+            cs = cs.indexed.base;
+          }
+          let rgb;
+          if (cs.n === 3) rgb = v;
+          else if (cs.n === 4) rgb = [(1 - v[0]) * (1 - v[3]), (1 - v[1]) * (1 - v[3]), (1 - v[2]) * (1 - v[3])];
+          else rgb = [v[0], v[0], v[0]];
+          px.push(String.fromCharCode(...rgb.map((t) => Math.round(Math.max(0, Math.min(1, t)) * 255)), 255));
+        }
+      }
+      placeImage(w, h, o.matrix, 'data:image/png;base64,' + base64(png(w, h, px.join(''))));
+    }
+    const imageDict = (d, mask) => {
+      const g = (k) => d.m.get('/' + k);
+      const src = g('DataSource');
+      const dec = g('Decode');
+      return {
+        w: g('Width'), h: g('Height'), bits: g('BitsPerComponent') || 1, matrix: g('ImageMatrix').v, mask,
+        files: [asFile(src)], cs: gs.cs, decode: dec && dec.v, invert: mask && !(dec && dec.v[0] === 1),
+      };
+    };
+    def('image', () => {
+      const top = os[os.length - 1];
+      if (top && top.t === 'dict') { drawImage(imageDict(pop(), false)); return; }
+      const src = pop(); const m = pop(); const bits = num(); const h = num(); const w = num();
+      drawImage({ w, h, bits, matrix: m.v, files: [asFile(src)], cs: { n: 1 } });
+    });
+    def('colorimage', () => {
+      const ncomp = num(); const multi = pop() === true;
+      const srcs = []; for (let k = 0; k < (multi ? ncomp : 1); k++) srcs.unshift(pop());
+      const m = pop(); const bits = num(); const h = num(); const w = num();
+      drawImage({ w, h, bits, matrix: m.v, files: srcs.map(asFile), cs: ncomp === 4 ? { n: 4, cmyk: true } : ncomp === 3 ? { n: 3 } : { n: 1 } });
+    });
+    def('imagemask', () => {
+      const top = os[os.length - 1];
+      if (top && top.t === 'dict') { drawImage(imageDict(pop(), true)); return; }
+      const src = pop(); const m = pop(); const inv = pop(); const h = num(); const w = num();
+      drawImage({ w, h, bits: 1, matrix: m.v, files: [asFile(src)], mask: true, invert: inv !== true });
+    });
+    def('gcheck', () => { pop(); os.push(false); });
+    def('wcheck', () => { pop(); os.push(true); });
+    def('rcheck', () => { pop(); os.push(true); });
 
     // fonts and text
     def('findfont', () => { const n = pop(); os.push({ t: 'font', name: n.v, matrix: [1, 0, 0, 1, 0, 0] }); });
@@ -518,7 +832,7 @@
     def('selectfont', () => { const s = pop(); const n = pop(); const m = typeof s === 'number' ? [s, 0, 0, s, 0, 0] : s.v; gs.font = { t: 'font', name: n.v, matrix: m }; });
     def('setfont', () => { gs.font = pop(); });
     def('currentfont', () => os.push(gs.font || { t: 'font', name: 'Times-Roman', matrix: [10, 0, 0, 10, 0, 0] }));
-    def('definefont', () => { const f = pop(); pop(); os.push(f); });
+    def('definefont', () => { const f = pop(); const k = pop(); os.push(f && f.t === 'dict' ? { t: 'font', name: k.v, matrix: [1, 0, 0, 1, 0, 0] } : f); });
     def('show', () => show(pop().v));
     def('ashow', () => { const s = pop(); pop(); pop(); show(s.v); });
     def('widthshow', () => { const s = pop(); pop(); pop(); pop(); show(s.v); });
@@ -545,12 +859,12 @@
     def('echo', () => { pop(); });
 
     // run the program, skipping a statement that fails as a printer would stop
-    const sc = scan(src);
     for (;;) {
       let tok;
       try { tok = sc.next(); } catch (e) { partial = true; break; }
       if (tok === undefined) break;
       if (tok === null) continue;
+      afterToken = true;
       try {
         if (tok.t === 'proc') os.push(tok); else execToken(tok);
       } catch (e) {

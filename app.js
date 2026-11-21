@@ -196,6 +196,7 @@
   function showBlocks(blocks, source) {
     renderedDoc = source;
     patchPreview(blocks);
+    swapPdfFigures(); // a render that started before a PDF figure was drawn
     applyFolds();
     updateToc();
     if (margin) margin.refresh();
@@ -496,6 +497,45 @@
     saveTimer = setTimeout(() => store.set('texglass:last', doc), 400);
   }
 
+  /**
+   * PDF figures cannot be shown as they are: draw each (one at a time, with
+   * pdf.js) and swap the picture in, in the preview and for later renders.
+   * <html data-pdf-figures="drawing"> while that goes on.
+   */
+  let pdfRun = 0;
+  const pdfSwaps = new Map(); // object URL of a PDF -> of its picture
+  function swapPdfFigures() {
+    if (!pdfSwaps.size) return;
+    for (const img of preview.querySelectorAll('img.graphic')) {
+      const url = pdfSwaps.get(img.getAttribute('src'));
+      if (url) img.src = url;
+    }
+  }
+  async function drawPdfFigures(images, map) {
+    const run = ++pdfRun;
+    pdfSwaps.clear();
+    if (!window.TeXglassPdf) return;
+    const pdfs = Object.entries(images).filter(([, blob]) => TeXglassPdf.isPdf(blob));
+    if (!pdfs.length) return;
+    const root = document.documentElement;
+    root.dataset.pdfFigures = 'drawing';
+    try {
+      for (const [path, blob] of pdfs) {
+        let image = null;
+        try { image = await TeXglassPdf.toImage(blob); } catch (e) { image = null; }
+        if (run !== pdfRun) return; // another document was opened meanwhile
+        if (!image) continue;
+        const url = URL.createObjectURL(image);
+        imageUrls.push(url);
+        pdfSwaps.set(map[path], url);
+        map[path] = url;
+        swapPdfFigures();
+      }
+    } finally {
+      if (run === pdfRun) delete root.dataset.pdfFigures;
+    }
+  }
+
   function load(text, name, images, gh) {
     closeEditor(false);
     watcher = null;
@@ -504,9 +544,13 @@
     imageUrls.forEach((u) => URL.revokeObjectURL(u));
     imageUrls = [];
     imageMap = null;
+    pdfSwaps.clear();
+    pdfRun++;
+    delete document.documentElement.dataset.pdfFigures;
     if (images && Object.keys(images).length && window.TeXglassArxiv) {
       imageMap = {};
       for (const [path, blob] of Object.entries(images)) imageUrls.push((imageMap[path] = URL.createObjectURL(blob)));
+      drawPdfFigures(images, imageMap);
     }
     doc = text.replace(/\r\n?/g, '\n');
     setSource(doc);

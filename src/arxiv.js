@@ -334,6 +334,14 @@
         if (r) images[path] = new Blob([r.svg], { type: 'image/svg+xml' });
       }
     }
+    // .pdf figures (pdflatex papers), drawn in the viewer by src/pdf.js (unless
+    // the authors also uploaded the figure as a picture browsers can show)
+    for (const [path, data] of Object.entries(raw)) {
+      if (!/\.pdf$/i.test(path)) continue;
+      const stem = path.replace(/\.[^.]+$/, '');
+      if (['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'].some((e) => images[stem + e])) continue;
+      images[path] = new Blob([data], { type: 'application/pdf' });
+    }
     const candidates = {};
     for (const n of Object.keys(texFiles)) if (/\.(tex|ltx|latex)$/i.test(n) || !n.includes('.')) candidates[n] = texFiles[n];
     const main = opts.main && texFiles[opts.main] != null ? opts.main : pickMain(candidates);
@@ -351,7 +359,7 @@
     const dirs = [''];
     const gp = /\\graphicspath\s*\{((?:\s*\{[^}]*\})+)\s*\}/.exec(source || '');
     if (gp) for (const m of gp[1].matchAll(/\{([^}]*)\}/g)) dirs.push(m[1].replace(/\/?$/, '/'));
-    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.ps'];
+    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.ps', '.pdf'];
     return (name) => {
       const clean = name.trim().replace(/^\.\//, '');
       for (const d of dirs) {

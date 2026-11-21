@@ -160,7 +160,8 @@ offline too (arXiv, GitHub and OAI preprints still need a connection).
   to open it. Or paste `2301.00001` or any arXiv link. Included files, the authors' own `.sty` macros, the
   bibliography (from the `.bbl`, BibTeX's or biber's, or else from the `.bib`
   files) and figures come along. `.eps` figures (common in older papers) are
-  drawn as SVG by a small PostScript interpreter. Also `?arxiv=2301.00001`.
+  drawn as SVG by a small PostScript interpreter, pictures inside them included,
+  and `.pdf` figures with pdf.js, loaded only for papers that have them. Also `?arxiv=2301.00001`.
 - **GitHub search and import**: type `github` and words (`github thesis
   template`) in the Open dialog to search public repositories with LaTeX in
   them, then click one; or paste a link to a file, folder or repo of a public
@@ -306,4 +307,4 @@ The license changed from MIT to PolyForm Noncommercial in November 2026,
 from the release after 0.8.8. Versions up to and including 0.8.8 stay
 under the MIT license for anyone who got a copy of them.
 
-Bundled third-party code, such as KaTeX, keeps its own license.
+Bundled third-party code, such as KaTeX and pdf.js, keeps its own license.

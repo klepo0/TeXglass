@@ -609,6 +609,7 @@
     "vscode:prepublish": "node scripts/build-web.js --minify",
     "package": "vsce package",
     "package:dev": "node scripts/package-dev.js",
+    "pretest": "node scripts/copy-shared.js",
     "test": "node --test test/*.test.js",
     "build-web": "node scripts/build-web.js --minify",
     "test-web": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. test/fixtures/web"
