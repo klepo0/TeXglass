@@ -13,7 +13,8 @@
 #
 # Either way the GitHub release carries the .vsix and the browser extension
 # zips, with notes generated from the pull requests merged since the previous
-# tag, and the .vsix goes to the VS Code Marketplace (and Open VSX).
+# tag, and the .vsix goes to the VS Code Marketplace (and Open VSX). The
+# Firefox build goes to Firefox Add-ons when the AMO_JWT_* secrets are set.
 name: Release
 
 on:
@@ -160,3 +161,50 @@ jobs:
             exit 0
           fi
           npx --yes ovsx@1.3.0 publish --skip-duplicate --packagePath texglass-*.vsix
+
+      # Firefox: the build in browser/dist/firefox goes to addons.mozilla.org as
+      # a new listed version of the add-on whose ID is in its manifest
+      # (browser_specific_settings.gecko.id in browser/build.js), with the
+      # repository's source for reviewers, since the bundle ships minified
+      # KaTeX and pdf.js. It doesn't wait for Mozilla's review: the version goes
+      # live when they approve it. The key comes from
+      # addons.mozilla.org/developers/addon/api/key (AMO_JWT_ISSUER is the
+      # "JWT issuer", AMO_JWT_SECRET the "JWT secret").
+      - name: Publish to Firefox Add-ons
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::notice::AMO_JWT_ISSUER / AMO_JWT_SECRET secrets not set; skipping Firefox Add-ons"
+            exit 0
+          fi
+          src="$RUNNER_TEMP/texglass-source-${TAG#v}.zip"
+          git archive --format=zip -o "$src" HEAD
+          notes="Built from the attached source (the repository at tag $TAG, https://github.com/${GITHUB_REPOSITORY}/tree/$TAG) with Node.js 22 and no other tools or downloads:
+
+            node browser/build.js --release
+
+          The add-on is browser/dist/firefox/ (also zipped as browser/dist/texglass-arxiv-firefox-${TAG#v}.zip). vendor/katex and vendor/pdfjs are the unmodified KaTeX and pdf.js releases; everything else is unminified source."
+          jq -n --arg notes "$notes" \
+            --arg rel "Changes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" \
+            '{version: {approval_notes: $notes, release_notes: {"en-US": $rel}}}' > "$RUNNER_TEMP/amo-metadata.json"
+          set +e
+          npx --yes web-ext@10.8.0 sign \
+            --channel=listed \
+            --source-dir=browser/dist/firefox \
+            --artifacts-dir="$RUNNER_TEMP/web-ext" \
+            --api-key="$AMO_JWT_ISSUER" \
+            --api-secret="$AMO_JWT_SECRET" \
+            --upload-source-code="$src" \
+            --amo-metadata="$RUNNER_TEMP/amo-metadata.json" \
+            --approval-timeout=0 \
+            --no-input 2>&1 | tee "$RUNNER_TEMP/web-ext.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # On a re-run the version is already there: not an error.
+          if [ "$status" -ne 0 ] && grep -qi "already exists" "$RUNNER_TEMP/web-ext.log"; then
+            echo "::notice::Firefox Add-ons already has ${TAG#v}; skipping"
+            exit 0
+          fi
+          exit "$status"

@@ -65,13 +65,27 @@ From GitHub, no local clone needed:
 The workflow raises the version, runs the tests, builds the `.vsix` and the
 browser extension zips, then pushes a `Release vX.Y.Z` commit to `main` with
 the `vX.Y.Z` tag, creates the GitHub release and publishes to the VS Code
-Marketplace (and Open VSX when its token is set). If anything fails before the
-push, nothing changes on `main`; fix it and run the workflow again.
+Marketplace (and Open VSX when its token is set) and sends the Firefox build to
+Firefox Add-ons (when its key is set). If anything fails before the push,
+nothing changes on `main`; fix it and run the workflow again.
 
 `main` is protected, and the workflow's built-in token can't bypass that, so
 the release commit is pushed with the deploy key in the `RELEASE_DEPLOY_KEY`
 secret. That key must have write access and be on the bypass list of the
 `main` ruleset.
+
+Firefox Add-ons (addons.mozilla.org) gets each release as a new listed
+version of the add-on `texglass-arxiv@klepo0.github.io` (the ID in
+`browser/build.js`; never change it), together with a zip of the repository
+source and build notes for Mozilla's reviewers. The workflow doesn't wait for
+the review; the version goes live once Mozilla approves it. It needs two
+secrets, and skips this step without them:
+
+1. Sign in at <https://addons.mozilla.org/developers/addon/api/key/> with the
+   account that owns the add-on and press **Generate new credentials**.
+2. In the repository, open **Settings → Secrets and variables → Actions → New
+   repository secret** and add `AMO_JWT_ISSUER` (the "JWT issuer", like
+   `user:12345:67`) and `AMO_JWT_SECRET` (the "JWT secret").
 
 Fallback from a clone: change the version in `vscode/package.json` in its own
 commit on `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The same
