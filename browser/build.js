@@ -160,7 +160,10 @@ function viewerHtml() {
   if (html.includes('cdn.jsdelivr.net')) throw new Error('index.html still loads something from a CDN');
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) throw new Error('index.html has an inline script, which extension pages refuse');
   // The web site's visitor counter stays out of the extension.
-  return html.replace(/[ \t]*<script[^>]*src="src\/stats\.js"[^>]*><\/script>\n?/, '');
+  // So do the web app's manifest and home-screen icons (the extension has its own).
+  return html
+    .replace(/[ \t]*<script[^>]*src="src\/stats\.js"[^>]*><\/script>\n?/, '')
+    .replace(/[ \t]*<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?/g, '');
 }
 
 function build(target) {

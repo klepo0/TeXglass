@@ -13,6 +13,13 @@
  * The popover's own vertical padding is the gap between the anchor and the card,
  * so the pointer can cross it into the card (to scroll it) without the popover
  * closing. That padding is counted in, so the bridge stays on the anchor's side.
+ *
+ * On a touch screen (no hover: phones, tablets) the popover is a sheet at the
+ * bottom of the window instead, as wide as the window, opened by a tap. A tap
+ * outside it, a swipe down on it, or Escape closes it: the popover is hidden and
+ * gets a 'tg-sheet-close' event, so its owner can forget what it was showing.
+ *
+ *   TeXglassPopover.sheet(win)   // true where previews open as bottom sheets
  */
 (function (root) {
   'use strict';
@@ -45,8 +52,74 @@
     return { down, room, cap: room };
   }
 
+  /** Previews open as bottom sheets where the main pointer cannot hover (a finger). */
+  function sheet(win) {
+    const w = win || root;
+    return !!(w && w.matchMedia && w.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  }
+
+  const wired = new WeakSet();
+  function closeSheet(pop) {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    pop.dispatchEvent(new (pop.ownerDocument.defaultView.Event)('tg-sheet-close'));
+  }
+  /** Close on a tap outside and on a swipe down; wired once per popover. */
+  function wireSheet(pop) {
+    if (wired.has(pop)) return;
+    wired.add(pop);
+    const page = pop.ownerDocument;
+    page.addEventListener('pointerdown', (e) => {
+      if (pop.classList.contains('tg-sheet') && !pop.hidden && !pop.contains(e.target)) closeSheet(pop);
+    }, true);
+    let start = null;
+    pop.addEventListener('pointerdown', (e) => {
+      // a swipe down from the handle at the top (the card itself scrolls)
+      start = e.isPrimary && e.target.classList.contains('tg-sheet-grip') ? { y: e.clientY, x: e.clientX } : null;
+      if (start && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
+    });
+    pop.addEventListener('pointermove', (e) => {
+      if (!start || !pop.classList.contains('tg-sheet')) return;
+      const dy = e.clientY - start.y;
+      pop.style.transform = dy > 0 ? `translateY(${dy}px)` : '';
+    });
+    const end = (e) => {
+      if (!start) return;
+      const dy = e.clientY - start.y;
+      const dx = Math.abs(e.clientX - start.x);
+      start = null;
+      pop.style.transform = '';
+      // a tap on the handle closes too
+      if (pop.classList.contains('tg-sheet') && e.type === 'pointerup' && ((dy > 60 && dy > dx) || (Math.abs(dy) < 6 && dx < 6))) closeSheet(pop);
+    };
+    pop.addEventListener('pointerup', end);
+    pop.addEventListener('pointercancel', end);
+    page.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pop.classList.contains('tg-sheet')) closeSheet(pop);
+    });
+  }
+
   function place(pop, anchor, opts) {
     const o = Object.assign({ margin: 8 }, opts);
+    const win = (pop.ownerDocument && pop.ownerDocument.defaultView) || root;
+    const asSheet = o.sheet != null ? !!o.sheet : sheet(win);
+    pop.classList.toggle('tg-sheet', asSheet);
+    const oldGrip = pop.querySelector(':scope > .tg-sheet-grip');
+    if (oldGrip && !asSheet) oldGrip.remove();
+    if (asSheet) {
+      wireSheet(pop);
+      const card = pop.firstElementChild;
+      if (card) card.style.maxHeight = '';
+      if (!pop.querySelector(':scope > .tg-sheet-grip')) {
+        const grip = pop.ownerDocument.createElement('div');
+        grip.className = 'tg-sheet-grip';
+        grip.setAttribute('aria-hidden', 'true');
+        pop.appendChild(grip);
+      }
+      pop.style.left = '';
+      pop.style.top = '';
+      return;
+    }
     const card = pop.firstElementChild;
     const r = rectOf(anchor);
     const v = viewport(pop);
@@ -69,7 +142,7 @@
     pop.style.top = top + 'px';
   }
 
-  const api = { place, layout };
+  const api = { place, layout, sheet };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassPopover = api;
 })(typeof window !== 'undefined' ? window : this);

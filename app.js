@@ -202,6 +202,7 @@
     applyFolds();
     updateToc();
     if (margin) margin.refresh();
+    reflowSoon(); // too-wide formulas on a phone break onto more lines
     if (insight) insight.invalidate(); // read the page again when next needed
     if (progress) progress.refresh(); // status markers, once the browser is idle
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
@@ -1507,6 +1508,100 @@
     if (!moreMenu.hidden && !e.target.closest('.more-group')) setMenu(false);
   });
 
+  // --- phones and tablets ---------------------------------------------------------
+  // A narrow window keeps a few large buttons in the toolbar (Open, Contents,
+  // Navigate, the looks, "…"); the others move to the top of the "…" menu and back
+  // again when the window widens. The side panel and the margin notes become
+  // drawers: their buttons open them, and so does a swipe in from the edge of the
+  // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
+  const compact = $('more-compact');
+  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link']
+    .map((sel) => document.querySelector('.toolbar ' + sel))
+    .filter(Boolean)
+    .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
+  function setCompact(on) {
+    if (on) {
+      for (const m of COMPACT_MOVES) compact.appendChild(m.el);
+    } else {
+      for (const m of COMPACT_MOVES.slice().reverse()) m.parent.insertBefore(m.el, m.next && m.next.parentNode === m.parent ? m.next : null);
+    }
+    compact.hidden = !on || !COMPACT_MOVES.some((m) => !m.el.hidden);
+    document.body.classList.toggle('compact', on);
+  }
+  // in the menu, those buttons close it once used (zooming keeps it open, to zoom again)
+  compact.addEventListener('click', (e) => {
+    const b = e.target.closest('button, a');
+    if (b && !b.closest('.zoom-group')) setMenu(false);
+  });
+
+  function setNarrow(on) {
+    setCompact(on);
+    if (margin && margin.setOverlay) margin.setOverlay(on);
+    if (on && tocWanted) { tocWanted = false; showToc(); }
+    if (!on) { tocWanted = store.get('texglass:toc') !== 'off'; showToc(); }
+    reflowMath();
+  }
+  if (window.TeXglassTouch) {
+    const tocEdge = () => (document.body.classList.contains('toc-right') ? 'right' : 'left');
+    TeXglassTouch.edgeSwipe(window, {
+      enabled: () => narrow.matches && mode !== 'split' && !document.querySelector('dialog[open]'),
+      onSwipe: (edge) => {
+        if (edge === tocEdge()) {
+          if (!tocToggle.hidden && !tocWanted) { tocWanted = true; showToc(); spyToc(); }
+        } else if (edge === 'right' && margin && margin.shown()) {
+          margin.open(true);
+        }
+      },
+    });
+    TeXglassTouch.swipeAway(tocPane, {
+      edge: tocEdge,
+      enabled: () => narrow.matches && tocWanted,
+      onSwipe: () => { tocWanted = false; showToc(); },
+    });
+  }
+
+  // A display formula too wide for a narrow or touch screen breaks after its relations and
+  // operators, as inline maths does (the stylesheet, .tg-reflow), instead of
+  // scrolling sideways. Ones that cannot break (a matrix, an alignment) still scroll.
+  const coarse = window.matchMedia('(pointer: coarse)');
+  function reflowMath() {
+    const on = narrow.matches || coarse.matches; // a phone, or a tablet: scrolling a formula sideways is awkward there
+    preview.querySelectorAll('.math-display').forEach((el) => {
+      const html = el.querySelector(':scope > .katex-display > .katex > .katex-html');
+      if (!on || !html || html.querySelectorAll(':scope > .base').length < 2) { el.classList.remove('tg-reflow'); return; }
+      if (el.classList.contains('tg-reflow')) return;
+      if (el.scrollWidth > el.clientWidth + 1) el.classList.add('tg-reflow');
+    });
+  }
+  let reflowFrame = 0;
+  const reflowSoon = () => { if (!reflowFrame) reflowFrame = requestAnimationFrame(() => { reflowFrame = 0; reflowMath(); }); };
+  window.addEventListener('resize', () => {
+    // wider again: let every formula try one line first
+    preview.querySelectorAll('.math-display.tg-reflow').forEach((el) => el.classList.remove('tg-reflow'));
+    reflowSoon();
+  });
+
+  setNarrow(narrow.matches);
+  narrow.addEventListener('change', (e) => setNarrow(e.matches));
+
+  // Install as an app (Chrome, Edge, Android): offered in the "…" menu when the
+  // browser says it can be. Safari: Share, then Add to Home Screen.
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    $('install').hidden = false;
+    $('install-sep').hidden = false;
+  });
+  $('install').addEventListener('click', () => {
+    if (!installPrompt) return;
+    const p = installPrompt;
+    installPrompt = null;
+    p.prompt();
+    Promise.resolve(p.userChoice).finally(() => { $('install').hidden = true; $('install-sep').hidden = true; });
+  });
+  window.addEventListener('appinstalled', () => { $('install').hidden = true; $('install-sep').hidden = true; });
+
   // --- the reader's highlights and notes ---------------------------------------
   // Highlights and notes made on the preview (src/margin.js) are kept per paper
   // in this browser (localStorage, texglass:notes:<paper key>); see
@@ -1950,10 +2045,25 @@
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
     const cited = cites && cites.noteFor(target, { link: a, onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
+    // On a touch screen the preview is a sheet at the bottom: a tap opened it, and
+    // this button goes to the result itself (as a click on the link does elsewhere).
+    if (asSheet()) {
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'tg-sheet-go';
+      go.textContent = 'Go there';
+      go.addEventListener('click', () => jumpTo(target));
+      const head = document.createElement('div');
+      head.className = 'tg-sheet-head';
+      head.appendChild(go);
+      body.prepend(head);
+    }
     popover.replaceChildren(body);
     popover.hidden = false;
     placePopover(a, body);
   }
+  const asSheet = () => !!(window.TeXglassPopover && TeXglassPopover.sheet && TeXglassPopover.sheet(window));
+  popover.addEventListener('tg-sheet-close', hidePopover);
   function placePopover(a, body) {
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
@@ -1971,6 +2081,7 @@
     TeXglassPopover.place(popover, a);
   }
   preview.addEventListener('mouseover', (e) => {
+    if (asSheet()) return; // a tap opens the preview there (below)
     const a = e.target.closest(PREVIEW_LINKS);
     if (!a || (editing && editing.el.contains(a) && !editing.previewEl.contains(a))) return;
     const target = document.getElementById(a.getAttribute('href').slice(1));
@@ -1978,6 +2089,7 @@
     showPopover(a, target);
   });
   preview.addEventListener('mouseout', (e) => {
+    if (asSheet()) return;
     const a = e.target.closest(PREVIEW_LINKS);
     if (!a || popover.hidden || a.contains(e.relatedTarget)) return;
     if (popover.contains(e.relatedTarget)) return; // moving into the popover
@@ -2019,6 +2131,11 @@
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target) return;
     e.preventDefault();
+    // On a touch screen a tap on a reference shows it in a sheet first; "Go there" jumps.
+    if (asSheet() && a.matches(PREVIEW_LINKS) && !target.contains(a) && !(editing && editing.el.contains(a) && !editing.previewEl.contains(a))) {
+      if (popoverLink !== a || popover.hidden) showPopover(a, target);
+      return;
+    }
     jumpTo(target);
   });
 

@@ -23,6 +23,9 @@ const KATEX_FONTS = [
 const PRECACHE = [
   './',
   'index.html',
+  // installed on a phone, tablet or computer, it opens as an app (the web app manifest and its icons)
+  'manifest.webmanifest',
+  ...['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'].map((f) => `icons/${f}`),
   'app.js',
   'styles.css',
   // the handwritten-notes look, shared with the VS Code extension (Kalam is the web viewer's hand)
@@ -34,7 +37,7 @@ const PRECACHE = [
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
   ...['arxiv', 'bib', 'cite', 'cited', 'copytex', 'diagrams', 'editor', 'eps', 'export', 'find', 'github', 'hypotheses', 'insight', 'local', 'openai-math',
-    'margin', 'notes-sync', 'pdf', 'popover', 'progress', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'zoom'].map((f) => `src/${f}.js`),
+    'margin', 'notes-sync', 'pdf', 'popover', 'progress', 'render-worker', 'scroll', 'stats', 'texglass', 'tikz', 'touch', 'zoom'].map((f) => `src/${f}.js`),
 ];
 
 if (typeof module === 'object' && module.exports) module.exports = { CACHE, PRECACHE };
