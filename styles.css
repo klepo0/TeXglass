@@ -1739,7 +1739,22 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6, .uses-head) { opacity: 0.5; }
 .uses-focus .uses-fade:hover { opacity: 0.6; }
 /* "Hide the rest": unrelated blocks fold away; headings of sections with something lit stay */
-@media screen { .uses-focus.uses-collapse .uses-fade:not(.uses-head) { display: none; } }
+@media screen {
+  .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof) { display: none; }
+  /* the proofs of the results shown stay, folded to their first line until clicked */
+  .uses-focus.uses-collapse .uses-proof { opacity: 1; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > :not(:first-child) { display: none; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child .qed { display: none; }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle { opacity: 1; color: var(--accent); }
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle svg { transform: rotate(-90deg); }
+}
 .uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }
