@@ -1,5 +1,17 @@
 # Contributing
 
+## Keep the guide up to date
+
+[docs/GUIDE.md](docs/GUIDE.md) describes every user-visible feature, keyboard
+shortcut, VS Code command and setting. **A pull request that adds, changes or
+removes any of these updates the guide in the same pull request**, and the
+README's feature list where it applies. Write keys as `<kbd>Ctrl+G</kbd>`.
+
+`test/guide.test.js` fails when a VS Code keybinding, command or setting, the
+browser extension's shortcut, a shortcut named in the toolbar, or a letter key
+the code listens for is missing from the guide. It can't see features without a
+shortcut, so check those by hand.
+
 ## Versions and releases
 
 TeXglass has **one version number**, the `"version"` in `vscode/package.json`.
