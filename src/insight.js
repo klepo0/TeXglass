@@ -1886,7 +1886,7 @@
           text: (s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase(),
           section: sectionOf(secs, s.el),
           kind: kindOfSymbol(s.tex, wordsNear(s), '', 0, s.text ? '' : s.el.dataset.tex),
-          alpha: alphaOf(s.tex),
+          alpha: alphaOf(s.tex.replace(/^\\([A-Za-z]+)(?![A-Za-z])/, (m, n) => (idx.byName.has(n) && !idx.byName.get(n).mac.nargs ? String(idx.byName.get(n).mac.body) : m))),
         });
       });
       idx.entries = out;
@@ -2091,6 +2091,11 @@
           if (!row.hidden) n++;
         });
         const used = g.classList.contains('insight-group-used');
+        const count = g.querySelector(':scope > summary .insight-count');
+        if (count && !used) {
+          if (!count.dataset.all) count.dataset.all = count.textContent;
+          count.textContent = q ? String(n) : count.dataset.all;
+        }
         g.hidden = !!q && (!n || used);
         if (q && n && !used) {
           // open groups with matches while searching, and close them again after
