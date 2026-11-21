@@ -148,6 +148,27 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     await page.fill('.side-insight .insight-filter', 'measure');
     assert.ok(await page.locator('.side-insight .insight-group-pinned tr').isVisible());
     await page.fill('.side-insight .insight-filter', '');
+    // Pinned rows reorder: drag a handle, or press ↑ ↓ on it; the order is kept.
+    await page.click('.side-insight .insight-group:not(.insight-group-pinned) [data-pin="s:\\\\Gamma"]');
+    await page.waitForSelector('.side-insight .insight-pin-item:nth-child(2)');
+    const pinOrder = () => page.locator('.side-insight .insight-pin-item').evaluateAll((els) => els.map((e) => e.dataset.pinItem));
+    assert.deepEqual(await pinOrder(), ['m:Var', 's:\\Gamma']);
+    const handle = page.locator('.side-insight .insight-pin-item[data-pin-item="s:\\\\Gamma"] .insight-drag');
+    const hb = await handle.boundingBox();
+    const first = await page.locator('.side-insight .insight-pin-item').first().boundingBox();
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(hb.x + hb.width / 2, first.y + 4, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 's:\\Gamma');
+    assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('texglass:notation-pins:' + document.getElementById('file-name').textContent))), ['s:\\Gamma', 'm:Var']);
+    await page.locator('.side-insight .insight-pin-item').first().locator('.insight-drag').focus();
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 'm:Var');
+    assert.equal(await page.evaluate(() => document.activeElement.closest('.insight-pin-item').dataset.pinItem), 's:\\Gamma', 'the moved row keeps the focus');
+    await page.click('.side-insight .insight-group-pinned [data-pin="s:\\\\Gamma"]');
+    await page.waitForFunction(() => document.querySelectorAll('.side-insight .insight-pin-item').length === 1);
+
     // "Used in …" can be pinned too
     assert.equal(await page.locator('.side-insight .insight-stuck .insight-used').count(), 0);
     await page.click('.side-insight [data-pin-used]');
