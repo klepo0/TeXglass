@@ -883,6 +883,7 @@ ${INK_FILTERS}
           toc: this.context.globalState.get('texglass.toc', true),
           sideTab: this.context.globalState.get('texglass.sideTab', 'toc'),
           sideWidth: this.context.globalState.get('texglass.sideWidth', null),
+          notationOrder: this.context.globalState.get('texglass.notationOrder', null),
           marginWidth: this.context.globalState.get('texglass.marginWidth', null),
           marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
           notePad: this.context.globalState.get('texglass.notePad', null),
@@ -970,6 +971,7 @@ ${INK_FILTERS}
         // the side panel's tab and width, kept for every preview
         if (m.key === 'texglass:side-tab') this.context.globalState.update('texglass.sideTab', String(m.value));
         if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
+        if (m.key === 'texglass:notation-order' && /^(section|kind|az)$/.test(String(m.value))) this.context.globalState.update('texglass.notationOrder', String(m.value));
         if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-collapsed') this.context.globalState.update('texglass.marginCollapsed', !!m.value);
         if (m.key === 'texglass:note-pad') {

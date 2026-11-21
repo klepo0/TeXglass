@@ -6,7 +6,9 @@
  *     notation comes from (the paper's own macros, symbols defined with :=, and
  *     symbols the text introduces in words: "let X be", "denote by X", "where X is");
  *   - a dependency map: which results each theorem's statement and proof refer to;
- *   - a notation index: the paper's macros and defined symbols, with first uses;
+ *   - a notation index: the paper's macros and defined symbols, with first uses,
+ *     arranged by section, by kind or A–Z, searchable by symbol or meaning, with
+ *     the symbols of the section being read at the top (side panel);
  *   - "What does this use?": a button by each result's heading lights up the
  *     results it rests on (or that rest on it) in the text and fades the rest.
  *     While it is on, a map on show (side panel or larger map) lights up the
@@ -22,6 +24,8 @@
  *     renderTex(texs) { ... },             // optional: Promise of HTML for small formulas
  *     hover: true,                         // notation on hover
  *     onHoverChange(on) { ... },           // the panel's checkbox changed it
+ *     notationOrder: 'section',            // how the index is arranged: 'section' | 'kind' | 'az'
+ *     onNotationOrder(order) { ... },      // the reader picked another arrangement (to keep it)
  *     statusOf(el) { ... },                // optional: reading progress { s, q } (src/progress.js)
  *     print() { ... },                     // optional: a Print button on the "What does this use?" bar
  *     onFocusStart() { ... },              // optional: "What does this use?" starts lighting up
@@ -29,6 +33,7 @@
  *   insight.setDefinitions(result.defs);   // after each render: the paper's macros
  *   insight.invalidate();                  // after the page changed
  *   insight.open('notation' | 'deps');     // the panel
+ *   insight.setNotationOrder('kind');      // arrange the notation index
  *   insight.toggleMap();                   // open or close the larger map (also the M key)
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
  *   insight.focus(theoremEl, 'uses' | 'usedBy' | 'both', { scroll, collapse }); insight.unfocus();
@@ -972,6 +977,88 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Arranging the notation index: by section, by kind, A–Z, and search
+  // ---------------------------------------------------------------------------
+
+  const GREEK = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'];
+  const GREEK_UNI = 'αβγδεζηθικλμνξοπρστυφχψω';
+  const GREEK_CAP = 'ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ';
+  /** The place of a Greek letter's name (\alpha, \Gamma, \varphi) in the alphabet, or -1. */
+  function greekIndex(name) {
+    const n = String(name).toLowerCase().replace(/^var/, '');
+    return GREEK.indexOf(n === 'digamma' ? 'gamma' : n);
+  }
+  /** A search typed with Greek letters (α, Γ) looks for their names. */
+  function greekQuery(q) {
+    return String(q).replace(/[α-ωΑ-Ως]/g, (c) => {
+      const k = GREEK_UNI.indexOf(c === 'ς' ? 'σ' : c);
+      if (k >= 0) return GREEK[k];
+      const K = GREEK_CAP.indexOf(c);
+      return K >= 0 ? GREEK[K] : c;
+    });
+  }
+
+  /**
+   * Where a symbol goes in A–Z order: { group, key }, group being a capital
+   * letter, "Greek" or "Other". tex is the symbol (or "\name" for a macro);
+   * decorations such as \mathbb, \hat or \mathcal are looked through.
+   */
+  function alphaOf(tex) {
+    const toks = String(tex).match(/\\[A-Za-z]+|[A-Za-z]|\S/g) || [];
+    for (const t of toks) {
+      if (/^[A-Za-z]$/.test(t)) return { group: t.toUpperCase(), key: t.toLowerCase() + (t === t.toLowerCase() ? '0' : '1') + tex };
+      if (t[0] !== '\\') continue;
+      const name = t.slice(1);
+      const g = greekIndex(name);
+      if (g >= 0) return { group: 'Greek', key: String(g).padStart(2, '0') + (name[0] === name[0].toLowerCase() ? '0' : '1') + tex };
+      if (DECOR.test(t) || /^(operatorname|mathrm|text[a-z]*|left|right|[bB]ig+[lr]?|[lr]Vert|[lr]vert|lVert|rVert)$/.test(name)) continue;
+      // another command: by its name (\norm under N, \cH under C)
+      return { group: name[0].toUpperCase(), key: name.toLowerCase() + '0' + tex };
+    }
+    return { group: 'Other', key: tex };
+  }
+
+  // The kinds the index can group symbols into, in the order shown.
+  const KINDS = [
+    ['spaces', 'Spaces and sets'],
+    ['maps', 'Maps and operators'],
+    ['names', 'Named functions'],
+    ['constants', 'Constants and parameters'],
+    ['other', 'Other symbols'],
+  ];
+  const KIND_WORDS = [
+    ['spaces', /\b(spaces?|sets?|subsets?|algebras?|sigma-algebra|σ-algebra|groups?|subgroups?|rings?|fields?|modules?|manifolds?|tor[iu]s?|lattices?|domains?|categor(y|ies)|class(es)?|collections?|famil(y|ies)|filtrations?|ideals?|intervals?|balls?|spheres?|cones?|graphs?|alphabets?|vector bundles?|bundles?|varieties|variety|cubes?|boxes|simplex|polytopes?|regions?)\b/],
+    ['maps', /\b(maps?|mappings?|operators?|semigroups?|norms?|seminorms?|inner products?|measures?|transforms?|derivatives?|projections?|kernels?|functionals?|expectations?|variances?|laws?|distributions?|processes|process|flows?|actions?|morphisms?|isomorphisms?|homomorphisms?|embeddings?|generators?|differentials?|gradients?|laplacians?|convolutions?|products?)\b/],
+    ['constants', /\b(constants?|parameters?|numbers?|exponents?|dimensions?|thresholds?|integers?|ranks?|degrees?|rates?|fixed|positive real|real numbers?|radius|radii)\b/],
+    ['names', /\bfunctions?\b/],
+  ];
+
+  /**
+   * The kind of a symbol, guessed from what the paper says about it (words: the
+   * text right after the symbol first, then before) and its shape (tex, the
+   * macro's body, how many arguments it takes, the formula that defines it).
+   * One of the KINDS ids.
+   */
+  function kindOfSymbol(tex, words, body, nargs, formula) {
+    const shape = String(tex) + ' ' + String(body || '');
+    if (/\\operatorname|\\DeclareMathOperator|\\mathrm\s*\{\s*[A-Za-z]{2,}\s*\}|\\text(rm|up)?\s*\{\s*[A-Za-z]{2,}\s*\}|\\(log|exp|sin|cos|tan|sinh|cosh|tanh|det|tr|dim|ker|deg|arg|sup|inf|lim|max|min|Pr|gcd)\b/.test(shape) && !/\\mathbb\s*\{?\s*[EP]\b/.test(shape)) return 'names';
+    for (const w of words || []) {
+      if (!w) continue;
+      let best = null;
+      for (const [k, re] of KIND_WORDS) {
+        const m = re.exec(w.toLowerCase());
+        if (m && (!best || m.index < best.at)) best = { k, at: m.index };
+      }
+      if (best) return best.k;
+    }
+    if (/\\mathbb\s*\{?\s*[EP]\b|\\(nabla|partial|Delta|mathcal\s*\{?\s*[LF]\})/.test(shape) && (nargs || /\\mathbb\s*\{?\s*[EP]\b/.test(shape))) return 'maps';
+    if (/\\(mathbb|mathcal|mathscr|mathfrak|mathsf|cal|scr|frak|Bbb)\s*\{?\s*[A-Z]/.test(shape)) return 'spaces';
+    if (nargs || /\\(lVert|lvert|langle|\|)|#1/.test(shape)) return 'maps';
+    if (/(:=|\\coloneqq)\s*-?\s*(\d|\\(pi|frac\s*\{?\s*\d|sqrt\s*\{?\s*\d|log\s*\d)\b)/.test(String(formula || ''))) return 'constants';
+    return 'other';
+  }
+
+  // ---------------------------------------------------------------------------
   // Where things are
   // ---------------------------------------------------------------------------
 
@@ -1646,6 +1733,18 @@
           opts.jump(go._target);
           return;
         }
+        const chip = e.target.closest('[data-chip]');
+        if (chip) {
+          e.preventDefault();
+          showRow(view, chip.dataset.chip);
+          return;
+        }
+        const ord = e.target.closest('[data-order]');
+        if (ord) {
+          e.preventDefault();
+          setNotationOrder(ord.dataset.order, true);
+          return;
+        }
         if (e.target.closest('.dep-larger')) {
           e.preventDefault();
           open('deps', view.selected);
@@ -1692,6 +1791,23 @@
           for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
         }
       });
+      // a group folded by hand stays folded when the list is drawn again
+      body.addEventListener('toggle', (e) => {
+        const g = e.target;
+        if (!g.matches || !g.matches('.insight-group') || g.dataset.searchOpened) return;
+        if (!view.closedGroups) view.closedGroups = new Set();
+        if (g.open) view.closedGroups.delete(g.dataset.group);
+        else view.closedGroups.add(g.dataset.group);
+      }, true);
+      // "Used in …" follows the reader from section to section
+      if (view.side) {
+        let queued = false;
+        (doc.closest('.pane') || window).addEventListener('scroll', () => {
+          if (queued || !view.isShown() || view.tab !== 'notation') return;
+          queued = true;
+          setTimeout(() => { queued = false; if (view.isShown() && view.tab === 'notation') fillUsed(view); }, 150);
+        }, { passive: true });
+      }
       wirePreviews(view);
       wireMapMoves(view);
       views.add(view);
@@ -1707,6 +1823,228 @@
     const hoverBox = () =>
       `<label class="insight-hover"><input type="checkbox"${hoverOn ? ' checked' : ''}> Show notation when resting on a formula</label>`;
 
+    // How the notation index is arranged: by the section where each symbol is
+    // first defined, by kind, or A–Z (the reader's choice is kept by the host).
+    const ORDERS = [['section', 'Section', 'Under the section where each symbol is first defined or used'], ['kind', 'Kind', 'Spaces and sets, maps and operators, named functions, constants'], ['az', 'A–Z', 'Alphabetically, Greek letters together']];
+    let notationOrder = ORDERS.some(([k]) => k === opts.notationOrder) ? opts.notationOrder : 'section';
+
+    /** The top-level sections, to group by: [{ el, label }], and where an element sits. */
+    function topSections() {
+      const top = doc.querySelector('h1.chapter, h2.chapter') ? 'chapter' : 'section';
+      return Array.from(doc.querySelectorAll(`.${top}[id], h1.appendix[id], h2.appendix[id]`))
+        .filter((h) => /^H[1-6]$/.test(h.tagName) && !h.closest(INSIDE_POPOVER))
+        .map((h, k) => {
+          const t = plainText(h);
+          const num = h.querySelector('.secnum');
+          const n = num ? num.textContent.trim() : '';
+          const label = n ? `§${n} ${t.slice(n.length).trim()}` : t;
+          return { el: h, label: label.length > 60 ? label.slice(0, 58) + '…' : label, order: k + 1 };
+        });
+    }
+    const OPENING = { el: null, label: 'Opening pages', order: 0 };
+    function sectionOf(secs, el) {
+      let lo = 0;
+      let hi = secs.length - 1;
+      let found = OPENING;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (secs[mid].el.compareDocumentPosition(el) & 4) { found = secs[mid]; lo = mid + 1; } else hi = mid - 1;
+      }
+      return found;
+    }
+
+    /** The words just after a symbol introduced in the text (then just before), within its sentence. */
+    function wordsNear(s) {
+      if (!s || !s.text || !s.run) return [];
+      const t = s.run.text;
+      const [a, b] = sentenceAround(t, s.at);
+      const clean = (x) => x.replace(/[\u0001]/g, ' ');
+      return [clean(t.slice(s.at + 1, Math.min(b, s.at + 90))), clean(t.slice(Math.max(a, s.at - 60), s.at))];
+    }
+
+    /** The index's rows, each { id, type, it, first, text, section, kind, alpha }, kept with the index. */
+    function entriesOf(idx) {
+      if (idx.entries) return idx.entries;
+      const secs = topSections();
+      const byKey = new Map();
+      for (const s of idx.symbols) if (s.text && !byKey.has(s.key)) byKey.set(s.key, s);
+      const out = [];
+      idx.macros.forEach((e, k) => {
+        const said = byKey.get(texTokens('\\' + e.name).join(' '));
+        const body = String(e.mac.body);
+        out.push({
+          id: 'm' + k, type: 'm', it: e, first: e.first,
+          text: (e.name + ' ' + body + (said ? ' ' + sentenceText(said) : '')).toLowerCase(),
+          section: sectionOf(secs, e.first),
+          kind: kindOfSymbol('\\' + e.name, wordsNear(said), body, e.mac.nargs || 0, ''),
+          alpha: ((a) => (a.group === 'Other' ? alphaOf('\\' + e.name) : a))(alphaOf(body)),
+        });
+      });
+      idx.symbols.forEach((s, k) => {
+        out.push({
+          id: 's' + k, type: 's', it: s, first: s.el,
+          text: (s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase(),
+          section: sectionOf(secs, s.el),
+          kind: kindOfSymbol(s.tex, wordsNear(s), '', 0, s.text ? '' : s.el.dataset.tex),
+          alpha: alphaOf(s.tex),
+        });
+      });
+      idx.entries = out;
+      idx.secs = secs;
+      return out;
+    }
+
+    /** The rows sorted into groups for an order: [{ id, title, rows }]. */
+    function groupsOf(entries, order) {
+      const groups = new Map();
+      const add = (id, title, sort, e) => {
+        if (!groups.has(id)) groups.set(id, { id, title, sort, rows: [] });
+        groups.get(id).rows.push(e);
+      };
+      const docOrder = (a, b) => (a.first === b.first ? 0 : a.first.compareDocumentPosition(b.first) & 4 ? -1 : 1);
+      const sorted = entries.slice().sort(docOrder);
+      for (const e of sorted) {
+        if (order === 'kind') {
+          const k = KINDS.findIndex(([id]) => id === e.kind);
+          add('kind-' + e.kind, KINDS[k][1], k, e);
+        } else if (order === 'az') {
+          const g = e.alpha.group;
+          add('az-' + g, g, g === 'Greek' ? 1000 : g === 'Other' ? 1001 : g.charCodeAt(0), e);
+        } else add('sec-' + e.section.order, e.section.label, e.section.order, e);
+      }
+      const out = Array.from(groups.values()).sort((a, b) => a.sort - b.sort);
+      if (order === 'az') for (const g of out) g.rows.sort((a, b) => (a.alpha.key < b.alpha.key ? -1 : a.alpha.key > b.alpha.key ? 1 : 0));
+      return out;
+    }
+
+    function macroRow(e, id) {
+      const sample = sampleOf(e);
+      const body = String(e.mac.body);
+      return `<tr data-k="${id}"><td class="insight-sym-cell">${sample ? `<span class="insight-sym" data-sym="${esc(sample)}"></span>` : ''}</td>` +
+        `<td class="insight-cmd"><code>\\${esc(e.name)}</code></td><td class="insight-def"><code>${esc(body.length > 90 ? body.slice(0, 87) + '…' : body)}</code></td>` +
+        `<td class="insight-first"><a href="#" data-go="" data-e="${id}">${esc(where(e.first))}</a><span class="insight-uses">${e.count} formula${e.count > 1 ? 's' : ''}</span></td></tr>`;
+    }
+    function symbolRow(s, id) {
+      return `<li data-k="${id}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><a href="#" data-go="" data-e="${id}">${esc(where(s.el))}</a></li>`;
+    }
+    function groupHtml(view, g, extra) {
+      const ms = g.rows.filter((e) => e.type === 'm');
+      const ss = g.rows.filter((e) => e.type === 's');
+      const open = !(view.closedGroups && view.closedGroups.has(g.id));
+      return `<details class="insight-group${extra || ''}" data-group="${esc(g.id)}"${open ? ' open' : ''}><summary>${esc(g.title)} <span class="insight-count">${g.rows.length}</span></summary>` +
+        (ms.length ? `<table class="insight-table"><tbody>${ms.map((e) => macroRow(e.it, e.id)).join('')}</tbody></table>` : '') +
+        (ss.length ? `<ol class="insight-symbols">${ss.map((e) => symbolRow(e.it, e.id)).join('')}</ol>` : '') +
+        '</details>';
+    }
+
+    // --- "Used here": the notation of the section being read --------------------------
+
+    /** The section the reader is in: the last top-level heading above the upper third of the window. */
+    function readingSection(idx) {
+      const secs = idx.secs || [];
+      if (!secs.length) return null;
+      const pane = doc.closest('.pane');
+      const win = document_.defaultView || window;
+      const top = pane ? pane.getBoundingClientRect().top : 0;
+      const h = pane ? pane.clientHeight : win.innerHeight;
+      const line = top + Math.min(160, h * 0.3);
+      let cur = OPENING;
+      for (const s of secs) {
+        if (s.el.getBoundingClientRect().top <= line) cur = s;
+        else break;
+      }
+      return cur;
+    }
+
+    /** The rows whose symbols appear in a section's formulas (or are defined there), in index order. */
+    function usedIn(idx, sec) {
+      if (!idx.usedCache) idx.usedCache = new Map();
+      if (idx.usedCache.has(sec.order)) return idx.usedCache.get(sec.order);
+      const entries = entriesOf(idx);
+      const secs = idx.secs;
+      const k = secs.indexOf(sec);
+      const start = sec.el;
+      const end = k >= 0 && k + 1 < secs.length ? secs[k + 1].el : null;
+      const inside = (el) => (!start || start.compareDocumentPosition(el) & 4) && (!end || el.compareDocumentPosition(end) & 4);
+      const names = new Set();
+      const keys = new Set();
+      for (const el of formulas(doc)) {
+        if (!inside(el)) continue;
+        for (const n of commandsIn(el.dataset.tex)) names.add(n);
+        if (el.dataset.tex.length < 2000) for (const d of definitionsUsed(idx.defs, el)) keys.add(d.key);
+      }
+      let used = entries.filter((e) => (e.type === 'm' ? names.has(e.it.name) : keys.has(e.it.key) || inside(e.it.el)));
+      // a symbol that is only one of the macros with its argument (\norm{x} beside \norm) once
+      const macs = new Set(used.filter((e) => e.type === 'm').map((e) => '\\' + e.it.name));
+      used = used.filter((e) => {
+        if (e.type === 'm') return true;
+        const t = texTokens(e.it.tex);
+        return !(macs.has(t[0]) && (t.length <= 2 || (t[1] === '{' && t[t.length - 1] === '}' && t.slice(2, -1).every((x) => x !== '{' && x !== '}'))));
+      });
+      idx.usedCache.set(sec.order, used);
+      return used;
+    }
+
+    /** Redraw the "Used here" group when the reader moves to another section. */
+    function fillUsed(view) {
+      const box = view.body.querySelector('.insight-used');
+      if (!box) return;
+      const idx = getIndex();
+      const sec = readingSection(idx);
+      const key = sec ? String(sec.order) : '';
+      if (box.dataset.sec === key && box.childNodes.length) return;
+      box.dataset.sec = key;
+      const rows = sec ? usedIn(idx, sec) : [];
+      if (!rows.length) { box.innerHTML = ''; return; }
+      const open = !(view.closedGroups && view.closedGroups.has('used'));
+      const chip = (e) => {
+        const tex = e.type === 'm' ? sampleOf(e.it) : e.it.tex;
+        const hint = e.type === 'm' ? `\\${e.it.name} → ${e.it.mac.body}` : e.it.text ? sentenceText(e.it) : e.it.el.dataset.tex;
+        const label = e.type === 'm' ? '\\' + e.it.name : e.it.tex;
+        return `<button type="button" class="insight-chip" data-chip="${e.id}" title="${esc(hint.length > 160 ? hint.slice(0, 158) + '…' : hint)}" aria-label="${esc(label)}">` +
+          (tex ? `<span class="insight-sym" data-sym="${esc(tex)}"><code>${esc(label)}</code></span>` : `<code>${esc(label)}</code>`) + '</button>';
+      };
+      box.innerHTML = `<details class="insight-group insight-group-used" data-group="used"${open ? ' open' : ''}>` +
+        `<summary>Used in ${esc(sec.label)} <span class="insight-count">${rows.length}</span></summary>` +
+        `<div class="insight-chips">${rows.map(chip).join('')}</div></details>`;
+      renderSymbols(box);
+      if (view.query) filterNotation(view, view.query);
+    }
+
+    /** Show a symbol's row in the list: open its group, scroll to it and flash it. */
+    function showRow(view, id) {
+      let row = null;
+      view.body.querySelectorAll(`[data-k="${id}"]`).forEach((r) => { if (!r.closest('.insight-used')) row = r; });
+      if (!row) return;
+      if (row.hidden || row.closest('.insight-group[hidden]')) {
+        const f = view.body.querySelector('.insight-filter');
+        if (f) f.value = '';
+        filterNotation(view, '');
+      }
+      const g = row.closest('.insight-group');
+      if (g && !g.open) g.open = true;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.remove('insight-flash');
+      void row.offsetWidth;
+      row.classList.add('insight-flash');
+      setTimeout(() => row.classList.remove('insight-flash'), 1600);
+    }
+
+    /** Make the rows' links jump, draw their symbols and sentences. */
+    function finishRows(view, root) {
+      const idx = getIndex();
+      const byId = new Map(entriesOf(idx).map((e) => [e.id, e]));
+      root.querySelectorAll('a[data-e]').forEach((a) => {
+        const e = byId.get(a.dataset.e);
+        if (!e) return;
+        a._target = e.first;
+        if (e.type === 's') a.previousElementSibling.appendChild(shownOf(e.it));
+        const row = a.closest('[data-k]');
+        row.dataset.text = e.text;
+      });
+      renderSymbols(root);
+    }
+
     function fillNotation(view) {
       const body = view.body;
       const idx = getIndex();
@@ -1714,42 +2052,57 @@
         body.innerHTML = '<p class="insight-empty">This document defines no notation of its own: no macros used in its formulas, and no symbols defined with := or in words such as "let X denote".</p>' + (view.side ? hoverBox() : '');
         return;
       }
-      let html = '<input class="insight-filter" type="search" placeholder="Filter by command or text" aria-label="Filter the notation">';
-      if (idx.macros.length) {
-        html += `<h3>Macros <span class="insight-count">${idx.macros.length}</span></h3><table class="insight-table"><tbody>`;
-        idx.macros.forEach((e, k) => {
-          const sample = sampleOf(e);
-          const body = String(e.mac.body);
-          html += `<tr data-k="m${k}" data-text="${esc((e.name + ' ' + body).toLowerCase())}"><td class="insight-sym-cell">${sample ? `<span class="insight-sym" data-sym="${esc(sample)}"></span>` : ''}</td>` +
-            `<td class="insight-cmd"><code>\\${esc(e.name)}</code></td><td class="insight-def"><code>${esc(body.length > 90 ? body.slice(0, 87) + '…' : body)}</code></td>` +
-            `<td class="insight-first"><a href="#" data-m="${k}">${esc(where(e.first))}</a><span class="insight-uses">${e.count} formula${e.count > 1 ? 's' : ''}</span></td></tr>`;
-        });
-        html += '</tbody></table>';
-      }
-      if (idx.symbols.length) {
-        html += `<h3>Defined in the text <span class="insight-count">${idx.symbols.length}</span></h3><ol class="insight-symbols">`;
-        idx.symbols.forEach((s, k) => {
-          html += `<li data-k="s${k}" data-text="${esc((s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase())}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><a href="#" data-s="${k}">${esc(where(s.el))}</a></li>`;
-        });
-        html += '</ol>';
-      }
+      const entries = entriesOf(idx);
+      const q = view.query || '';
+      let html = '<div class="insight-tools">' +
+        `<input class="insight-filter" type="search" placeholder="Search by symbol or meaning" aria-label="Search the notation by symbol or meaning" value="${esc(q)}">` +
+        '<div class="insight-order" role="radiogroup" aria-label="Arrange the notation">' +
+        ORDERS.map(([k, label, title]) => `<button type="button" role="radio" data-order="${k}" aria-checked="${k === notationOrder}" title="${esc(title)}">${label}</button>`).join('') +
+        '</div></div>';
+      if (view.side) html += '<div class="insight-used"></div>';
+      html += groupsOf(entries, notationOrder).map((g) => groupHtml(view, g)).join('');
+      html += '<p class="insight-nomatch" hidden>Nothing matches. Try a command name (norm), a letter (alpha or α) or a word from the sentence that introduces the symbol.</p>';
       if (view.side) html += hoverBox();
+      const keep = body.scrollTop;
       body.innerHTML = html;
-      body.querySelectorAll('a[data-m]').forEach((a) => { a.dataset.go = ''; a._target = idx.macros[Number(a.dataset.m)].first; });
-      body.querySelectorAll('a[data-s]').forEach((a) => {
-        const s = idx.symbols[Number(a.dataset.s)];
-        a.dataset.go = '';
-        a._target = s.el;
-        a.previousElementSibling.appendChild(shownOf(s));
-      });
-      renderSymbols(body);
+      finishRows(view, body);
+      if (view.side) fillUsed(view);
+      if (q) filterNotation(view, q);
+      body.scrollTop = keep;
     }
 
-    function filterNotation(view, q) {
-      q = q.trim().toLowerCase().replace(/^\\/, '');
-      view.body.querySelectorAll('[data-text]').forEach((row) => {
-        row.hidden = !!q && !row.dataset.text.includes(q);
+    function setNotationOrder(order, fromUi) {
+      if (!ORDERS.some(([k]) => k === order) || order === notationOrder) return;
+      notationOrder = order;
+      for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
+      if (fromUi && opts.onNotationOrder) opts.onNotationOrder(order);
+    }
+
+    function filterNotation(view, raw) {
+      view.query = raw;
+      const q = greekQuery(raw.trim().toLowerCase()).replace(/^\\/, '');
+      const body = view.body;
+      body.classList.toggle('insight-searching', !!q);
+      let any = false;
+      body.querySelectorAll('.insight-group').forEach((g) => {
+        let n = 0;
+        g.querySelectorAll('[data-text]').forEach((row) => {
+          row.hidden = !!q && !row.dataset.text.includes(q);
+          if (!row.hidden) n++;
+        });
+        const used = g.classList.contains('insight-group-used');
+        g.hidden = !!q && (!n || used);
+        if (q && n && !used) {
+          // open groups with matches while searching, and close them again after
+          if (!g.open) { g.open = true; g.dataset.searchOpened = '1'; }
+          any = true;
+        } else if (!q && g.dataset.searchOpened) {
+          delete g.dataset.searchOpened;
+          g.open = false;
+        }
       });
+      const none = body.querySelector('.insight-nomatch');
+      if (none) none.hidden = !q || any;
     }
 
     // How maps are drawn, shared by every map on show: cited works as leaves,
@@ -2592,6 +2945,9 @@
       setDefinitions,
       usedByNote,
       setHover: (on) => setHover(on, false),
+      /** Arrange the notation index: 'section', 'kind' or 'az'. */
+      setNotationOrder: (order) => setNotationOrder(order, false),
+      notationOrder: () => notationOrder,
       /** Switch parts on or off: { map, notation, uses, words } (missing keys stay as they are). */
       setFeatures(f) {
         const before = Object.assign({}, feats);
@@ -2748,7 +3104,7 @@
     };
   }
 
-  const api = { attach, sidePanel, dependencyGraph, notationIndex, definedSymbol, proseDefinitions, texTokens, patternOf, occurrences, layout, foldGroups, mentionsIn };
+  const api = { attach, sidePanel, dependencyGraph, notationIndex, kindOfSymbol, alphaOf, greekQuery, definedSymbol, proseDefinitions, texTokens, patternOf, occurrences, layout, foldGroups, mentionsIn };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassInsight = api;
 })(typeof self !== 'undefined' ? self : this);

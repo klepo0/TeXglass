@@ -240,6 +240,18 @@ Contents to the Other Side**, `texglass.contentsPosition`).
 - **Notation**: an index of the paper's macros and defined symbols, with
   their meaning in words where the text gives one and a link to the first use.
   The checkbox turns notation on hover off and on.
+  - **Search** by symbol or by meaning: a command name (`norm`), a letter
+    (`alpha` or `α`) or a word from the sentence that introduces the symbol
+    (`measure`).
+  - **Section**, **Kind** and **A–Z** arrange the list: under the section
+    where each symbol is first defined; as spaces and sets, maps and
+    operators, named functions, constants and parameters (guessed from the
+    wording and the symbol's shape); or alphabetically, with Greek letters
+    together. Each group folds with a click on its heading. Your choice is
+    remembered.
+  - **Used in …** at the top shows the symbols of the section you are reading
+    and follows you as you scroll. Click (or tap) one to find its entry in the
+    list.
 
 ## Understanding the logic
 

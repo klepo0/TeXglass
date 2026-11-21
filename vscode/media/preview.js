@@ -858,6 +858,7 @@
         if (margin && m.marginWidth) margin.setWidth(m.marginWidth);
         if (margin) margin.setCollapsed(!!m.marginCollapsed);
         if (margin && m.notePad) margin.setPadAt(m.notePad);
+        if (insight && m.notationOrder) insight.setNotationOrder(m.notationOrder);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);
@@ -1016,6 +1017,7 @@
         vscode.postMessage({ type: 'render-tex', id, texs });
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+      onNotationOrder: (order) => vscode.postMessage({ type: 'side-pref', key: 'texglass:notation-order', value: order }),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => vscode.postMessage({ type: 'print-request' }),
       onFocusStart: () => { if (picker) picker.stop(); },
