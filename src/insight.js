@@ -1007,7 +1007,7 @@
     const toks = String(tex).match(/\\[A-Za-z]+|[A-Za-z]|\S/g) || [];
     for (const t of toks) {
       if (/^[A-Za-z]$/.test(t)) return { group: t.toUpperCase(), key: t.toLowerCase() + (t === t.toLowerCase() ? '0' : '1') + tex };
-      if (t[0] !== '\\') continue;
+      if (t[0] !== '\\' || t.length < 2) continue; // a lone backslash (from \, or \;) names nothing
       const name = t.slice(1);
       const g = greekIndex(name);
       if (g >= 0) return { group: 'Greek', key: String(g).padStart(2, '0') + (name[0] === name[0].toLowerCase() ? '0' : '1') + tex };
@@ -1815,8 +1815,15 @@
 
     function fill(view) {
       const t0 = Date.now();
-      if (view.tab === 'deps') fillDeps(view);
-      else fillNotation(view);
+      try {
+        if (view.tab === 'deps') fillDeps(view);
+        else fillNotation(view);
+      } catch (e) {
+        // One odd symbol or result must never leave the side panel stuck: say
+        // so in the tab and keep the rest of the page (and the other tabs) working.
+        if (typeof console !== 'undefined') console.error('TeXglass: could not draw the ' + (view.tab === 'deps' ? 'map' : 'notation list'), e);
+        view.body.innerHTML = '<p class="insight-empty insight-failed">Could not draw this tab for this paper.</p>';
+      }
       view.body.dataset.ms = String(Date.now() - t0);
     }
 
