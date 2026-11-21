@@ -196,6 +196,17 @@ body {
 .toolbar .more-menu button[role="menuitemcheckbox"]::after { content: ''; width: 1em; text-align: right; color: var(--accent); }
 .toolbar .more-menu button[role="menuitemcheckbox"][aria-checked="true"]::after { content: '✓'; }
 .toolbar .more-menu button:disabled { opacity: 0.45; cursor: default; background: none; }
+/* "Support TeXglass ☕": a quiet link at the end of the menu */
+.toolbar .more-menu .more-support {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.toolbar .more-menu .more-support:hover, .toolbar .more-menu .more-support:focus-visible { background: var(--accent-soft); outline: none; }
 #notes-sync-dialog .local-note { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
 
 /* Import from arXiv */
@@ -2022,6 +2033,7 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
     overscroll-behavior: contain;
   }
   .toolbar .more-menu button { min-height: 44px; align-items: center; font-size: 15px; }
+  .toolbar .more-menu .more-support { display: flex; min-height: 44px; align-items: center; font-size: 14px; }
 
   /* the side panel: a drawer over the page (opened by its button or a swipe from its edge) */
   .toc-pane {

@@ -20,6 +20,7 @@
   <a href="https://open-vsx.org/extension/klepo1/texglass"><img src="https://img.shields.io/open-vsx/dt/klepo1/texglass?label=Open%20VSX" alt="Open VSX downloads"></a>
   <a href="https://klepo0.github.io/TeXglass/dashboard/"><img src="https://img.shields.io/badge/render%20dashboard-nightly-2f6fb2" alt="Render dashboard"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-555" alt="License: PolyForm Noncommercial 1.0.0"></a>
+  <a href="https://buymeacoffee.com/texglass"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&amp;logoColor=black" alt="Support TeXglass on Buy Me a Coffee"></a>
 </p>
 
 <p align="center">

@@ -1424,6 +1424,9 @@ function activate(context) {
       if (preview) preview.post({ type: 'show-settings' });
       else vscode.commands.executeCommand('workbench.action.openSettings', '@ext:klepo1.texglass');
     }),
+    // A quiet link at the end of the preview's … menu: TeXglass's Buy Me a Coffee page.
+    vscode.commands.registerCommand('texglass.support', () =>
+      vscode.env.openExternal(vscode.Uri.parse('https://buymeacoffee.com/texglass'))),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
     // Zoom the document in the preview (Ctrl/Cmd +, - and 0 while it has focus).
     vscode.commands.registerCommand('texglass.zoomIn', () => preview && preview.post({ type: 'zoom-step', dir: 1 })),

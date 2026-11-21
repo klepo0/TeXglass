@@ -80,7 +80,7 @@ test('menus are created on install and the toolbar button opens the paper next t
   const fake = fakeBrowser();
   loadBackground(fake);
   fake.listeners.installed();
-  assert.deepStrictEqual(fake.menus.map((m) => m.id), ['texglass-link', 'texglass-page', 'texglass-local']);
+  assert.deepStrictEqual(fake.menus.map((m) => m.id), ['texglass-link', 'texglass-page', 'texglass-local', 'texglass-support']);
   assert.ok(fake.menus[0].targetUrlPatterns.includes('*://*.arxiv.org/abs/*'));
 
   fake.listeners.action({ id: 7, index: 2, url: 'https://arxiv.org/pdf/2102.13459v3' });
@@ -103,6 +103,17 @@ test('the right-click menu and page links open the paper; the web viewer can be 
     'https://klepo0.github.io/TeXglass/?arxiv=math%2F0211159',
     'https://klepo0.github.io/TeXglass/?arxiv=2301.00001',
   ]);
+});
+
+test('the toolbar button\'s "Support TeXglass" item opens the Buy Me a Coffee page', async () => {
+  const fake = fakeBrowser();
+  loadBackground(fake);
+  fake.listeners.installed();
+  const item = fake.menus.find((m) => m.id === 'texglass-support');
+  assert.deepStrictEqual([...item.contexts], ['action']);
+  await fake.listeners.menu({ menuItemId: 'texglass-support' }, { id: 1, index: 0 });
+  await settle();
+  assert.strictEqual(fake.tabs[0].url, 'https://buymeacoffee.com/texglass');
 });
 
 test('arxivId also reads alphaXiv addresses; HAL and ResearchGate pages need a lookup', () => {

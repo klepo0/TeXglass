@@ -14,6 +14,9 @@
     "type": "git",
     "url": "https://github.com/klepo0/TeXglass"
   },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/texglass"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -231,6 +234,11 @@
         "title": "Settings: Switch Reading Aids On or Off",
         "category": "TeXglass",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "texglass.support",
+        "title": "Support TeXglass ☕",
+        "category": "TeXglass"
       }
     ],
     "menus": {
@@ -349,6 +357,11 @@
           "command": "texglass.syncNotes",
           "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.studyTools",
           "group": "5_notes@3"
+        },
+        {
+          "command": "texglass.support",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "9_support"
         }
       ],
       "explorer/context": [
