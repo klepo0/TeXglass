@@ -232,6 +232,60 @@ test('the preview of a cited result splits it, ticks are kept, and unmentioned h
   }
 });
 
+test('item marks drawn as formulas ($\bullet$) are not shown as TeX; labels and notes keep their formulas', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const src = String.raw`\documentclass{article}
+\newtheorem{lemma}{Lemma}
+\begin{document}
+\begin{lemma}[$L^p$ bound]\label{marks}
+Assume the following:
+\begin{itemize}
+\item[$\bullet$] $X$ is compact;
+\item[$\circ$] $f$ is continuous;
+\item[$(\mathrm{H}_3)$] $f$ is positive.
+\end{itemize}
+Then $f$ attains its minimum.
+\end{lemma}
+\begin{proof}
+Since $X$ is compact, Lemma~\ref{marks} applies.
+\end{proof}
+\end{document}`;
+    const r = TeXglass.render(src, { renderMath });
+    const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    await page.setContent(
+      `<style>${fs.readFileSync(path.join(ROOT, 'vendor/katex/katex.min.css'), 'utf8')}${fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8')}</style>` +
+      `<article id="preview" class="document">${r.html}</article><div id="out" class="ref-popover-body"></div>`
+    );
+    await page.addScriptTag({ path: path.join(ROOT, 'src/hypotheses.js') });
+    const got = await page.evaluate(() => {
+      const checker = TeXglassHypotheses.attach({ root: document.getElementById('preview'), isChecked: () => false, setChecked: () => {} });
+      const a = document.querySelector('#preview .proof a.ref');
+      const v = checker.viewFor(document.getElementById(a.getAttribute('href').slice(1)), a, null);
+      document.getElementById('out').appendChild(v);
+      return {
+        seen: v.querySelector('.hyp-check').innerText,
+        labels: Array.from(v.querySelectorAll('.hyp-check > .hyp-list .hyp-label')).map((l) => {
+          const c = l.cloneNode(true);
+          c.querySelectorAll('.katex-mathml').forEach((m) => m.remove());
+          return c.textContent.replace(/[\s\u200b]+/g, '');
+        }),
+        labelMath: v.querySelectorAll('.hyp-check > .hyp-list .hyp-label .katex').length,
+        aria: Array.from(v.querySelectorAll('.hyp-box')).map((b) => b.getAttribute('aria-label')),
+        note: v.querySelector('.hyp-note') ? v.querySelector('.hyp-note').querySelectorAll('.katex').length : -1,
+      };
+    });
+    assert.doesNotMatch(got.seen, /\\(?:bullet|circ|mathrm)/, 'no TeX source on show');
+    assert.deepEqual(got.labels, ['(H3)']); // the bare marks are dropped next to the tick boxes
+    assert.equal(got.labelMath, 1, 'the (H3) label is drawn as on the page');
+    for (const l of got.aria) assert.doesNotMatch(l, /\\/);
+    assert.equal(got.note, 1, 'the note [$L^p$ bound] keeps its formula');
+  } finally {
+    await browser.close();
+  }
+});
+
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 test('in the viewer, hovering a result cited in a proof shows its hypotheses and what the section assumes', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
