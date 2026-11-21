@@ -2136,7 +2136,7 @@
     if (!target) return;
     e.preventDefault();
     // On a touch screen a tap on a reference shows it in a sheet first; "Go there" jumps.
-    if (asSheet() && a.matches(PREVIEW_LINKS) && !target.contains(a) && !(editing && editing.el.contains(a) && !editing.previewEl.contains(a))) {
+    if (asSheet() && a.matches(PREVIEW_LINKS) && (!Features || featureOn(Features.previewKind(a))) && !target.contains(a) && !(editing && editing.el.contains(a) && !editing.previewEl.contains(a))) {
       if (popoverLink !== a || popover.hidden) showPopover(a, target);
       return;
     }

@@ -24,6 +24,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Understanding the logic](#understanding-the-logic)
 - [Your own highlights and notes](#your-own-highlights-and-notes)
 - [Looks: themes, handwritten notes, zoom](#looks-themes-handwritten-notes-zoom)
+- [Settings: switching features on or off](#settings-switching-features-on-or-off)
 - [Web viewer](#web-viewer)
 - [Browser extension](#browser-extension)
 - [VS Code extension](#vs-code-extension)
@@ -289,6 +290,42 @@ Overleaf panel).
 - **Zoom**: the **− 100% +** buttons, <kbd>Ctrl+=</kbd> <kbd>Ctrl+-</kbd>
   <kbd>Ctrl+0</kbd>, or Ctrl + scroll / pinch. Remembered.
 
+## Settings: switching features on or off
+
+The **gear** button opens Settings, a list of TeXglass's reading aids with a
+switch for each. Turn off what you don't use; **Turn everything back on**
+restores them. Choices apply to every paper at once.
+
+| Group | Switch | What it covers |
+| --- | --- | --- |
+| Previews on hover | References | Previews of theorems, equations, sections and figures. |
+| | Footnotes | Footnote previews. |
+| | Citations | The bibliography entry when you rest on a citation. |
+| | Look up cited papers online | Title, authors and abstract from DataCite, Crossref and arXiv (needs Citations). Off means no citation is sent anywhere. |
+| | Cited theorems | "[12, Theorem 4.1]" previews (needs the lookup). |
+| | Hypothesis checker | Results cited in proofs split into hypotheses to tick (needs References). |
+| Notation and structure | Notation on hover | Where a formula's symbols are defined. |
+| | Symbols introduced in words | Also read "let X be", "denote by X". |
+| | Notation index | The Notation tab. |
+| | Dependency map | The Map tab, the larger map (<kbd>M</kbd>), and "Uses / Used in" under previews. |
+| | "What does this use?" buttons | The button by each result. |
+| Study | Highlights and notes | Same as the `…` menu item. |
+| | Reading progress | Same as the `…` menu item. |
+| Page | Click a formula to copy its LaTeX | |
+| | Handwritten notes look | Same as the pen button. |
+
+A switch that needs another one is dimmed while that one is off. Where each
+one is kept:
+
+- **Web viewer and browser extension**: in that browser (the extension's
+  viewer and its Overleaf view share them). Not synced with your notes.
+- **Overleaf view**: the gear in its toolbar shows the switches that apply
+  there (no footnotes, cited theorems, hypothesis checker, notes or progress).
+- **VS Code**: the gear in the preview's title bar (**TeXglass: Settings:
+  Switch Reading Aids On or Off**) opens the same panel. Each switch is a
+  `texglass.*` setting (see [Settings](#settings)), so Settings Sync carries
+  them and a workspace can set its own.
+
 ## Web viewer
 
 [klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/). Nothing to
@@ -404,7 +441,7 @@ in github.dev and vscode.dev.
   SVG, GIF, WebP, PDF and EPS, with `\graphicspath`.
 - **Export to HTML** (`texglass.exportEmbedFonts`) and **Print / Save as PDF**.
 - Title-bar buttons: Navigate, Contents, Hide/Show proofs, handwriting,
-  light/dark, scroll sync; the `…` menu has the rest.
+  Settings (gear), light/dark, scroll sync; the `…` menu has the rest.
 
 ### Commands
 
@@ -424,6 +461,7 @@ All in the Command Palette under **TeXglass:**.
 | Show Proofs | Unfold every proof. |
 | Toggle Light/Dark Preview | Switch the theme. |
 | Toggle Handwritten Notes Look | Switch the look. |
+| Settings: Switch Reading Aids On or Off | The [Settings panel](#settings-switching-features-on-or-off) (gear). |
 | Show or Hide Highlights and Notes | Your own notes and highlights. |
 | Next Margin Note | <kbd>N</kbd> in the preview. |
 | Previous Margin Note | <kbd>Shift+N</kbd> in the preview. |
@@ -452,6 +490,16 @@ All in the Command Palette under **TeXglass:**.
 | `texglass.studyTools` | `true` | Your highlights and notes in the preview. |
 | `texglass.readingProgress` | `true` | Reading progress markers and summaries. |
 | `texglass.notationHover` | `true` | Notation on hover. |
+| `texglass.notationFromText` | `true` | Notation also finds symbols introduced in words. |
+| `texglass.notationIndex` | `true` | The Notation tab. |
+| `texglass.dependencyMap` | `true` | The Map tab, larger map and "Uses / Used in" under previews. |
+| `texglass.whatDoesThisUse` | `true` | "What does this use?" buttons. |
+| `texglass.previews.references` | `true` | Previews of references. |
+| `texglass.previews.footnotes` | `true` | Previews of footnotes. |
+| `texglass.previews.citations` | `true` | Previews of citations (the bibliography entry). |
+| `texglass.citationLookup` | `true` | Look up cited papers on DataCite, Crossref and arXiv. |
+| `texglass.citedTheoremPreviews` | `true` | "[12, Theorem 4.1]" previews from arXiv. |
+| `texglass.hypothesisChecker` | `true` | Hypotheses to tick in previews of cited results. |
 | `texglass.clickToCopyMath` | `true` | Click a formula to copy its LaTeX. |
 | `texglass.previewTheme` | `auto` | `auto`, `light` or `dark`. |
 | `texglass.previewStyle` | `standard` | `standard` or `handwritten`. |
@@ -490,7 +538,8 @@ section will describe it.
   already seen are kept.
 - Your files and the papers you open never leave your browser or editor.
   Citation previews ask DataCite and Crossref about a citation only when you
-  hover it. Notes sync goes only to your own GitHub gist.
+  hover it; switch **Look up cited papers online** off in
+  [Settings](#settings-switching-features-on-or-off) to stop that. Notes sync goes only to your own GitHub gist.
 - The public website counts visits with GoatCounter (no cookies, path only,
   skipped with Do Not Track or Global Privacy Control). Local copies and the
   extensions count nothing.
