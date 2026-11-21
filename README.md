@@ -135,9 +135,10 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 ## Contribute
 
 Found a paper that renders badly? [Open an issue](https://github.com/klepo0/TeXglass/issues)
-with its arXiv id. To work on the code, see [CONTRIBUTING.md](CONTRIBUTING.md);
-`npm start` serves the web viewer at http://localhost:8000 and `npm test` runs
-the tests.
+with its arXiv id. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md)
+for how to contribute and the [Contributor License Agreement](CLA.md) you sign
+on your first pull request. `npm start` serves the web viewer at
+http://localhost:8000 and `npm test` runs the tests.
 
 ## License
 

@@ -1,5 +1,27 @@
 # Contributing
 
+Contributions are welcome: bug reports, papers that render badly, fixes and new
+features.
+
+## How to contribute
+
+1. **Report a problem.** [Open an issue](https://github.com/klepo0/TeXglass/issues/new/choose).
+   For a paper that renders badly, give its arXiv id. Please don't post
+   unpublished work.
+2. **Send a change.** Fork the repository, make your change on a branch, run
+   `npm test`, and open a pull request against `main`. Keep each pull request
+   to one change; for anything large, open an issue first so we can agree on
+   the approach.
+3. **Sign the CLA.** On your first pull request a bot asks you to sign the
+   [Contributor License Agreement](CLA.md) by posting a comment. You keep the
+   copyright in your work. The agreement lets TeXglass offer your contribution
+   under both its [noncommercial license](LICENSE) and separate commercial
+   licenses, which is how the project is funded. You sign once, and it covers
+   all your later contributions.
+
+The maintainer reviews every pull request before merging. Workflows on pull
+requests from first-time contributors run only after approval.
+
 ## Where the code is
 
 The converter is `src/texglass.js`, dependency-free and shared by the web
@@ -45,6 +67,11 @@ browser extension zips, then pushes a `Release vX.Y.Z` commit to `main` with
 the `vX.Y.Z` tag, creates the GitHub release and publishes to the VS Code
 Marketplace (and Open VSX when its token is set). If anything fails before the
 push, nothing changes on `main`; fix it and run the workflow again.
+
+`main` is protected, and the workflow's built-in token can't bypass that, so
+the release commit is pushed with the deploy key in the `RELEASE_DEPLOY_KEY`
+secret. That key must have write access and be on the bypass list of the
+`main` ruleset.
 
 Fallback from a clone: change the version in `vscode/package.json` in its own
 commit on `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The same
