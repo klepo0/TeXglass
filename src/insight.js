@@ -23,6 +23,8 @@
  *     hover: true,                         // notation on hover
  *     onHoverChange(on) { ... },           // the panel's checkbox changed it
  *     statusOf(el) { ... },                // optional: reading progress { s, q } (src/progress.js)
+ *     print() { ... },                     // optional: a Print button on the "What does this use?" bar
+ *     onFocusStart() { ... },              // optional: "What does this use?" starts lighting up
  *   });
  *   insight.setDefinitions(result.defs);   // after each render: the paper's macros
  *   insight.invalidate();                  // after the page changed
@@ -2413,6 +2415,7 @@
     function focus(el, dir, scroll, collapse) {
       if (!el || !doc.contains(el)) return;
       if (collapse) collapseRest = true;
+      if (!focusState && opts.onFocusStart) opts.onFocusStart(); // e.g. end "Show selected results"
       clearMarks();
       hidePop();
       const g = getGraph();
@@ -2501,6 +2504,7 @@
           const b = e.target.closest('button');
           if (!b || !focusState) return;
           if (b.dataset.act === 'done') return unfocus();
+          if (b.dataset.act === 'print') return opts.print();
           if (b.dataset.act === 'collapse') {
             collapseRest = !collapseRest;
             doc.classList.toggle('uses-collapse', collapseRest);
@@ -2540,6 +2544,7 @@
         `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
         step +
         `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
+        (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF (with Hide the rest on, only that; folded proofs are left out)">Print</button>' : '') +
         '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
       bar.hidden = false;
     }

@@ -50,6 +50,7 @@
   let imageMap = null; // { path: object URL } for those figures
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let progress = null; // reading progress on the results (src/progress.js)
+  let picker = null; // "Show selected results" (src/pick.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
   let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
@@ -209,6 +210,7 @@
     if (margin) margin.refresh();
     reflowSoon(); // too-wide formulas on a phone break onto more lines
     if (insight) insight.invalidate(); // read the page again when next needed
+    if (picker) picker.refresh(); // the same selection, on the new page
     if (progress) progress.refresh(); // status markers, once the browser is idle
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
   }
@@ -2246,8 +2248,27 @@
       hover: featureOn('notationHover'),
       onHoverChange: (on) => setFeature('notationHover', on),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
+      print: () => window.print(),
+      onFocusStart: () => { if (picker) picker.stop(); },
     })
     : null;
+  // Show selected results: tick results and numbered equations, see (and print) only those.
+  picker = window.TeXglassPick
+    ? TeXglassPick.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      proofsOf: (el) => {
+        const n = insight && insight.graph().byEl.get(el);
+        return n ? n.proofs : null;
+      },
+      print: () => window.print(),
+      onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
+    })
+    : null;
+  if ($('pick-results')) {
+    if (picker) $('pick-results').addEventListener('click', () => picker.start());
+    else $('pick-results').hidden = true;
+  }
   // A result cited in a proof previews as its hypotheses and conclusion; the
   // reader's ticks are kept with their notes (and sync with them).
   const hypTicks = new Map(); // ticks while no paper is open to keep them with

@@ -33,6 +33,7 @@ body { display: block; }
 .theme-toggle[hidden] { display: none; }
 .theme-toggle:hover { color: var(--ink); }
 @media print { .theme-toggle { display: none; } }
+.tg-view-hide { display: none !important; }
 `;
 
   // A light/dark switch like the preview's; it remembers nothing, so the page
@@ -61,6 +62,33 @@ body { display: block; }
     else go();
   });
 })();
+`;
+
+  // For a page printed with a view (VS Code: "Show selected results", or "What
+  // does this use?" with Hide the rest): the preview says which of its blocks
+  // show (TeXglassPick.snapshot, by their place among VIEW_BLOCKS); the page
+  // hides the others. If the page's blocks do not match the preview's, the
+  // whole document prints.
+  const VIEW_BLOCKS = 'h1, h2, h3, h4, h5, h6, header, .theorem, .proof, .math-display, figure, table, li, p, blockquote, pre';
+  const VIEW_OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar';
+  function applyView(root, view, blocksSel, outsideSel) {
+    var blocks = Array.prototype.filter.call(root.querySelectorAll(blocksSel), function (el) { return !el.closest(outsideSel); });
+    if (!view || blocks.length !== view.n) return false;
+    var keep = new Set();
+    view.keep.forEach(function (i) { if (blocks[i]) keep.add(blocks[i]); });
+    var lit = new Set();
+    keep.forEach(function (k) { for (var p = k.parentElement; p && p !== root; p = p.parentElement) lit.add(p); });
+    (function walk(node) {
+      Array.prototype.forEach.call(node.children, function (c) {
+        if (keep.has(c)) return;
+        if (lit.has(c)) walk(c);
+        else c.classList.add('tg-view-hide');
+      });
+    })(root);
+    return true;
+  }
+  const viewScript = (view) => `
+(${applyView.toString()})(document.getElementById('preview'), ${JSON.stringify({ n: view.n | 0, keep: (view.keep || []).map((i) => i | 0) })}, ${JSON.stringify(VIEW_BLOCKS)}, ${JSON.stringify(VIEW_OUTSIDE)});
 `;
 
   const SRC_BLOCK = /^<div class="src-block" data-s="\d+" data-e="\d+">/;
@@ -135,11 +163,12 @@ body { display: block; }
    *   diagramsJs src/diagrams.js, which draws the arrows of tikzcd/xymatrix and
    *              the tikzpicture paths; put inside the page when it has diagrams
    *   print      open the print dialog as soon as the page has loaded
+   *   view       print only these blocks: { n, keep } from TeXglassPick.snapshot
    *   rootAttrs  more attributes for <html>, e.g. { 'data-look': 'notes' }
    *   extraCss   a stylesheet to put after the viewer's (e.g. a look's)
    *   bodyStart  markup to put first in <body> (e.g. SVG filters the look uses)
    */
-  function page({ body, title, css, katexCss, theme, diagramsJs, print, rootAttrs, extraCss, bodyStart }) {
+  function page({ body, title, css, katexCss, theme, diagramsJs, print, view, rootAttrs, extraCss, bodyStart }) {
     const diagrams = diagramsJs && /class="tg-diagram/.test(body || '')
       ? `\n<script>${diagramsJs.replace(/<\/script/gi, '<\\/script')}</script>`
       : '';
@@ -168,7 +197,7 @@ ${bodyStart ? bodyStart + '\n' : ''}<button id="theme-toggle" class="theme-toggl
 <main class="panes"><section class="pane"><article id="preview" class="document">
 ${body}
 </article></section></main>
-<script>${THEME_SCRIPT}</script>${diagrams}
+${view && Array.isArray(view.keep) ? `<script>${viewScript(view)}</script>\n` : ''}<script>${THEME_SCRIPT}</script>${diagrams}
 ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
 </html>
 `;
@@ -182,5 +211,5 @@ ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
     return (base || 'document') + '.html';
   }
 
-  return { page, joinBlocks, embedKatexFonts, replaceImages, fileName, KATEX_CDN, KATEX_VERSION };
+  return { page, joinBlocks, embedKatexFonts, replaceImages, fileName, applyView, VIEW_BLOCKS, VIEW_OUTSIDE, KATEX_CDN, KATEX_VERSION };
 });

@@ -1292,6 +1292,15 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .uses-btn, .uses-bar, .rp-marks { display: none !important; }
   .uses-focus .uses-fade { opacity: 1 !important; }
   .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
+  /* Print what the view shows: with "Hide the rest" or "Show selected results"
+     (src/pick.js), hidden blocks and folded proofs stay out. */
+  .pick-box, .pick-bar { display: none !important; }
+  .pick-mode .pick-able { outline: none !important; }
+  .pick-view .pick-proof:not(.pick-open),
+  .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof),
+  .uses-focus.uses-collapse .uses-proof:not(.uses-open) { display: none !important; }
+  /* a page printed from VS Code with a view applied (src/export.js) */
+  .tg-view-hide { display: none !important; }
   :root {
     --bg: #fff !important;
     --paper: #fff !important;
@@ -1833,19 +1842,20 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 /* "Hide the rest": unrelated blocks fold away; headings of sections with something lit stay */
 @media screen {
   .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof) { display: none; }
-  /* the proofs of the results shown stay, folded to their first line until clicked */
+  /* the proofs of the results shown stay, folded to their first line until clicked
+     (also in "Show selected results", src/pick.js) */
   .uses-focus.uses-collapse .uses-proof { opacity: 1; }
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > :not(:first-child) { display: none; }
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child {
+  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > :not(:first-child) { display: none; }
+  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > p:first-child {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--muted);
     cursor: pointer;
   }
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) > p:first-child .qed { display: none; }
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle { opacity: 1; color: var(--accent); }
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) .fold-toggle svg { transform: rotate(-90deg); }
+  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > p:first-child .qed { display: none; }
+  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) .fold-toggle { opacity: 1; color: var(--accent); }
+  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) .fold-toggle svg { transform: rotate(-90deg); }
 }
 .uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
@@ -2118,3 +2128,28 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .rp-key-understood { background: var(--rp-understood-bg); border-color: var(--rp-understood); }
 .rp-key-q { border: 0; background: none; width: auto; color: var(--rp-q); font-weight: 700; }
 .rp-detail { color: var(--ink); }
+
+/* --- Show selected results (src/pick.js) -----------------------------------------
+   Picking: every result and numbered equation gets a tick box; a click ticks it.
+   Showing: only the ticked ones, their section headings and their proofs (folded). */
+.pick-mode .pick-able { position: relative; cursor: pointer; }
+.pick-mode .pick-able:hover { outline: 1.5px dashed var(--thm-border); outline-offset: 4px; border-radius: 2px; }
+.pick-mode .pick-able.pick-on { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+.pick-box {
+  /* inside the block, top right of a result and left of an equation: results
+     and displays may scroll sideways, which would clip anything outside them */
+  position: absolute; right: 0.5em; top: 0.55em; z-index: 1;
+  width: 1.05em; height: 1.05em; box-sizing: border-box;
+  border: 1.6px solid var(--muted); border-radius: 3px; background: var(--paper);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1rem; font-style: normal; line-height: 1; color: #fff;
+}
+.pick-box[aria-checked="true"] { border-color: var(--accent); background: var(--accent); }
+.pick-box[aria-checked="true"]::after { content: "✓"; font-size: 0.8em; font-weight: 700; }
+.math-display > .pick-box { right: auto; left: 0.3em; top: 50%; transform: translateY(-50%); }
+.pick-view .pick-hide { display: none !important; }
+/* room to scroll the last item above the bar */
+@media screen { .pick-mode, .pick-view { padding-bottom: 6rem !important; } }
+.pick-names { color: var(--muted); font-size: 0.9em; }
+.pick-bar button:disabled { opacity: 0.5; cursor: default; }
+

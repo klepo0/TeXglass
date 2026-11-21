@@ -41,7 +41,12 @@ browser extension:
   direction, step through them, or press Esc to end it. Results reached only
   through a guessed link (see the Map below) get a dashed outline, and the
   cited works light up in the bibliography. The Map tab has the
-  same thing as **Show what it uses**.
+  same thing as **Show what it uses**. **Print** on its bar prints what is
+  shown.
+- **Show selected results**: tick theorems, lemmas, definitions and numbered
+  equations (say Theorem 1, (1.1) and (3.4)) and see only those, each proof
+  folded until you open it; **Print** then prints exactly that view, to a
+  printer or as a PDF.
 - **Reading progress**: a small marker by each theorem, lemma, definition and
   proof; click it to step through unread, skimmed, read and understood, and
   flag a result with **?** to ask about it. Contents shows how far each section
@@ -125,7 +130,8 @@ Install **TeXglass** from the
   `texglass.notes.*` settings. Print and HTML export keep the look.
 - **Export to HTML**: one standalone page that works offline
   (`texglass.exportEmbedFonts`).
-- **Print / Save as PDF**, laid out like a paper.
+- **Print / Save as PDF**, laid out like a paper; a selection of results, or
+  **Hide the rest**, prints as shown.
 - Works in **github.dev and vscode.dev**: press `.` on any GitHub repo,
   preview, edit, commit.
 
@@ -194,7 +200,8 @@ offline too (arXiv, GitHub and OAI preprints still need a connection).
 - **Save** back to the file (Ctrl+S) and **live reload** when the file changes
   on disk (Chrome and Edge).
 - **Export** a standalone offline `.html` page.
-- **Print** (Ctrl+P) as a clean paper-style PDF.
+- **Print** (Ctrl+P) as a clean paper-style PDF, or only the results you
+  selected.
 - **On phones and tablets**: a compact toolbar; the side panel and margin notes
   swipe in from the screen edges; a tap on a reference, citation or formula
   opens its preview as a sheet at the bottom; wide formulas break onto more

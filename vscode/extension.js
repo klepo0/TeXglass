@@ -723,6 +723,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'pick.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
@@ -865,6 +866,14 @@ ${INK_FILTERS}
 
   onMessage(m) {
     switch (m.type) {
+      case 'print-request': // Print on the bar of a selection or of "What does this use?"
+        vscode.commands.executeCommand('texglass.print');
+        break;
+      case 'print': // what shows in the preview, after 'print-view'
+        if (WEB) break;
+        vscode.commands.executeCommand('texglass.exportHtml', this.uri, undefined, true,
+          m.view && Array.isArray(m.view.keep) ? { n: m.view.n, keep: m.view.keep } : undefined);
+        break;
       case 'ready': {
         this.ready = true;
         this.post({ type: 'doc', uri: this.uri.toString() });
@@ -1199,7 +1208,7 @@ async function notesForExport(context, print) {
   }
 }
 
-async function exportHtml(context, converter, uri, out, print) {
+async function exportHtml(context, converter, uri, out, print, view) {
   const project = await assembleDocument(uri, new Map());
   if (!project || project.error) {
     vscode.window.showErrorMessage(project ? project.error : `Could not read ${uri}.`);
@@ -1259,6 +1268,7 @@ async function exportHtml(context, converter, uri, out, print) {
     const notes = await notesForExport(context, !!print);
     const html = TeXglassExport.page({
       body: m.result.html, title: m.result.title || name, css, katexCss, diagramsJs, print: !!print,
+      view: print && view ? view : undefined,
       ...(notes || {}),
       // Paper prints light; on screen an exported page follows the reader's system.
       theme: notes && print ? 'light' : undefined,
@@ -1394,6 +1404,10 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.disableScrollSync', () => setScrollSync(false)),
     // The Contents and Hide/Show proofs buttons in the preview's title bar.
     vscode.commands.registerCommand('texglass.find', () => preview && preview.post({ type: 'find', mode: 'find' })),
+    vscode.commands.registerCommand('texglass.selectResults', () => {
+      if (preview) preview.post({ type: 'pick' });
+      else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
+    }),
     vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
     vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
@@ -1493,7 +1507,7 @@ function activate(context) {
     // Export the document as a standalone .html file: the one given (Explorer),
     // else the LaTeX file being edited, else the one the preview shows.
     // Other extensions and tasks may pass where to write it as a second argument.
-    vscode.commands.registerCommand('texglass.exportHtml', async (uri, out, print) => {
+    vscode.commands.registerCommand('texglass.exportHtml', async (uri, out, print, view) => {
       if (!(uri instanceof vscode.Uri)) {
         const ed = vscode.window.activeTextEditor;
         if (ed && isTex(ed.document)) uri = ed.document.uri;
@@ -1511,7 +1525,7 @@ function activate(context) {
           uri = await rootOf(uri, text || '');
         } catch (e) { /* keep the file itself */ }
       }
-      return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined, print === true);
+      return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined, print === true, view && typeof view === 'object' ? view : undefined);
     }),
     // Print the document, or save it as a PDF, laid out like a paper. On the
     // desktop it opens in the browser (webviews cannot print); in vscode.dev and
@@ -1521,6 +1535,20 @@ function activate(context) {
         if (preview) preview.post({ type: 'print' });
         else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file), then print it.');
         return null;
+      }
+      // The document the preview shows: print what the preview shows (only
+      // the selected results, or what "Hide the rest" leaves). The preview
+      // answers with a 'print' message.
+      if (preview && preview.ready && !(uri instanceof vscode.Uri) && !(out instanceof vscode.Uri)) {
+        const ed = vscode.window.activeTextEditor;
+        let target = preview.uri;
+        if (ed && isTex(ed.document) && ed.document.uri.toString() !== preview.uri.toString()) {
+          try { target = await rootOf(ed.document.uri, ed.document.getText()); } catch (e) { target = ed.document.uri; }
+        }
+        if (target.toString() === preview.uri.toString()) {
+          preview.post({ type: 'print-view' });
+          return null;
+        }
       }
       return vscode.commands.executeCommand('texglass.exportHtml', uri, out, true);
     }),

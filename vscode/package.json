@@ -151,6 +151,11 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.selectResults",
+        "title": "Show Selected Results…",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.showNotation",
         "title": "Show Notation Index",
         "category": "TeXglass"
@@ -237,6 +242,11 @@
           "command": "texglass.showDependencies",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "4_insight@2"
+        },
+        {
+          "command": "texglass.selectResults",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "4_insight@3"
         },
         {
           "command": "texglass.toggleContents",
