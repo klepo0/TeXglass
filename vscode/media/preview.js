@@ -8,6 +8,10 @@
   'use strict';
 
   const vscode = acquireVsCodeApi();
+  // Settings (shared/features.js): which reading aids are on, from the texglass.* settings.
+  const Features = window.TeXglassFeatures || null;
+  let features = {};
+  const featureOn = (id) => !Features || Features.on(features, id);
   const preview = document.getElementById('preview');
   const pane = document.getElementById('preview-pane');
   const popover = document.getElementById('ref-popover');
@@ -687,6 +691,7 @@
   preview.addEventListener('mouseover', (e) => {
     const a = e.target.closest(PREVIEW_LINKS);
     if (!a) return;
+    if (Features && !featureOn(Features.previewKind(a))) return; // switched off in Settings
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target || target.contains(a)) return;
     clearTimeout(hideTimer);
@@ -715,13 +720,13 @@
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
       // A result cited in a proof: its hypotheses and conclusion, with boxes to tick (shared/hypotheses.js).
-      const split = hypotheses && hypotheses.viewFor(target, a, clone);
+      const split = hypotheses && featureOn('hypotheses') && hypotheses.viewFor(target, a, clone);
       body.appendChild(split || clone);
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up by the extension now.
-    const cited = cites && cites.noteFor(target, { link: a, onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    const cited = cites && featureOn('citeLookup') && cites.noteFor(target, { link: a, results: featureOn('citedResults'), onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
@@ -919,6 +924,13 @@
       case 'notation-hover':
         if (insight) insight.setHover(m.on);
         break;
+      case 'features':
+        features = m.prefs || {};
+        applyFeatures();
+        break;
+      case 'show-settings':
+        if (settingsPanel) settingsPanel.open();
+        break;
       case 'tex-rendered': {
         const done = texWaiting.get(m.id);
         texWaiting.delete(m.id);
@@ -1031,6 +1043,33 @@
       insight,
       jump: (el) => { jumpTo(el); if (narrow.matches) { tocWanted = false; showToc(); } },
       onChange: (map) => vscode.postMessage({ type: 'progress', map }),
+    })
+    : null;
+
+  // --- settings: switching reading aids on or off ------------------------------------
+  // The panel changes the texglass.* settings; the extension sends them back ('features').
+
+  function applyFeatures() {
+    if (Features && insight) insight.setFeatures(Features.insightParts(features));
+    if (Features && side && side.setTabs) side.setTabs(Features.sideTabs(features));
+    if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
+    if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
+  }
+  const settingsPanel = Features
+    ? Features.panel({
+      get: () => features,
+      set: (id, on) => {
+        features = Object.assign({}, features, { [id]: on });
+        applyFeatures();
+        vscode.postMessage({ type: 'set-feature', id, on });
+      },
+      footer: (() => {
+        const p = document.createElement('p');
+        p.className = 'features-extra';
+        p.innerHTML = 'These are VS Code settings (texglass.*), kept with your other settings. <button type="button" class="link-button">Open in Settings</button>';
+        p.querySelector('button').addEventListener('click', () => vscode.postMessage({ type: 'open-settings' }));
+        return p;
+      })(),
     })
     : null;
 

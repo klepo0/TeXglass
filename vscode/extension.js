@@ -24,6 +24,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+const TeXglassFeatures = require('./shared/features.js');
 const NotesSync = require('./shared/notes-sync.js');
 
 /** Hosts the citation previews may ask (see shared/cite.js). */
@@ -265,6 +266,25 @@ async function notesGist(context, ask) {
 
 function notationHover() {
   return vscode.workspace.getConfiguration('texglass').get('notationHover', true) !== false;
+}
+
+/** Every reading aid's setting, by its id in shared/features.js: { refPreviews: true, ... }. */
+function featureSettings() {
+  const config = vscode.workspace.getConfiguration('texglass');
+  const out = {};
+  for (const f of TeXglassFeatures.LIST) {
+    if (f.id === 'handwriting') out[f.id] = config.get('previewStyle', 'standard') === 'handwritten';
+    else out[f.id] = config.get(f.vscode, true) !== false;
+  }
+  return out;
+}
+
+/** Change one reading aid's setting (from the preview's Settings panel). */
+function setFeatureSetting(id, on) {
+  const f = TeXglassFeatures.LIST.find((x) => x.id === id);
+  if (!f) return undefined;
+  if (id === 'handwriting') return setConfig('previewStyle', on ? 'handwritten' : 'standard');
+  return setConfig(f.vscode, !!on);
 }
 
 function clickToCopy() {
@@ -707,6 +727,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'features.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
@@ -868,6 +889,7 @@ ${INK_FILTERS}
         this.notesText = undefined;
         this.loadNotes();
         this.post({ type: 'notation-hover', on: notationHover() });
+        this.post({ type: 'features', prefs: featureSettings() });
         this.renderedText = null;
         this.defsJson = null;
         this.render().then(() => {
@@ -949,6 +971,13 @@ ${INK_FILTERS}
         break;
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);
+        break;
+      case 'set-feature':
+        // a switch in the preview's Settings panel
+        if (typeof m.id === 'string') setFeatureSetting(m.id, !!m.on);
+        break;
+      case 'open-settings':
+        vscode.commands.executeCommand('workbench.action.openSettings', '@ext:klepo1.texglass');
         break;
       case 'open-link':
         if (/^https?:|^mailto:/.test(m.href)) vscode.env.openExternal(vscode.Uri.parse(m.href));
@@ -1371,6 +1400,11 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.showNotation', () => preview && preview.post({ type: 'insight', tab: 'notation' })),
     vscode.commands.registerCommand('texglass.showDependencies', () => preview && preview.post({ type: 'insight', tab: 'deps' })),
     vscode.commands.registerCommand('texglass.showLargerMap', () => preview && preview.post({ type: 'larger-map' })),
+    // The preview's Settings panel: switch reading aids on or off (texglass.* settings).
+    vscode.commands.registerCommand('texglass.showSettings', () => {
+      if (preview) preview.post({ type: 'show-settings' });
+      else vscode.commands.executeCommand('workbench.action.openSettings', '@ext:klepo1.texglass');
+    }),
     vscode.commands.registerCommand('texglass.toggleContents', () => preview && preview.post({ type: 'toggle-toc' })),
     // Zoom the document in the preview (Ctrl/Cmd +, - and 0 while it has focus).
     vscode.commands.registerCommand('texglass.zoomIn', () => preview && preview.post({ type: 'zoom-step', dir: 1 })),
@@ -1499,6 +1533,9 @@ function activate(context) {
       }
       if (preview && e.affectsConfiguration('texglass.studyTools')) {
         preview.post({ type: 'study', on: studyTools() });
+      }
+      if (preview && e.affectsConfiguration('texglass')) {
+        preview.post({ type: 'features', prefs: featureSettings() });
       }
       if (preview && e.affectsConfiguration('texglass.notationHover')) {
         preview.post({ type: 'notation-hover', on: notationHover() });

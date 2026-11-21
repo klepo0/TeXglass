@@ -52,6 +52,7 @@
   let progress = null; // reading progress on the results (src/progress.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
+  let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -66,6 +67,10 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
     remove(k) { try { localStorage.removeItem(k); } catch (e) { /* storage unavailable */ } },
   };
+  // Settings: which reading aids are on (src/features.js), kept in this browser.
+  const Features = window.TeXglassFeatures || null;
+  let features = Features ? Features.read(store) : {};
+  const featureOn = (id) => !Features || Features.on(features, id);
   if (margin) {
     margin.setWidth(parseFloat(store.get('texglass:margin-width')));
     margin.setCollapsed(store.get('texglass:margin-collapsed') === '1');
@@ -724,7 +729,7 @@
     mode = m;
     document.body.classList.toggle('mode-edit', m === 'edit');
     document.body.classList.toggle('editing', m === 'split');
-    if (copier) copier.setEnabled(m !== 'edit');
+    if (copier) copier.setEnabled(m !== 'edit' && featureOn('copyMath'));
     updateStudy();
     updateProgress();
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
@@ -1650,7 +1655,7 @@
     return out;
   }
 
-  const studyOn = () => store.get('texglass:study') !== '0';
+  const studyOn = () => featureOn('notes');
   function updateStudy() {
     const on = !!(margin && NotesSync && paper && studyOn() && mode !== 'edit');
     if (margin) margin.setStudy(on);
@@ -1871,8 +1876,7 @@
 
   if ($('notes-toggle')) {
     $('notes-toggle').addEventListener('click', () => {
-      store.set('texglass:study', studyOn() ? '0' : '1');
-      updateStudy();
+      setFeature('notes', !studyOn());
     });
     $('notes-export').addEventListener('click', exportNotes);
     $('notes-import').addEventListener('click', () => $('notes-file').click());
@@ -1887,7 +1891,7 @@
   // --- reading progress -------------------------------------------------------------
   // A status by each result (src/progress.js), kept with the paper's notes
   // (record.progress), so it is exported, imported and synced with them.
-  function progressOn() { return store.get('texglass:progress') !== '0'; }
+  function progressOn() { return featureOn('progress'); }
   function updateProgress() {
     const item = $('progress-toggle');
     if (item) item.setAttribute('aria-checked', String(progressOn()));
@@ -1905,8 +1909,7 @@
   }
   if ($('progress-toggle')) {
     $('progress-toggle').addEventListener('click', () => {
-      store.set('texglass:progress', progressOn() ? '0' : '1');
-      updateProgress();
+      setFeature('progress', !progressOn());
     });
     if (!NotesSync || !window.TeXglassProgress) $('progress-toggle').hidden = true;
   }
@@ -2037,13 +2040,13 @@
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
       // A result cited in a proof: its hypotheses and conclusion, with boxes to tick (src/hypotheses.js).
-      const split = hypotheses && hypotheses.viewFor(target, a, clone);
+      const split = hypotheses && featureOn('hypotheses') && hypotheses.viewFor(target, a, clone);
       body.appendChild(split || clone);
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
-    const cited = cites && cites.noteFor(target, { link: a, onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    const cited = cites && featureOn('citeLookup') && cites.noteFor(target, { link: a, results: featureOn('citedResults'), onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
     // On a touch screen the preview is a sheet at the bottom: a tap opened it, and
     // this button goes to the result itself (as a click on the link does elsewhere).
@@ -2084,6 +2087,7 @@
     if (asSheet()) return; // a tap opens the preview there (below)
     const a = e.target.closest(PREVIEW_LINKS);
     if (!a || (editing && editing.el.contains(a) && !editing.previewEl.contains(a))) return;
+    if (Features && !featureOn(Features.previewKind(a))) return; // switched off in Settings
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target || target.contains(a)) return;
     showPopover(a, target);
@@ -2132,7 +2136,7 @@
     if (!target) return;
     e.preventDefault();
     // On a touch screen a tap on a reference shows it in a sheet first; "Go there" jumps.
-    if (asSheet() && a.matches(PREVIEW_LINKS) && !target.contains(a) && !(editing && editing.el.contains(a) && !editing.previewEl.contains(a))) {
+    if (asSheet() && a.matches(PREVIEW_LINKS) && (!Features || featureOn(Features.previewKind(a))) && !target.contains(a) && !(editing && editing.el.contains(a) && !editing.previewEl.contains(a))) {
       if (popoverLink !== a || popover.hidden) showPopover(a, target);
       return;
     }
@@ -2239,8 +2243,8 @@
       root: preview,
       jump: (el) => jumpTo(el),
       renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
-      hover: store.get('texglass:notationHover') !== 'off',
-      onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
+      hover: featureOn('notationHover'),
+      onHoverChange: (on) => setFeature('notationHover', on),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
     })
     : null;
@@ -2265,7 +2269,7 @@
 
   // The side panel's tabs (Contents, Map, Notation) and its draggable divider.
   if (window.TeXglassInsight) {
-    TeXglassInsight.sidePanel({
+    sideView = TeXglassInsight.sidePanel({
       pane: tocPane,
       head: tocPane.querySelector('.toc-pane-head'),
       list: tocList,
@@ -2289,6 +2293,40 @@
     : null;
   updateProgress();
   if (progress) progress.refresh();
+
+  // --- settings: switching reading aids on or off ---------------------------------
+
+  /** Bring the page in line with the settings. */
+  function applyFeatures() {
+    if (copier) copier.setEnabled(mode !== 'edit' && featureOn('copyMath'));
+    if (insight) {
+      insight.setHover(featureOn('notationHover'));
+      if (Features) insight.setFeatures(Features.insightParts(features));
+    }
+    if (sideView && sideView.setTabs && Features) sideView.setTabs(Features.sideTabs(features));
+    updateStudy();
+    updateProgress();
+    if (typeof setHandwritten === 'function' && (rootEl.dataset.look === 'notes') !== featureOn('handwriting')) setHandwritten(featureOn('handwriting'), false);
+    if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
+    if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
+  }
+  function setFeature(id, on) {
+    if (!Features) return;
+    Features.write(store, id, on);
+    features = Features.read(store);
+    applyFeatures();
+  }
+  const settingsPanel = Features ? Features.panel({ get: () => features, set: setFeature }) : null;
+  if ($('settings')) {
+    if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
+    else $('settings').hidden = true;
+  }
+  // Settings changed in another tab of this browser.
+  window.addEventListener('storage', (e) => {
+    if (!Features || !e.key || !Features.LIST.some((f) => Features.keyOf(f) === e.key)) return;
+    features = Features.read(store);
+    applyFeatures();
+  });
 
   // --- resizable split ------------------------------------------------------------
 
@@ -2398,10 +2436,15 @@
     const label = on ? 'Show as a typeset page' : 'Show as handwritten notes';
     handButton.setAttribute('aria-label', label);
     handButton.title = on ? label : 'Show as handwritten notes (chalk on a board in the dark theme)';
-    if (save) store.set('texglass:look', on ? 'notes' : 'standard');
+    if (save) {
+      store.set('texglass:look', on ? 'notes' : 'standard');
+      if (Features) features = Features.read(store);
+      if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
+    }
   }
   handButton.addEventListener('click', () => setHandwritten(rootEl.dataset.look !== 'notes', true));
   setHandwritten(store.get('texglass:look') === 'notes', false);
+  applyFeatures();
 
   // --- start -----------------------------------------------------------------
 

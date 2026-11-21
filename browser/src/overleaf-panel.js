@@ -527,7 +527,12 @@
   }
 
   // Click a formula to copy its LaTeX; the delay lets a double-click (go to the source) cancel it.
-  if (window.TeXglassCopyTex) TeXglassCopyTex.attach({ roots: [preview, popover], delay: 250 });
+  const copier = window.TeXglassCopyTex ? TeXglassCopyTex.attach({ roots: [preview, popover], delay: 250 }) : null;
+
+  // Settings (src/features.js): the same choices as the extension's viewer (same storage).
+  const Features = window.TeXglassFeatures || null;
+  let features = Features ? Features.read(store) : {};
+  const featureOn = (id) => !Features || Features.on(features, id);
 
   // --- reference previews (as in the web viewer and VS Code) --------------------------
 
@@ -568,7 +573,7 @@
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
-    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    const cited = cites && featureOn('citeLookup') && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
@@ -591,6 +596,7 @@
   preview.addEventListener('mouseover', (e) => {
     const a = e.target.closest('a.ref, .cite a');
     if (!a) return;
+    if (Features && !featureOn(Features.previewKind(a))) return; // switched off in Settings
     const target = document.getElementById((a.getAttribute('href') || '').slice(1));
     if (!target || target.contains(a)) return;
     showPopover(a, target);
@@ -782,18 +788,19 @@
       root: preview,
       jump: (el) => jumpTo(el),
       renderTex: (texs, defs) => (TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
-      hover: store.get('texglass:notationHover') !== 'off',
-      onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
+      hover: featureOn('notationHover'),
+      onHoverChange: (on) => setFeature('notationHover', on),
     })
     : null;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
   // width are kept apart from the full viewer's, since this panel is usually narrower.
+  let sideView = null;
   if (insight) {
     const sideStore = {
       get: (k) => store.get(k.replace('texglass:', 'texglass:overleaf-')),
       set: (k, v) => store.set(k.replace('texglass:', 'texglass:overleaf-'), v),
     };
-    TeXglassInsight.sidePanel({
+    sideView = TeXglassInsight.sidePanel({
       pane: tocPane,
       head: tocPane.querySelector('.toc-pane-head'),
       list: tocList,
@@ -878,6 +885,39 @@
   window.addEventListener('storage', (e) => {
     if (e.key === 'texglass:look') setHandwritten(e.newValue === 'notes', false);
   });
+
+  // --- settings: switching reading aids on or off -------------------------------------
+
+  const SETTINGS = ['refPreviews', 'citePreviews', 'citeLookup', 'notationHover', 'proseDefinitions',
+    'notationIndex', 'dependencyMap', 'usesButtons', 'copyMath', 'handwriting'];
+  function applyFeatures() {
+    if (copier) copier.setEnabled(featureOn('copyMath'));
+    if (insight) {
+      insight.setHover(featureOn('notationHover'));
+      if (Features) insight.setFeatures(Features.insightParts(features));
+    }
+    if (sideView && sideView.setTabs && Features) sideView.setTabs(Features.sideTabs(features));
+    if ((rootEl.dataset.look === 'notes') !== featureOn('handwriting')) setHandwritten(featureOn('handwriting'), false);
+    if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
+    if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
+  }
+  function setFeature(id, on) {
+    if (!Features) return;
+    Features.write(store, id, on);
+    features = Features.read(store);
+    applyFeatures();
+  }
+  const settingsPanel = Features ? Features.panel({ get: () => features, set: setFeature, ids: SETTINGS }) : null;
+  if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
+  else $('settings').hidden = true;
+  handButton.addEventListener('click', () => { if (Features) features = Features.read(store); });
+  // changed in the extension's viewer or another Overleaf tab
+  window.addEventListener('storage', (e) => {
+    if (!Features || !e.key || !Features.LIST.some((f) => Features.keyOf(f) === e.key)) return;
+    features = Features.read(store);
+    applyFeatures();
+  });
+  applyFeatures();
 
   // --- zoom and close ----------------------------------------------------------------
 
