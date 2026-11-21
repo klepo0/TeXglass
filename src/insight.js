@@ -1503,6 +1503,8 @@
         hideTimer = setTimeout(() => hidePop(true), 250);
       }
     });
+    // a bottom sheet on a touch screen (src/popover.js) was closed by a tap outside or a swipe
+    pop.addEventListener('tg-sheet-close', () => hidePop());
     pop.addEventListener('mouseenter', () => clearTimeout(hideTimer));
     pop.addEventListener('mouseleave', (e) => {
       if (popFor && popFor.contains(e.relatedTarget)) return;

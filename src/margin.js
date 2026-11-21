@@ -40,6 +40,14 @@
  *   margin.setPadAt(at);               // put the note pad where it was moved to before
  *   margin.next(); margin.previous();  // jump to the next or previous note (N, Shift+N)
  *   margin.setFilter('todo');          // jump between these only: 'all', 'par', 'todo' or 'mine'
+ *   margin.setOverlay(on);             // a phone: the margin is a drawer over the text, closed at first
+ *
+ * Handwritten notes: with the study tools on, a pen (Apple Pencil, a stylus)
+ * writes in the margin column; a finger still scrolls, and a mouse still
+ * selects. The first touch of a pen opens the margin column even when there is
+ * no note yet. Strokes written one soon after another make one note, anchored
+ * to the line beside where it starts, and kept as one SVG path (`ink`:
+ * { w, h, d }) with the reader's other notes, so it syncs like them.
  *
  * The anchoring functions (describe, locate) work on plain strings and are
  * exported for tests.
@@ -271,6 +279,36 @@
   const plainHtml = (t) => escapeHtml(t).replace(/\n/g, '<br>');
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
+  /** Pen strokes ([[x, y, x, y, …], …], in px) as one compact SVG path: absolute moves, relative lines. */
+  function inkPath(strokes) {
+    let d = '';
+    for (const st of strokes) {
+      if (st.length < 2) continue;
+      let px = Math.round(st[0]);
+      let py = Math.round(st[1]);
+      d += `M${px} ${py}`;
+      let line = '';
+      for (let k = 2; k < st.length; k += 2) {
+        const x = Math.round(st[k]);
+        const y = Math.round(st[k + 1]);
+        if (x === px && y === py) continue;
+        line += ` ${x - px} ${y - py}`;
+        px = x;
+        py = y;
+      }
+      d += line ? 'l' + line.trim() : 'l0 0'; // a dot is a line of length 0, drawn by the round cap
+    }
+    return d.replace(/ -/g, '-');
+  }
+
+  /** A stored handwritten note as SVG, or '' when it is not a well-formed one (notes come from files and gists). */
+  function inkSvg(ink) {
+    if (!ink || typeof ink.d !== 'string' || !/^[Ml0-9 .-]*$/.test(ink.d) || ink.d.length > 200000) return '';
+    const w = Math.max(1, Math.min(4000, Number(ink.w) || 0));
+    const h = Math.max(1, Math.min(8000, Number(ink.h) || 0));
+    return `<svg class="tg-ink" viewBox="0 0 ${w} ${h}" style="max-width:${w}px" role="img" aria-label="Handwritten note"><path d="${ink.d}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+
   function attach(opts) {
     const { pane, doc } = opts;
     const page = doc.ownerDocument;
@@ -283,6 +321,8 @@
     let placed = new Map(); // annotation id -> { start, end, exact } where it is now
     const noteHtml = new Map(); // note text -> rendered HTML
     let editing = null; // id of the note being edited
+    let penSeen = false; // a pen has touched the page: the margin column shows, to write in (below)
+    let inkLive = null; // { svg, path, strokes, timer } while a pen writes in the margin
 
     const layer = page.createElement('aside');
     layer.className = 'tg-margin document';
@@ -353,11 +393,17 @@
     // The fold button: it hides the margin, and the text takes the room back. The
     // notes stay marked in the text (a dot); clicking one brings the margin back.
     let collapsed = !!opts.collapsed;
+    // On a phone (setOverlay) the margin is a drawer over the text: closed at first,
+    // opened by its button, a note's dot or a swipe, and closed again by a tap
+    // outside it. Its open or closed state there is not remembered.
+    let overlay = false;
+    let wideCollapsed = collapsed; // the reader's choice for wider windows, kept while overlaid
     const toggle = page.createElement('button');
     toggle.type = 'button';
     toggle.className = 'tg-margin-toggle';
     const setCollapsed = (on, save, force) => {
       on = !!on;
+      if (overlay) save = false;
       const was = collapsed;
       collapsed = on;
       layout();
@@ -523,6 +569,11 @@
     }
 
     function noteBody(a) {
+      const ink = inkSvg(a.ink);
+      if (ink) return ink + ((a.note || '').trim() ? `<div class="tg-ink-text">${noteText(a)}</div>` : '');
+      return noteText(a);
+    }
+    function noteText(a) {
       const text = a.note || '';
       if (!text.trim()) return '<span class="tg-mcard-empty">Empty note</span>';
       if (noteHtml.has(text)) return noteHtml.get(text);
@@ -595,6 +646,7 @@
       layer.appendChild(toggle);
       layer.appendChild(nav);
       layer.appendChild(navMenu);
+      if (inkLive) layer.appendChild(inkLive.svg);
       cards.forEach((c) => ro && ro.observe(c.el));
       layout();
     }
@@ -614,10 +666,14 @@
     }
 
     function layout() {
-      const on = cards.length > 0;
+      const on = cards.length > 0 || (penSeen && study) || !!inkLive;
       doc.classList.toggle('tg-with-margin', on);
       doc.classList.toggle('tg-margin-collapsed', on && collapsed);
+      doc.classList.toggle('tg-margin-overlay', on && overlay);
       layer.classList.toggle('tg-margin-folded', collapsed);
+      layer.classList.toggle('tg-margin-drawer', overlay && !collapsed);
+      layer.classList.toggle('tg-drawer-open', overlay && !collapsed);
+      layer.style.height = '';
       layer.hidden = !on;
       if (!on) return;
       const n = cards.length;
@@ -638,15 +694,23 @@
         return;
       }
       const zoom = (parseFloat(win.getComputedStyle(doc).fontSize) || 18) / 18;
-      const w = userW != null
-        ? Math.min(userW, maxW())
-        : Math.round(Math.min(240 * zoom, Math.max(130, pane.clientWidth * 0.26)));
+      const w = overlay
+        ? Math.round(Math.min(320, pane.clientWidth * 0.8))
+        : userW != null
+          ? Math.min(userW, maxW())
+          : Math.round(Math.min(240 * zoom, Math.max(130, pane.clientWidth * 0.26)));
       if (w !== marginW) {
         marginW = w;
-        doc.style.setProperty('--tg-margin-w', w + 'px');
+        if (!overlay) doc.style.setProperty('--tg-margin-w', w + 'px');
       }
       const cs = win.getComputedStyle(doc);
-      layer.style.left = doc.offsetLeft + doc.offsetWidth - parseFloat(cs.paddingRight) + 20 + 'px';
+      if (overlay) {
+        // over the right of the text, the whole height of the document
+        layer.style.left = pane.clientWidth - w + 'px';
+        layer.style.height = Math.max(doc.offsetHeight, pane.clientHeight) + 'px';
+      } else {
+        layer.style.left = doc.offsetLeft + doc.offsetWidth - parseFloat(cs.paddingRight) + 20 + 'px';
+      }
       layer.style.width = w + 'px';
       grip.style.height = doc.offsetHeight + 'px';
       grip.setAttribute('aria-valuenow', String(w));
@@ -1074,9 +1138,11 @@
       const ta = page.createElement('textarea');
       ta.className = 'tg-mcard-input';
       ta.value = a.note || '';
-      ta.placeholder = 'Write a note… ($…$ for maths)';
+      ta.placeholder = a.ink ? 'Add words to it… ($…$ for maths)' : 'Write a note… ($…$ for maths)';
       ta.rows = 2;
       body.replaceChildren(ta);
+      const ink = inkSvg(a.ink);
+      if (ink) ta.insertAdjacentHTML('beforebegin', ink); // writing words under a handwritten note
       card.classList.add('tg-mcard-editing');
       const grow = () => {
         ta.style.height = 'auto';
@@ -1093,7 +1159,7 @@
         editing = null;
         const text = ta.value.replace(/\s+$/, '');
         if (keep) a.note = text;
-        if (!(a.note || '').trim() && (fresh || keep)) {
+        if (!(a.note || '').trim() && !inkSvg(a.ink) && (fresh || keep)) {
           // An empty note goes; a highlight it was on stays.
           if (a.anchor && a.anchor.quote && a.color) delete a.note;
           else list = list.filter((x) => x !== a);
@@ -1309,6 +1375,159 @@
       });
     });
 
+    // --- the margin as a drawer (a phone) ------------------------------------------------
+
+    function setOverlay(on) {
+      on = !!on;
+      if (on === overlay) return;
+      if (on) {
+        wideCollapsed = collapsed;
+        overlay = true;
+        collapsed = true;
+      } else {
+        overlay = false;
+        collapsed = wideCollapsed;
+      }
+      layout();
+    }
+    // a tap outside the open drawer closes it (a note's dot opens it: see above)
+    page.addEventListener('pointerdown', (e) => {
+      if (!overlay || collapsed || layer.contains(e.target) || bar.contains(e.target) || dock.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('.mnote')) return;
+      setCollapsed(true);
+    }, true);
+    page.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay && !collapsed && !editing) setCollapsed(true);
+    });
+    if (win.TeXglassTouch) {
+      win.TeXglassTouch.swipeAway(layer, { edge: 'right', enabled: () => overlay && !collapsed, onSwipe: () => setCollapsed(true) });
+    }
+
+    // --- writing with a pen in the margin -------------------------------------------------
+    //
+    // A pen that touches the margin column draws there. Its strokes are kept in
+    // margin coordinates while it writes; a pause (or a stroke far from the
+    // others) makes them a note on the line beside the first stroke.
+
+    const INK_PAUSE = 1300; // ms without the pen before the strokes become a note
+    let pen = null; // the stroke being drawn: { id, points }
+    let penBlocks = false; // the touch that follows this pen's pointerdown must not scroll
+
+    function marginRect() {
+      if (layer.hidden || collapsed) return null;
+      const r = layer.getBoundingClientRect();
+      const d = doc.getBoundingClientRect();
+      const p = pane.getBoundingClientRect();
+      return { left: r.left - 10, right: r.left + marginW + 10, top: Math.max(p.top, d.top), bottom: Math.min(p.bottom, d.bottom) };
+    }
+    function inMargin(x, y) {
+      const m = marginRect();
+      return !!m && x >= m.left && x <= m.right && y >= m.top && y <= m.bottom;
+    }
+    function toLayer(e) {
+      const r = layer.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    }
+    function drawLive() {
+      const all = inkLive.strokes.concat(pen ? [pen.points] : []);
+      inkLive.path.setAttribute('d', inkPath(all));
+    }
+    function startInk() {
+      const svg = page.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'tg-ink-live');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.height = Math.max(doc.offsetHeight, pane.clientHeight) + 'px';
+      const path = page.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'currentColor');
+      path.setAttribute('stroke-width', '1.7');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
+      layer.appendChild(svg);
+      inkLive = { svg, path, strokes: [], timer: 0 };
+    }
+    function boxOf(strokes) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const st of strokes) {
+        for (let k = 0; k < st.length; k += 2) {
+          x0 = Math.min(x0, st[k]); x1 = Math.max(x1, st[k]);
+          y0 = Math.min(y0, st[k + 1]); y1 = Math.max(y1, st[k + 1]);
+        }
+      }
+      return { x0, y0, x1, y1 };
+    }
+    /** The strokes written so far become a note on the line beside the first of them. */
+    function commitInk() {
+      if (!inkLive) return;
+      const live = inkLive;
+      clearTimeout(live.timer);
+      inkLive = null;
+      live.svg.remove();
+      if (!live.strokes.length) return layout();
+      const b = boxOf(live.strokes);
+      const pad = 3;
+      const ox = Math.max(0, b.x0 - pad);
+      const oy = b.y0 - pad;
+      const strokes = live.strokes.map((st) => st.map((v, k) => (k % 2 ? v - oy : v - ox)));
+      const ink = { w: Math.ceil(b.x1 - ox + pad), h: Math.ceil(b.y1 - oy + pad), d: inkPath(strokes) };
+      // the line level with the top of the writing
+      const lr = layer.getBoundingClientRect();
+      const i = wordStart(offsetAtPoint(lr.left - 40, lr.top + b.y0 + 6, true));
+      if (i == null) return layout();
+      add(i, i, { note: '', ink });
+      changed();
+    }
+
+    pane.addEventListener('pointerdown', (e) => {
+      penBlocks = false;
+      if (e.pointerType !== 'pen' || !study) return;
+      if (!penSeen) {
+        penSeen = true; // the margin opens, to write in
+        layout();
+      }
+      if (e.target.closest && e.target.closest('button, textarea, input, a, .tg-mcard-user, .tg-margin-nav, .tg-mnav-menu')) return;
+      if (!inMargin(e.clientX, e.clientY)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      penBlocks = true;
+      hideBar();
+      const at = toLayer(e);
+      if (inkLive) {
+        clearTimeout(inkLive.timer);
+        // far from what is being written: that note is done, this starts another
+        const b = boxOf(inkLive.strokes);
+        if (inkLive.strokes.length && (at[1] < b.y0 - 60 || at[1] > b.y1 + 60)) commitInk();
+      }
+      if (!inkLive) startInk();
+      pen = { id: e.pointerId, points: at };
+      try { pane.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      drawLive();
+    }, true);
+    pane.addEventListener('pointermove', (e) => {
+      if (!pen || e.pointerId !== pen.id) return;
+      e.preventDefault();
+      const evs = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+      for (const ev of evs.length ? evs : [e]) {
+        const [x, y] = toLayer(ev);
+        const n = pen.points.length;
+        if (Math.abs(x - pen.points[n - 2]) + Math.abs(y - pen.points[n - 1]) >= 1.5) pen.points.push(x, y);
+      }
+      drawLive();
+    });
+    const penUp = (e) => {
+      if (!pen || e.pointerId !== pen.id) return;
+      inkLive.strokes.push(pen.points);
+      pen = null;
+      drawLive();
+      inkLive.timer = setTimeout(commitInk, INK_PAUSE);
+    };
+    pane.addEventListener('pointerup', penUp);
+    pane.addEventListener('pointercancel', penUp);
+    // Pointer events come first: when that pen is writing, its touch must not scroll the page.
+    pane.addEventListener('touchstart', (e) => { if (penBlocks) e.preventDefault(); }, { passive: false });
+    pane.addEventListener('touchmove', (e) => { if (pen) e.preventDefault(); }, { passive: false });
+
     // --- the host's side --------------------------------------------------------------------
 
     function refresh() {
@@ -1355,8 +1574,15 @@
       /** Which notes to jump between: 'all', 'par' (\marginpar), 'todo' or 'mine' (the reader's). */
       setFilter: (kind) => setFilter(kind, false),
       filter: () => filter,
+      /** A phone: the margin becomes a drawer over the text (true), or a column beside it again. */
+      setOverlay,
+      overlay: () => overlay,
+      /** Open (or close) the margin; in the drawer this is not remembered. */
+      open: (on) => setCollapsed(on === false, true),
+      /** Whether the margin has anything to show (notes, or a pen to write with). */
+      shown: () => !layer.hidden,
     };
   }
 
-  return { attach, describe, locate, buildIndex, toDom, fromDom, COLORS };
+  return { attach, describe, locate, buildIndex, toDom, fromDom, COLORS, inkPath, inkSvg };
 });

@@ -2,8 +2,17 @@
 <html lang="en" data-paper="grid" data-hand="kalam" data-hand-math="on" data-ink="ballpoint" data-ink-texture="on">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>TeXglass</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1e1f23" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="TeXglass">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="description" content="A LaTeX viewer that renders .tex files like a Markdown preview: math, sections and numbered theorems with working references.">
   <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="styles.css">
@@ -25,6 +34,7 @@
   <script defer src="src/zoom.js"></script>
   <script defer src="src/scroll.js"></script>
   <script defer src="src/popover.js"></script>
+  <script defer src="src/touch.js"></script>
   <script defer src="src/copytex.js"></script>
   <script defer src="src/margin.js"></script>
   <script defer src="src/notes-sync.js"></script>
@@ -54,6 +64,8 @@
     <div class="more-group">
       <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: save, export, print, notes" title="Save, export or print; your highlights and notes">…</button>
       <div id="more-menu" class="more-menu" role="menu" aria-labelledby="more" hidden>
+        <!-- On a phone the toolbar keeps a few large buttons; the rest move up here (app.js, compact toolbar). -->
+        <div id="more-compact" class="more-compact" hidden></div>
         <button id="save" type="button" role="menuitem" title="Save your changes (Ctrl+S)">Save<kbd>Ctrl+S</kbd></button>
         <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
         <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
@@ -63,15 +75,17 @@
         <button id="notes-import" type="button" role="menuitem" title="Add the highlights and notes from an exported file to this paper">Import notes…</button>
         <button id="notes-sync" type="button" role="menuitem" title="Keep your highlights and notes in step on all your devices, through a private gist on your GitHub account">Sync notes with GitHub…</button>
         <button id="progress-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="A marker by each theorem, lemma, definition and proof to note how far you have read it (unread, skimmed, read, understood, or ? to ask about); progress shows in Contents and on the map">Reading progress</button>
+        <div class="more-sep" role="separator" hidden id="install-sep"></div>
+        <button id="install" type="button" role="menuitem" title="Add TeXglass to your home screen or apps, to open it like an app, offline too" hidden>Install TeXglass as an app</button>
       </div>
     </div>
-    <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which">Contents</button>
+    <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which" aria-label="Contents"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Contents</span></button>
     <div class="zoom-group" role="group" aria-label="Zoom">
       <button id="zoom-out" type="button" aria-label="Zoom out" title="Make the document smaller (Ctrl+−)">−</button>
       <button id="zoom-level" class="zoom-level" type="button" title="Reset the zoom to 100% (Ctrl+0)">100%</button>
       <button id="zoom-in" type="button" aria-label="Zoom in" title="Make the document larger (Ctrl++)">+</button>
     </div>
-    <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)">Navigate</button>
+    <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)" aria-label="Navigate"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Navigate</span></button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
