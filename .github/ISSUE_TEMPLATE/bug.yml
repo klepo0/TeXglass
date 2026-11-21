@@ -1,0 +1,14 @@
+name: Bug or feature request
+description: Something doesn't work, or an idea for something new.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, or what would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: For bugs. Include where you use TeXglass (web viewer, VS Code, browser extension, Overleaf, CLI) and its version.

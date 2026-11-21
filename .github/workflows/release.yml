@@ -105,9 +105,27 @@ jobs:
 
       # A push fails if main moved while this ran; nothing is published then,
       # so just run the workflow again.
+      # main is protected by a ruleset, which GITHUB_TOKEN can't bypass. When
+      # the RELEASE_DEPLOY_KEY secret holds a deploy key (write access, on the
+      # ruleset's bypass list), the commit goes to main with that key and the
+      # tag with GITHUB_TOKEN, so the tag push doesn't start this workflow a
+      # second time. Without the secret, both go with GITHUB_TOKEN.
       - name: Push the release commit and tag
         if: github.event_name == 'workflow_dispatch'
-        run: git push --atomic origin HEAD:main "refs/tags/$TAG"
+        env:
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          if [ -n "$DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh
+            printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/release_key
+            chmod 600 ~/.ssh/release_key
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes" \
+              git push "git@github.com:${GITHUB_REPOSITORY}.git" HEAD:main
+            git push origin "refs/tags/$TAG"
+          else
+            git push --atomic origin HEAD:main "refs/tags/$TAG"
+          fi
 
       - name: Create the release
         env:
