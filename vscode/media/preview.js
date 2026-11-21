@@ -818,6 +818,7 @@
         if (insight) insight.invalidate();
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);
+        if (progress) progress.refresh();
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');
@@ -939,6 +940,12 @@
       case 'study':
         if (margin) margin.setStudy(m.on);
         break;
+      case 'progress':
+        if (progress) progress.setMap(m.map);
+        break;
+      case 'reading-progress':
+        if (progress) progress.setEnabled(m.on);
+        break;
       case 'note-html': {
         const done = noteWaiting.get(m.id);
         noteWaiting.delete(m.id);
@@ -973,6 +980,7 @@
         vscode.postMessage({ type: 'render-tex', id, texs });
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+      statusOf: (el) => (progress ? progress.statusOf(el) : null),
     })
     : null;
 
@@ -1010,6 +1018,19 @@
       },
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
+    })
+    : null;
+
+  // Reading progress (src/progress.js): the extension keeps the statuses with the
+  // paper's notes (name.texglass.json, Settings Sync, the gist).
+  var progress = window.TeXglassProgress
+    ? window.TeXglassProgress.attach({
+      root: preview,
+      pane: tocPane,
+      list: tocList,
+      insight,
+      jump: (el) => { jumpTo(el); if (narrow.matches) { tocWanted = false; showToc(); } },
+      onChange: (map) => vscode.postMessage({ type: 'progress', map }),
     })
     : null;
 

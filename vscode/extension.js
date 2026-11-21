@@ -197,6 +197,10 @@ function findInBlock(text, m) {
 
 /** Set a context key that decides which buttons the preview's title bar shows. */
 /** Whether a click on a formula in the preview copies its LaTeX. */
+function readingProgress() {
+  return vscode.workspace.getConfiguration('texglass').get('readingProgress', true) !== false;
+}
+
 function studyTools() {
   return vscode.workspace.getConfiguration('texglass').get('studyTools', true) !== false;
 }
@@ -236,8 +240,8 @@ function notesStore(context) {
 function keepNotes(context, key, record) {
   if (!key) return Promise.resolve();
   const all = notesStore(context);
-  if (!record || (!record.notes.length && !Object.keys(record.deleted || {}).length)) delete all[key];
-  else all[key] = { title: record.title || undefined, notes: record.notes, deleted: record.deleted || {} };
+  if (NotesSync.isEmpty(record)) delete all[key];
+  else all[key] = { title: record.title || undefined, notes: record.notes, deleted: record.deleted || {}, progress: record.progress || {} };
   return context.globalState.update(NOTES_STATE, all);
 }
 
@@ -529,7 +533,9 @@ class Preview {
     this.notesText = text;
     const key = await this.paperKey();
     if (removed && this.notesRecord) {
+      this.notesRecord = Object.assign({}, this.notesRecord, { progress: {} });
       this.post({ type: 'annotations', list: [] });
+      this.post({ type: 'progress', map: {} });
       return this.saveNotes([]);
     }
     let rec = NotesSync.empty(key);
@@ -543,7 +549,8 @@ class Preview {
     const merged = NotesSync.merge(rec, kept ? Object.assign({}, kept, { paper: key }) : null);
     this.notesRecord = merged;
     this.post({ type: 'annotations', list: merged.notes });
-    if (!NotesSync.equal(merged, rec) && merged.notes.length) await this.writeNotes(merged);
+    this.post({ type: 'progress', map: merged.progress || {} });
+    if (!NotesSync.equal(merged, rec) && !NotesSync.isEmpty(merged)) await this.writeNotes(merged);
     await keepNotes(this.context, key, merged);
     this.syncGist();
   }
@@ -552,6 +559,17 @@ class Preview {
   async saveNotes(list) {
     const key = await this.paperKey();
     this.notesRecord = Object.assign(NotesSync.track(this.notesRecord || NotesSync.empty(key), Array.isArray(list) ? list : []), { paper: key });
+    await this.writeNotes(this.notesRecord);
+    await keepNotes(this.context, key, this.notesRecord);
+    clearTimeout(this.gistTimer);
+    this.gistTimer = setTimeout(() => this.syncGist(), 2500);
+  }
+
+  /** The reader changed a reading status in the preview (src/progress.js). */
+  async saveProgress(map) {
+    const key = await this.paperKey();
+    const rec = this.notesRecord || NotesSync.empty(key);
+    this.notesRecord = Object.assign({}, rec, { paper: key, progress: NotesSync.mergeProgress(rec.progress, map) });
     await this.writeNotes(this.notesRecord);
     await keepNotes(this.context, key, this.notesRecord);
     clearTimeout(this.gistTimer);
@@ -576,6 +594,7 @@ class Preview {
     if (NotesSync.equal(merged, before)) return 0;
     this.notesRecord = merged;
     this.post({ type: 'annotations', list: merged.notes });
+    this.post({ type: 'progress', map: merged.progress || {} });
     await this.writeNotes(merged);
     await keepNotes(this.context, key, merged);
     return merged.notes.length - before.notes.length;
@@ -604,10 +623,9 @@ class Preview {
   /** Write paperk.texglass.json (or remove it once no notes are left). */
   async writeNotes(record) {
     const file = notesUri(this.uri);
-    const notes = record.notes || [];
     try {
-      if (!notes.length) {
-        // No notes left: no file either (if there was one).
+      if (NotesSync.isEmpty(Object.assign({}, record, { deleted: {} }))) {
+        // No notes or reading progress left: no file either (if there was one).
         if (this.notesText) await vscode.workspace.fs.delete(file);
         this.notesText = '';
         return;
@@ -685,6 +703,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
@@ -845,6 +864,7 @@ ${INK_FILTERS}
         this.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });
         this.post({ type: 'click-to-copy', on: clickToCopy() });
         this.post({ type: 'study', on: studyTools() });
+        this.post({ type: 'reading-progress', on: readingProgress() });
         this.notesText = undefined;
         this.loadNotes();
         this.post({ type: 'notation-hover', on: notationHover() });
@@ -896,6 +916,9 @@ ${INK_FILTERS}
         break;
       case 'annotations':
         this.saveNotes(m.list);
+        break;
+      case 'progress':
+        if (m.map && typeof m.map === 'object') this.saveProgress(m.map);
         break;
       case 'check':
         // a hypothesis ticked in a preview of a cited result (shared/hypotheses.js)
@@ -1368,7 +1391,7 @@ function activate(context) {
       if (!preview) return vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
       const key = await preview.paperKey();
       const rec = preview.notesRecord || NotesSync.empty(key);
-      if (!rec.notes.length) return vscode.window.showInformationMessage('This paper has no highlights or notes yet.');
+      if (NotesSync.isEmpty(rec)) return vscode.window.showInformationMessage('This paper has no highlights, notes or reading progress yet.');
       const base = path.posix.basename(preview.uri.path).replace(/\.(tex|ltx|latex)$/i, '');
       const home = os && os.homedir ? os.homedir() : null;
       const dir = home && fs && fs.existsSync(path.join(home, 'Downloads')) ? vscode.Uri.file(path.join(home, 'Downloads')) : vscode.Uri.joinPath(preview.uri, '..');
@@ -1470,6 +1493,9 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
         preview.post({ type: 'toc-side', value: contentsPosition() });
+      }
+      if (preview && e.affectsConfiguration('texglass.readingProgress')) {
+        preview.post({ type: 'reading-progress', on: readingProgress() });
       }
       if (preview && e.affectsConfiguration('texglass.studyTools')) {
         preview.post({ type: 'study', on: studyTools() });

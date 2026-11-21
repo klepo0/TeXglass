@@ -39,6 +39,14 @@ browser extension:
   through a guessed link (see the Map below) get a dashed outline, and the
   cited works light up in the bibliography. The Map tab has the
   same thing as **Show what it uses**.
+- **Reading progress**: a small marker by each theorem, lemma, definition and
+  proof; click it to step through unread, skimmed, read and understood, and
+  flag a result with **?** to ask about it. Contents shows how far each section
+  has got ("4 of 7 understood"), suggests **What should I read next?** (the
+  unread result the most others rest on) and lists the **?** results to copy;
+  the Map colours results by status. Statuses are kept by `\label` with your
+  notes, so they sync with them and survive a revised version of the paper.
+  Switch it off in the **…** menu (VS Code: `texglass.readingProgress`).
 - **Go to** any theorem, equation or section by number (Ctrl+G).
 - **Trace** (a tab of the same bar): pick a theorem, lemma or definition and see only what it uses and what uses it.
 - **Notation on hover**: rest the pointer on a formula to see where its

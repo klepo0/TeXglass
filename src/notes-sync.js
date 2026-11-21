@@ -14,6 +14,12 @@
  * Notes are anchored by the text they mark, not by a position, so they find
  * their place again in a revised paper (see margin.js).
  *
+ * The reader's reading progress on the paper's results (src/progress.js) rides
+ * along in the same record, as "progress": { "<result key>": { s, q, t } }, with
+ * s the status (unread, skimmed, read, understood), q the "?" flag and t when it
+ * was set. Results are keyed by their \label, so progress survives a revision.
+ * Two copies are merged result by result: the later setting wins.
+ *
  * Two copies of a paper's notes are merged by note id: of two versions of a
  * note the later one wins, and a deleted note stays deleted (the "deleted"
  * list remembers it), so nothing is lost when two devices edit at once.
@@ -103,8 +109,42 @@
 
   /** An empty record for a paper. */
   function empty(key, title) {
-    return { paper: key || null, title: title || '', notes: [], deleted: {} };
+    return { paper: key || null, title: title || '', notes: [], deleted: {}, progress: {} };
   }
+
+  // --- reading progress --------------------------------------------------------------------
+
+  const STATUSES = ['unread', 'skimmed', 'read', 'understood'];
+  const isMark = (m) => m && typeof m === 'object' && STATUSES.includes(m.s || 'unread');
+
+  /** A progress map with only well-formed entries. */
+  function cleanProgress(p) {
+    const out = {};
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return out;
+    for (const [k, m] of Object.entries(p)) {
+      if (!k || !isMark(m)) continue;
+      const e = { s: m.s || 'unread' };
+      if (m.q) e.q = true;
+      if (m.t) e.t = String(m.t);
+      out[k] = e;
+    }
+    return out;
+  }
+
+  /** Two progress maps merged result by result: the later setting wins. */
+  function mergeProgress(a, b) {
+    const out = cleanProgress(a);
+    for (const [k, m] of Object.entries(cleanProgress(b))) {
+      const had = out[k];
+      if (!had || (Date.parse(m.t || '') || 0) > (Date.parse(had.t || '') || 0)) out[k] = m;
+    }
+    return out;
+  }
+
+  /** Whether a record holds any reading progress worth keeping. */
+  const hasProgress = (r) => !!(r && r.progress && Object.keys(r.progress).length);
+  /** Whether a record holds anything worth keeping: notes, deletions or progress. */
+  const isEmpty = (r) => !r || (!(r.notes || []).length && !Object.keys(r.deleted || {}).length && !hasProgress(r));
 
   /**
    * After the reader changed the notes (margin.js save(list)): the paper's new
@@ -199,6 +239,7 @@
       title: a.title || b.title || '',
       notes,
       deleted: prune(deleted, now),
+      progress: mergeProgress(a.progress, b.progress),
     };
   }
 
@@ -207,6 +248,7 @@
     const norm = (r) => JSON.stringify({
       notes: ((r && r.notes) || []).slice().sort((x, y) => (x.id < y.id ? -1 : 1)),
       deleted: Object.keys((r && r.deleted) || {}).sort(),
+      progress: Object.entries(cleanProgress(r && r.progress)).sort((x, y) => (x[0] < y[0] ? -1 : 1)),
     });
     return norm(a) === norm(b);
   }
@@ -224,6 +266,7 @@
       notes: r.notes || [],
     };
     if (r.deleted && Object.keys(r.deleted).length) out.deleted = r.deleted;
+    if (hasProgress(r)) out.progress = cleanProgress(r.progress);
     return JSON.stringify(out, null, 2) + '\n';
   }
 
@@ -239,13 +282,14 @@
       const notes = (Array.isArray(d) ? d : (d && Array.isArray(d.notes) ? d.notes : [])).filter(isNote);
       const deleted = d && !Array.isArray(d) && d.deleted && typeof d.deleted === 'object' ? Object.assign({}, d.deleted) : {};
       const title = d && !Array.isArray(d) && typeof d.title === 'string' ? d.title : '';
-      return { paper: key || null, title, notes, deleted };
+      const progress = d && !Array.isArray(d) ? cleanProgress(d.progress) : {};
+      return { paper: key || null, title, notes, deleted, progress };
     };
     if (data && !Array.isArray(data) && data.papers && typeof data.papers === 'object') {
       for (const [k, d] of Object.entries(data.papers)) out[k] = one(k, d);
       return out;
     }
-    if (Array.isArray(data) || (data && Array.isArray(data.notes))) {
+    if (Array.isArray(data) || (data && (Array.isArray(data.notes) || (data.progress && typeof data.progress === 'object')))) {
       const key = (!Array.isArray(data) && typeof data.paper === 'string' && data.paper) || fallbackKey || '';
       out[key] = one(key || null, data);
       return out;
@@ -258,9 +302,10 @@
     const out = {};
     for (const k of Object.keys(papers || {}).sort()) {
       const r = papers[k];
-      if (!r || (!(r.notes || []).length && !Object.keys(r.deleted || {}).length)) continue;
+      if (isEmpty(r)) continue;
       out[k] = { title: r.title || undefined, notes: r.notes || [] };
       if (Object.keys(r.deleted || {}).length) out[k].deleted = r.deleted;
+      if (hasProgress(r)) out[k].progress = cleanProgress(r.progress);
     }
     return JSON.stringify({
       about: 'Highlights and notes made in TeXglass, by paper. Kept here by TeXglass to sync them between your devices.',
@@ -378,5 +423,5 @@
     return { find, read, write, sync, id: () => id };
   }
 
-  return { VERSION, GIST_FILE, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, equal, toFile, parseFile, toStore, gist };
+  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, isEmpty, equal, toFile, parseFile, toStore, gist };
 });

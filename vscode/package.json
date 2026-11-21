@@ -498,6 +498,11 @@
           "default": true,
           "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed. Export and import them with the TeXglass: Export/Import Highlights and Notes commands, and sync them between machines with TeXglass: Sync Highlights and Notes with GitHub (a private gist on your account); with VS Code's Settings Sync on, they also follow you to your other machines."
         },
+        "texglass.readingProgress": {
+          "type": "boolean",
+          "default": true,
+          "description": "A marker by each theorem, lemma, definition and proof in the preview: click it to step through unread, skimmed, read and understood, and flag a result with ? to ask about it. The Contents tab shows each section's progress, suggests what to read next and lists the ? results; the dependency map colours results by status. Kept with your highlights and notes (name.texglass.json), and synced with them."
+        },
         "texglass.notationHover": {
           "type": "boolean",
           "default": true,
