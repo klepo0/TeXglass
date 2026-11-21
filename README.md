@@ -192,6 +192,13 @@ offline too (arXiv, GitHub and OAI preprints still need a connection).
   on disk (Chrome and Edge).
 - **Export** a standalone offline `.html` page.
 - **Print** (Ctrl+P) as a clean paper-style PDF.
+- **On phones and tablets**: a compact toolbar; the side panel and margin notes
+  swipe in from the screen edges; a tap on a reference, citation or formula
+  opens its preview as a sheet at the bottom; wide formulas break onto more
+  lines. With an Apple Pencil or stylus you can write notes by hand in the
+  margin while your finger scrolls. Add it to your home screen (Share, then
+  Add to Home Screen; or **Install TeXglass as an app** in the "…" menu) to use
+  it like an app, offline too.
 - **Status** counts undefined references and duplicate labels.
 
 Run it locally with `npm start` (http://localhost:8000). It is a static page
