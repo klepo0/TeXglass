@@ -95,12 +95,13 @@
       <button id="zoom-in" type="button" aria-label="Zoom in" title="Make the document larger (Ctrl++)">+</button>
     </div>
     <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)" aria-label="Navigate"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Navigate</span></button>
+    <button id="save-offline" type="button" aria-pressed="false" title="Save this paper on this device, figures and all, to read it with no connection" aria-label="Save for offline"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="save-offline-mark" d="M7 3.5h10a1 1 0 0 1 1 1V20.5l-6-4.2-6 4.2V4.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Save offline</span></button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
     <span id="status" class="status" role="status"></span>
     <button id="settings" class="icon-button" type="button" aria-haspopup="dialog" aria-label="Settings" title="Settings: switch reading aids on or off (previews, notation, map, notes…)">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="tb-label">Settings</span>
     </button>
     <button id="hand-toggle" class="icon-button" type="button" aria-pressed="false" aria-label="Show as handwritten notes" title="Show as handwritten notes (chalk on a board in the dark theme)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z M13.8 6.8l3.4 3.4 M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
@@ -143,7 +144,10 @@
       <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="rough paths signature, github thesis template, 2301.00001">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
-      <p class="local-hint" id="library-hint" hidden>Or open one of your <button type="button" id="arxiv-library" class="link-button">saved papers</button>, offline too.</p>
+      <div id="library-recent" class="library-recent" hidden>
+        <div class="library-recent-head"><span>Saved papers</span><button type="button" id="arxiv-library" class="link-button">All saved papers</button></div>
+        <ol id="library-recent-list" class="library-recent-list"></ol>
+      </div>
       <p class="local-hint">Or open a document on this computer: <button type="button" id="arxiv-local-file" class="link-button">a .tex file</button> or <button type="button" id="arxiv-local-folder" class="link-button">its folder</button>, with its <code>\input</code> files and figures.</p>
       <p class="bookmarklet-hint">Drag <a id="bookmarklet" class="bookmarklet" href="#" title="Drag me to your bookmarks bar">Open in TeXglass</a> to your bookmarks bar. Click it on any GitHub page to open that file here.</p>
       <div class="arxiv-actions">
@@ -200,7 +204,7 @@
       <h2 id="library-title">Saved papers</h2>
       <button type="button" id="library-close" class="preprints-close" aria-label="Close">×</button>
     </div>
-    <p class="library-intro">Papers you saved open here with no connection, figures included. To save one, open it and choose <strong>Save for offline</strong> in the <strong>…</strong> menu.</p>
+    <p class="library-intro">Papers you saved open here with no connection, figures included. To save one, open it and press <strong>Save offline</strong> (the bookmark) in the toolbar (or <strong>Save for offline</strong> in the <strong>…</strong> menu).</p>
     <div class="preprints-filters" id="library-filters" hidden>
       <input id="library-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search your saved papers" aria-label="Search your saved papers">
     </div>

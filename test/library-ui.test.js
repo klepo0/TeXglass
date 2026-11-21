@@ -95,13 +95,23 @@ test('saving papers for offline reading, opening them offline, and the list on a
     await page.waitForFunction(() => /Kept offline/.test(document.getElementById('preview').textContent));
     await figureShown(page);
 
-    // Save it from the … menu.
-    await page.click('#more');
-    assert.equal(await page.getAttribute('#library-save', 'aria-checked'), 'false');
-    assert.equal(await page.textContent('#library-save'), 'Save for offline');
-    await page.click('#library-save');
-    await page.waitForFunction(() => document.getElementById('library-save').getAttribute('aria-checked') === 'true');
+    // Save it with the toolbar button (it fits in the phone's toolbar).
+    assert.equal(await page.isVisible('#save-offline'), true);
+    const bar = await page.evaluate(() => {
+      const b = document.getElementById('save-offline').getBoundingClientRect();
+      return { right: b.right, width: innerWidth, scroll: document.querySelector('.toolbar').scrollWidth - document.querySelector('.toolbar').clientWidth };
+    });
+    assert.ok(bar.right <= bar.width && bar.scroll <= 0, 'the toolbar fits: ' + JSON.stringify(bar));
+    assert.equal(await page.getAttribute('#save-offline', 'aria-pressed'), 'false');
+    await page.screenshot({ path: process.env.LIBRARY_BAR_SHOT || path.join(require('os').tmpdir(), 'library-bar.png') });
+    await page.click('#save-offline');
+    await page.waitForFunction(() => document.getElementById('save-offline').getAttribute('aria-pressed') === 'true');
     assert.match(await page.textContent('#status'), /Saved for offline reading \(\d+ B\)/);
+    // the … menu item says so too
+    await page.click('#more');
+    assert.equal(await page.getAttribute('#library-save', 'aria-checked'), 'true');
+    assert.equal(await page.textContent('#library-save'), 'Saved for offline');
+    await page.click('#more');
 
     // The list goes up to the gist (not the paper).
     const t0 = Date.now();
@@ -132,7 +142,9 @@ test('saving papers for offline reading, opening them offline, and the list on a
     const hits = arxiv.hits;
     await phone.setOffline(true);
     await page.click('#open');
-    assert.equal(await page.isVisible('#library-hint'), true, 'the Open dialog points to the saved papers');
+    await page.waitForSelector('#library-recent-list .library-recent-open');
+    assert.equal(await page.textContent('#library-recent-list .library-recent-title'), 'Saved heat bounds', 'the Open dialog lists the saved papers');
+    await page.screenshot({ path: process.env.LIBRARY_OPEN_SHOT || path.join(require('os').tmpdir(), 'library-open.png') });
     await page.fill('#arxiv-input', '2401.00001');
     await page.press('#arxiv-input', 'Enter');
     await page.waitForFunction(() => /Kept offline/.test(document.getElementById('preview').textContent));
@@ -179,6 +191,45 @@ test('saving papers for offline reading, opening them offline, and the list on a
     const t1 = Date.now();
     while (JSON.parse(gistText()).papers.library.notes.length && Date.now() - t1 < 8000) await p2.waitForTimeout(200);
     assert.equal(JSON.parse(gistText()).papers.library.notes.length, 0);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('the Open dialog lists at most 5 saved papers, the most recently saved or opened first', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const ctx = await browser.newContext();
+    await serve(ctx, { up: false, hits: 0 });
+    const page = await ctx.newPage();
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview h2');
+    // seven saved papers, saved a day apart; paper 2 was opened most recently
+    await page.evaluate(async () => {
+      const db = await TeXglassLibrary.open();
+      for (let i = 1; i <= 7; i++) {
+        await db.put({ key: 'tex:p' + i + '.tex', title: 'Paper ' + i, name: 'p' + i + '.tex', source: '\\section{Paper ' + i + '}', images: {}, saved: new Date(Date.UTC(2026, 10, i)).toISOString() });
+      }
+      localStorage.setItem('texglass:library-opened', JSON.stringify({ 'tex:p2.tex': new Date(Date.UTC(2026, 10, 20)).toISOString() }));
+    });
+    await page.click('#open');
+    await page.waitForFunction(() => document.querySelectorAll('#library-recent-list .library-recent-open').length === 5);
+    const titles = await page.$$eval('#library-recent-list .library-recent-title', (els) => els.map((e) => e.textContent));
+    assert.deepEqual(titles, ['Paper 2', 'Paper 7', 'Paper 6', 'Paper 5', 'Paper 4']);
+    assert.equal(await page.textContent('#arxiv-library'), 'All saved papers (7)');
+    // one opens from there
+    await page.click('#library-recent-list .library-recent-open[data-key="tex:p5.tex"]');
+    await page.waitForFunction(() => /Paper 5/.test(document.getElementById('preview').textContent));
+    assert.equal(await page.evaluate(() => document.getElementById('arxiv-dialog').open), false);
+    assert.equal(await page.getAttribute('#save-offline', 'aria-pressed'), 'true');
+    // and now comes first
+    await page.click('#open');
+    await page.waitForFunction(() => document.querySelector('#library-recent-list .library-recent-open').dataset.key === 'tex:p5.tex');
+    // "All saved papers" opens the full list
+    await page.click('#arxiv-library');
+    await page.waitForFunction(() => document.getElementById('library-dialog').open);
+    await page.waitForFunction(() => document.querySelectorAll('#library-list .library-item').length === 7);
   } finally {
     await browser.close();
   }
