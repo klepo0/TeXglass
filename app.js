@@ -2504,6 +2504,8 @@
       renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
       hover: featureOn('notationHover'),
       onHoverChange: (on) => setFeature('notationHover', on),
+      notationOrder: store.get('texglass:notation-order'),
+      onNotationOrder: (order) => store.set('texglass:notation-order', order),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => window.print(),
       onFocusStart: () => { if (picker) picker.stop(); },

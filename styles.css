@@ -926,6 +926,30 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .insight-body h3 { font-size: 15px; margin: 16px 0 6px; }
 .insight-count { color: var(--muted); font-weight: normal; margin-left: 4px; }
 .insight-filter { width: min(360px, 100%); font: inherit; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--ink); }
+/* The notation index: search, the order switch, and groups that fold. */
+.insight-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.insight-tools .insight-filter { flex: 1 1 200px; }
+.insight-order { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; flex: none; }
+.insight-order button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; min-height: 28px; }
+.insight-order button + button { border-left: 1px solid var(--rule); }
+.insight-order button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.insight-group { margin: 10px 0 0; }
+.insight-group > summary { cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); padding: 4px 0; list-style-position: outside; }
+.insight-group > summary::marker { color: var(--muted); }
+.insight-group > summary .insight-count { font-weight: 400; margin-left: 2px; }
+.insight-group-used { background: var(--accent-soft); border-radius: 6px; padding: 2px 8px 4px; margin: 6px 0 4px; }
+.insight-group-used > summary { color: var(--accent); }
+.insight-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; }
+.insight-chip { font: inherit; font-size: 15px; line-height: 1.2; min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--rule); border-radius: 5px; background: var(--bg); color: var(--ink); cursor: pointer; }
+.insight-chip:hover, .insight-chip:focus-visible { border-color: var(--accent); }
+.insight-chip code { font-size: 12px; }
+@media (pointer: coarse) { .insight-chip { min-height: 36px; min-width: 36px; } }
+@keyframes insight-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+.insight-flash { animation: insight-flash 1.6s ease-out; }
+.insight-group + .insight-group > .insight-table tr:first-child { border-top: 1px solid var(--rule); }
+.insight-symbols li[hidden], .insight-group[hidden], .insight-table tr[hidden] { display: none; }
+.insight-nomatch { color: var(--muted); font-size: 13px; }
+@media (pointer: coarse) { .insight-order button { min-height: 36px; padding: 6px 12px; } }
 .insight-table { border-collapse: collapse; width: 100%; }
 .insight-table td { padding: 5px 8px; border-top: 1px solid var(--rule); vertical-align: middle; }
 .insight-sym-cell { min-width: 3em; text-align: center; font-size: 17px; }
@@ -1009,6 +1033,10 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 /* In the side panel the index stacks: symbol and command, then its definition and first use. */
 .insight-side h3 { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
 .insight-side .insight-filter { width: 100%; font-size: 13px; padding: 5px 8px; }
+.insight-side .insight-tools { flex-direction: column; align-items: stretch; gap: 6px; }
+.insight-side .insight-tools .insight-filter { flex: none; }
+.insight-side .insight-order { display: flex; }
+.insight-side .insight-order button { flex: 1; padding: 3px 6px; }
 .insight-side .insight-table, .insight-side .insight-table tbody { display: block; }
 .insight-side .insight-table tr { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; padding: 6px 0; border-top: 1px solid var(--rule); }
 .insight-side .insight-table tr[hidden] { display: none; }
