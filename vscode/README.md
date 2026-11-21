@@ -44,14 +44,14 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   notation is defined: the document's own macros (with their definition and
   first use) and symbols defined with `:=`. The `texglass.notationHover`
   setting turns it off.
-- The contents sidebar has three tabs: **Contents**, **Notation** (the
-  document's macros and defined symbols with their first uses) and **Map**
+- The contents sidebar has three tabs: **Contents**, **Map**
   (which lemmas each theorem uses, from the `\ref`s in its statement and
   proof, from results named without a link such as "the previous lemma",
   shown dashed, and from citations, shown as leaves; solid lines are used in a
   proof, dotted ones only named in a statement; results are grouped by section,
-  and chains of lemmas serving one result fold into it on big maps); rest the
-  pointer on a result in the map to preview its statement. Press **M** in the
+  and chains of lemmas serving one result fold into it on big maps) and
+  **Notation** (the document's macros and defined symbols with their first
+  uses); rest the pointer on a result in the map to preview its statement. Press **M** in the
   preview (or run **TeXglass: Show Larger Dependency Map**) for the larger map,
   which fills the panel: drag to move around, Ctrl + scroll or pinch to zoom,
   or press **−**, **+**, **0** and **F** (fit the whole map).

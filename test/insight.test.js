@@ -170,7 +170,7 @@ test('the dependency map, the notation index and notation on hover read the rend
   }
 });
 
-test('the side panel has Contents, Notation and Map tabs and a divider that resizes it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('the side panel has Contents, Map and Notation tabs, in that order, and a divider that resizes it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -196,6 +196,7 @@ test('the side panel has Contents, Notation and Map tabs and a divider that resi
         store,
       });
     }, r.defs);
+    assert.deepEqual(await page.$$eval('.side-tabs button', (bs) => bs.map((b) => b.textContent)), ['Contents', 'Map', 'Notation']);
     const width = () => page.evaluate(() => Math.round(document.getElementById('toc-pane').getBoundingClientRect().width));
     // The saved tab and width come back, without being saved again.
     assert.equal(await width(), 300);
