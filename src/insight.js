@@ -1666,6 +1666,7 @@
         const node = e.target.closest('.dep-node, [data-pick]');
         if (node) {
           e.preventDefault();
+          if (node.matches('.dep-node') && twice(view, node, e)) return;
           if (node.dataset.c != null) selectCite(view, Number(node.dataset.c));
           else pick(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
         }
@@ -2005,6 +2006,27 @@
       if (!n) return;
       if (focusState && n.el && doc.contains(n.el)) focus(n.el, focusState.dir, true);
       else select(view, k);
+    }
+
+    /**
+     * A second click (or tap) on the same map node within a moment jumps to that
+     * result in the text, closing the larger map. Counted by hand rather than with
+     * dblclick, which phones do not all send, and the first click may redraw the node.
+     */
+    function twice(view, node, e) {
+      const key = node.dataset.c != null ? 'c' + node.dataset.c : node.dataset.n;
+      const last = view.lastNodeClick;
+      const near = last && last.key === key && e.timeStamp - last.t < 450 &&
+        Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) < 24;
+      view.lastNodeClick = near ? null : { key, t: e.timeStamp, x: e.clientX, y: e.clientY };
+      if (!near) return false;
+      const m = thingOf(view.body, key);
+      const el = m && m.el;
+      if (!el || !doc.contains(el)) return false;
+      hidePop();
+      view.leave();
+      opts.jump(el);
+      return true;
     }
 
     /** What a key on the map (data-n, data-from…) stands for: a result, or "c3", a cited work. */
