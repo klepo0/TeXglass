@@ -294,6 +294,8 @@ Overleaf panel).
   note in the margin to move it to another line.
 - In a note, `$…$` is maths with the paper's own macros. <kbd>Ctrl+Enter</kbd>
   saves, <kbd>Esc</kbd> cancels. Hover a note for edit and delete.
+- Each paper's notes are one small file, `paper.texglass.json`, keyed by the
+  paper: its arXiv id, its GitHub path, or for a `.tex` file its name and title.
 - Notes are anchored to the text they mark (a quote plus its surroundings),
   not line numbers, so they find their place in a revised paper; a note whose
   text has gone shows "Text not found".
@@ -380,8 +382,10 @@ install; after the first visit it opens and renders offline.
 **Opening a document**
 
 - **Open** (<kbd>Ctrl+K</kbd>) is one dialog for everything:
-  - type words, a title or an author to **search arXiv**, or paste an arXiv id
-    or link; the source, the authors' own `.sty` files, the bibliography and
+  - type words, a title or an author to **search arXiv** (through
+    [DataCite](https://datacite.org), which holds every arXiv DOI, with
+    OpenAlex and Semantic Scholar as fallbacks, since arXiv's own search can't
+    be called from a web page), or paste an arXiv id or link; the source, the authors' own `.sty` files, the bibliography and
     figures (including `.eps` and `.pdf`) come along;
   - type `github` and words to **search GitHub** for repositories with LaTeX,
     or paste a link to a public file, folder or repository (`github
@@ -493,8 +497,11 @@ editor.
 
 Install **TeXglass** from the
 [Marketplace](https://marketplace.visualstudio.com/items?itemName=klepo1.texglass)
-or Open VSX, open a `.tex` file and press <kbd>Ctrl+K V</kbd>. It also works
-in github.dev and vscode.dev.
+or Open VSX (`ext install klepo1.texglass`), open a `.tex` file and press
+<kbd>Ctrl+K V</kbd>. It also works in github.dev and vscode.dev: press `.` on
+any GitHub repository, preview, edit, commit. Prefer a file? Every
+[release](https://github.com/klepo0/TeXglass/releases) has a `.vsix`
+(**Extensions: Install from VSIX…**).
 
 - **Live preview** beside the editor or in place, updated as you type without
   saving; also in the Explorer's right-click menu.
@@ -506,7 +513,8 @@ in github.dev and vscode.dev.
   document (`% !TEX root`, subfiles, or the file that includes it).
 - **Bibliographies** from `.bib`, `.bbl` or amsrefs; **figures** in PNG, JPEG,
   SVG, GIF, WebP, PDF and EPS, with `\graphicspath`.
-- **Export to HTML** (`texglass.exportEmbedFonts`) and **Print / Save as PDF**.
+- **Export to HTML**: one standalone page that works offline
+  (`texglass.exportEmbedFonts`). **Print / Save as PDF**, laid out like a paper.
 - Title-bar buttons: Navigate, Contents, Hide/Show proofs, handwriting,
   Settings (gear), light/dark, scroll sync; the `…` menu has the rest.
 
@@ -670,23 +678,48 @@ text still works as usual.
   Citation previews ask DataCite and Crossref about a citation only when you
   hover it; switch **Look up cited papers online** off in
   [Settings](#settings-switching-features-on-or-off) to stop that. Notes sync goes only to your own GitHub gist.
-- The public website counts visits with GoatCounter (no cookies, path only,
-  skipped with Do Not Track or Global Privacy Control). Local copies and the
-  extensions count nothing.
+- The public website counts visits with [GoatCounter](https://www.goatcounter.com),
+  a cookieless counter: one request per visit with the site's path, the
+  referring site and the screen width, never a paper, file name or arXiv id.
+  It stores nothing on your device and is skipped when your browser sends Do
+  Not Track or Global Privacy Control. Local copies, the browser extension, the
+  VS Code extension and the command line count nothing.
 
 ## What LaTeX it understands
 
-Math environments (`equation`, `align`, `gather`, `multline`, `alignat`,
-`eqnarray`, mhequ's `equ`/`equs`, with `\tag`, `\nonumber`, `\notag`);
-macros (`\newcommand`, `\renewcommand`, `\def`, `\let`,
-`\DeclareMathOperator`, and the physics package's); `\newtheorem` in all its
-forms; sections, `\appendix`, `\numberwithin`, enumerate and enumitem labels;
-lists, footnotes, `tabular`, `verbatim`, links; ulem underlines; diagrams
-(`tikzcd`, `\xymatrix`, `tikzpicture`, `\DeclareSymbol` trees). Anything
-unknown is skipped gracefully. Details in the [README](../README.md#what-it-understands).
+- **Math**: `$…$`, `\(…\)`, `\[…\]`, `equation`, `align`, `gather`,
+  `multline`, `alignat`, `eqnarray`, mhequ's `equ` and `equs`, with `\tag`,
+  `\nonumber`, `\notag`. The physics package's macros (`\abs`, `\norm`,
+  `\qty`, `\dv`, …) work out of the box.
+- **Macros**: `\newcommand`, `\renewcommand`, `\def` (delimited parameters
+  too), `\let`, `\DeclareMathOperator`, in math and text, and those in a
+  paper's own `.sty` files when imported from arXiv.
+- **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
+- **Numbering and references**: sections, `\appendix`, `\numberwithin`,
+  enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`,
+  `\Cref`, `\autoref`, `\nameref`.
+- **Structure**: `\maketitle`, abstract, lists, footnotes, `tabular`,
+  `verbatim`, links, ulem underlines.
+- **Bibliographies**: `thebibliography`, `.bbl` (BibTeX or biber), `.bib`
+  files (BibTeX and biblatex) and amsrefs records
+  (`\begin{bibdiv}…\bib{key}{article}{…}`).
+- **Figures**: PNG, JPEG, SVG, GIF and WebP, with `\graphicspath`. `.eps`
+  figures (common in older papers) are drawn as SVG by a small PostScript
+  interpreter, pictures inside them included, and `.pdf` figures with pdf.js,
+  loaded only for papers that have them.
+- **Diagrams**: `tikzcd` and `\xymatrix` (bends, shifts, 2-cells, arrow
+  styles) and `tikzpicture`s, including `\clip`, hatching patterns, braces,
+  pictures inside nodes, macros that hold paths, and `\resizebox` to the
+  column width (pictures wider than the column shrink to fit). Tree symbols
+  declared with `\DeclareSymbol` (as in regularity structures papers) are
+  drawn inside formulas. Heavier TikZ shows its source.
+
+Anything unknown is skipped gracefully. There is no TeX install and no compile
+step, and long papers stay fast.
 
 ## Render dashboard
 
 Every night the [render dashboard](https://klepo0.github.io/TeXglass/dashboard/)
-opens about 200 arXiv papers in the web viewer and lists what broke, with what
-changed since the night before. See [dashboard/README.md](../dashboard/README.md).
+opens about 200 arXiv papers in the web viewer and lists what broke: maths
+KaTeX could not render, missing figures, undrawn diagrams, papers that froze,
+and slow loads, with what changed since the night before. See [dashboard/README.md](../dashboard/README.md).
