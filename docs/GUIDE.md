@@ -123,7 +123,8 @@ Rebind any of them in **Keyboard Shortcuts** (Ctrl+K Ctrl+S) by searching for
     the margin with that note lit up.
   - The arrows under the margin, or <kbd>N</kbd> and <kbd>Shift+N</kbd>, jump
     from note to note. The button below them narrows the jumps to margin
-    notes, todo notes or your own notes.
+    notes, todo notes or your own notes. The fold arrow and these buttons stay
+    put near the top of the window while you scroll.
 - **Footnotes**: hover the mark to read the footnote in place.
 - **Reading progress**: a small marker by each theorem, lemma, definition and
   proof.

@@ -1656,10 +1656,26 @@ s.xout { text-decoration-thickness: 0.15em; }
 .tg-margin-grip:hover::after, .tg-margin-grip:focus-visible::after, body.tg-margin-resizing .tg-margin-grip::after { background: var(--accent); width: 2px; }
 .tg-margin-grip:focus { outline: none; }
 body.tg-margin-resizing { cursor: col-resize; user-select: none; }
+/* The fold button and the note arrows ride a rail as tall as the text, in a sticky
+   box, so they stand still on screen while the text scrolls (src/margin.js). */
+.tg-margin-rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.tg-margin-stick {
+  position: sticky;
+  top: 10px;
+  height: 80px;
+}
+.tg-margin-stick > * { pointer-events: auto; }
 /* The fold button, on the divider; folded, it waits beside the text with a count. */
 .tg-margin-toggle {
   position: absolute;
-  top: 10px;
+  top: 0;
   left: -21px;
   z-index: 3;
   display: flex;
@@ -1684,7 +1700,7 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 /* Under it, arrows to the next and previous note, and which notes they visit. */
 .tg-margin-nav {
   position: absolute;
-  top: 34px;
+  top: 24px;
   left: -21px;
   z-index: 3;
   display: flex;
@@ -1721,6 +1737,7 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-margin-nav .tg-mnav-filter.tg-mnav-on { color: var(--accent); }
 .tg-mnav-menu {
   position: absolute;
+  top: 24px;
   left: 2px;
   z-index: 4;
   min-width: 190px;
@@ -2189,6 +2206,8 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   .tg-margin-toggle { min-width: 24px; height: 26px; border-radius: 13px; }
   .tg-margin-folded .tg-margin-toggle { left: -8px; }
   .tg-margin-nav button { min-width: 26px; min-height: 26px; }
+  .tg-margin-nav, .tg-mnav-menu { top: 30px; }
+  .tg-margin-stick { height: 112px; }
 
 
   .tg-note-dock { bottom: max(16px, env(safe-area-inset-bottom)); }
