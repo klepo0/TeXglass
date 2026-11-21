@@ -46,7 +46,7 @@ function classify(raw) {
   const count = (k) => Object.values(problems[k] || {}).reduce((a, b) => a + b, 0);
   p.counts = { math: count('math'), figure: count('figure'), diagram: count('diagram'), tikz: count('tikz'), command: count('command') };
   p.problems = problems;
-  if (raw.timeout) return Object.assign(p, { status: 'broken', why: 'Did not finish rendering (hang or very slow)' });
+  if (raw.timeout) return Object.assign(p, { status: 'broken', timeout: true, why: 'Did not finish rendering (hang or very slow)' });
   if (raw.error) return Object.assign(p, { status: 'broken', why: raw.error });
   if (!raw.blocks) return Object.assign(p, { status: 'broken', why: 'Nothing was rendered' });
   p.slow = p.ms != null && p.ms > SLOW_MS;
@@ -89,7 +89,7 @@ function tally(papers, kind, keyOf) {
   return [...byKey.values()].sort((a, b) => b.papers.length - a.papers.length || b.count - a.count).slice(0, 25);
 }
 
-/** Packages used by at least 3 papers, by the share of those papers with problems. */
+/** Packages used by at least 3 papers, by how many papers with problems use them. */
 function packageTally(papers) {
   const by = new Map();
   for (const p of papers) {
@@ -103,7 +103,7 @@ function packageTally(papers) {
   }
   return [...by.values()].filter((e) => e.used >= 3 && e.papers.length)
     .map((e) => Object.assign(e, { share: e.papers.length / e.used }))
-    .sort((a, b) => b.share - a.share || b.used - a.used).slice(0, 25);
+    .sort((a, b) => b.papers.length - a.papers.length || b.share - a.share).slice(0, 25);
 }
 
 const problemTotal = (p) => Object.values(p.counts || {}).reduce((a, b) => a + b, 0) - ((p.counts || {}).command || 0);
@@ -132,6 +132,55 @@ function changes(papers, prev) {
   return out.sort((a, b) => order[a.change] - order[b.change]);
 }
 
+/** The year a paper was submitted: from the corpus, or else from its arXiv id. */
+function yearOf(p) {
+  if (p.year) return p.year;
+  const id = String(p.id || '');
+  const m = /^(\d{2})\d{2}\./.exec(id) || /\/(\d{2})\d{2}/.exec(id);
+  if (!m) return null;
+  const yy = Number(m[1]);
+  return yy > 90 ? 1900 + yy : 2000 + yy;
+}
+
+const YEARS = ['before 2008', '2008–2014', '2015–2019', '2020–2023', '2024 on', 'unknown'];
+
+/** The decade-ish bucket for a year, so small years do not each get a row. */
+function yearBucket(y) {
+  if (!y) return 'unknown';
+  if (y < 2008) return 'before 2008';
+  if (y < 2015) return '2008–2014';
+  if (y < 2020) return '2015–2019';
+  if (y < 2024) return '2020–2023';
+  return '2024 on';
+}
+
+/** Papers per group (field, years), with how many are OK, have issues or are broken. */
+function breakdown(papers, groupOf) {
+  const by = new Map();
+  for (const p of papers) {
+    if (p.status === 'nosource') continue;
+    const g = groupOf(p) || 'other';
+    const e = by.get(g) || { key: g, papers: 0, ok: 0, issues: 0, broken: 0 };
+    e.papers++;
+    e[p.status]++;
+    by.set(g, e);
+  }
+  return [...by.values()].map((e) => Object.assign(e, { clean: e.ok / e.papers }));
+}
+
+/** How many papers have each kind of failure. */
+function byType(papers) {
+  const t = { math: 0, figure: 0, tikz: 0, diagram: 0, timeout: 0, error: 0, slow: 0 };
+  for (const p of papers) {
+    const c = p.counts || {};
+    for (const k of ['math', 'figure', 'tikz', 'diagram']) if (c[k]) t[k]++;
+    if (p.timeout) t.timeout++;
+    else if (p.status === 'broken') t.error++;
+    if (p.slow) t.slow++;
+  }
+  return t;
+}
+
 /**
  * The run's results: { date, commit, papers, summary, changes, top, history }.
  * corpus: [{ id, field, title, note }]; prev: the last run's results, if any.
@@ -154,6 +203,10 @@ function build(raws, corpus, prev, info) {
   for (const p of papers) { summary[p.status]++; if (p.slow) summary.slow++; }
   const rendered = papers.filter((p) => p.ms != null && p.status !== 'broken').map((p) => p.ms).sort((a, b) => a - b);
   summary.medianMs = rendered.length ? rendered[Math.floor(rendered.length / 2)] : null;
+  summary.p90Ms = rendered.length ? rendered[Math.min(rendered.length - 1, Math.floor(rendered.length * 0.9))] : null;
+  const judged = summary.papers - summary.nosource;
+  summary.clean = judged ? summary.ok / judged : null;
+  summary.byType = byType(papers);
   const top = {
     math: tally(papers, 'math'),
     command: tally(papers, 'command'),
@@ -161,8 +214,17 @@ function build(raws, corpus, prev, info) {
     figure: tally(papers, 'figure', figureKind),
     packages: packageTally(papers),
   };
-  const history = ((prev && prev.history) || []).concat([{ date, commit: info.commit || '', summary }]).slice(-120);
-  return { date, commit: info.commit || '', papers, summary, changes: changes(papers, prev), top, history };
+  for (const p of papers) p.year = yearOf(Object.assign({}, meta.get(p.id), p));
+  const groups = {
+    field: breakdown(papers, (p) => p.field).sort((a, b) => b.papers - a.papers),
+    year: breakdown(papers, (p) => yearBucket(p.year)).sort((a, b) => YEARS.indexOf(a.key) - YEARS.indexOf(b.key)),
+  };
+  const slowest = papers.filter((p) => p.ms != null).sort((a, b) => b.ms - a.ms).slice(0, 10)
+    .map((p) => ({ id: p.id, ms: p.ms, status: p.status, timeout: !!p.timeout }));
+  const changed = changes(papers, prev);
+  const entry = { date, commit: info.commit || '', summary, worse: changed.filter((c) => c.change === 'worse').length, better: changed.filter((c) => c.change === 'better').length };
+  const history = ((prev && prev.history) || []).concat([entry]).slice(-120);
+  return { date, commit: info.commit || '', papers, summary, changes: changed, top, groups, slowest, history };
 }
 
-module.exports = { classify, mathErrorKey, figureKind, badness, tally, packageTally, changes, build, SLOW_MS };
+module.exports = { classify, mathErrorKey, figureKind, yearOf, yearBucket, breakdown, byType, badness, tally, packageTally, changes, build, SLOW_MS };

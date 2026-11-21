@@ -12,8 +12,10 @@ import path people use) in headless Chromium and records:
 
 The results go to the `render-dashboard` branch as `results.json`, and
 [the dashboard page](https://klepo0.github.io/TeXglass/dashboard/) reads them
-from there: status per paper, what changed since the last run, and the macros,
-environments and packages behind the most problems. The page can read another
+from there: the clean-render rate and median load time over time, newly broken
+and newly fixed papers since the last run, how many papers have each kind of
+failure, the macros, commands, figure types and packages affecting the most
+papers, the slowest papers, and the clean-render rate by field and by year. The page can read another
 results file with `?data=<url>`.
 
 Paper sources are kept in the Actions cache, so arXiv sees each paper once. New

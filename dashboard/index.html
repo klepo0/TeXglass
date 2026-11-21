@@ -43,7 +43,21 @@ a { color: var(--accent); }
 .tile span { color: var(--muted); font-size: 0.9rem; }
 .tile.ok b { color: var(--ok); } .tile.issues b { color: var(--issues); } .tile.broken b { color: var(--broken); }
 .trend { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
-.trend svg { width: 100%; height: 70px; display: block; }
+.trend svg { width: 100%; height: auto; display: block; overflow: visible; }
+.trend .axis { font-size: 11px; fill: var(--muted); }
+.trend .grid-line { stroke: var(--rule); stroke-width: 1; }
+.tile small { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+.tile small.up { color: var(--ok); } .tile small.down { color: var(--broken); }
+.types .tile b { font-size: 1.3rem; }
+.panel h3 { font-size: 0.95rem; margin: 10px 0 6px; }
+.panel h3 .count { color: var(--muted); font-weight: 400; }
+.bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--none-soft); min-width: 80px; }
+.bar i { display: block; height: 100%; }
+.groups td { border-bottom: 1px dashed var(--rule); padding: 5px 6px; }
+.groups table { font-size: 0.9rem; }
+.slow-list { margin: 0 0 10px; padding: 0; list-style: none; }
+.slow-list li { display: flex; gap: 8px; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--rule); }
+.slow-list li:last-child { border-bottom: 0; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 4px 14px; }
@@ -97,13 +111,24 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
   <p class="muted" id="when">Loading the last run…</p>
   <p id="error" hidden></p>
   <div class="tiles" id="tiles"></div>
-  <div class="trend" id="trend" hidden></div>
+
+  <h2>Clean-render rate over time</h2>
+  <div class="trend" id="trend"><p class="muted">The chart starts after the second run.</p></div>
 
   <h2>Changed since the last run</h2>
-  <div class="panel changes" id="changes"><p class="muted">—</p></div>
+  <div class="grid" id="changes"><div class="panel"><p class="muted">—</p></div></div>
+
+  <h2>Failures by type</h2>
+  <div class="tiles types" id="types"></div>
 
   <h2>What to support next</h2>
   <div class="grid top" id="top"></div>
+
+  <h2>Load time</h2>
+  <div class="grid" id="timing"></div>
+
+  <h2>By field and by year</h2>
+  <div class="grid" id="groups"></div>
 
   <h2>All papers</h2>
   <div class="controls" id="filters" role="group" aria-label="Show"></div>
@@ -169,6 +194,10 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
     let list = data.papers.filter((p) => {
       if (filter === 'problems' && !(p.status === 'broken' || p.status === 'issues' || p.slow)) return false;
       if (filter === 'slow' && !p.slow) return false;
+      if (filter.startsWith('type:')) {
+        const k = filter.slice(5);
+        if (k === 'timeout' ? !p.timeout : k === 'error' ? !(p.status === 'broken' && !p.timeout) : k === 'slow' ? !p.slow : !((p.counts || {})[k])) return false;
+      }
       if (['ok', 'issues', 'broken', 'nosource'].includes(filter) && p.status !== filter) return false;
       if (q && !(p.id + ' ' + p.title + ' ' + (p.field || '') + ' ' + JSON.stringify(p.problems || {})).toLowerCase().includes(q)) return false;
       return true;
@@ -187,36 +216,45 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
     const s = data.summary;
     const opts = [['problems', `Needs work (${s.issues + s.broken})`], ['broken', `Broken (${s.broken})`], ['issues', `Issues (${s.issues})`],
       ['slow', `Slow (${s.slow})`], ['ok', `OK (${s.ok})`], ['nosource', `No source (${s.nosource})`], ['all', `All (${s.papers})`]];
+    const TYPE = { math: 'Maths not rendered', figure: 'Figures missing', tikz: 'TikZ partly drawn', diagram: 'Diagrams not drawn', timeout: 'Froze', error: 'Failed to import' };
+    if (filter.startsWith('type:') && TYPE[filter.slice(5)]) opts.unshift([filter, TYPE[filter.slice(5)]]);
     $('filters').innerHTML = opts.map(([k, t]) => `<button data-filter="${k}" aria-pressed="${k === filter}">${esc(t)}</button>`).join('') +
       '<input id="q" type="search" placeholder="Search id, title or macro" aria-label="Search papers">';
     $('q').value = query;
   }
 
+  const cleanOf = (sum) => (sum.clean != null ? sum.clean : sum.ok / Math.max(1, sum.papers - (sum.nosource || 0)));
+  const pct = (x) => (x == null ? '—' : Math.round(x * 100) + '%');
+
+  /** A line chart of one number per run. */
+  function lineChart(runs, value, fmt, max, label) {
+    const w = Math.max(300, Math.min(1000, $('trend').clientWidth - 28)), h = 150, l = 40, r = 10, t = 10, b = 22;
+    const xs = (i) => l + (runs.length === 1 ? (w - l - r) / 2 : (i * (w - l - r)) / (runs.length - 1));
+    const ys = (v) => t + (1 - v / max) * (h - t - b);
+    let g = '';
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      g += `<line class="grid-line" x1="${l}" x2="${w - r}" y1="${ys(f * max)}" y2="${ys(f * max)}"/><text class="axis" x="${l - 6}" y="${ys(f * max) + 4}" text-anchor="end">${esc(fmt(f * max))}</text>`;
+    }
+    const pts = runs.map((run, i) => [xs(i), ys(Math.min(max, value(run) || 0)), run]);
+    const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const dots = pts.map(([x, y, run]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="var(--accent)"><title>${esc(day(run.date))}: ${esc(fmt(value(run)))}${run.worse ? `, ${run.worse} worse` : ''}${run.better ? `, ${run.better} better` : ''}</title></circle>`).join('');
+    const ends = `<text class="axis" x="${l}" y="${h - 4}">${esc(day(runs[0].date))}</text><text class="axis" x="${w - r}" y="${h - 4}" text-anchor="end">${esc(day(runs[runs.length - 1].date))}</text>`;
+    return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">${g}<polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"/>${dots}${ends}</svg>`;
+  }
+
   function trend(history) {
     if (!history || history.length < 2) return;
-    const runs = history.slice(-60);
-    const w = 600, h = 70, bw = w / runs.length;
-    const colors = { ok: 'var(--ok)', issues: 'var(--issues)', broken: 'var(--broken)' };
-    let bars = '';
-    runs.forEach((r, i) => {
-      const s = r.summary; const total = s.ok + s.issues + s.broken || 1;
-      let y = h;
-      for (const k of ['ok', 'issues', 'broken']) {
-        const bh = (s[k] / total) * h;
-        y -= bh;
-        bars += `<rect x="${(i * bw + 1).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" fill="${colors[k]}"><title>${esc(day(r.date))}: ${s.ok} OK, ${s.issues} issues, ${s.broken} broken</title></rect>`;
-      }
-    });
-    $('trend').hidden = false;
-    $('trend').innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Status of rendered papers over the last ${runs.length} runs">${bars}</svg>` +
-      `<div class="legend"><span><i style="background:var(--ok)"></i>OK</span><span><i style="background:var(--issues)"></i>Issues</span><span><i style="background:var(--broken)"></i>Broken</span><span>last ${runs.length} runs, oldest on the left</span></div>`;
+    const runs = history.slice(-90);
+    const maxMs = Math.max(2000, ...runs.map((r) => r.summary.medianMs || 0)) * 1.2;
+    $('trend').innerHTML = lineChart(runs, (r) => cleanOf(r.summary), pct, 1, 'Share of papers that render cleanly, per run') +
+      `<div class="legend"><span>Share of papers with no problems, last ${runs.length} runs. Hover a point for the date and how many papers got worse or better.</span></div>` +
+      `<h3 style="font-size:0.9rem;margin:14px 0 4px">Median load time</h3>` +
+      lineChart(runs, (r) => r.summary.medianMs, (v) => (v / 1000).toFixed(1) + ' s', maxMs, 'Median load time per run');
   }
 
   function changes(list) {
-    if (!data.history || data.history.length < 2) { $('changes').innerHTML = '<p class="muted">This is the first run; changes show from the next one.</p>'; return; }
-    if (!list.length) { $('changes').innerHTML = '<p class="muted">Nothing changed.</p>'; return; }
-    const verb = { worse: '<b style="color:var(--broken)">Worse</b>', better: '<b style="color:var(--ok)">Better</b>', new: '<b>New in the list</b>' };
-    $('changes').innerHTML = '<ul>' + list.slice(0, 40).map((c) => {
+    if (!data.history || data.history.length < 2) { $('changes').innerHTML = '<div class="panel"><p class="muted">This is the first run; changes show from the next one.</p></div>'; return; }
+    const item = (c) => {
       let what = '';
       if (c.change === 'new') what = badge(c.to);
       else {
@@ -224,8 +262,48 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
         if (c.ms && c.ms[0] != null && c.ms[1] != null && Math.abs(c.ms[1] - c.ms[0]) > 3000) what += ` · ${secs(c.ms[0])} → ${secs(c.ms[1])}`;
         if (c.fresh && c.fresh.length) what += ` · new: <span class="mono">${c.fresh.map(esc).join(', ')}</span>`;
       }
-      return `<li>${verb[c.change]} ${paperLink(c.id)} ${what}</li>`;
-    }).join('') + (list.length > 40 ? `<li class="muted">and ${list.length - 40} more</li>` : '') + '</ul>';
+      return `<li>${paperLink(c.id)} ${what}</li>`;
+    };
+    const col = (title, color, items, none) => `<div class="panel changes"><h3 style="color:${color}">${title} <span class="count">(${items.length})</span></h3>` +
+      (items.length ? '<ul>' + items.slice(0, 15).map(item).join('') + (items.length > 15 ? `<li class="muted">and ${items.length - 15} more</li>` : '') + '</ul>' : `<p class="muted">${none}</p>`) + '</div>';
+    const worse = list.filter((c) => c.change === 'worse');
+    const broke = worse.filter((c) => c.from !== c.to);
+    const fixed = list.filter((c) => c.change === 'better');
+    $('changes').innerHTML =
+      col('Newly broken or worse', 'var(--broken)', broke.concat(worse.filter((c) => c.from === c.to)), 'No regressions.') +
+      col('Newly fixed or better', 'var(--ok)', fixed.filter((c) => c.to === 'ok').concat(fixed.filter((c) => c.to !== 'ok')), 'Nothing improved.') +
+      (list.some((c) => c.change === 'new') ? col('New in the list', 'var(--ink)', list.filter((c) => c.change === 'new'), '') : '');
+  }
+
+  function types(s) {
+    const t = s.byType;
+    if (!t) { $('types').innerHTML = '<p class="muted">Counted from the next run.</p>'; return; }
+    const judged = Math.max(1, s.papers - s.nosource);
+    const rows = [['math', 'maths not rendered'], ['figure', 'figures missing'], ['tikz', 'TikZ partly drawn'], ['diagram', 'diagrams not drawn'],
+      ['timeout', 'froze or timed out'], ['error', 'failed to import'], ['slow', 'slower than 20 s']];
+    $('types').innerHTML = rows.map(([k, label]) =>
+      `<button class="tile" data-type="${k}" style="text-align:left;font:inherit;color:inherit;cursor:pointer" title="Show these papers"><b>${t[k]}</b><span>${label}</span><small>${pct(t[k] / judged)} of papers</small></button>`).join('');
+  }
+
+  function timing(s) {
+    const list = data.slowest || data.papers.filter((p) => p.ms != null).sort((a, b) => b.ms - a.ms).slice(0, 10);
+    $('timing').innerHTML =
+      `<div class="panel"><h3>Typical paper</h3><p>Median <b>${secs(s.medianMs)}</b>${s.p90Ms != null ? ` · 9 in 10 papers under <b>${secs(s.p90Ms)}</b>` : ''}</p>` +
+      `<p class="muted" style="font-size:0.85rem">From opening the link to the page settling, with the paper's source already downloaded. A paper over 20 s counts as slow; one over 2 minutes as frozen.</p></div>` +
+      `<div class="panel"><h3>Slowest papers</h3><ol class="slow-list">` + list.map((p) =>
+        `<li><span>${paperLink(p.id)} ${p.timeout ? badge('broken') : ''}</span><span class="mono">${p.timeout ? 'froze' : secs(p.ms)}</span></li>`).join('') + '</ol></div>';
+  }
+
+  function groups(g) {
+    if (!g) { $('groups').innerHTML = '<p class="muted">Counted from the next run.</p>'; return; }
+    const table = (title, rows) => `<div class="panel groups"><h3>${title}</h3><table><tbody>` + rows.map((e) => {
+      const w = (n) => ((n / e.papers) * 100).toFixed(1) + '%';
+      return `<tr><td>${esc(e.key)}</td><td class="num muted">${e.papers}</td><td style="width:45%"><div class="bar" title="${e.ok} OK, ${e.issues} with issues, ${e.broken} broken">` +
+        `<i style="width:${w(e.ok)};background:var(--ok)"></i><i style="width:${w(e.issues)};background:var(--issues)"></i><i style="width:${w(e.broken)};background:var(--broken)"></i></div></td>` +
+        `<td class="num"><b>${pct(e.clean)}</b></td></tr>`;
+    }).join('') + '</tbody></table></div>';
+    $('groups').innerHTML = table('By field', g.field) + table('By year submitted', g.year) +
+      '<div class="legend" style="grid-column:1/-1"><span><i style="background:var(--ok)"></i>OK</span><span><i style="background:var(--issues)"></i>Issues</span><span><i style="background:var(--broken)"></i>Broken</span><span>The number is the clean-render rate.</span></div>';
   }
 
   function top(t) {
@@ -235,10 +313,10 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
         `<div class="ids">${e.papers.slice(0, 40).map(paperLink).join(', ')}${e.papers.length > 40 ? ' …' : ''}</div></details></li>`).join('') + '</ol></div>';
     const papers = (e) => `${e.papers.length} paper${e.papers.length > 1 ? 's' : ''}`;
     $('top').innerHTML =
-      block('Maths KaTeX could not render', 'Undefined macros and other KaTeX errors, by the number of papers they break.', t.math, (e) => `${papers(e)} · ${e.count}×`) +
+      block('Maths KaTeX could not render', 'Undefined macros and other KaTeX errors, ranked by how many papers each one affects.', t.math, (e) => `${papers(e)} · ${e.count}×`) +
       block('Commands the viewer does not know', 'Text-mode commands the converter skipped.', t.command, (e) => `${papers(e)} · ${e.count}×`) +
       block('Diagrams not drawn', 'Environments shown as a placeholder.', t.diagram, papers) +
-      block('Packages behind the most problems', 'Packages used by at least 3 papers, by the share of those papers with problems.', t.packages, (e) => `${e.papers.length} of ${e.used}`) +
+      block('Packages behind the most problems', 'Packages in at least 3 papers, ranked by how many papers with problems use them (out of all that use them).', t.packages, (e) => `${e.papers.length} of ${e.used}`) +
       block('Figures that did not show', 'By file type: what the viewer would need to show them.', t.figure, (e) => `${papers(e)} · ${e.count}×`) ||
       '<p class="muted">Nothing failed.</p>';
   }
@@ -247,16 +325,27 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
     const s = data.summary;
     const commit = data.commit ? ` at <a class="mono" href="https://github.com/klepo0/TeXglass/commit/${esc(data.commit)}">${esc(data.commit.slice(0, 7))}</a>` : '';
     $('when').innerHTML = `Last run ${esc(new Date(data.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}${commit}: ${s.papers} arXiv papers, median load time ${secs(s.medianMs)}.`;
-    $('tiles').innerHTML = [['ok', s.ok, 'render cleanly'], ['issues', s.issues, 'with issues'], ['broken', s.broken, 'broken or frozen'], ['', s.slow, 'slower than 20 s'], ['', s.nosource, 'PDF only, skipped']]
-      .map(([c, n, t]) => `<div class="tile ${c}"><b>${n}</b><span>${t}</span></div>`).join('');
-    trend(data.history);
+    const h = data.history || [];
+    const before = h.length > 1 ? cleanOf(h[h.length - 2].summary) : null;
+    const now = cleanOf(s);
+    const delta = before == null ? '' : Math.round((now - before) * 100);
+    const deltaText = delta === '' ? '' : `<small class="${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta > 0 ? '+' : ''}${delta} points since last run</small>`;
+    $('tiles').innerHTML = `<div class="tile ok"><b>${pct(now)}</b><span>clean-render rate</span>${deltaText}</div>` +
+      [['ok', s.ok, 'render cleanly'], ['issues', s.issues, 'with issues'], ['broken', s.broken, 'broken or frozen'], ['', s.nosource, 'PDF only, skipped']]
+        .map(([c, n, t]) => `<div class="tile ${c}"><b>${n}</b><span>${t}</span></div>`).join('');
+    trend(h);
     changes(data.changes || []);
+    types(s);
     top(data.top || {});
+    timing(s);
+    groups(data.groups);
     filters();
     rows();
   }
 
   document.addEventListener('click', (e) => {
+    const ty = e.target.closest('[data-type]');
+    if (ty) { filter = 'type:' + ty.dataset.type; filters(); rows(); $('filters').scrollIntoView({ behavior: 'smooth' }); return; }
     const f = e.target.closest('[data-filter]');
     if (f) { filter = f.dataset.filter; filters(); rows(); return; }
     const s = e.target.closest('[data-sort]');
