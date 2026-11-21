@@ -5,6 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const preview = $('preview');
   const previewPane = $('preview-pane');
+  // Each jump (a reference, Contents, the map, Go to, the next note…) remembers
+  // where you were: the Back button over the preview, or Alt+Left, goes back there.
+  const viewHistory = window.TeXglassScroll && TeXglassScroll.history ? TeXglassScroll.history(previewPane, { keys: window }) : null;
   // \marginpar and \todo notes go in a margin column beside the text (src/margin.js).
   const margin = window.TeXglassMargin
     ? window.TeXglassMargin.attach({
@@ -571,6 +574,7 @@
     clearPreview();
     const shown = render();
     previewPane.scrollTop = 0;
+    if (viewHistory) viewHistory.clear(); // a new document: nowhere to go back to
     store.set('texglass:last', doc);
     store.set('texglass:last-name', name || '');
     return shown;

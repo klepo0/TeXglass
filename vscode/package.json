@@ -156,6 +156,18 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.back",
+        "title": "Go Back in Preview",
+        "category": "TeXglass",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "texglass.forward",
+        "title": "Go Forward in Preview",
+        "category": "TeXglass",
+        "icon": "$(arrow-right)"
+      },
+      {
         "command": "texglass.showNotation",
         "title": "Show Notation Index",
         "category": "TeXglass"
@@ -374,6 +386,14 @@
           "when": "activeWebviewPanelId == 'texglass.preview'"
         },
         {
+          "command": "texglass.back",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
+          "command": "texglass.forward",
+          "when": "activeWebviewPanelId == 'texglass.preview'"
+        },
+        {
           "command": "texglass.showNotation",
           "when": "activeWebviewPanelId == 'texglass.preview'"
         },
@@ -445,6 +465,16 @@
         "command": "texglass.goTo",
         "key": "ctrl+g",
         "mac": "cmd+g",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.back",
+        "key": "alt+left",
+        "when": "activeWebviewPanelId == 'texglass.preview'"
+      },
+      {
+        "command": "texglass.forward",
+        "key": "alt+right",
         "when": "activeWebviewPanelId == 'texglass.preview'"
       },
       {

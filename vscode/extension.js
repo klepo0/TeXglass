@@ -1409,6 +1409,9 @@ function activate(context) {
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
     }),
     vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
+    // Back to where the preview was before a jump, and forward again (Alt+Left / Alt+Right).
+    vscode.commands.registerCommand('texglass.back', () => preview && preview.post({ type: 'history', dir: -1 })),
+    vscode.commands.registerCommand('texglass.forward', () => preview && preview.post({ type: 'history', dir: 1 })),
     vscode.commands.registerCommand('texglass.findNext', () => preview && preview.post({ type: 'find-step', dir: 1 })),
     vscode.commands.registerCommand('texglass.findPrevious', () => preview && preview.post({ type: 'find-step', dir: -1 })),
     vscode.commands.registerCommand('texglass.showNotation', () => preview && preview.post({ type: 'insight', tab: 'notation' })),

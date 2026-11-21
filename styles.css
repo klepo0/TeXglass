@@ -522,6 +522,35 @@ body.toc-right .toc-side svg { transform: scaleX(-1); }
 .zoom-float button { font: inherit; color: inherit; background: none; border: 0; padding: 1px 8px; cursor: pointer; }
 .zoom-float button:hover { color: var(--ink); }
 .zoom-float .zoom-level { min-width: 3.6em; font-variant-numeric: tabular-nums; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
+/* Back (and Forward) over the top left of the preview, once a jump has happened (src/scroll.js). */
+.tg-history {
+  position: fixed;
+  z-index: 8;
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  font: 12.5px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.tg-history[hidden] { display: none; }
+.tg-history:hover, .tg-history:focus-within, .tg-history.tg-history-fresh { opacity: 1; }
+.tg-history button {
+  display: inline-flex; align-items: center; gap: 3px;
+  font: inherit; color: inherit; background: none; border: 0; padding: 5px 10px 5px 7px; cursor: pointer;
+}
+.tg-history button[hidden] { display: none; }
+.tg-history button:hover:not(:disabled) { color: var(--ink); background: var(--accent-soft); }
+.tg-history button:disabled { opacity: 0.45; cursor: default; }
+.tg-history .tg-history-fwd { padding: 5px 7px; border-left: 1px solid var(--rule); }
+.tg-history svg { width: 14px; height: 14px; flex: none; }
+@media (pointer: coarse) { .tg-history button { padding: 9px 13px 9px 10px; } .tg-history .tg-history-fwd { padding: 9px 10px; } }
+@media print { .tg-history { display: none !important; } }
 .toc-list { list-style: none; margin: 0; padding: 0; }
 .toc-list a {
   display: flex;

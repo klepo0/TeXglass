@@ -415,6 +415,7 @@
       return 0;
     }
 
+    let searchMoved = false; // since the bar opened
     function scrollToRange(range) {
       const node = range.startContainer;
       const el = node.nodeType === 1 ? node : node.parentElement;
@@ -422,12 +423,18 @@
       reveal(el);
       const view = scroller.getBoundingClientRect();
       let r = range.getBoundingClientRect();
+      const margin = 64; // clear of the bar
+      const away = (q) => q.top < view.top + margin || q.bottom > view.bottom - 24;
+      // The first match the search moves to is a jump: Back (Alt+Left) returns from it.
+      if (!searchMoved && ((!r.width && !r.height) || away(r))) {
+        searchMoved = true;
+        if (win.TeXglassScroll && win.TeXglassScroll.remember) win.TeXglassScroll.remember(scroller);
+      }
       if (!r.width && !r.height) {
         el.scrollIntoView({ block: 'center' });
         r = range.getBoundingClientRect();
       }
-      const margin = 64; // clear of the bar
-      if (r.top < view.top + margin || r.bottom > view.bottom - 24) {
+      if (away(r)) {
         scroller.scrollTop += r.top - (view.top + view.height / 3);
       }
       if (!hasHighlights) {
@@ -508,6 +515,8 @@
       }
       // Glide only when it is close; a long smooth scroll sweeps the whole page.
       const r = t.el.getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      if ((r.bottom < view.top || r.top > view.bottom) && win.TeXglassScroll && win.TeXglassScroll.remember) win.TeXglassScroll.remember(scroller);
       const far = r.bottom < -innerHeight || r.top > 2 * innerHeight;
       t.el.scrollIntoView({ behavior: far ? 'auto' : 'smooth', block: 'center' });
       const flash = t.block || t.el;
@@ -546,6 +555,7 @@
     function open(m, text) {
       if (m === 'trace' && !options.onFocus) m = 'goto';
       const wasOpen = !bar.hidden;
+      if (!wasOpen) searchMoved = false;
       bar.hidden = false;
       place();
       if (text != null) queries[m || mode] = text;

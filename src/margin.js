@@ -989,6 +989,28 @@
     pane.appendChild(bar);
     let barFor = null; // { start, end } of a selection, or { id } of a highlight
 
+    // The system's own menu for a selection (copy, look up, share on phones and
+    // tablets; Edge's mini menu on a computer) opens above the selected text, with
+    // drag handles under it on a touch screen. So the bar goes below the selection,
+    // past the handles on a touch screen, and above it only when there is no room
+    // below, then far enough up to clear that menu.
+    const BAR_GAP = 8;
+    const BAR_GAP_TOUCH = 36; // under the selection handles
+    const NATIVE_MENU = 56; // room the system's menu takes above a selection
+    let lastPointer = 'mouse';
+    const touchy = () => lastPointer === 'touch' || lastPointer === 'pen' ||
+      !!(win.matchMedia && win.matchMedia('(hover: none) and (pointer: coarse)').matches);
+
+    /** The bar's top (in the window) for a selection at `rect`: below it, else above. */
+    function barTop(rect, h, viewTop, viewBottom, touch) {
+      const below = rect.bottom + (touch ? BAR_GAP_TOUCH : BAR_GAP);
+      if (below + h <= viewBottom - 4) return below;
+      const above = rect.top - h - (touch ? NATIVE_MENU + BAR_GAP : BAR_GAP);
+      if (above >= viewTop + 4) return above;
+      // a selection taller than the window: the bottom edge of what is in view
+      return Math.max(viewTop + 4, viewBottom - h - 4);
+    }
+
     function showBar(rect, target) {
       barFor = target;
       bar.classList.toggle('tg-hlbar-existing', !!target.id);
@@ -996,9 +1018,12 @@
       const p = pane.getBoundingClientRect();
       const w = bar.offsetWidth;
       const left = Math.max(4, Math.min(rect.left + rect.width / 2 - w / 2 - p.left + pane.scrollLeft, pane.clientWidth - w - 4));
-      const above = rect.top - p.top - bar.offsetHeight - 8;
+      const vv = win.visualViewport;
+      const viewTop = Math.max(p.top, vv ? vv.offsetTop : 0);
+      const viewBottom = Math.min(p.bottom, vv ? vv.offsetTop + vv.height : win.innerHeight);
+      const top = barTop(rect, bar.offsetHeight, viewTop, viewBottom, touchy());
       bar.style.left = left + 'px';
-      bar.style.top = (above > 0 ? above : rect.bottom - p.top + 8) + pane.scrollTop + 'px';
+      bar.style.top = top - p.top + pane.scrollTop + 'px';
     }
     function hideBar() {
       bar.hidden = true;
@@ -1020,6 +1045,7 @@
     }
 
     function onPointerUp(e) {
+      if (e.pointerType) lastPointer = e.pointerType;
       if (!study || e.button !== 0 || bar.contains(e.target)) return;
       setTimeout(() => {
         const s = selectionInDoc();
@@ -1044,13 +1070,24 @@
       }, 0);
     }
     doc.addEventListener('pointerup', onPointerUp);
+    doc.addEventListener('pointerdown', (e) => { if (e.pointerType) lastPointer = e.pointerType; });
     page.addEventListener('keyup', (e) => {
       if (!study || !e.shiftKey) return;
       const s = selectionInDoc();
       if (s) showBar(s.rect, { start: s.start, end: s.end });
     });
+    // A long press selects text on a touch screen without a pointerup the page
+    // sees, and the handles change it afterwards: show the bar once it settles.
+    let settle = null;
     page.addEventListener('selectionchange', () => {
-      if (barFor && !barFor.id && !selectionInDoc()) hideBar();
+      const s = selectionInDoc();
+      if (barFor && !barFor.id && !s) hideBar();
+      clearTimeout(settle);
+      if (!study || !s || !touchy()) return;
+      settle = setTimeout(() => {
+        const now = selectionInDoc();
+        if (now) showBar(now.rect, { start: now.start, end: now.end });
+      }, 350);
     });
     page.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !bar.hidden) hideBar();

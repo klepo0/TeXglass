@@ -32,7 +32,7 @@ browser extension:
   (BibTeX, biblatex and amsrefs).
 - **Hover previews** of references and citations; click to jump there.
 - **Citation previews**: resting on a citation shows its bibliography entry,
-  then the cited paper's title and abstract (looked up on DataCite and Crossref
+  then the cited paper's title and a folded abstract (looked up on DataCite and Crossref
   only when you hover, and kept for the visit), with **Open in TeXglass** when the
   paper is on arXiv. Offline, the bibliography entry is shown on its own.
 - **What does this use?**: the small button by a theorem's heading lights up
@@ -56,6 +56,7 @@ browser extension:
   notes, so they sync with them and survive a revised version of the paper.
   Switch it off in the **…** menu (VS Code: `texglass.readingProgress`).
 - **Go to** any theorem, equation or section by number (Ctrl+G).
+- **Back** to where you were after any jump (a reference, Contents, the map, Go to), with a button or Alt+Left; Alt+Right goes forward again.
 - **Trace** (a tab of the same bar): pick a theorem, lemma or definition and see only what it uses and what uses it.
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined
