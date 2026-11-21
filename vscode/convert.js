@@ -31,7 +31,16 @@ function resolverFor(job) {
         return false;
       }
     },
-    (rel) => job.base + '/' + rel.split('/').map(encodeURIComponent).join('/')
+    (rel) => {
+      const url = job.base + '/' + rel.split('/').map(encodeURIComponent).join('/');
+      if (!/\.(pdf|eps|ps)$/i.test(rel)) return url;
+      // the preview keeps a drawing per URL: a new one when the file changes
+      try {
+        return url + '?v=' + Math.round(fs.statSync(path.join(job.dir, rel)).mtimeMs);
+      } catch (e) {
+        return url;
+      }
+    }
   );
 }
 

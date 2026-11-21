@@ -23,8 +23,14 @@ for (const [from, to] of [
   ['src/insight.js', 'insight.js'],
   ['src/cite.js', 'cite.js'],
   ['src/bib.js', 'bib.js'],
+  ['src/eps.js', 'eps.js'],
+  ['src/pdf.js', 'pdf.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));
 }
+// pdf.js, for PDF figures; src/pdf.js finds it at ../vendor/pdfjs/ from shared/
+const pdfjs = path.join(__dirname, '..', 'vendor', 'pdfjs');
+fs.mkdirSync(pdfjs, { recursive: true });
+for (const f of ['pdf.min.js', 'pdf.worker.min.js', 'LICENSE']) fs.copyFileSync(path.join(root, 'vendor', 'pdfjs', f), path.join(pdfjs, f));
 console.log('Copied the shared files into', path.relative(process.cwd(), out) || '.');

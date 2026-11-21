@@ -177,8 +177,9 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   are drawn, and follow the light/dark theme.
 - Figures (`\includegraphics`) are shown when a PNG, JPEG, SVG, GIF or WebP
   file with that name sits next to the document (`\graphicspath` is
-  respected). PDF and EPS figures are shown only if a PNG of the same name
-  exists.
+  respected). PDF figures are drawn with pdf.js and EPS figures by a small
+  PostScript interpreter; a PNG of the same name is used instead when there is one.
+  A figure is drawn again when its file changes.
 
 Long documents are fine: a 350-page paper takes a few seconds to convert, and
 the conversion runs in a background thread, so typing is never held up.

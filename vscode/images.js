@@ -1,8 +1,9 @@
 /*
  * Find the image file for an \includegraphics, the way LaTeX would: relative
  * to the document's folder and the \graphicspath folders, trying the usual
- * extensions. A .pdf or .eps figure cannot be shown in the preview, but a
- * .png of the same name often exists, so that is tried too.
+ * extensions. A picture browsers can show comes first (a .png next to a .pdf
+ * or .eps of the same name); otherwise the .pdf or .eps itself, which the
+ * preview draws (media/preview.js, with pdf.js and the EPS interpreter).
  */
 'use strict';
 
@@ -42,6 +43,14 @@ function imageResolver(text, exists, url) {
           if (/\.(pdf|eps|ps)$/i.test(p)) continue;
           if (exists(p)) return url(p);
         }
+      }
+    }
+    // no picture browsers can show: the .pdf or .eps itself, which the preview draws
+    for (const d of dirs) {
+      const rel = normalize(d + clean);
+      if (!rel) continue;
+      for (const p of /\.(pdf|eps|ps)$/i.test(rel) ? [rel] : /\.[a-z0-9]+$/i.test(rel) ? [] : [rel + '.pdf', rel + '.eps']) {
+        if (exists(p)) return url(p);
       }
     }
     return null;
