@@ -831,6 +831,7 @@
         show(m.blocks, m.lines);
         drawFigures();
         if (insight) insight.invalidate();
+        if (picker) picker.refresh();
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);
         if (progress) progress.refresh();
@@ -910,6 +911,16 @@
       }
       case 'print':
         window.print();
+        break;
+      case 'print-view': {
+        // Printing in the browser: which blocks show now (a selection, or Hide the rest)
+        let view = null;
+        try { view = window.TeXglassPick ? window.TeXglassPick.snapshot(preview) : null; } catch (e) { view = null; }
+        vscode.postMessage({ type: 'print', view });
+        break;
+      }
+      case 'pick':
+        if (picker) picker.start();
         break;
       case 'toggle-theme':
         // Switch away from what is showing now, whatever chose it.
@@ -1006,6 +1017,24 @@
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
+      print: () => vscode.postMessage({ type: 'print-request' }),
+      onFocusStart: () => { if (picker) picker.stop(); },
+    })
+    : null;
+
+  // Show selected results (TeXglass: Show Selected Results…): tick results and
+  // numbered equations, see only those. Print asks the extension, which prints
+  // in the browser what is shown here (see 'print-view').
+  const picker = window.TeXglassPick
+    ? window.TeXglassPick.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      proofsOf: (el) => {
+        const n = insight && insight.graph().byEl.get(el);
+        return n ? n.proofs : null;
+      },
+      print: () => vscode.postMessage({ type: 'print-request' }),
+      onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
     })
     : null;
 

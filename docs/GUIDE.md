@@ -251,7 +251,25 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   - A map on show lights up the same results, and picking a result on the map
     moves the focus to it.
   - **Done** or <kbd>Esc</kbd> ends it.
+  - **Print** on the bar prints what is shown: with **Hide the rest** on, only
+    the lit results, and of their proofs only the ones you opened.
 - **Trace**: the same, chosen by name from the Navigate bar.
+- **Show selected results**: pick theorems, lemmas, definitions and numbered
+  equations, and see only those. Start it from the … menu (web viewer) or
+  **TeXglass: Show Selected Results…** (VS Code, also in the preview's `…`
+  menu).
+  - Every result and numbered equation gets a tick box; click a result or an
+    equation to tick it, again to untick it. **Show selected** shows only the
+    ticked ones, with the headings of their sections and the paper's title.
+  - The proof of a selected result comes along folded to its first line.
+    Click it to open it; its fold arrow folds it again.
+  - **Print** on the bar prints exactly that view, to a printer or as a PDF:
+    the selected results and equations, and only the proofs you opened. For
+    example, tick Theorem 1, (1.1) and (3.4), open the proof of Theorem 1, and
+    print. <kbd>Ctrl+P</kbd> (web viewer) and **TeXglass: Print / Save as
+    PDF** print the view too.
+  - **Change** goes back to ticking; **Done** or <kbd>Esc</kbd> shows the
+    whole document again.
 - **Hypothesis checker** and **cited theorems**: see
   [Previews on hover](#previews-on-hover).
 - **Reading progress**: see [Reading a paper](#reading-a-paper).
@@ -393,8 +411,10 @@ install; after the first visit it opens and renders offline.
 
 **The … menu**: **Save** (<kbd>Ctrl+S</kbd>, back to the file, with live
 reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
-standalone page that works offline), **Print or save as PDF**
-(<kbd>Ctrl+P</kbd>), **Highlights and notes**, **Export notes**, **Import
+standalone page that works offline), **Show selected results…** (see
+[Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
+(<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
+rest** prints as shown), **Highlights and notes**, **Export notes**, **Import
 notes…**, **Sync notes with GitHub…** and **Reading progress**.
 
 **Status** at the top counts undefined references and duplicate labels.
@@ -503,8 +523,9 @@ All in the Command Palette under **TeXglass:**.
 | Show Notation Index | The Notation tab. |
 | Show Dependency Map of the Results | The Map tab. |
 | Show Larger Dependency Map | <kbd>M</kbd> in the preview. |
+| Show Selected Results… | Tick results and numbered equations, then show (and print) only those. |
 | Export to HTML | A standalone page. |
-| Print / Save as PDF | Laid out like a paper. |
+| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (a selection, or **Hide the rest**). |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |
