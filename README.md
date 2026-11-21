@@ -40,10 +40,11 @@
 - **Read anywhere, phones and tablets included.** Swipe-in panels, previews
   that open on a tap, notes written with Apple Pencil or a stylus, and a
   home-screen app that works offline.
-- **Your notes go with you.** Highlights, margin notes and reading progress
-  sync through your own GitHub gist, with no TeXglass server.
-- **Works offline and stays private.** Your files never leave your browser or
-  editor.
+- **Your notes go with you.** Highlights, margin notes, reading progress and
+  your list of saved papers sync through your own GitHub gist, with no
+  TeXglass server.
+- **Works offline and stays private.** Save papers for a train or a plane and
+  read them with no connection. Your files never leave your browser or editor.
 
 ## Get started
 
@@ -73,7 +74,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 
 ### Understand
 
-- **Dependency map** of which results each theorem uses, read from the paper's own references.
+- **Dependency map** of which results each theorem uses, read from the paper's own references; double-click a result to jump to it.
 - **What does this use?** lights up everything a result rests on, or everything that uses it.
 - **Hypothesis checker**: a cited lemma's hypotheses split out, each with a box to tick.
 - **Notation on hover** and a **notation index** of the paper's macros and defined symbols.
@@ -85,6 +86,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Handwritten notes look**: ink on squared paper, or chalk on a board in dark mode.
 - **Write with a pen** in the margin on a tablet.
 - **Show selected results** and **print** exactly that view.
+- **Save for offline**: keep papers on your device and find them under **Saved papers**.
 - **Sync** notes through a private GitHub gist, your browser's sync or VS Code Settings Sync.
 
 ### Write
@@ -123,7 +125,8 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
   counts visits with a cookieless counter. Details in the
   [guide](docs/GUIDE.md#offline-and-privacy).
 - **Offline**: the VS Code extension and the command line work fully offline,
-  and the web viewer does too after your first visit.
+  and the web viewer does too after your first visit. Papers you **Save for
+  offline** open without a connection.
 - **What LaTeX it understands** is listed in the
   [guide](docs/GUIDE.md#what-latex-it-understands). Anything unknown is skipped
   gracefully.
