@@ -475,12 +475,65 @@ stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
 
 ## On phones and tablets
 
-<!-- Placeholder: the mobile layout is being worked on. Fill this section in
-     when it lands (touch gestures, what moves where on a small screen). -->
+The web viewer adapts to a phone or a tablet. Nothing needs switching on.
 
-On a narrow window the contents open as a drawer over the page (close it with
-the button or <kbd>Esc</kbd>). A layout made for phones is on its way; this
-section will describe it.
+**Install it like an app.** On an iPhone or iPad, open the site in Safari, tap
+Share, then **Add to Home Screen**. On Android, or in Chrome or Edge, choose
+**Install TeXglass as an app** in the **…** menu when it appears there. Opened
+from the home screen it has no browser bars and works offline after the first
+visit, like the web viewer anywhere.
+
+**A compact toolbar (windows up to 760px wide).** The toolbar is one row of
+large buttons: **Open**, the side panel (the three lines), **Navigate** (the
+magnifier), the handwritten and theme toggles, and **…**. The mode switch
+(Preview, Edit, Split), **OAI preprints**, zoom, **Hide proofs** and **Edit on
+GitHub** move to the top of the **…** menu. They move back when the window is
+wider.
+
+**Drawers you swipe in.** On a narrow screen the side panel and the margin notes
+are drawers over the text, so the text keeps the whole width:
+
+- Swipe in from the left edge to open the side panel (from the right edge if you
+  moved it to the right). Its button opens it too.
+- Swipe in from the right edge to open the margin. Its small arrow button, or a
+  tap on a note's dot in the text, opens it too.
+- Swipe a drawer back toward its edge, tap outside it, or press <kbd>Esc</kbd>
+  to close it. Choosing a section in Contents closes the side panel.
+
+Whether the margin is open on a phone isn't saved, so it stays the way you set
+it on a computer.
+
+**Previews open on a tap.** On a touch screen, the previews that a mouse shows
+on hover open as a sheet at the bottom of the screen. That covers references,
+citations, footnotes, notation and the map's results.
+
+- A tap on a reference or citation shows it, without leaving your place.
+  **Go there** in the sheet jumps to it.
+- A tap on a formula shows where its notation comes from.
+- Tap outside the sheet, swipe its handle down, or tap the handle to close it.
+  A long preview scrolls inside the sheet.
+
+**Formulas fit the screen.** On a phone or tablet, a display formula too wide
+for the screen breaks after its relations and operators (`=`, `≤`, `+`) and
+continues on the next line, instead of scrolling sideways. Formulas that can't
+break, such as matrices and aligned equations, still scroll sideways.
+
+**Write notes with Apple Pencil or a stylus.** With **Highlights and notes** on,
+a pen writes in the margin column. Your finger still scrolls, and selecting
+text still works as usual.
+
+- The first touch of the pen opens the margin column, even when there are no
+  notes yet.
+- Strokes you write one soon after another make one note, placed beside the
+  line where you started. Pause for a moment, or start writing well above or
+  below, to begin a new note.
+- A handwritten note is kept with your other notes, so it exports, imports and
+  syncs through your gist like them. Its pencil button adds typed words under
+  the handwriting, and its bin button deletes it. You can drag it to another
+  line like any note.
+- The browser extension's own sync holds at most 8 KB of notes per paper.
+  Many handwritten notes on one paper can go over that, and then they stay in
+  that browser. Gist sync has no such limit.
 
 ## Offline and privacy
 
