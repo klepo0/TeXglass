@@ -152,3 +152,29 @@ test('sync: a wrong token says so, and a deleted gist is made again', async () =
   assert.notEqual(g.id(), 'gone');
   assert.equal(gh.gists.size, 1);
 });
+
+test('reading progress rides along: merged result by result, later wins, kept in files and the gist', () => {
+  const a = Object.assign(S.empty('arxiv:1'), {
+    progress: { 'label:lem:a': { s: 'read', t: '2026-11-01T00:00:00Z' }, 'label:thm': { s: 'skimmed', q: true, t: '2026-11-03T00:00:00Z' } },
+  });
+  const b = Object.assign(S.empty('arxiv:1'), {
+    progress: { 'label:lem:a': { s: 'understood', t: '2026-11-02T00:00:00Z' }, 'label:thm': { s: 'read', t: '2026-11-02T00:00:00Z' }, bad: { s: 'nonsense' } },
+  });
+  const m = S.merge(a, b);
+  assert.deepEqual(m.progress, {
+    'label:lem:a': { s: 'understood', t: '2026-11-02T00:00:00Z' },
+    'label:thm': { s: 'skimmed', q: true, t: '2026-11-03T00:00:00Z' },
+  });
+  assert.equal(S.equal(m, a), false);
+  assert.equal(S.equal(m, S.merge(m, a)), true);
+  // a record with only progress is worth keeping, and survives a file and the gist's store
+  assert.equal(S.isEmpty(m), false);
+  assert.equal(S.isEmpty(S.empty('x')), true);
+  const back = S.parseFile(S.toFile(m), 'arxiv:1')['arxiv:1'];
+  assert.deepEqual(back.progress, m.progress);
+  const store = S.parseFile(S.toStore({ 'arxiv:1': m }));
+  assert.deepEqual(store['arxiv:1'].progress, m.progress);
+  // notes changing do not lose it
+  const tracked = S.track(m, []);
+  assert.deepEqual(tracked.progress, m.progress);
+});

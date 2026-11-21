@@ -24,6 +24,14 @@
   --hl-comment: #8a8a8f;
   --hl-punct: #8a8a8f;
   --hl-align: #c0392b;
+  /* reading progress (src/progress.js) */
+  --rp-skimmed: #c98a12;
+  --rp-skimmed-bg: #fbf0d6;
+  --rp-read: #2f74c0;
+  --rp-read-bg: #dce9f8;
+  --rp-understood: #2e8b57;
+  --rp-understood-bg: #d6f0df;
+  --rp-q: #c0392b;
   color-scheme: light;
 }
 
@@ -54,6 +62,13 @@
     --hl-comment: #7d7d85;
     --hl-punct: #8a8a92;
     --hl-align: #ff8a80;
+    --rp-skimmed: #e0b057;
+    --rp-skimmed-bg: #3a3020;
+    --rp-read: #7fb0ec;
+    --rp-read-bg: #1f3048;
+    --rp-understood: #74c995;
+    --rp-understood-bg: #1d3a2a;
+    --rp-q: #ff8a80;
     color-scheme: dark;
   }
 }
@@ -84,6 +99,13 @@
   --hl-comment: #7d7d85;
   --hl-punct: #8a8a92;
   --hl-align: #ff8a80;
+  --rp-skimmed: #e0b057;
+  --rp-skimmed-bg: #3a3020;
+  --rp-read: #7fb0ec;
+  --rp-read-bg: #1f3048;
+  --rp-understood: #74c995;
+  --rp-understood-bg: #1d3a2a;
+  --rp-q: #ff8a80;
   color-scheme: dark;
 }
 
@@ -1197,7 +1219,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
-  .uses-btn, .uses-bar { display: none !important; }
+  .uses-btn, .uses-bar, .rp-marks { display: none !important; }
   .uses-focus .uses-fade { opacity: 1 !important; }
   .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
   :root {
@@ -1764,3 +1786,66 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-bar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .uses-step { color: var(--muted); font-variant-numeric: tabular-nums; }
 .uses-done { font-weight: 600; }
+
+/* Reading progress (src/progress.js): a status marker by each result's heading,
+   progress in the Contents tab, and the map coloured by status. */
+.rp-marks { display: inline-flex; align-items: center; gap: 0.15em; margin: 0 0.1em 0 0.3em; vertical-align: -0.1em; font-style: normal; }
+.rp-off .rp-marks, .ref-popover .rp-marks, .insight-popover .rp-marks, .insight-dialog .rp-marks, .tg-margin .rp-marks { display: none; }
+.rp-mark, .rp-q {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; padding: 0; border-radius: 50%; cursor: pointer; font: inherit; line-height: 1;
+}
+.rp-mark { border: 1.5px solid var(--muted); background: none; opacity: 0.35; transition: opacity 0.15s; }
+.theorem:hover > * > .rp-marks .rp-mark, .theorem:hover > .rp-marks .rp-mark, .proof:hover .rp-mark, .rp-mark:focus-visible { opacity: 0.9; }
+.rp-mark[data-s="skimmed"] { opacity: 1; border-color: var(--rp-skimmed); background: conic-gradient(var(--rp-skimmed) 0 33%, transparent 0); }
+.rp-mark[data-s="read"] { opacity: 1; border-color: var(--rp-read); background: conic-gradient(var(--rp-read) 0 67%, transparent 0); }
+.rp-mark[data-s="understood"] { opacity: 1; border-color: var(--rp-understood); background: var(--rp-understood); }
+.rp-mark[data-s="understood"]::after { content: "\2713"; color: var(--paper); font-size: 0.7em; font-weight: 700; }
+.rp-q { border: 0; background: none; color: var(--muted); opacity: 0; transition: opacity 0.15s; }
+.rp-q::before { content: "?"; font-weight: 700; font-size: 0.85em; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.theorem:hover .rp-q, .proof:hover .rp-q, .rp-q:focus-visible { opacity: 0.6; }
+.rp-q:hover { opacity: 1; color: var(--rp-q); }
+.rp-q[aria-pressed="true"] { opacity: 1; color: var(--on-accent); background: var(--rp-q); }
+@media (hover: none) { .rp-mark { opacity: 0.6; } .rp-q { opacity: 0.5; } }
+
+/* the Contents tab: the paper's progress at the top, and a bar by each section */
+.rp-summary { margin: 0 0 8px; padding: 6px 8px 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); font-size: 13px; }
+.rp-summary[hidden], .toc-pane:not([data-tab="toc"]) .rp-summary, .toc-pane.rp-only-q:not([data-tab="notation"]):not([data-tab="deps"]) .toc-list { display: none; }
+.rp-sum-line { display: flex; align-items: center; gap: 8px; }
+.rp-sum-line .rp-bar { flex: 1 1 auto; width: auto; height: 6px; }
+.rp-sum-text { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rp-sum-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rp-summary button { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--rule); border-radius: 6px; background: none; color: var(--ink); cursor: pointer; }
+.rp-summary button:hover { border-color: var(--accent); color: var(--accent); }
+.rp-summary button[data-rp="questions"] { color: var(--rp-q); font-weight: 600; }
+.rp-summary button[aria-pressed="true"] { background: var(--rp-q); border-color: var(--rp-q); color: var(--on-accent); }
+.rp-next p { margin: 6px 0 0; line-height: 1.4; }
+.rp-next button { margin-left: 4px; }
+.rp-qhead { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.rp-qlist { margin: 4px 0 0; padding-left: 1.4em; }
+.rp-qlist li { margin: 2px 0; }
+.rp-summary a { color: var(--accent); text-decoration: none; }
+.rp-summary a:hover { text-decoration: underline; }
+.rp-muted { color: var(--muted); }
+.rp-bar { display: inline-flex; overflow: hidden; width: 34px; height: 5px; border-radius: 3px; background: var(--rule); flex: 0 0 auto; }
+.rp-bar i { display: block; height: 100%; }
+.rp-bar-understood { background: var(--rp-understood); }
+.rp-bar-read { background: var(--rp-read); }
+.rp-bar-skimmed { background: var(--rp-skimmed); }
+.toc-list .rp-toc { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding-left: 4px; align-self: center; color: var(--muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.toc-list .rp-toc-done .rp-toc-n { color: var(--rp-understood); }
+
+/* the map: results coloured by status, "?" flagged */
+.dep-node.rp-st-skimmed rect { fill: var(--rp-skimmed-bg); }
+.dep-node.rp-st-read rect { fill: var(--rp-read-bg); }
+.dep-node.rp-st-understood rect { fill: var(--rp-understood-bg); stroke: var(--rp-understood); }
+.dep-node.rp-st-understood.dep-sel rect, .dep-node.rp-st-read.dep-sel rect, .dep-node.rp-st-skimmed.dep-sel rect { fill: var(--accent); }
+.dep-node .rp-qmark circle { fill: var(--rp-q); stroke: var(--paper); stroke-width: 1.5; }
+.dep-node .rp-qmark text { fill: var(--on-accent); font-size: 10px; font-weight: 700; }
+.dep-picked .dep-node .rp-qmark { opacity: 1; }
+.rp-key { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--thm-border); border-radius: 3px; vertical-align: -1px; background: var(--paper); }
+.rp-key-skimmed { background: var(--rp-skimmed-bg); }
+.rp-key-read { background: var(--rp-read-bg); }
+.rp-key-understood { background: var(--rp-understood-bg); border-color: var(--rp-understood); }
+.rp-key-q { border: 0; background: none; width: auto; color: var(--rp-q); font-weight: 700; }
+.rp-detail { color: var(--ink); }

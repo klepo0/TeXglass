@@ -49,6 +49,7 @@
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
   let imageMap = null; // { path: object URL } for those figures
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
+  let progress = null; // reading progress on the results (src/progress.js)
   let cites = null; // citation previews (src/cite.js)
 
   // Syntax colouring and completion for both source editors.
@@ -201,6 +202,7 @@
     updateToc();
     if (margin) margin.refresh();
     if (insight) insight.invalidate(); // read the page again when next needed
+    if (progress) progress.refresh(); // status markers, once the browser is idle
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
   }
 
@@ -722,6 +724,7 @@
     document.body.classList.toggle('editing', m === 'split');
     if (copier) copier.setEnabled(m !== 'edit');
     updateStudy();
+    updateProgress();
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
     store.set('texglass:mode', m);
     if (m !== 'edit') closeEditor(true);
@@ -1533,7 +1536,7 @@
     return null;
   }
   function writeNotes(key, record) {
-    if (!record.notes.length && !Object.keys(record.deleted || {}).length) store.remove(NOTES + key);
+    if (NotesSync.isEmpty(record)) store.remove(NOTES + key);
     else store.set(NOTES + key, JSON.stringify(record));
   }
   /** Every paper with notes in this browser: { key: record }. */
@@ -1569,6 +1572,7 @@
     if (paper) showNotes();
     else margin.setAnnotations([]);
     updateStudy();
+    updateProgress();
     if (paper) syncNotes(true);
   }
 
@@ -1597,6 +1601,7 @@
     if (NotesSync.equal(merged, paper.record)) return;
     paper.record = merged;
     writeNotes(paper.key, merged);
+    if (progress) progress.setMap(merged.progress);
     // Not while a note is being written: try again a little later.
     const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.tg-mcard-input');
     if (typing) setTimeout(() => paper && showNotes(), 4000);
@@ -1610,7 +1615,7 @@
     try {
       const got = (await extApi.storage.sync.get(item))[item];
       const merged = NotesSync.merge(record, got ? Object.assign({}, got, { paper: key }) : null);
-      const slim = { notes: merged.notes, deleted: merged.deleted };
+      const slim = { notes: merged.notes, deleted: merged.deleted, progress: merged.progress };
       if (!got || !NotesSync.equal(merged, Object.assign(NotesSync.empty(key), got))) {
         if (JSON.stringify(slim).length + item.length < EXT_ITEM_MAX) await extApi.storage.sync.set({ [item]: slim });
       }
@@ -1782,6 +1787,33 @@
     $('notes-sync').addEventListener('click', showSyncDialog);
   }
   if (!NotesSync || !margin) for (const id of ['notes-toggle', 'notes-export', 'notes-import', 'notes-sync']) if ($(id)) $(id).hidden = true;
+
+  // --- reading progress -------------------------------------------------------------
+  // A status by each result (src/progress.js), kept with the paper's notes
+  // (record.progress), so it is exported, imported and synced with them.
+  function progressOn() { return store.get('texglass:progress') !== '0'; }
+  function updateProgress() {
+    const item = $('progress-toggle');
+    if (item) item.setAttribute('aria-checked', String(progressOn()));
+    if (!progress) return;
+    progress.setMap(paper ? paper.record.progress : {});
+    progress.setEnabled(!!(paper && progressOn() && mode !== 'edit'));
+  }
+  /** The reader changed a status. */
+  function progressChanged(map) {
+    if (!paper) return;
+    paper.record = Object.assign({}, paper.record, { progress: map });
+    writeNotes(paper.key, paper.record);
+    clearTimeout(notesPushTimer);
+    notesPushTimer = setTimeout(() => syncNotes(true), 2500);
+  }
+  if ($('progress-toggle')) {
+    $('progress-toggle').addEventListener('click', () => {
+      store.set('texglass:progress', progressOn() ? '0' : '1');
+      updateProgress();
+    });
+    if (!NotesSync || !window.TeXglassProgress) $('progress-toggle').hidden = true;
+  }
 
   // --- print / save as PDF -----------------------------------------------------
   // The print stylesheet (styles.css) lays the document out like a paper. Before
@@ -2089,6 +2121,7 @@
       renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
       hover: store.get('texglass:notationHover') !== 'off',
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
+      statusOf: (el) => (progress ? progress.statusOf(el) : null),
     })
     : null;
   // The side panel's tabs (Contents, Map, Notation) and its draggable divider.
@@ -2103,6 +2136,20 @@
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
     });
   }
+  // Reading progress: markers by the results, progress in Contents, colours on the map.
+  progress = window.TeXglassProgress && NotesSync
+    ? TeXglassProgress.attach({
+      root: preview,
+      pane: tocPane,
+      list: tocList,
+      insight,
+      enabled: false, // until a paper is open (updateProgress)
+      jump: (el) => { jumpTo(el); if (narrow.matches) { tocWanted = false; showToc(); } },
+      onChange: progressChanged,
+    })
+    : null;
+  updateProgress();
+  if (progress) progress.refresh();
 
   // --- resizable split ------------------------------------------------------------
 
