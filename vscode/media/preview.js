@@ -714,7 +714,9 @@
       const clone = node.cloneNode(true);
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-      body.appendChild(clone);
+      // A result cited in a proof: its hypotheses and conclusion, with boxes to tick (shared/hypotheses.js).
+      const split = hypotheses && hypotheses.viewFor(target, a, clone);
+      body.appendChild(split || clone);
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
@@ -931,6 +933,8 @@
         break;
       case 'annotations':
         if (margin) margin.setAnnotations(m.list);
+        // the hypothesis checker's ticks come with the notes
+        hypTicks = new Set((Array.isArray(m.list) ? m.list : []).filter((a) => a && a.kind === 'check').map((a) => a.id));
         break;
       case 'study':
         if (margin) margin.setStudy(m.on);
@@ -969,6 +973,26 @@
         vscode.postMessage({ type: 'render-tex', id, texs });
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+    })
+    : null;
+
+  // A result cited in a proof previews as its hypotheses and conclusion; the
+  // ticks are kept by the extension with the reader's notes (paper.texglass.json)
+  // and sync with them.
+  let hypTicks = new Set();
+  const hypotheses = window.TeXglassHypotheses
+    ? window.TeXglassHypotheses.attach({
+      root: preview,
+      isChecked: (id) => hypTicks.has(id),
+      setChecked: (id, on, info) => {
+        if (on) hypTicks.add(id); else hypTicks.delete(id);
+        vscode.postMessage({ type: 'check', id, on, info });
+      },
+      prefs: {
+        get: (k) => ((vscode.getState && vscode.getState()) || {})[k] || null,
+        set: (k, v) => { if (vscode.setState) vscode.setState(Object.assign({}, vscode.getState() || {}, { [k]: v })); },
+      },
+      onChange: () => { if (popoverLink && !popover.hidden) placePopover(popoverLink, popover.firstElementChild); },
     })
     : null;
 

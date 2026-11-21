@@ -1320,7 +1320,8 @@
     }
 
     function setAnnotations(next) {
-      list = Array.isArray(next) ? next.filter((a) => a && typeof a.id === 'string' && a.anchor) : [];
+      // ticks of the hypothesis checker travel with the notes but are not shown here
+      list = Array.isArray(next) ? next.filter((a) => a && typeof a.id === 'string' && a.anchor && a.kind !== 'check') : [];
       editing = null;
       refresh();
     }

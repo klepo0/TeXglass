@@ -50,6 +50,7 @@
   let imageMap = null; // { path: object URL } for those figures
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let cites = null; // citation previews (src/cite.js)
+  let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -1908,7 +1909,9 @@
       const clone = node.cloneNode(true);
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-      body.appendChild(clone);
+      // A result cited in a proof: its hypotheses and conclusion, with boxes to tick (src/hypotheses.js).
+      const split = hypotheses && hypotheses.viewFor(target, a, clone);
+      body.appendChild(split || clone);
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
@@ -2091,6 +2094,25 @@
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
     })
     : null;
+  // A result cited in a proof previews as its hypotheses and conclusion; the
+  // reader's ticks are kept with their notes (and sync with them).
+  const hypTicks = new Map(); // ticks while no paper is open to keep them with
+  hypotheses = window.TeXglassHypotheses
+    ? window.TeXglassHypotheses.attach({
+      root: preview,
+      isChecked: (id) => (paper && NotesSync ? NotesSync.checks(paper.record).has(id) : !!hypTicks.get(id)),
+      setChecked: (id, on, info) => {
+        if (!paper || !NotesSync) { hypTicks.set(id, on); return; }
+        paper.record = Object.assign(NotesSync.setCheck(paper.record, id, on, info), { paper: paper.key });
+        writeNotes(paper.key, paper.record);
+        clearTimeout(notesPushTimer);
+        notesPushTimer = setTimeout(() => syncNotes(true), 2500);
+      },
+      prefs: store,
+      onChange: () => { if (popoverLink && !popover.hidden) placePopover(popoverLink, popover.firstElementChild); },
+    })
+    : null;
+
   // The side panel's tabs (Contents, Map, Notation) and its draggable divider.
   if (window.TeXglassInsight) {
     TeXglassInsight.sidePanel({
