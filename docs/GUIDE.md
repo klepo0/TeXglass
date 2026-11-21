@@ -254,7 +254,10 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     list.
   - **Pin** a symbol with the pin by its entry: pinned symbols gather at the
     top of the tab and stay in view while you scroll the list (and while you
-    search). Pins are kept per paper; click the pin again to unpin. The pin by
+    search). Pins are kept per paper; click the pin again to unpin. Drag a
+    pinned symbol by its handle (⋮⋮) to reorder them, with the mouse or a
+    finger, or focus the handle and press <kbd>↑</kbd> <kbd>↓</kbd>; the order
+    is kept with the pins. The pin by
     **Used in …** keeps that strip in view too.
 
 ## Understanding the logic

@@ -1802,6 +1802,71 @@
           for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
         }
       });
+      // pinned rows: drag a handle (mouse, pen or finger) or press ↑ ↓ on it to reorder
+      body.addEventListener('pointerdown', (e) => {
+        const h = e.target.closest && e.target.closest('.insight-drag');
+        if (!h || e.button > 0) return;
+        const item = h.closest('.insight-pin-item');
+        const list = item.parentElement;
+        const box = list.closest('.insight-stuck');
+        e.preventDefault();
+        item.classList.add('insight-dragging');
+        const before = Array.from(list.children).map((x) => x.dataset.pinItem).join('\n');
+        let lastY = e.clientY;
+        let scroller = null;
+        const place = () => {
+          for (const other of list.children) {
+            if (other === item) continue;
+            const r = other.getBoundingClientRect();
+            if (lastY < r.top + r.height / 2) {
+              if (item.nextElementSibling !== other) list.insertBefore(item, other);
+              return;
+            }
+          }
+          if (list.lastElementChild !== item) list.appendChild(item);
+        };
+        // near the edge of the pinned block (when it scrolls), scroll it
+        const edge = () => {
+          if (!box || box.scrollHeight <= box.clientHeight) return;
+          const r = box.getBoundingClientRect();
+          const d = lastY < r.top + 24 ? -8 : lastY > r.bottom - 24 ? 8 : 0;
+          if (d) { box.scrollTop += d; place(); }
+        };
+        const move = (ev) => {
+          if (ev.pointerId !== e.pointerId) return;
+          ev.preventDefault();
+          lastY = ev.clientY;
+          place();
+          if (!scroller) scroller = setInterval(edge, 30);
+        };
+        const up = (ev) => {
+          if (ev.pointerId !== e.pointerId) return;
+          win.removeEventListener('pointermove', move);
+          win.removeEventListener('pointerup', up);
+          win.removeEventListener('pointercancel', up);
+          clearInterval(scroller);
+          item.classList.remove('insight-dragging');
+          const order = Array.from(list.children).map((x) => x.dataset.pinItem);
+          if (order.join('\n') !== before) orderPins(order);
+        };
+        // on the window: moving the row in the list can drop the pointer capture
+        const win = document_.defaultView || window;
+        win.addEventListener('pointermove', move, { passive: false });
+        win.addEventListener('pointerup', up);
+        win.addEventListener('pointercancel', up);
+      });
+      body.addEventListener('keydown', (e) => {
+        const h = e.target.closest && e.target.closest('.insight-drag');
+        if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        const item = h.closest('.insight-pin-item');
+        const keys = Array.from(item.parentElement.children).map((x) => x.dataset.pinItem);
+        const k = keys.indexOf(item.dataset.pinItem);
+        const j = e.key === 'ArrowUp' ? k - 1 : k + 1;
+        if (j < 0 || j >= keys.length) return;
+        [keys[k], keys[j]] = [keys[j], keys[k]];
+        orderPins(keys, item.dataset.pinItem);
+      });
       // a group folded by hand stays folded when the list is drawn again
       body.addEventListener('toggle', (e) => {
         const g = e.target;
@@ -1954,6 +2019,36 @@
       try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
       for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
     }
+    /** Keep the pinned rows in this order (keys; pins left out keep their place after them). */
+    function orderPins(keys, focusKey) {
+      const next = new Set(keys.filter((k) => pinned.has(k)));
+      for (const k of pinned) next.add(k);
+      if (Array.from(next).join('\n') === Array.from(pinned).join('\n')) return;
+      pinned = next;
+      try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
+      for (const v of views) {
+        if (v.tab !== 'notation' || !v.isShown()) continue;
+        fillNotation(v);
+        if (focusKey) {
+          for (const h of v.body.querySelectorAll('.insight-pin-item .insight-drag')) if (h.closest('.insight-pin-item').dataset.pinItem === focusKey) h.focus();
+        }
+      }
+    }
+    const GRIP_ICON = '<svg viewBox="0 0 10 16" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="7" cy="13" r="1.3"/></g></svg>';
+    /** The Pinned group: each row with a handle to drag it up or down. */
+    function pinnedHtmlOf(view, pins) {
+      const open = !(view.closedGroups && view.closedGroups.has('pinned'));
+      const item = (e) => {
+        const what = e.type === 'm' ? '\\' + e.it.name : e.it.tex;
+        const row = e.type === 'm' ? `<table class="insight-table"><tbody>${macroRow(e.it, e.id)}</tbody></table>` : `<ol class="insight-symbols">${symbolRow(e.it, e.id)}</ol>`;
+        return `<div class="insight-pin-item" data-pin-item="${esc(e.pin)}">` +
+          (pins.length > 1 ? `<button type="button" class="insight-drag" title="Drag to reorder (or press ↑ ↓)" aria-label="Move ${esc(what)} up or down">${GRIP_ICON}</button>` : '') +
+          `<div class="insight-pin-body">${row}</div></div>`;
+      };
+      return `<details class="insight-group insight-group-pinned" data-group="pinned"${open ? ' open' : ''}><summary>Pinned <span class="insight-count">${pins.length}</span></summary>` +
+        `<div class="insight-pin-list">${pins.map(item).join('')}</div></details>`;
+    }
+
     // "Used in …" can be pinned too (kept for every paper)
     let usedPinned = !!opts.usedPinned;
     function setUsedPinned(on, fromUi) {
@@ -2108,8 +2203,10 @@
         ORDERS.map(([k, label, title]) => `<button type="button" role="radio" data-order="${k}" aria-checked="${k === notationOrder}" title="${esc(title)}">${label}</button>`).join('') +
         '</div></div>';
       pinned = readPins();
-      const pins = entries.filter((e) => pinned.has(e.pin));
-      const pinnedHtml = pins.length ? `<div class="insight-pinned">${groupHtml(view, { id: 'pinned', title: 'Pinned', rows: pins }, ' insight-group-pinned')}</div>` : '';
+      // in the reader's order (they drag the rows to change it)
+      const byPin = new Map(entries.map((e) => [e.pin, e]));
+      const pins = Array.from(pinned).map((k) => byPin.get(k)).filter(Boolean);
+      const pinnedHtml = pins.length ? `<div class="insight-pinned">${pinnedHtmlOf(view, pins)}</div>` : '';
       const usedHtml = view.side ? '<div class="insight-used"></div>' : '';
       // pinned rows (and "Used in …" when pinned) stay in view while the list scrolls
       if (view.side) html += `<div class="insight-stuck">${pinnedHtml}${usedPinned ? usedHtml : ''}</div>${usedPinned ? '' : usedHtml}`;
