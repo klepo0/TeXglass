@@ -51,6 +51,7 @@
   let lastToc = [];
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
   let imageMap = null; // { path: object URL } for those figures
+  let opened = { images: null, gh: null, arxiv: null }; // the open document's figures (Blobs) and where it came from, to save it for offline reading
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let progress = null; // reading progress on the results (src/progress.js)
   let picker = null; // "Show selected results" (src/pick.js)
@@ -561,6 +562,7 @@
     pdfSwaps.clear();
     pdfRun++;
     delete document.documentElement.dataset.pdfFigures;
+    opened = { images: images || null, gh: gh || null, arxiv: null };
     if (images && Object.keys(images).length && window.TeXglassArxiv) {
       imageMap = {};
       for (const [path, blob] of Object.entries(images)) imageUrls.push((imageMap[path] = URL.createObjectURL(blob)));
@@ -570,6 +572,7 @@
     setSource(doc);
     fileName.textContent = name || 'untitled.tex';
     openNotes(gh && gh.path, name, doc);
+    updateLibraryButton();
     setDirty(false);
     clearPreview();
     const shown = render();
@@ -1811,6 +1814,7 @@
       flashStatus('Could not import: ' + (e instanceof SyntaxError ? 'not a notes file' : e.message));
       return;
     }
+    if (window.TeXglassLibrary) delete papers[TeXglassLibrary.LIST_KEY]; // the saved-papers list in a gist's file
     const keys = Object.keys(papers);
     // One paper's file goes on the open paper (its notes find their text again);
     // a file of many papers (the gist's) fills in each of them.
@@ -1861,6 +1865,7 @@
       $('notes-sync-message').textContent = 'Syncing…';
       $('notes-sync-go').disabled = true;
       await syncNotes(false, true);
+      await syncLibrary();
       $('notes-sync-go').disabled = false;
       const err = store.get('texglass:gist-error');
       if (err) {
@@ -1893,6 +1898,254 @@
     $('notes-sync').addEventListener('click', showSyncDialog);
   }
   if (!NotesSync || !margin) for (const id of ['notes-toggle', 'notes-export', 'notes-import', 'notes-sync']) if ($(id)) $(id).hidden = true;
+
+  // --- saved papers, for offline reading ----------------------------------------------
+  // "Save for offline" keeps the open paper whole on this device (IndexedDB, see
+  // src/library.js): source, figures and where it came from. "Saved papers…" lists
+  // them; they open with no connection, and an arXiv paper asked for offline (or
+  // when arXiv can't be reached) opens from its saved copy. The list itself (not
+  // the papers) syncs through the notes gist when the reader signed in there.
+  const Library = window.TeXglassLibrary;
+  const LIBRARY_LIST = 'texglass:library';
+  const libraryDb = Library ? Library.open().catch(() => null) : Promise.resolve(null);
+  const libraryHere = new Set(); // keys of the papers saved on this device
+  let librarySyncing = false;
+
+  function libraryKeyOf(arxivId) {
+    return NotesSync ? NotesSync.paperKey({ arxiv: arxivId }) : null;
+  }
+  function readLibraryList() {
+    try {
+      const r = JSON.parse(store.get(LIBRARY_LIST) || 'null');
+      if (r && Array.isArray(r.notes)) return Object.assign(Library.emptyList(), r);
+    } catch (e) { /* not a list */ }
+    return Library.emptyList();
+  }
+  function writeLibraryList(list) {
+    store.set(LIBRARY_LIST, JSON.stringify(list));
+  }
+
+  function updateLibraryButton() {
+    const btn = $('library-save');
+    if (!btn) return;
+    const saved = !!(paper && libraryHere.has(paper.key));
+    btn.setAttribute('aria-checked', String(saved));
+    btn.textContent = saved ? 'Saved for offline' : 'Save for offline';
+    btn.title = saved
+      ? 'This paper is kept on this device and opens with no connection. Click to remove it'
+      : 'Keep this paper on this device, figures and all, to read it with no connection';
+    btn.disabled = !paper;
+    store.set('texglass:last-saved', saved ? paper.key : '');
+  }
+
+  /** The open paper as a record to keep. */
+  function savedRecord() {
+    const title = Library.plainTitle(NotesSync.titleOf(doc)) || fileName.title || (fileName.textContent || '').replace(/\.(tex|ltx|latex)$/i, '');
+    const arxiv = opened.arxiv || (paper.key.startsWith('arxiv:') ? paper.key.slice(6) : null);
+    return { key: paper.key, title, name: fileName.textContent, nameTitle: fileName.title || '', source: doc, images: opened.images || {}, arxiv, gh: opened.gh, saved: new Date().toISOString() };
+  }
+  /** What the synced list keeps of a saved paper. */
+  const listInfo = (rec) => ({ key: rec.key, title: rec.title, arxiv: rec.arxiv, gh: rec.gh && rec.gh.links && rec.gh.links.view });
+
+  async function saveForOffline() {
+    const db = await libraryDb;
+    if (!db || !paper) {
+      flashStatus('This browser cannot keep papers for offline reading here (a private window?)');
+      return;
+    }
+    const key = paper.key;
+    if (libraryHere.has(key)) {
+      await db.remove(key);
+      libraryHere.delete(key);
+      writeLibraryList(Library.removeEntry(readLibraryList(), key));
+      updateLibraryButton();
+      flashStatus('Removed from your saved papers');
+      syncLibrary();
+      return;
+    }
+    const rec = savedRecord();
+    try {
+      await db.put(rec);
+    } catch (e) {
+      flashStatus('Could not save: ' + (e.message || 'the device may be out of space'));
+      return;
+    }
+    libraryHere.add(key);
+    writeLibraryList(Library.addEntry(readLibraryList(), listInfo(rec)));
+    updateLibraryButton();
+    // ask the browser not to clear saved papers when it runs short of space
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* not offered */ }
+    flashStatus(`Saved for offline reading (${Library.formatSize(Library.sizeOf(rec))})`);
+    syncLibrary();
+  }
+
+  /** Open a saved paper from this device. */
+  function openSaved(rec, quiet) {
+    fileHandle = null;
+    const shown = load(rec.source, rec.name, rec.images, rec.gh || null);
+    opened.arxiv = rec.arxiv || null;
+    if (rec.nameTitle) fileName.title = rec.nameTitle;
+    updateLibraryButton();
+    if (!quiet) flashStatus(navigator.onLine === false ? 'Offline: opened your saved copy' : 'Opened your saved copy');
+    return shown;
+  }
+  /** Open the saved paper with this key, if there is one. opts.quiet: no status; opts.source: only if its source is this. */
+  async function openSavedKey(key, opts) {
+    const o = opts || {};
+    if (!key) return false;
+    const db = await libraryDb;
+    const rec = db && await db.get(key).catch(() => null);
+    if (!rec || (o.source != null && rec.source !== o.source)) return false;
+    await openSaved(rec, o.quiet);
+    return true;
+  }
+
+  /** Merge the saved list with the notes gist (if signed in there). Quiet. */
+  function syncLibrary() {
+    if (!Library || !NotesSync || !gistToken() || navigator.onLine === false || librarySyncing) return notesSyncing;
+    const run = async () => {
+      librarySyncing = true;
+      try {
+        const g = gistClient();
+        const merged = await g.sync(Library.LIST_KEY, readLibraryList());
+        if (g.id()) store.set('texglass:gist-id', g.id());
+        if (merged) writeLibraryList(Object.assign(Library.emptyList(), merged));
+        if (libraryDialog && libraryDialog.open) renderLibrary();
+      } catch (e) {
+        /* the notes' own sync reports problems with the gist */
+      } finally {
+        librarySyncing = false;
+      }
+    };
+    notesSyncing = notesSyncing.then(run, run);
+    return notesSyncing;
+  }
+
+  // The dialog listing the saved papers.
+  const libraryDialog = $('library-dialog');
+  let libraryFilter = '';
+  function librarySay(text, warn) {
+    $('library-message').textContent = text;
+    $('library-message').classList.toggle('warn', !!warn);
+  }
+  async function renderLibrary() {
+    const db = await libraryDb;
+    const here = db ? await db.all().catch(() => []) : [];
+    libraryHere.clear();
+    for (const r of here) libraryHere.add(r.key);
+    const list = readLibraryList();
+    // every paper on this device, then those saved on other devices (from the synced list)
+    const rows = here.map((r) => ({ key: r.key, title: r.title, arxiv: r.arxiv, gh: r.gh && r.gh.links && r.gh.links.view, saved: r.saved, bytes: r.bytes, here: true }));
+    for (const e of Library.entries(list)) if (!libraryHere.has(e.key)) rows.push(Object.assign({}, e, { here: false }));
+    rows.sort((a, b) => (Date.parse(b.saved) || 0) - (Date.parse(a.saved) || 0));
+    const q = libraryFilter.trim().toLowerCase();
+    const shown = q ? rows.filter((r) => `${r.title} ${r.arxiv || ''} ${r.key}`.toLowerCase().includes(q)) : rows;
+    $('library-filters').hidden = rows.length < 7;
+    const ol = $('library-list');
+    ol.textContent = '';
+    const fmtDate = (t) => { try { return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
+    for (const r of shown) {
+      const li = document.createElement('li');
+      li.className = 'preprint library-item' + (r.here ? '' : ' library-elsewhere');
+      li.dataset.key = r.key;
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'preprint-open';
+      const where = r.arxiv ? 'arXiv:' + r.arxiv : r.key.startsWith('github:') ? r.key.slice(7) : (r.key.replace(/^tex:/, '').replace(/#.*/, ''));
+      const meta = r.here
+        ? [where, Library.formatSize(r.bytes || 0), r.saved && 'saved ' + fmtDate(r.saved)]
+        : [where, 'saved on another device'];
+      open.innerHTML = `<span class="preprint-title">${mathText(r.title || where)}</span><span class="arxiv-result-meta">${mathText(meta.filter(Boolean).join(' · '))}</span>`;
+      const canGet = !r.here && (r.arxiv || r.gh);
+      if (!r.here && !canGet) open.disabled = true;
+      open.title = r.here ? 'Open this paper (offline too)' : canGet ? 'Download this paper and keep it on this device too' : 'Only on the device where it was saved';
+      open.addEventListener('click', () => openFromLibrary(r));
+      li.appendChild(open);
+      if (!r.here && canGet) {
+        const get = document.createElement('button');
+        get.type = 'button';
+        get.className = 'library-action library-download';
+        get.textContent = 'Download';
+        get.title = open.title;
+        get.addEventListener('click', () => openFromLibrary(r));
+        li.appendChild(get);
+      }
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'library-action library-remove';
+      rm.textContent = 'Remove';
+      rm.title = r.here ? 'Remove it from this device and from your list' : 'Remove it from your list';
+      rm.addEventListener('click', () => removeFromLibrary(r.key));
+      li.appendChild(rm);
+      ol.appendChild(li);
+    }
+    if (!rows.length) librarySay('No saved papers yet.');
+    else if (!shown.length) librarySay('No saved paper matches.');
+    else librarySay('');
+    let foot = rows.length ? `${here.length} paper${here.length === 1 ? '' : 's'} on this device, ${Library.formatSize(here.reduce((n, r) => n + (r.bytes || 0), 0))}.` : '';
+    if (rows.length && gistToken()) foot += ' The list syncs with your notes on GitHub.';
+    else if (rows.length && NotesSync) foot += ' Sign in under Sync notes with GitHub to see this list on your other devices.';
+    $('library-foot').textContent = foot;
+    $('library-hint').hidden = !rows.length;
+    updateLibraryButton();
+  }
+
+  async function openFromLibrary(r) {
+    if (r.here) {
+      libraryDialog.close();
+      await openSavedKey(r.key);
+      return;
+    }
+    if (navigator.onLine === false) {
+      librarySay('Downloading needs a connection. It will stay on your list.', true);
+      return;
+    }
+    librarySay('Downloading…');
+    const ok = r.arxiv ? await importArxiv(r.arxiv) : await importGitHub(r.gh);
+    if (!ok || !paper) {
+      librarySay('Could not download it. Try again when you are online.', true);
+      return;
+    }
+    libraryDialog.close();
+    if (!libraryHere.has(paper.key)) await saveForOffline();
+  }
+
+  async function removeFromLibrary(key) {
+    const db = await libraryDb;
+    if (db) await db.remove(key).catch(() => {});
+    libraryHere.delete(key);
+    writeLibraryList(Library.removeEntry(readLibraryList(), key));
+    await renderLibrary();
+    syncLibrary();
+  }
+
+  function showLibrary() {
+    if (!libraryDialog) return;
+    if (arxivDialog.open) arxivDialog.close();
+    libraryFilter = $('library-search').value = '';
+    renderLibrary();
+    libraryDialog.showModal();
+    syncLibrary();
+  }
+
+  if (Library && NotesSync && libraryDialog) {
+    $('library-save').addEventListener('click', () => { saveForOffline(); setMenu(false); });
+    $('library-open').addEventListener('click', () => { setMenu(false); showLibrary(); });
+    $('arxiv-library').addEventListener('click', showLibrary);
+    $('library-close').addEventListener('click', () => libraryDialog.close());
+    libraryDialog.addEventListener('click', (e) => { if (e.target === libraryDialog) libraryDialog.close(); });
+    $('library-search').addEventListener('input', (e) => { libraryFilter = e.target.value; renderLibrary(); });
+    libraryDb.then((db) => (db ? db.keys() : [])).then((keys) => {
+      for (const k of keys) libraryHere.add(k);
+      $('library-hint').hidden = !keys.length && !Library.entries(readLibraryList()).length;
+      updateLibraryButton();
+    }).catch(() => {});
+    window.addEventListener('online', () => syncLibrary());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncLibrary(); });
+    setTimeout(syncLibrary, 1500);
+  } else {
+    for (const id of ['library-save', 'library-open']) if ($(id)) $(id).hidden = true;
+  }
 
   // --- reading progress -------------------------------------------------------------
   // A status by each result (src/progress.js), kept with the paper's notes
@@ -2495,6 +2748,12 @@
       arxivSay('That does not look like an arXiv link or id, e.g. 2301.00001 or arxiv.org/abs/2301.00001.', true);
       return false;
     }
+    // Saved for offline reading: with no connection, the saved copy opens straight away.
+    const savedKey = libraryKeyOf(id);
+    if (navigator.onLine === false && await openSavedKey(savedKey)) {
+      if (arxivDialog.open) arxivDialog.close();
+      return true;
+    }
     arxivBusy = true;
     arxivGo.disabled = true;
     arxivSay(`Downloading ${id} from arXiv…`);
@@ -2503,10 +2762,17 @@
       const paper = await TeXglassArxiv.importPaper(id);
       fileHandle = null;
       load(paper.source, paper.name, paper.images);
+      opened.arxiv = id;
+      updateLibraryButton();
       if (arxivDialog.open) arxivDialog.close();
       flashStatus(`Imported ${id} from arXiv`);
       return true;
     } catch (e) {
+      // could not download it, but it is saved here: open that copy
+      if (await openSavedKey(savedKey)) {
+        if (arxivDialog.open) arxivDialog.close();
+        return true;
+      }
       const blocked = e instanceof TypeError || /Failed to fetch|NetworkError|Load failed|Could not reach/.test(e.message);
       arxivSay(blocked
         ? `Could not download ${id}. This page may not be allowed to reach arxiv.org here. Download arxiv.org/src/${id}, unpack it and open the .tex file instead.`
@@ -3065,6 +3331,9 @@
       else loadWelcome();
       return openPreprintByFolder(preprint);
     }
+    // The last paper was a saved one: open that copy, figures included (offline too).
+    const lastSaved = store.get('texglass:last-saved');
+    if (lastSaved && last) return openSavedKey(lastSaved, { quiet: true, source: last }).then((ok) => ok || loadLast(), loadLast);
     if (last) return loadLast();
     return loadWelcome();
   }

@@ -193,7 +193,8 @@ Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
 ### Back to where you were
 
 Every jump remembers where you were reading: clicking a reference or a
-citation, an entry in **Contents**, a result on the **Map** or in the notation
+citation, an entry in **Contents**, a result on the **Map** (double-click, or
+**Go there**) or in the notation
 index, **Go to**, **Trace**, the first match of **Find**, **Go there** in a
 preview, and the next or previous margin note. A jump to something already on
 screen doesn't count.
@@ -228,6 +229,9 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     cited works (`\cite`) are leaves.
   - Results are grouped by section; on big maps chains of lemmas that serve one
     result fold into it (**+3** on the result shows them).
+  - Click a result to light up what it uses and what uses it; double-click
+    (double-tap on a touch screen) to jump to it in the text, which also
+    closes the larger map. **Back** returns you.
   - Drag to pan. **Show what it uses** starts "What does this use?" there.
   - <kbd>M</kbd> (or **Larger map**; VS Code: **TeXglass: Show Larger
     Dependency Map**) opens the map filling the window: drag to move, Ctrl +
@@ -400,6 +404,23 @@ install; after the first visit it opens and renders offline.
   `?preprint=<folder>`. A **bookmarklet** in the Open dialog opens the GitHub
   page you are on.
 
+**Saving papers for offline reading**
+
+- **Save for offline** in the **…** menu keeps the open paper on this device:
+  its source, figures and where it came from. Choose it again (it reads
+  **Saved for offline**, ticked) to remove it.
+- **Saved papers…** in the **…** menu (also linked from the Open dialog) lists
+  them with their size. Tap one to open it, with or without a connection;
+  **Remove** deletes it. A search box appears once there are several.
+- An arXiv paper you saved opens from its saved copy when you are offline or
+  arXiv can't be reached, from Open, a `?arxiv=` link or a reload.
+- Signed in under **Sync notes with GitHub…**, the list (titles and links, not
+  the papers) travels with your notes. A paper saved on another device shows
+  as *saved on another device*; **Download** fetches it from arXiv or GitHub
+  and keeps it here too. Removing a paper takes it off the list everywhere.
+- Works for any open document (arXiv, GitHub, OAI preprints, your own files).
+  The browser is asked to keep saved papers even when space runs low.
+
 **Editing**
 
 - **Preview**, **Edit** and **Split** modes (<kbd>Ctrl+E</kbd>,
@@ -418,8 +439,9 @@ reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
 standalone page that works offline), **Show selected results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
-rest** prints as shown), **Highlights and notes**, **Export notes**, **Import
-notes…**, **Sync notes with GitHub…** and **Reading progress**.
+rest** prints as shown), **Save for offline** and **Saved papers…** (see
+above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
+notes with GitHub…** and **Reading progress**.
 
 **Status** at the top counts undefined references and duplicate labels.
 
@@ -587,6 +609,11 @@ Share, then **Add to Home Screen**. On Android, or in Chrome or Edge, choose
 from the home screen it has no browser bars and works offline after the first
 visit, like the web viewer anywhere.
 
+**Papers to read offline.** Before a trip, open each paper and choose **Save
+for offline** in the **…** menu. **Saved papers…** in the same menu lists them,
+and they open with no connection, figures included (see [Saving papers for
+offline reading](#web-viewer)).
+
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Open**, the side panel (the three lines), **Navigate** (the
 magnifier), the handwritten and theme toggles, and **…**. The mode switch
@@ -645,7 +672,8 @@ text still works as usual.
 - The VS Code extension and the command line work fully offline. The web
   viewer works offline after the first visit (arXiv, GitHub, citation lookups
   and OAI preprints need a connection). Cited theorems and citation details
-  already seen are kept.
+  already seen are kept, and so are papers you **Save for offline** (in the
+  browser's own storage on this device).
 - Your files and the papers you open never leave your browser or editor.
   Citation previews ask DataCite and Crossref about a citation only when you
   hover it; switch **Look up cited papers online** off in

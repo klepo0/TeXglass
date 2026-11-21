@@ -322,8 +322,37 @@
 
   function thmName(el) {
     const n = el.querySelector('.thm-name');
-    return n && n.closest('.theorem') === el ? n.textContent.trim() : '';
+    return n && n.closest('.theorem') === el ? textOf(n) : '';
   }
+
+  /**
+   * An element's words as the reader sees them. A formula drawn by KaTeX keeps
+   * its TeX in hidden MathML (for screen readers), so textContent would give
+   * "∙\bullet∙" for $\bullet$: that copy is left out.
+   */
+  function textOf(el) {
+    if (!el) return '';
+    let s = '';
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c.nodeType === 3) s += c.nodeValue;
+        else if (c.nodeType === 1 && !c.matches('.katex-mathml, script, style')) walk(c);
+      }
+    };
+    walk(el);
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  /** A copy of an element's content to show elsewhere, without its ids. */
+  function contentCopy(el, doc) {
+    const span = doc.createElement('span');
+    for (const c of el.childNodes) span.appendChild(c.cloneNode(true));
+    span.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+    return span;
+  }
+
+  // An itemize mark (•, ∙, –, ∗, ·, $\bullet$, $\circ$, …) says nothing next to a tick box.
+  const MARK_ONLY = /^[\s\u2022\u2219\u00b7\u2013\u2014\u2217*\u2218\u25e6\u25aa\u25ab\u25a0\u25a1\u25cf\u25cb\u22c6\u2023\u2043\u27a2>\-+\u22c4\u2666\u25c6\u2605\u2606\u2713\u2714]*$/;
 
   /**
    * A statement's flat text and how to get its pieces back as page content:
@@ -349,10 +378,12 @@
         const items = [];
         for (const li of child.children) {
           if (li.tagName !== 'LI') continue;
-          const label = li.querySelector(':scope > .item-label');
+          const labelEl = li.querySelector(':scope > .item-label');
+          let label = textOf(labelEl);
+          if (MARK_ONLY.test(label)) label = '';
           let text = '';
           walk(li, li, (seg, s) => { text += s; });
-          items.push({ label: label ? label.textContent.trim() : '', text, body: li.querySelector(':scope > .item-body') || li });
+          items.push({ label, labelEl: label ? labelEl : null, text, body: li.querySelector(':scope > .item-body') || li });
         }
         lists.push(items);
         add({ kind: 'gap', box: child }, LIST);
@@ -421,12 +452,8 @@
         return {
           text: plain(it.text).replace(/[\s,;.]+$/, ''),
           label: it.label,
-          content: () => {
-            const span = doc.createElement('span');
-            for (const c of it.body.childNodes) span.appendChild(c.cloneNode(true));
-            span.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-            return span;
-          },
+          labelContent: it.labelEl ? () => contentCopy(it.labelEl, doc) : null,
+          content: () => contentCopy(it.body, doc),
         };
       }
       return { text: plain(f.flat.slice(p.from, p.to)), label: '', content: () => contentOf(f, p.from, p.to, doc) };
@@ -523,7 +550,7 @@
       const box = t && (t.matches('.theorem') ? t : t.closest('.theorem, li.item'));
       if (!box || box === thm) return;
       const owner = box.matches('.theorem') ? box : box.closest('.theorem');
-      if (owner && ASSUMPTION_NAME.test(thmName(owner))) push({ name: box === owner ? thmName(owner) : `${thmName(owner)} ${a.textContent.trim()}`, text: plainOf(box), el: box, referred: true });
+      if (owner && ASSUMPTION_NAME.test(thmName(owner))) push({ name: box === owner ? thmName(owner) : `${thmName(owner)} ${textOf(a)}`, text: plainOf(box), el: box, referred: true });
     });
     let headLevel = null; // the level of the section heading reached, once one is
     let crossedSection = false;
@@ -563,7 +590,7 @@
     }
     if (!owner) {
       for (const el of before(link.closest('p, li, div') || link, rootEl)) {
-        if (/^H[1-6]$/.test(el.tagName)) { owner = el.textContent.trim(); break; }
+        if (/^H[1-6]$/.test(el.tagName)) { owner = textOf(el); break; }
       }
     }
     const scope = proof || thm || link.closest('p') || rootEl;
@@ -647,7 +674,11 @@
       const title = el('strong', 'hyp-title', st.name || 'Result');
       head.appendChild(title);
       const note = target.querySelector('.thm-note');
-      if (note && note.closest('.theorem') === target) head.appendChild(el('span', 'hyp-note', ' ' + note.textContent.trim()));
+      if (note && note.closest('.theorem') === target) {
+        const n = el('span', 'hyp-note', ' ');
+        n.appendChild(contentCopy(note, doc));
+        head.appendChild(n);
+      }
       const count = el('span', 'hyp-count');
       head.appendChild(count);
       const toWritten = el('button', 'hyp-switch', 'As written');
@@ -656,6 +687,14 @@
       head.appendChild(toWritten);
       split.appendChild(head);
 
+      /** An item's label as the page draws it ("(H1)", "$(\\mathrm{A}_2)$"), then a space. */
+      const labelOf = (item) => {
+        const s = el('span', 'hyp-label');
+        if (item.labelContent) s.appendChild(item.labelContent());
+        else s.textContent = item.label;
+        s.appendChild(doc.createTextNode(' '));
+        return s;
+      };
       const boxes = [];
       const row = (item, result, kind) => {
         const li = el('li', 'hyp-item');
@@ -674,7 +713,7 @@
         boxes.push(box);
         li.appendChild(box);
         const body = el('div', 'hyp-text');
-        if (item.label) body.appendChild(el('span', 'hyp-label', item.label + ' '));
+        if (item.label) body.appendChild(labelOf(item));
         body.appendChild(item.content());
         li.appendChild(body);
         return li;
@@ -703,7 +742,7 @@
         const c = el('div', 'hyp-concl');
         st.concl.forEach((p) => {
           const d = el('div', 'hyp-concl-part');
-          if (p.label) d.appendChild(el('span', 'hyp-label', p.label + ' '));
+          if (p.label) d.appendChild(labelOf(p));
           d.appendChild(p.content());
           c.appendChild(d);
         });
