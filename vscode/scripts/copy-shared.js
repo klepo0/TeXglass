@@ -23,6 +23,8 @@ for (const [from, to] of [
   ['src/notes-sync.js', 'notes-sync.js'],
   ['src/insight.js', 'insight.js'],
   ['src/cite.js', 'cite.js'],
+  ['src/cited.js', 'cited.js'],
+  ['src/arxiv.js', 'arxiv.js'],
   ['src/bib.js', 'bib.js'],
   ['src/eps.js', 'eps.js'],
   ['src/pdf.js', 'pdf.js'],

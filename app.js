@@ -1913,7 +1913,7 @@
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
-    const cited = cites && cites.noteFor(target, { onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
+    const cited = cites && cites.noteFor(target, { link: a, onChange: () => { if (popoverLink === a && !popover.hidden) placePopover(a, body); } });
     if (cited) body.appendChild(cited);
     popover.replaceChildren(body);
     popover.hidden = false;
@@ -1963,6 +1963,12 @@
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popover.hidden) hidePopover();
   });
+  /** Go to a numbered thing by name ("Theorem 4.1", "Equation (3.2)"), as the Go to box would. */
+  function goToNamed(name) {
+    if (!window.TeXglassFind) return;
+    const t = TeXglassFind.rankTargets(TeXglassFind.collectTargets(preview), name, 1)[0];
+    if (t) jumpTo(t.el.closest('.math-display') || t.el);
+  }
   function jumpTo(target) {
     hidePopover();
     reveal(target);
@@ -2005,14 +2011,68 @@
   // Resting on a citation shows its bibliography entry, then the cited paper's
   // title and abstract once looked up; a paper on arXiv opens in TeXglass in a new tab,
   // as does the "Open in TeXglass" button on its entry in the bibliography.
+  // A citation that names a result ("[12, Theorem 4.1]") shows that result
+  // itself: the cited paper's source is fetched from arXiv and converted in a
+  // worker of its own, so the document's own renders never wait for it.
+  const loadCitedPaper = (() => {
+    const katexScript = document.querySelector('script[src*="katex"]');
+    let worker = null;
+    let ready = null;
+    let nextId = 0;
+    const waiting = new Map();
+    const start = () => {
+      if (ready) return ready;
+      ready = new Promise((resolve) => {
+        try {
+          if (!window.Worker || !katexScript || !katexScript.src) { resolve(false); return; }
+          worker = new Worker('src/render-worker.js');
+          worker.onmessage = (e) => {
+            const m = e.data;
+            if ('ready' in m) { resolve(m.ready); return; }
+            const done = waiting.get(m.id);
+            waiting.delete(m.id);
+            if (done) done(m);
+          };
+          worker.onerror = (e) => {
+            e.preventDefault();
+            waiting.forEach((done) => done({ error: 'The converter stopped.' }));
+            waiting.clear();
+            worker = null;
+            resolve(false);
+          };
+          worker.postMessage({ katex: katexScript.src });
+        } catch (e) {
+          worker = null;
+          resolve(false);
+        }
+      });
+      return ready;
+    };
+    return async (id) => {
+      if ((await start()) && worker) {
+        const m = await new Promise((resolve) => {
+          const k = ++nextId;
+          waiting.set(k, resolve);
+          worker.postMessage({ id: k, arxiv: id });
+        });
+        if (m.error) throw new Error(m.error);
+        return m.html;
+      }
+      const paper = await TeXglassArxiv.importPaper(id);
+      return TeXglass.render(paper.source, {}).html;
+    };
+  })();
+
   cites = window.TeXglassCite
     ? window.TeXglassCite.create({
-      openArxiv: (id) => {
+      // goto: a result to show once the paper is open ("Theorem 4.1")
+      openArxiv: (id, goto) => {
         const url = new URL(location.href);
-        url.search = '?arxiv=' + encodeURIComponent(id);
+        url.search = '?arxiv=' + encodeURIComponent(id) + (goto ? '&goto=' + encodeURIComponent(goto) : '');
         url.hash = '';
         window.open(url.href, '_blank', 'noopener');
       },
+      loadPaper: window.TeXglassArxiv ? loadCitedPaper : undefined,
     })
     : null;
   if (cites) cites.decorate(preview);
@@ -2730,7 +2790,9 @@
     const gh = params.get('gh') || params.get('github');
     if (arxiv && window.TeXglassArxiv) {
       if (last) loadLast();
-      return importArxiv(arxiv);
+      // &goto=Theorem 4.1 (from a cited result's preview): show that result once the paper is in
+      const goto = params.get('goto');
+      return importArxiv(arxiv).then((ok) => (ok && goto ? render().then(() => goToNamed(goto)) : ok));
     }
     // A bare ?arxiv (the browser extension's toolbar button away from a paper)
     // opens the arXiv dialog over the last document.
