@@ -696,3 +696,9 @@ Body text.
   assert.match(text(s.html), /Body text\./);
   assert.doesNotMatch(text(s.html), /\\bd/);
 });
+
+test('a paper\'s own \\text made of \\mbox, and its own \\char, do not send KaTeX round in circles', () => {
+  const r = realMath(String.raw`\newcommand{\text}[1]{\mbox{#1}}\def\char{{\rm char}}
+\newcommand{\top}{\mbox{\footnotesize$\Lambda$}}\begin{document}$\top + \text{a} \neq b$\end{document}`);
+  assert.doesNotMatch(r.html, /math-error|katex-error/);
+});

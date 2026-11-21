@@ -1048,9 +1048,13 @@
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS);
         for (const name in this.macros) {
+          // KaTeX's own macros use \char (\neq does), so a paper's \char stays out of formulas
+          if (name === 'char') continue;
           const mac = this.macros[name];
           m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
         }
+        // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
+        if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
         for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name], this.triple);
         for (const d of this.triple) if (!m[d]) m[d] = `{${TRIPLE_BAR}}`;
         m['\\texglassTree'] = (ctx) => {
