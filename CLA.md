@@ -1,9 +1,5 @@
 # TeXglass Individual Contributor License Agreement
 
-> **Draft, not yet reviewed by a lawyer.** This text is modelled on the Apache
-> Individual Contributor License Agreement and the Harmony agreements. Its
-> wording has not been checked for any particular jurisdiction.
-
 Thank you for contributing to TeXglass. This agreement makes clear what rights
 you give for your contributions. TeXglass is offered under the PolyForm
 Noncommercial License 1.0.0, and commercial licenses are sold separately
