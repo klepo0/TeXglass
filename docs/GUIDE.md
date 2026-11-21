@@ -117,8 +117,10 @@ Rebind any of them in **Keyboard Shortcuts** (Ctrl+K Ctrl+S) by searching for
     <kbd>←</kbd> <kbd>→</kbd> on it; double-click for the automatic width.
     The width is remembered.
   - Fold the margin away with the small arrow on that line, or by dragging it
-    all the way right; notes stay as dots in the text, and clicking one opens
-    the margin again.
+    all the way right. Each line with a note then gets a small dot at the right
+    edge of the text (orange for a todo, the highlight colour for your own
+    notes; a ringed dot means several notes on that line). Click a dot to open
+    the margin with that note lit up.
   - The arrows under the margin, or <kbd>N</kbd> and <kbd>Shift+N</kbd>, jump
     from note to note. The button below them narrows the jumps to margin
     notes, todo notes or your own notes.
@@ -671,7 +673,7 @@ on a computer does not apply on a phone):
 - Swipe in from the left edge to open the side panel (from the right edge if you
   moved it to the right). Its button opens it too.
 - Swipe in from the right edge to open the margin. Its small arrow button, or a
-  tap on a note's dot in the text, opens it too.
+  tap on a note's dot at the right edge of the text, opens it too.
 - Swipe a drawer back toward its edge, tap outside it, or press <kbd>Esc</kbd>
   to close it. Choosing a section in Contents closes the side panel.
 

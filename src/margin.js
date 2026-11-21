@@ -42,6 +42,9 @@
  *   margin.setFilter('todo');          // jump between these only: 'all', 'par', 'todo' or 'mine'
  *   margin.setOverlay(on);             // a phone: the margin is a drawer over the text, closed at first
  *
+ * Folded (or closed on a phone), each line with a note gets a dot at the right
+ * edge of the text (.tg-mdot); clicking one opens the margin on that note.
+ *
  * Handwritten notes: with the study tools on, a pen (Apple Pencil, a stylus)
  * writes in the margin column; a finger still scrolls, and a mouse still
  * selects. The first touch of a pen opens the margin column even when there is
@@ -646,6 +649,7 @@
       layer.appendChild(toggle);
       layer.appendChild(nav);
       layer.appendChild(navMenu);
+      layer.appendChild(dots);
       if (inkLive) layer.appendChild(inkLive.svg);
       cards.forEach((c) => ro && ro.observe(c.el));
       layout();
@@ -685,12 +689,14 @@
       toggle.innerHTML = collapsed
         ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tg-margin-count">' + n + '</span>'
         : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      dots.replaceChildren();
       if (collapsed) {
-        // A strip at the right of the text, for the button only.
+        // A strip at the right of the text, for the button and a dot per noted line.
         const cs = win.getComputedStyle(doc);
         layer.style.left = doc.offsetLeft + doc.offsetWidth - parseFloat(cs.paddingRight) + 6 + 'px';
         layer.style.width = '0px';
         placeToggle();
+        placeDots();
         return;
       }
       const zoom = (parseFloat(win.getComputedStyle(doc).fontSize) || 18) / 18;
@@ -724,6 +730,63 @@
         const top = Math.max(y, bottom + GAP);
         c.el.style.top = top + 'px';
         bottom = top + c.el.offsetHeight;
+      }
+    }
+
+    // --- dots beside the text, while the margin is folded ------------------------------
+    //
+    // Folded, each line with a note gets a small dot at the right edge of the
+    // text (notes on the same line share one). Clicking or tapping a dot brings
+    // the margin back and lights up that note's card.
+
+    const dots = page.createElement('div');
+    dots.className = 'tg-margin-dots';
+    dots.addEventListener('pointerdown', (e) => e.stopPropagation());
+    dots.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('.tg-mdot');
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const c = cards[Number(b.dataset.card)];
+      setCollapsed(false, true);
+      if (!c) return;
+      const t = c.src ? { key: c.src, mnote: c.src } : { key: c.id, note: list.find((a) => a.id === c.id) };
+      current = { key: t.key, scroll: pane.scrollTop };
+      pulse(t);
+    });
+
+    const kindOf = (c) => (c.src ? (c.src.classList.contains('mnote-todo') ? 'todo' : 'par') : 'mine');
+    const DOT_KIND = { par: 'margin note', todo: 'todo note', mine: 'note of yours' };
+
+    function placeDots() {
+      const want = [];
+      cards.forEach((c, i) => {
+        const y = c.top();
+        if (y != null) want.push({ c, i, y });
+      });
+      want.sort((a, b) => a.y - b.y);
+      const groups = [];
+      for (const w of want) {
+        const g = groups[groups.length - 1];
+        if (g && w.y - g[0].y < 12) g.push(w);
+        else groups.push([w]);
+      }
+      for (const g of groups) {
+        const first = g[0];
+        const b = page.createElement('button');
+        b.type = 'button';
+        b.tabIndex = -1;
+        b.className = 'tg-mdot tg-mdot-' + kindOf(first.c);
+        b.dataset.card = String(first.i);
+        const c = first.c.el.style.getPropertyValue('--note-c');
+        if (c) b.style.setProperty('--note-c', c);
+        if (g.length > 1) b.classList.add('tg-mdot-more');
+        b.style.top = first.y + 'px';
+        const text = (first.c.el.querySelector('.tg-mcard-body') || first.c.el).textContent.trim().replace(/\s+/g, ' ');
+        const what = g.length > 1 ? g.length + ' notes' : DOT_KIND[kindOf(first.c)];
+        b.title = 'Show the margin: ' + what + (text ? ' (“' + (text.length > 60 ? text.slice(0, 59) + '…' : text) + '”)' : '');
+        b.setAttribute('aria-label', b.title);
+        dots.appendChild(b);
       }
     }
 
