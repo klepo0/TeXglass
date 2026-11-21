@@ -22,6 +22,7 @@
  *     renderTex(texs) { ... },             // optional: Promise of HTML for small formulas
  *     hover: true,                         // notation on hover
  *     onHoverChange(on) { ... },           // the panel's checkbox changed it
+ *     statusOf(el) { ... },                // optional: reading progress { s, q } (src/progress.js)
  *   });
  *   insight.setDefinitions(result.defs);   // after each render: the paper's macros
  *   insight.invalidate();                  // after the page changed
@@ -29,6 +30,7 @@
  *   insight.toggleMap();                   // open or close the larger map (also the M key)
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
  *   insight.focus(theoremEl, 'uses' | 'usedBy' | 'both', { scroll, collapse }); insight.unfocus();
+ *   insight.repaint();                     // reading statuses changed: recolour the maps
  */
 (function (root) {
   'use strict';
@@ -1790,6 +1792,7 @@
           'Drag to move around; Ctrl + scroll or pinch to zoom.</p>' +
           controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`;
       view.synced = false;
+      paintStatus(view);
       if (view.zoomable) zoomTo(view, view.scale || 1);
       const wrap = body.querySelector('.dep-wrap');
       if (kept && wrap) { wrap.scrollLeft = kept.l; wrap.scrollTop = kept.t; } // redrawn: stay where it was
@@ -1797,6 +1800,77 @@
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
       else if (view.selectedCite != null && g.cites[view.selectedCite]) selectCite(view, view.selectedCite);
       else body.querySelector('.dep-detail').innerHTML = '<p class="insight-muted">No result picked.</p>';
+    }
+
+    // --- reading progress on the map (src/progress.js) ---------------------------
+
+    const STATUS_NAMES = { unread: 'unread', skimmed: 'skimmed', read: 'read', understood: 'understood' };
+    const statusOf = (n) => (opts.statusOf && n && n.el ? opts.statusOf(n.el) : null);
+
+    /** Colour a map's results by the reader's status, and flag the "?" ones. */
+    function paintStatus(view) {
+      const body = view.body;
+      const svg = body.querySelector('.dep-map');
+      if (!svg) return;
+      let any = false;
+      svg.querySelectorAll('.dep-node[data-n]').forEach((g) => {
+        const n = body._nodes && body._nodes[Number(g.dataset.n)];
+        const st = statusOf(n);
+        if (st) any = true;
+        for (const k of Object.keys(STATUS_NAMES)) g.classList.toggle('rp-st-' + k, !!st && st.s === k);
+        g.classList.toggle('rp-st-q', !!(st && st.q));
+        const old = g.querySelector('.rp-qmark');
+        if (old) old.remove();
+        if (st && st.q) {
+          const r = g.querySelector('rect');
+          const NS = 'http://www.w3.org/2000/svg';
+          const cx = Number(r.getAttribute('x')) + Number(r.getAttribute('width')) - 2;
+          const cy = Number(r.getAttribute('y')) + 1;
+          const mark = document_.createElementNS(NS, 'g');
+          mark.setAttribute('class', 'rp-qmark');
+          mark.setAttribute('aria-hidden', 'true');
+          const c = document_.createElementNS(NS, 'circle');
+          c.setAttribute('cx', String(cx));
+          c.setAttribute('cy', String(cy));
+          c.setAttribute('r', '6.5');
+          const t = document_.createElementNS(NS, 'text');
+          t.setAttribute('x', String(cx));
+          t.setAttribute('y', String(cy + 3.5));
+          t.setAttribute('text-anchor', 'middle');
+          t.textContent = '?';
+          mark.append(c, t);
+          g.appendChild(mark);
+        }
+        const label = g.getAttribute('aria-label') || '';
+        const base = label.replace(/\. Reading: .*$/, '');
+        g.setAttribute('aria-label', st ? `${base}. Reading: ${st.s}${st.q ? ', flagged with a question' : ''}` : base);
+      });
+      let legend = body.querySelector('.rp-legend');
+      if (!any) { if (legend) legend.remove(); return; }
+      if (!legend) {
+        legend = document_.createElement('div');
+        legend.className = 'dep-legend rp-legend';
+        legend.innerHTML = ['unread', 'skimmed', 'read', 'understood']
+          .map((k) => `<span><span class="rp-key rp-key-${k}" aria-hidden="true"></span> ${k}</span>`).join('') +
+          '<span><span class="rp-key rp-key-q" aria-hidden="true">?</span> question</span>';
+        const wrap = body.querySelector('.dep-wrap');
+        const after = wrap && wrap.nextElementSibling && wrap.nextElementSibling.classList.contains('dep-legend') ? wrap.nextElementSibling : wrap;
+        if (after) after.after(legend);
+      }
+    }
+
+    /** The reader changed a status: recolour the maps on show, and the picked result's detail. */
+    function repaint() {
+      for (const v of views) {
+        if (v.tab !== 'deps' || !v.isShown()) continue;
+        paintStatus(v);
+        if (v.selected != null && !v.synced && v.lay) {
+          const detail = v.body.querySelector('.dep-detail');
+          const keep = detail ? detail.scrollTop : 0;
+          select(v, v.selected);
+          if (detail) detail.scrollTop = keep;
+        }
+      }
     }
 
     // --- zooming and moving around a map -----------------------------------------
@@ -2017,6 +2091,7 @@
           : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
         `<p><span class="insight-usedby-k">Uses</span> ${pickList(n.uses, (m) => n.edges.get(m))}${indirect(up, n.uses)}</p>` +
         `<p><span class="insight-usedby-k">Used in</span> ${pickList(n.usedBy, (m) => m.edges.get(n))}${indirect(down, n.usedBy)}</p>` +
+        notUnderstood(n, up) +
         (cites.length ? `<p><span class="insight-usedby-k">Cites</span> ${cites.map((c) => (c.el ? `<a href="#" data-cite="${c.order}">${esc(`${c.label} ${c.who}`.trim())}</a>` : `<span>${esc(c.label)}</span>`)).join(', ')}</p>` : '') +
         (folded ? `<p><span class="insight-usedby-k">Folded in</span> ${pickList(new Set(folded))} <a href="#" data-fold="${esc(n.id)}">Show them</a></p>` : '');
       const go = detail.querySelector('.dep-go');
@@ -2032,6 +2107,14 @@
         view.leave();
         focus(n.el, 'uses', true);
       });
+    }
+
+    /** "Not yet understood": what a result rests on that the reader has not marked understood. */
+    function notUnderstood(n, up) {
+      if (!statusOf(n) || !up.size) return '';
+      const rest = new Set(Array.from(up).filter((m) => !m.cite && (statusOf(m) || {}).s !== 'understood'));
+      if (!rest.size) return '<p class="rp-detail"><span class="insight-usedby-k">Reading</span> everything it rests on is marked understood</p>';
+      return `<p class="rp-detail"><span class="insight-usedby-k">Not yet understood</span> ${rest.size} of the ${up.size} result${up.size === 1 ? '' : 's'} it rests on: ${pickList(rest)}</p>`;
     }
 
     /** Light up a cited work on a map, and the results that rest on it. */
@@ -2277,12 +2360,32 @@
 
     const HEADING = /^H[1-6]$/;
 
+    // With "Hide the rest" on, a click on a folded proof opens it, and its fold
+    // arrow folds it again. This sits above the host's own proof folding (run
+    // first, in the capture phase) and leaves the folds the host remembers alone.
+    doc.addEventListener('click', (e) => {
+      if (!focusState || !collapseRest || e.ctrlKey || e.metaKey || !e.target.closest) return;
+      const proof = e.target.closest('.uses-proof');
+      if (!proof || !doc.contains(proof)) return;
+      const toggle = e.target.closest('.fold-toggle');
+      if (proof.classList.contains('uses-open')) {
+        if (!toggle || toggle.closest('.proof') !== proof || proof.classList.contains('folded')) return;
+        proof.classList.remove('uses-open');
+      } else {
+        if (!toggle && e.target.closest('a, .math-copyable .math[data-tex]')) return;
+        proof.classList.add('uses-open');
+        if (proof.classList.contains('folded')) return; // the host unfolds its own fold too
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+
     /** The block an equation, figure or item reference lights up. */
     const blockOf = (t) => t.closest('.math-display, figure, table, .theorem, .proof, li, p') || t;
 
     function clearMarks() {
       if (!focusState) return;
-      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess');
+      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess', 'uses-proof', 'uses-open');
       doc.classList.remove('uses-focus', 'uses-collapse');
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
@@ -2317,6 +2420,12 @@
           if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
           keep.set(b, 'uses-ref');
         }
+      }
+      // The proofs of the other results: faded with the rest, but with "Hide
+      // the rest" on they stay, folded to their first line (a click opens one).
+      for (const m of others) for (const p of m.proofs) {
+        if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
+        keep.set(p, 'uses-fade uses-proof');
       }
       // Fade every block that holds nothing lit; go inside the ones that do.
       const lit = new Set();
@@ -2448,6 +2557,7 @@
         return n ? { uses: closure(n, 'uses').size, usedBy: closure(n, 'usedBy').size } : null;
       },
       unfocus,
+      repaint,
       focused: () => (focusState ? { id: focusState.id, dir: focusState.dir } : null),
       graph: getGraph,
       index: getIndex,

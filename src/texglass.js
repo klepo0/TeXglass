@@ -1374,6 +1374,11 @@
           const a = readArg(src, i);
           const t = this.target || { num: '', kind: 'none', id: this.newId('label') };
           this.setLabel(a.content, Object.assign({}, t));
+          // a theorem's first label names it on the page (reading progress, src/progress.js)
+          if (this.target && /^thm-/.test(t.id) && a.content.trim()) {
+            if (!this.thmLabels) this.thmLabels = Object.create(null);
+            if (!this.thmLabels[t.id]) this.thmLabels[t.id] = a.content.trim();
+          }
           return res(this.target ? '' : `<span id="${t.id}"></span>`, a.end);
         }
         case 'ref': case 'eqref': case 'cref': case 'Cref': case 'autoref': case 'Autoref': case 'nameref':
@@ -2144,7 +2149,8 @@
       const content = this.flow(o ? body.slice(o.end) : body, false);
       const style = /^(plain|definition|remark)$/.test(def.style) ? def.style : 'plain';
       const cls = `theorem thm-${style} thm-env-${escapeHtml(name.replace(/\*/g, ''))}`;
-      return `<div class="${cls}" id="${id}" data-number="${escapeHtml(num)}">${attachHead(head, content)}</div>`;
+      const label = this.thmLabels && this.thmLabels[id];
+      return `<div class="${cls}" id="${id}" data-number="${escapeHtml(num)}"${label ? ` data-label="${escapeHtml(label)}"` : ''}>${attachHead(head, content)}</div>`;
     }
 
     list(name, body) {

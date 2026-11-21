@@ -714,7 +714,9 @@
       const clone = node.cloneNode(true);
       clone.removeAttribute('id');
       clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-      body.appendChild(clone);
+      // A result cited in a proof: its hypotheses and conclusion, with boxes to tick (shared/hypotheses.js).
+      const split = hypotheses && hypotheses.viewFor(target, a, clone);
+      body.appendChild(split || clone);
     }
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
@@ -816,6 +818,7 @@
         if (insight) insight.invalidate();
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);
+        if (progress) progress.refresh();
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');
@@ -931,9 +934,17 @@
         break;
       case 'annotations':
         if (margin) margin.setAnnotations(m.list);
+        // the hypothesis checker's ticks come with the notes
+        hypTicks = new Set((Array.isArray(m.list) ? m.list : []).filter((a) => a && a.kind === 'check').map((a) => a.id));
         break;
       case 'study':
         if (margin) margin.setStudy(m.on);
+        break;
+      case 'progress':
+        if (progress) progress.setMap(m.map);
+        break;
+      case 'reading-progress':
+        if (progress) progress.setEnabled(m.on);
         break;
       case 'note-html': {
         const done = noteWaiting.get(m.id);
@@ -969,6 +980,27 @@
         vscode.postMessage({ type: 'render-tex', id, texs });
       }),
       onHoverChange: (on) => vscode.postMessage({ type: 'set-notation-hover', on }),
+      statusOf: (el) => (progress ? progress.statusOf(el) : null),
+    })
+    : null;
+
+  // A result cited in a proof previews as its hypotheses and conclusion; the
+  // ticks are kept by the extension with the reader's notes (paper.texglass.json)
+  // and sync with them.
+  let hypTicks = new Set();
+  const hypotheses = window.TeXglassHypotheses
+    ? window.TeXglassHypotheses.attach({
+      root: preview,
+      isChecked: (id) => hypTicks.has(id),
+      setChecked: (id, on, info) => {
+        if (on) hypTicks.add(id); else hypTicks.delete(id);
+        vscode.postMessage({ type: 'check', id, on, info });
+      },
+      prefs: {
+        get: (k) => ((vscode.getState && vscode.getState()) || {})[k] || null,
+        set: (k, v) => { if (vscode.setState) vscode.setState(Object.assign({}, vscode.getState() || {}, { [k]: v })); },
+      },
+      onChange: () => { if (popoverLink && !popover.hidden) placePopover(popoverLink, popover.firstElementChild); },
     })
     : null;
 
@@ -986,6 +1018,19 @@
       },
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
+    })
+    : null;
+
+  // Reading progress (src/progress.js): the extension keeps the statuses with the
+  // paper's notes (name.texglass.json, Settings Sync, the gist).
+  var progress = window.TeXglassProgress
+    ? window.TeXglassProgress.attach({
+      root: preview,
+      pane: tocPane,
+      list: tocList,
+      insight,
+      jump: (el) => { jumpTo(el); if (narrow.matches) { tocWanted = false; showToc(); } },
+      onChange: (map) => vscode.postMessage({ type: 'progress', map }),
     })
     : null;
 

@@ -22,6 +22,8 @@ for (const [from, to] of [
   ['src/margin.js', 'margin.js'],
   ['src/notes-sync.js', 'notes-sync.js'],
   ['src/insight.js', 'insight.js'],
+  ['src/progress.js', 'progress.js'],
+  ['src/hypotheses.js', 'hypotheses.js'],
   ['src/cite.js', 'cite.js'],
   ['src/cited.js', 'cited.js'],
   ['src/arxiv.js', 'arxiv.js'],
