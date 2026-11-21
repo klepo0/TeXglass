@@ -193,7 +193,8 @@ Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
 ### Back to where you were
 
 Every jump remembers where you were reading: clicking a reference or a
-citation, an entry in **Contents**, a result on the **Map** or in the notation
+citation, an entry in **Contents**, a result on the **Map** (double-click, or
+**Go there**) or in the notation
 index, **Go to**, **Trace**, the first match of **Find**, **Go there** in a
 preview, and the next or previous margin note. A jump to something already on
 screen doesn't count.
@@ -228,6 +229,9 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     cited works (`\cite`) are leaves.
   - Results are grouped by section; on big maps chains of lemmas that serve one
     result fold into it (**+3** on the result shows them).
+  - Click a result to light up what it uses and what uses it; double-click
+    (double-tap on a touch screen) to jump to it in the text, which also
+    closes the larger map. **Back** returns you.
   - Drag to pan. **Show what it uses** starts "What does this use?" there.
   - <kbd>M</kbd> (or **Larger map**; VS Code: **TeXglass: Show Larger
     Dependency Map**) opens the map filling the window: drag to move, Ctrl +
