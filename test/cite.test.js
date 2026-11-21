@@ -252,10 +252,17 @@ test('a citation\'s note shows the abstract, an Open in TeXglass button, and onl
         if (!el.querySelector('.cite-wait')) return res();
         new MutationObserver((_, o) => { if (!el.querySelector('.cite-wait')) { o.disconnect(); res(); } }).observe(el, { childList: true, subtree: true });
       });
-      const a = cites.noteFor(items[0]);
+      let changes = 0;
+      const a = cites.noteFor(items[0], { onChange: () => { changes++; } });
       document.body.appendChild(a);
       const waiting = !!a.querySelector('.cite-wait');
       await wait(a);
+      const det = a.querySelector('details.cite-more');
+      const folded = !!det && !det.open && !!det.querySelector('.cite-abstract');
+      const before = changes;
+      det.open = true;
+      await new Promise((res) => setTimeout(res, 50));
+      const replaced = changes > before;
       a.querySelector('.cite-open').click();
       const b = cites.noteFor(items[1]);
       document.body.appendChild(b);
@@ -265,11 +272,13 @@ test('a citation\'s note shows the abstract, an Open in TeXglass button, and onl
       isOnline = false;
       const c = cites.noteFor(items[1]);
       return {
-        waiting, a: a.textContent, opened: window.opened, b: b.textContent, c: c.textContent,
+        waiting, folded, replaced, a: a.textContent, opened: window.opened, b: b.textContent, c: c.textContent,
         again: window.asked.length - askedBefore, notBib: cites.noteFor(document.querySelector('.theorem')),
       };
     }, ARXIV_RECORD);
     assert.ok(out.waiting);
+    assert.ok(out.folded, 'the abstract is folded at first');
+    assert.ok(out.replaced, 'opening the abstract places the preview again');
     assert.match(out.a, /We study the shape of/);
     assert.match(out.a, /Open in TeXglass/);
     assert.equal(out.opened, '2301.00001');

@@ -510,11 +510,11 @@
         else if (cited.error) parts.push(missingHtml(cited.pins, null, info.arxiv, esc(cited.error)));
         else parts.push(missingHtml(cited.pins, cited.found, info.arxiv));
       }
-      if (shown.length) {
-        // the statement is what was asked for: the abstract waits behind a click
-        if (info.abstract) parts.push(`<details class="cite-more"><summary>Abstract</summary><div class="cite-abstract">${withMath(abstractText(info.abstract))}</div></details>`);
-      } else if (info.abstract) {
-        parts.push(`<div class="cite-abstract"><span class="insight-usedby-k">Abstract</span> ${withMath(abstractText(info.abstract))}</div>`);
+      if (info.abstract) {
+        // folded: the title and the entry say what the paper is; the abstract waits behind a click
+        parts.push(`<details class="cite-more"><summary>Abstract</summary><div class="cite-abstract">${withMath(abstractText(info.abstract))}</div></details>`);
+      } else if (shown.length) {
+        // the statement is what was asked for
       } else if (info.found) {
         parts.push('<div class="insight-muted">No abstract is on record for this paper.</div>');
       } else {
@@ -539,6 +539,8 @@
       const pins = results && nopts.link && nopts.results !== false ? Cited.pinpointsOf(nopts.link) : [];
       const div = (li.ownerDocument || document).createElement('div');
       div.className = 'cite-note';
+      // opening or folding the abstract changes the preview's height: place it again
+      div.addEventListener('toggle', () => { if (nopts.onChange) nopts.onChange(div); }, true);
       div.addEventListener('click', (e) => {
         const open = e.target.closest('.cite-open');
         if (open) {

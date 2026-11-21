@@ -366,3 +366,55 @@ test('the note pad moves by its handle and remembers where; dragging the pad its
     await browser.close();
   }
 });
+
+test('the highlight bar sits below a selection, clear of the system\'s own menu above it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  const setUp = async (ctxOpts) => {
+    const ctx = await browser.newContext(ctxOpts);
+    const page = await ctx.newPage();
+    await page.setContent(`<style>${fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8')}</style>` +
+      `<main class="panes"><section class="pane" id="pane"><article id="preview" class="document">${DOC()}</article></section></main>`);
+    await page.addScriptTag({ path: path.join(ROOT, 'src/margin.js') });
+    await page.evaluate(() => {
+      const doc = document.getElementById('preview');
+      window.margin = TeXglassMargin.attach({
+        pane: document.getElementById('pane'), doc, study: true, files: () => ['paper.tex'],
+        blocks: () => Array.from(doc.querySelectorAll('.src-block')).map((el, k) => ({ el, line: k * 3, file: 0 })),
+        save: () => {},
+      });
+      window.margin.refresh();
+    });
+    return page;
+  };
+  // Select "main difficulty"; with `up`, as a mouse does, else as a long press does (no pointerup).
+  const select = (page, up) => page.evaluate((up) => {
+    const t = document.querySelectorAll('#preview p')[1].firstChild;
+    const r = document.createRange();
+    r.setStart(t, 4);
+    r.setEnd(t, 19);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    if (up) t.parentElement.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerType: 'mouse' }));
+  }, up);
+  const gap = (page) => page.evaluate(() => {
+    const sel = getSelection().getRangeAt(0).getBoundingClientRect();
+    const bar = document.querySelector('.tg-hlbar').getBoundingClientRect();
+    return bar.top - sel.bottom;
+  });
+  try {
+    const desk = await setUp({ viewport: { width: 1100, height: 700 } });
+    await select(desk, true);
+    await desk.waitForFunction(() => !document.querySelector('.tg-hlbar').hidden);
+    const g = await gap(desk);
+    assert.ok(g >= 4 && g < 20, `below the selection with a mouse (gap ${g})`);
+
+    const phone = await setUp({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
+    await select(phone, false);
+    await phone.waitForFunction(() => !document.querySelector('.tg-hlbar').hidden);
+    const gt = await gap(phone);
+    assert.ok(gt >= 30, `below the selection handles on a touch screen (gap ${gt})`);
+  } finally {
+    await browser.close();
+  }
+});
