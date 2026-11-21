@@ -738,9 +738,41 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 }
 
 #preview {
-  max-width: calc(760px * var(--zoom, 1));
+  /* --tg-text-width is the reader's own width, from the grips on the text's edges (src/textwidth.js). */
+  max-width: calc(var(--tg-text-width, 760px) * var(--zoom, 1));
   margin: 0 auto;
   padding: 40px 16px 24px;
+}
+/* Dragged to the pane's edge: the text fills the pane (the margin notes keep their column). */
+.tg-text-full #preview, .tg-text-full #preview.tg-with-margin, .tg-text-full #preview.tg-with-margin.tg-margin-collapsed { max-width: none; }
+
+/* The grips on the text's edges that change its width (src/textwidth.js). */
+.text-resizer {
+  position: fixed;
+  width: 10px;
+  z-index: 3;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.text-resizer[hidden] { display: none; }
+.text-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.text-resizer:hover::after, .text-resizer:focus-visible::after, body.text-resizing .text-resizer::after { background: var(--accent); }
+.text-resizer:focus { outline: none; }
+body.text-resizing { cursor: ew-resize; user-select: none; }
+body.text-resizing #preview { transition: none; }
+/* Phones: the text takes the screen whatever width was set elsewhere; no grips. */
+@media (max-width: 760px) and (pointer: coarse) {
+  #preview { max-width: calc(760px * var(--zoom, 1)); }
+  .text-resizer { display: none !important; }
 }
 
 /* Long documents have tens of thousands of blocks. Let the browser skip the
@@ -1211,7 +1243,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 }
 
 /* Edit mode: click a block to edit its source in place */
-.add-block-row { max-width: 760px; margin: 0 auto; padding: 0 16px 120px; display: none; }
+.add-block-row { max-width: calc(var(--tg-text-width, 760px) * var(--zoom, 1)); margin: 0 auto; padding: 0 16px 120px; display: none; }
 .mode-edit .add-block-row { display: block; }
 .add-block {
   font: inherit;
@@ -1399,7 +1431,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   }
 
   /* Everything but the document. */
-  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float,
+  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float, .text-resizer,
   .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
@@ -1530,7 +1562,7 @@ s.xout { text-decoration-thickness: 0.15em; }
 
 /* With it, the text makes room for a margin column and the notes go there. */
 #preview.tg-with-margin {
-  max-width: calc(760px * var(--zoom, 1) + var(--tg-margin-w, 200px) + 28px);
+  max-width: calc(var(--tg-text-width, 760px) * var(--zoom, 1) + var(--tg-margin-w, 200px) + 28px);
   padding-right: calc(16px + var(--tg-margin-w, 200px) + 28px);
 }
 .tg-with-margin .mnote > .mnote-body { display: none; }
@@ -1683,7 +1715,7 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 }
 .tg-mnote-pulse::before { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 50%; }
 /* Folded: the text takes the room back; the notes stay as dots in the text. */
-#preview.tg-with-margin.tg-margin-collapsed { max-width: calc(760px * var(--zoom, 1) + 28px); padding-right: 44px; }
+#preview.tg-with-margin.tg-margin-collapsed { max-width: calc(var(--tg-text-width, 760px) * var(--zoom, 1) + 28px); padding-right: 44px; }
 .tg-margin-collapsed .mnote { cursor: pointer; }
 .tg-margin-collapsed .mnote:not(.mnote-todo)::before {
   content: "";

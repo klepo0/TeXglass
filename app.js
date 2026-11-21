@@ -80,6 +80,21 @@
     margin.setWidth(parseFloat(store.get('texglass:margin-width')));
     margin.setCollapsed(store.get('texglass:margin-collapsed') === '1');
   }
+  // The text's width: grips on its edges (src/textwidth.js), remembered in this browser.
+  const TEXT_KEY = 'texglass:text-width';
+  const textWidth = window.TeXglassTextWidth
+    ? window.TeXglassTextWidth.attach({
+      doc: preview,
+      pane: previewPane,
+      store: { get: () => store.get(TEXT_KEY), set: (v) => store.set(TEXT_KEY, v) },
+      avoid: [$('toc-pane')], // the side panel, a drawer over the text in a narrow window
+    })
+    : null;
+  if (textWidth) {
+    window.addEventListener('storage', (e) => {
+      if (e.key === TEXT_KEY) textWidth.set(window.TeXglassTextWidth.parse(e.newValue), false);
+    });
+  }
 
   // Until November 2026 the viewer was called TeXdown and kept its state under
   // texdown:* keys. Carry those over once, so the last document, folds, theme

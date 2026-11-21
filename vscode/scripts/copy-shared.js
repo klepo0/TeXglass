@@ -27,6 +27,7 @@ for (const [from, to] of [
   ['src/hypotheses.js', 'hypotheses.js'],
   ['src/cite.js', 'cite.js'],
   ['src/features.js', 'features.js'],
+  ['src/textwidth.js', 'textwidth.js'],
   ['src/cited.js', 'cited.js'],
   ['src/arxiv.js', 'arxiv.js'],
   ['src/bib.js', 'bib.js'],

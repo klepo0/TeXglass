@@ -729,6 +729,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'features.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'textwidth.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
@@ -886,6 +887,7 @@ ${INK_FILTERS}
           notationOrder: this.context.globalState.get('texglass.notationOrder', null),
           marginWidth: this.context.globalState.get('texglass.marginWidth', null),
           marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
+          textWidth: this.context.globalState.get('texglass.textWidth', ''),
           notePad: this.context.globalState.get('texglass.notePad', null),
         });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
@@ -974,6 +976,7 @@ ${INK_FILTERS}
         if (m.key === 'texglass:notation-order' && /^(section|kind|az)$/.test(String(m.value))) this.context.globalState.update('texglass.notationOrder', String(m.value));
         if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-collapsed') this.context.globalState.update('texglass.marginCollapsed', !!m.value);
+        if (m.key === 'texglass:text-width' && /^(|full|\d{2,5})$/.test(String(m.value))) this.context.globalState.update('texglass.textWidth', String(m.value));
         if (m.key === 'texglass:note-pad') {
           const at = m.value && Number.isFinite(m.value.right) && Number.isFinite(m.value.bottom)
             ? { right: m.value.right, bottom: m.value.bottom } : null;

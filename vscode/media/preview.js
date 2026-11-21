@@ -242,6 +242,17 @@
   const tocPane = document.getElementById('toc-pane');
   const tocList = document.getElementById('toc-list');
   const narrow = window.matchMedia('(max-width: 760px)');
+
+  // The text's width: grips on its edges (src/textwidth.js); the extension keeps it
+  // for every preview (prefs: textWidth).
+  const textWidth = window.TeXglassTextWidth
+    ? window.TeXglassTextWidth.attach({
+      doc: preview,
+      pane,
+      store: { get: () => null, set: (value) => vscode.postMessage({ type: 'side-pref', key: 'texglass:text-width', value }) },
+      avoid: [tocPane], // the side panel, a drawer over the text in a narrow preview
+    })
+    : null;
   let tocWanted = !narrow.matches;
   let toc = [];
   let tocKey = '';
@@ -857,6 +868,7 @@
         if (typeof m.toc === 'boolean') tocWanted = m.toc && !narrow.matches;
         if (margin && m.marginWidth) margin.setWidth(m.marginWidth);
         if (margin) margin.setCollapsed(!!m.marginCollapsed);
+        if (textWidth) textWidth.set(window.TeXglassTextWidth.parse(m.textWidth), false);
         if (margin && m.notePad) margin.setPadAt(m.notePad);
         if (insight && m.notationOrder) insight.setNotationOrder(m.notationOrder);
         if (side) {
