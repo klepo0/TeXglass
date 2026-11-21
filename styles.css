@@ -719,7 +719,7 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .ref-popover[hidden] { display: none; }
 .ref-popover-body {
   position: relative; /* keeps KaTeX's MathML inside the scroll box */
-  max-height: 60vh;
+  max-height: 75vh; /* and no taller than the room beside the link (src/popover.js) */
   overflow: auto;
   overscroll-behavior: contain;
   padding: 0.6em 1em;

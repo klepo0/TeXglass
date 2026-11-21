@@ -720,7 +720,6 @@
     placePopover(a, body);
   });
   function placePopover(a, body) {
-    const r = a.getBoundingClientRect();
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
     // Widen it, up to the window, for a display that is wider than that, so the
@@ -733,10 +732,8 @@
       width = Math.min(width + extra + 2, window.innerWidth - 32);
       popover.style.width = width + 'px';
     }
-    popover.style.left = Math.max(16, Math.min(r.left, window.innerWidth - width - 16)) + 'px';
-    // The popover's own 8px padding is the gap to the link (the hover bridge).
-    const h = popover.offsetHeight;
-    popover.style.top = (r.bottom + h > window.innerHeight && r.top - h > 0 ? r.top - h : r.bottom) + 'px';
+    // below or above, whichever fits; capped to the window and scrolled when it fits on neither side
+    TeXglassPopover.place(popover, a);
   }
   preview.addEventListener('mouseout', (e) => {
     const a = e.target.closest(PREVIEW_LINKS);

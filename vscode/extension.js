@@ -643,6 +643,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'popover.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'copytex.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
