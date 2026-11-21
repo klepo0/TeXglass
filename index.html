@@ -38,6 +38,7 @@
   <script defer src="src/copytex.js"></script>
   <script defer src="src/margin.js"></script>
   <script defer src="src/notes-sync.js"></script>
+  <script defer src="src/library.js"></script>
   <script defer src="src/insight.js"></script>
   <script defer src="src/pick.js"></script>
   <script defer src="src/progress.js"></script>
@@ -71,6 +72,9 @@
         <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
         <button id="pick-results" type="button" role="menuitem" title="Tick theorems, lemmas, definitions and numbered equations, then show only those (their proofs folded) and print them">Show selected results…</button>
         <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
+        <div class="more-sep" role="separator"></div>
+        <button id="library-save" type="button" role="menuitemcheckbox" aria-checked="false" title="Keep this paper on this device, figures and all, to read it with no connection">Save for offline</button>
+        <button id="library-open" type="button" role="menuitem" title="The papers you saved for offline reading">Saved papers…</button>
         <div class="more-sep" role="separator"></div>
         <button id="notes-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="Select text in the preview to highlight it or write a note beside it">Highlights and notes</button>
         <button id="notes-export" type="button" role="menuitem" title="Download this paper's highlights and notes as a file (paper.texglass.json)">Export notes</button>
@@ -136,6 +140,7 @@
       <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="rough paths signature, github thesis template, 2301.00001">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
+      <p class="local-hint" id="library-hint" hidden>Or open one of your <button type="button" id="arxiv-library" class="link-button">saved papers</button>, offline too.</p>
       <p class="local-hint">Or open a document on this computer: <button type="button" id="arxiv-local-file" class="link-button">a .tex file</button> or <button type="button" id="arxiv-local-folder" class="link-button">its folder</button>, with its <code>\input</code> files and figures.</p>
       <p class="bookmarklet-hint">Drag <a id="bookmarklet" class="bookmarklet" href="#" title="Drag me to your bookmarks bar">Open in TeXglass</a> to your bookmarks bar. Click it on any GitHub page to open that file here.</p>
       <div class="arxiv-actions">
@@ -185,6 +190,20 @@
     </div>
     <p id="preprints-message" class="arxiv-message" role="status"></p>
     <ol id="preprints-list" class="preprints-list"></ol>
+  </dialog>
+
+  <dialog id="library-dialog" class="arxiv-dialog preprints-dialog library-dialog" aria-labelledby="library-title">
+    <div class="preprints-head">
+      <h2 id="library-title">Saved papers</h2>
+      <button type="button" id="library-close" class="preprints-close" aria-label="Close">×</button>
+    </div>
+    <p class="library-intro">Papers you saved open here with no connection, figures included. To save one, open it and choose <strong>Save for offline</strong> in the <strong>…</strong> menu.</p>
+    <div class="preprints-filters" id="library-filters" hidden>
+      <input id="library-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search your saved papers" aria-label="Search your saved papers">
+    </div>
+    <p id="library-message" class="arxiv-message" role="status"></p>
+    <ol id="library-list" class="preprints-list library-list"></ol>
+    <p id="library-foot" class="library-foot"></p>
   </dialog>
 
   <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a .tex file, or its folder, to view it</div></div>
