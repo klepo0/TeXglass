@@ -2156,17 +2156,28 @@
       this.listDepth++;
       const depth = this.listDepth;
       const counter = 'enum' + roman(Math.min(depth, 4));
+      // enumitem keys (label=, ref=, start=, resume, resume*) or an enumerate-package template like [(i)]
+      const keys = opt != null ? listKeys(opt) : {};
+      if (!this.enumResume) this.enumResume = Object.create(null);
+      const prev = isEnum ? this.enumResume[depth] : null;
+      let template = null;
+      let refTemplate = null;
+      if (isEnum && opt != null) {
+        if ('resume*' in keys && prev) ({ template, refTemplate } = prev);
+        if ('label' in keys) template = keys.label;
+        else if ('label*' in keys) template = keys['label*'];
+        if ('ref' in keys) refTemplate = keys.ref;
+        if (!template && !/=/.test(opt) && /\\(alph|Alph|roman|Roman|arabic)\*?|\b[aAiI1]\b/.test(opt)) template = opt;
+      }
       if (isEnum) {
         this.newCounter(counter, null);
-        this.counters[counter].value = 0;
+        let start = 0;
+        if (('resume' in keys || 'resume*' in keys) && prev) start = prev.value;
+        else if (/^-?\d+$/.test((keys.start || '').trim())) start = parseInt(keys.start, 10) - 1;
+        this.counters[counter].value = start;
       }
       const parentNum = isEnum && this.enumRefPrefix ? this.enumRefPrefix : '';
       const items = splitTop(body, commandSep('item')).slice(1);
-      let template = null;
-      if (isEnum && opt) {
-        const m = /label\s*=\s*(\{[^}]*\}|[^,]*)/.exec(opt);
-        template = m ? m[1].replace(/^\{|\}$/g, '') : /\\(alph|Alph|roman|Roman|arabic)\*?|\b[aAiI1]\b/.test(opt) ? opt : null;
-      }
       const out = items.map((item) => {
         let label = '';
         const io = readOpt(item, 0);
@@ -2176,9 +2187,19 @@
         if (isEnum) {
           this.counters[counter].value++;
           const v = this.counters[counter].value;
-          const formatted = formatEnum(depth, v, template);
-          if (!io) label = escapeHtml(formatted.label);
-          this.target = { num: parentNum + formatted.ref, kind: 'item', id, name: '' };
+          let num;
+          if (template && /\\/.test(template)) {
+            // A label with commands (\upshape, \textbf, \ref, ...): fill in the counter, then render it.
+            const html = this.flow(fillEnum(template, v), true);
+            if (!io) label = html;
+            num = stripTags(this.flow(fillEnum(refTemplate || template.replace(/\$/g, ''), v), true)).trim();
+            if (!refTemplate) num = num.replace(/\.$/, '');
+          } else {
+            const formatted = formatEnum(depth, v, template);
+            if (!io) label = escapeHtml(formatted.label);
+            num = refTemplate ? stripTags(this.flow(fillEnum(refTemplate, v), true)).trim() : formatted.ref;
+          }
+          this.target = { num: parentNum + num, kind: 'item', id, name: '' };
         } else if (!io) {
           label = ['•', '–', '∗', '·'][(depth - 1) % 4];
         }
@@ -2188,6 +2209,7 @@
         this.enumRefPrefix = savedPrefix;
         return `<li class="item" id="${id}"><span class="item-label">${label}</span><div class="item-body">${content}</div></li>`;
       });
+      if (isEnum) this.enumResume[depth] = { value: this.counters[counter].value, template, refTemplate };
       this.listDepth--;
       const cls = isDesc ? 'description' : isEnum ? 'enumerate' : 'itemize';
       return `<ul class="list ${cls}">${out.join('')}</ul>`;
@@ -2602,6 +2624,29 @@
       else break;
     }
     return j;
+  }
+
+  /** enumitem options as {key: value}; braces around a value are dropped, bare keys map to ''. */
+  function listKeys(opt) {
+    const keys = {};
+    for (const part of splitTop(opt, (src, i) => (src[i] === ',' ? 1 : 0))) {
+      const eq = findDelim(part, 0, '=');
+      const key = part.slice(0, eq).trim();
+      if (!key) continue;
+      let val = eq < part.length ? part.slice(eq + 1).trim() : '';
+      if (val[0] === '{') {
+        const g = readGroup(val, 0);
+        if (g.end >= val.length) val = g.content;
+      }
+      keys[key] = val;
+    }
+    return keys;
+  }
+
+  /** An enumitem label template with its counter commands (\alph* ...) replaced by the value. */
+  function fillEnum(template, v) {
+    const map = { alph: alpha(v), Alph: alpha(v, true), roman: roman(v), Roman: roman(v, true), arabic: String(v) };
+    return template.replace(/\\(alph|Alph|roman|Roman|arabic)\*?(?![A-Za-z])/g, (_, k) => map[k]);
   }
 
   function formatEnum(depth, v, template) {
