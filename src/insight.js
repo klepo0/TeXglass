@@ -2275,12 +2275,32 @@
 
     const HEADING = /^H[1-6]$/;
 
+    // With "Hide the rest" on, a click on a folded proof opens it, and its fold
+    // arrow folds it again. This sits above the host's own proof folding (run
+    // first, in the capture phase) and leaves the folds the host remembers alone.
+    doc.addEventListener('click', (e) => {
+      if (!focusState || !collapseRest || e.ctrlKey || e.metaKey || !e.target.closest) return;
+      const proof = e.target.closest('.uses-proof');
+      if (!proof || !doc.contains(proof)) return;
+      const toggle = e.target.closest('.fold-toggle');
+      if (proof.classList.contains('uses-open')) {
+        if (!toggle || toggle.closest('.proof') !== proof || proof.classList.contains('folded')) return;
+        proof.classList.remove('uses-open');
+      } else {
+        if (!toggle && e.target.closest('a, .math-copyable .math[data-tex]')) return;
+        proof.classList.add('uses-open');
+        if (proof.classList.contains('folded')) return; // the host unfolds its own fold too
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+
     /** The block an equation, figure or item reference lights up. */
     const blockOf = (t) => t.closest('.math-display, figure, table, .theorem, .proof, li, p') || t;
 
     function clearMarks() {
       if (!focusState) return;
-      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess');
+      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess', 'uses-proof', 'uses-open');
       doc.classList.remove('uses-focus', 'uses-collapse');
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
@@ -2315,6 +2335,12 @@
           if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
           keep.set(b, 'uses-ref');
         }
+      }
+      // The proofs of the other results: faded with the rest, but with "Hide
+      // the rest" on they stay, folded to their first line (a click opens one).
+      for (const m of others) for (const p of m.proofs) {
+        if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
+        keep.set(p, 'uses-fade uses-proof');
       }
       // Fade every block that holds nothing lit; go inside the ones that do.
       const lit = new Set();
