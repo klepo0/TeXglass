@@ -811,6 +811,12 @@
     });
   }
 
+  // --- back and forward -------------------------------------------------------------
+
+  // Each jump (a reference, Contents, the map, Go to…) remembers where you were:
+  // the Back button over the preview, or Alt+Left while it has focus, goes back.
+  if (window.TeXglassScroll && TeXglassScroll.history) TeXglassScroll.history(pane, { keys: window });
+
   // --- find and go to ----------------------------------------------------------------
 
   // Ctrl+F searches the preview; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2" (src/find.js).

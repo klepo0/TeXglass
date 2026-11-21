@@ -51,6 +51,7 @@ browser extension:
   notes, so they sync with them and survive a revised version of the paper.
   Switch it off in the **…** menu (VS Code: `texglass.readingProgress`).
 - **Go to** any theorem, equation or section by number (Ctrl+G).
+- **Back** to where you were after any jump (a reference, Contents, the map, Go to), with a button or Alt+Left; Alt+Right goes forward again.
 - **Trace** (a tab of the same bar): pick a theorem, lemma or definition and see only what it uses and what uses it.
 - **Notation on hover**: rest the pointer on a formula to see where its
   notation comes from, the paper's macros (`\newcommand`) and symbols defined

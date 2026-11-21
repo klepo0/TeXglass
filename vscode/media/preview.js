@@ -482,6 +482,7 @@
     // (A far target is jumped to, with only a short glide at the end.)
     TeXglassScroll.to(pane, mark, {
       align: 'center',
+      history: false, // following the editor is not a jump to come back from
       done() {
         if (syncMark === mark) ignoreScrollUntil = Date.now() + 150;
       },
@@ -775,6 +776,14 @@
     if (e.key === 'Escape' && !popover.hidden) hidePopover();
   });
 
+  // --- back and forward -------------------------------------------------------------
+
+  // Each jump (a reference, Contents, the map, Go to, the next note…) remembers
+  // where you were: the Back button over the preview goes back there. Alt+Left
+  // and Alt+Right are the texglass.back / texglass.forward commands, which VS
+  // Code runs for keys pressed in here too (so they are not VS Code's own Go Back).
+  const viewHistory = window.TeXglassScroll && TeXglassScroll.history ? TeXglassScroll.history(pane) : null;
+
   // --- find and go to ----------------------------------------------------------------
 
   // Opened by the texglass.find / texglass.goTo commands (Ctrl+F, Ctrl+G), which
@@ -808,6 +817,7 @@
     switch (m.type) {
       case 'doc':
         if ((vscode.getState() || {}).uri !== m.uri) {
+          if (viewHistory) viewHistory.clear();
           shown = [];
           allAnchors = [];
           anchors = [];
@@ -937,6 +947,9 @@
         if (done) done(m.html);
         break;
       }
+      case 'history':
+        if (viewHistory) viewHistory[m.dir < 0 ? 'back' : 'forward']();
+        break;
       case 'find':
         if (finder) finder.open(m.mode, m.mode === 'find' ? selectedText() : null);
         break;

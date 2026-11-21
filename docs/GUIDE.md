@@ -47,6 +47,7 @@ letters are ignored while you type in a text field.
 | <kbd>Ctrl+F</kbd> | Find in the document (opens the **Navigate** bar on **Find**). |
 | <kbd>Ctrl+G</kbd> | Go to a theorem, equation, section, figure or table by number (**Navigate** on **Go to**). |
 | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> | Next / previous match while the bar is open. In the Find box, <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> do the same. |
+| <kbd>Alt+Left</kbd> / <kbd>Alt+Right</kbd> | [Back](#back-to-where-you-were) to where you were before a jump, and forward again (<kbd>Option</kbd> on a Mac). Not while you type in a text field. |
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to** and **Trace**: move through the list and pick. |
 | <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
@@ -88,6 +89,7 @@ letters are ignored while you type in a text field.
 | <kbd>Ctrl+F</kbd> | **TeXglass: Find in Preview** (preview focused). |
 | <kbd>Ctrl+G</kbd> | **TeXglass: Go to Theorem, Equation or Section…** |
 | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> | **Find Next / Find Previous in Preview**. |
+| <kbd>Alt+Left</kbd> / <kbd>Alt+Right</kbd> | **TeXglass: Go Back in Preview** / **Go Forward in Preview** (preview focused; VS Code's own Go Back elsewhere). |
 | <kbd>Ctrl+=</kbd> (also <kbd>Ctrl+Shift+=</kbd>, <kbd>Ctrl+Numpad +</kbd>) | **TeXglass: Zoom In**. |
 | <kbd>Ctrl+-</kbd> (also <kbd>Ctrl+Shift+-</kbd>, <kbd>Ctrl+Numpad -</kbd>) | **TeXglass: Zoom Out**. |
 | <kbd>Ctrl+0</kbd> (also <kbd>Ctrl+Numpad 0</kbd>) | **TeXglass: Reset Zoom**. |
@@ -187,6 +189,25 @@ with three tabs:
   [What does this use?](#understanding-the-logic) on that result.
 
 Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
+
+### Back to where you were
+
+Every jump remembers where you were reading: clicking a reference or a
+citation, an entry in **Contents**, a result on the **Map** or in the notation
+index, **Go to**, **Trace**, the first match of **Find**, **Go there** in a
+preview, and the next or previous margin note. A jump to something already on
+screen doesn't count.
+
+- After a jump, a **Back** button appears over the top left corner of the
+  document. Click it, or press <kbd>Alt+Left</kbd>, to go back to the very
+  spot you left. Press it again to go back further, as in a browser.
+- Once you have gone back, a **→** button beside it (or <kbd>Alt+Right</kbd>)
+  goes forward again. A new jump clears the way forward.
+- The button fades while you read and brightens when you point at it.
+- Opening another document starts afresh. In the web viewer and the Overleaf
+  panel, <kbd>Alt+Left</kbd> goes back in the document, not to the previous
+  web page. In VS Code it goes back in the preview while the preview has
+  focus, and is VS Code's own **Go Back** everywhere else.
 
 ## The side panel: Contents, Map, Notation
 
@@ -417,7 +438,8 @@ editor.
   or double-click); text from an `\input` file opens that file first.
 - Click a formula to copy it, hover previews, folding and **Proofs**,
   **Contents** (left or right), **Navigate** (<kbd>Ctrl+F</kbd>,
-  <kbd>Ctrl+G</kbd>), the map and notation, light and dark.
+  <kbd>Ctrl+G</kbd>), [Back](#back-to-where-you-were) after a jump
+  (<kbd>Alt+Left</kbd>), the map and notation, light and dark.
 - **Text width**: drag either edge of the text (double-click for the usual
   width); drag the panel's left edge to resize the panel.
 - **Files** downloads the project's zip with your login and pulls in
@@ -476,6 +498,8 @@ All in the Command Palette under **TeXglass:**.
 | Find Next in Preview | <kbd>F3</kbd>. |
 | Find Previous in Preview | <kbd>Shift+F3</kbd>. |
 | Go to Theorem, Equation or Section… | <kbd>Ctrl+G</kbd>. |
+| Go Back in Preview | Back to where the preview was before a jump (<kbd>Alt+Left</kbd>). |
+| Go Forward in Preview | Forward again (<kbd>Alt+Right</kbd>). |
 | Show Notation Index | The Notation tab. |
 | Show Dependency Map of the Results | The Map tab. |
 | Show Larger Dependency Map | <kbd>M</kbd> in the preview. |
@@ -559,7 +583,8 @@ on hover open as a sheet at the bottom of the screen. That covers references,
 citations, footnotes, notation and the map's results.
 
 - A tap on a reference or citation shows it, without leaving your place.
-  **Go there** in the sheet jumps to it.
+  **Go there** in the sheet jumps to it, and the **Back** button at the top
+  left brings you back.
 - A tap on a formula shows where its notation comes from.
 - Tap outside the sheet, swipe its handle down, or tap the handle to close it.
   A long preview scrolls inside the sheet.
