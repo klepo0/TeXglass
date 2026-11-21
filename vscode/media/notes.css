@@ -91,6 +91,7 @@
   --def-border: var(--ink);
   --rule: #4a5a51;
   --accent-soft: #3a4c42;
+  --on-accent: var(--sheet); /* board-coloured text on a chalk-filled button */
   --flash: #5a5426;
 }
 
