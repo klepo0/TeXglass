@@ -98,6 +98,10 @@ Commutative diagrams (`tikz-cd`, `xymatrix`) are drawn in the preview:
   to reset); the width is remembered. Fold the margin away with the small arrow
   on that line, or by dragging it all the way right; the notes stay as dots in
   the text, and clicking one or dragging the arrow back out opens it again.
+  The arrows under it, **N** and **Shift+N** in the preview, or **TeXglass: Next
+  Margin Note** / **Previous Margin Note** jump from note to note, yours
+  included; the button below the arrows narrows the jumps to margin notes,
+  todo notes or your own.
 - **Highlighter and notes of your own** (study tools): select text and pick a
   colour from the small bar that appears, or the note button to write a note
   on it. Drag the note pad at the bottom right onto any line for a note there

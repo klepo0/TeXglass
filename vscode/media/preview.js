@@ -833,6 +833,9 @@
       case 'fold-proofs':
         foldAllProofs(m.fold);
         break;
+      case 'margin-jump':
+        if (margin) { if (m.dir < 0) margin.previous(); else margin.next(); }
+        break;
       case 'click-to-copy':
         if (copier) copier.setEnabled(m.on);
         break;

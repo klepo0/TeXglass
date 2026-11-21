@@ -1405,6 +1405,87 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-margin-toggle:hover, .tg-margin-toggle:focus-visible { opacity: 1; color: var(--ink); border-color: var(--accent); }
 .tg-margin-folded .tg-margin-toggle { left: 0; padding: 0 5px 0 1px; opacity: 0.8; }
 .tg-margin-folded .tg-mcard, body:not(.tg-margin-resizing) .tg-margin-folded .tg-margin-grip { display: none; }
+/* Under it, arrows to the next and previous note, and which notes they visit. */
+.tg-margin-nav {
+  position: absolute;
+  top: 34px;
+  left: -21px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 18px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--paper);
+  opacity: 0.55;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.tg-margin-nav:hover, .tg-margin-nav:focus-within { opacity: 1; border-color: var(--accent); }
+.tg-margin-folded .tg-margin-nav { left: 0; }
+.tg-margin-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tg-margin-nav button[hidden] { display: none; }
+.tg-margin-nav button:disabled { opacity: 0.35; cursor: default; }
+.tg-margin-nav button:not(:disabled):hover, .tg-margin-nav button:focus-visible { color: var(--ink); }
+.tg-margin-nav button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tg-margin-nav svg { width: 13px; height: 13px; }
+.tg-margin-nav .tg-mnav-filter { border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
+.tg-margin-nav .tg-mnav-filter.tg-mnav-on { color: var(--accent); }
+.tg-mnav-menu {
+  position: absolute;
+  left: 2px;
+  z-index: 4;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  font: 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.tg-margin-folded .tg-mnav-menu { left: auto; right: 4px; }
+.tg-mnav-menu[hidden] { display: none; }
+.tg-mnav-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 4px 8px 4px 20px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tg-mnav-menu button[aria-checked="true"] { position: relative; font-weight: 600; }
+.tg-mnav-menu button[aria-checked="true"]::before { content: "\2713"; position: absolute; left: 6px; }
+.tg-mnav-menu button:hover, .tg-mnav-menu button:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: none; }
+.tg-mnav-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* With one kind chosen, the other cards step back. */
+.tg-margin[data-filter="par"] .tg-mcard:not(.tg-mcard-par),
+.tg-margin[data-filter="todo"] .tg-mcard:not(.tg-mcard-todo),
+.tg-margin[data-filter="mine"] .tg-mcard:not(.tg-mcard-user) { opacity: 0.35; }
+/* The note just jumped to. */
+.tg-mcard-pulse { animation: tg-mcard-pulse 1.5s ease-out; }
+@keyframes tg-mcard-pulse {
+  0%, 30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+.tg-mnote-pulse::before { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 50%; }
 /* Folded: the text takes the room back; the notes stay as dots in the text. */
 #preview.tg-with-margin.tg-margin-collapsed { max-width: calc(760px * var(--zoom, 1) + 28px); padding-right: 44px; }
 .tg-margin-collapsed .mnote { cursor: pointer; }

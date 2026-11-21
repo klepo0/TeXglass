@@ -181,9 +181,9 @@ test('the margin\'s divider drags to resize it, and a double-click goes back to 
     const width = () => page.evaluate(() => Math.round(document.querySelector('.tg-margin').getBoundingClientRect().width));
     assert.equal(await width(), 200, 'the remembered width is used');
     const box = await page.locator('.tg-margin-grip').boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.mouse.move(box.x + box.width / 2, box.y + 150);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 - 80, box.y + 40, { steps: 5 });
+    await page.mouse.move(box.x + box.width / 2 - 80, box.y + 150, { steps: 5 });
     await page.mouse.up();
     assert.equal(await width(), 280, 'dragging left widens the margin');
     assert.deepEqual(await page.evaluate(() => window.widths), [280]);
@@ -243,9 +243,9 @@ test('the margin folds away with its button or by dragging its divider, and open
 
     // Dragging the divider all the way right folds it; the width is kept for later.
     let box = await page.locator('.tg-margin-grip').boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.mouse.move(box.x + box.width / 2, box.y + 150);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 + 180, box.y + 40, { steps: 6 });
+    await page.mouse.move(box.x + box.width / 2 + 180, box.y + 150, { steps: 6 });
     await page.mouse.up();
     assert.equal((await state()).folded, true);
     assert.deepEqual(await page.evaluate(() => window.folds), [true, false, true]);

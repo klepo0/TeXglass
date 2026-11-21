@@ -29,6 +29,8 @@
  *     onWidth(px) {},                  // its divider was dragged (null: back to automatic)
  *     collapsed: false,                // optional: start with the margin folded away
  *     onCollapse(folded) {},           // its fold button was used
+ *     filter: 'all', onFilter(kind) {}, // optional: which notes N jumps between, and when it changes
+ *     keys: true,                      // N / Shift+N jump to the next / previous note
  *     padAt: { right, bottom },        // optional: where the note pad was moved to (px from the corner)
  *     onPadMove(at) {},                // the note pad was moved by its handle (null: back to the corner)
  *   });
@@ -36,6 +38,8 @@
  *   margin.setAnnotations(list); margin.setStudy(on);
  *   margin.setCollapsed(on);           // fold the margin away, or bring it back
  *   margin.setPadAt(at);               // put the note pad where it was moved to before
+ *   margin.next(); margin.previous();  // jump to the next or previous note (N, Shift+N)
+ *   margin.setFilter('todo');          // jump between these only: 'all', 'par', 'todo' or 'mine'
  *
  * The anchoring functions (describe, locate) work on plain strings and are
  * exported for tests.
@@ -514,7 +518,7 @@
         if (c) el.style.setProperty('--note-c', c);
         const body = m.querySelector('.mnote-body');
         el.innerHTML = body ? body.innerHTML : '';
-        return { el, top: () => rectTop(m.getClientRects()[0]) };
+        return { el, src: m, top: () => rectTop(m.getClientRects()[0]) };
       });
     }
 
@@ -589,6 +593,8 @@
       for (const c of cards) layer.appendChild(c.el);
       layer.appendChild(grip);
       layer.appendChild(toggle);
+      layer.appendChild(nav);
+      layer.appendChild(navMenu);
       cards.forEach((c) => ro && ro.observe(c.el));
       layout();
     }
@@ -601,8 +607,10 @@
     let marginW = 0;
     function placeToggle() {
       if (layer.hidden) return;
-      const top = Math.max(0, Math.min(pane.scrollTop + 10, doc.offsetHeight - 30));
+      const top = Math.max(0, Math.min(pane.scrollTop + 10, doc.offsetHeight - 80));
       toggle.style.top = top + 'px';
+      nav.style.top = top + 24 + 'px';
+      navMenu.style.top = top + 24 + 'px';
     }
 
     function layout() {
@@ -617,6 +625,7 @@
       toggle.setAttribute('aria-expanded', String(!collapsed));
       toggle.title = collapsed ? 'Show the margin (' + what + ')' : 'Hide the margin';
       toggle.setAttribute('aria-label', toggle.title);
+      updateNav();
       toggle.innerHTML = collapsed
         ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tg-margin-count">' + n + '</span>'
         : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -660,6 +669,219 @@
       ro.observe(pane);
     } else {
       win.addEventListener('resize', layoutSoon);
+    }
+
+    // --- jumping from note to note ---------------------------------------------------------
+    //
+    // Two arrows under the fold button (and N, Shift+N) go to the next or the
+    // previous note, in the order of the text: the author's \marginpar and \todo
+    // notes and the reader's own notes and highlights. A menu (or the filter
+    // button) narrows the jumps to one kind; the other cards fade meanwhile.
+
+    const KINDS = [
+      { id: 'all', label: 'All notes' },
+      { id: 'par', label: 'Margin notes' },
+      { id: 'todo', label: 'Todo notes' },
+      { id: 'mine', label: 'My notes and highlights' },
+    ];
+    let filter = KINDS.some((k) => k.id === opts.filter) ? opts.filter : 'all';
+    let current = null; // { key, scroll }: the note jumped to last, and where the pane was then
+    let pulseTimer = 0;
+    const svg = (d) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const nav = page.createElement('div');
+    nav.className = 'tg-margin-nav';
+    nav.setAttribute('role', 'group');
+    nav.setAttribute('aria-label', 'Jump between notes');
+    nav.innerHTML =
+      `<button type="button" class="tg-mnav-prev">${svg('M3.5 10 8 5.5l4.5 4.5')}</button>` +
+      `<button type="button" class="tg-mnav-next">${svg('M3.5 6 8 10.5 12.5 6')}</button>` +
+      `<button type="button" class="tg-mnav-filter" aria-haspopup="menu" aria-expanded="false">${svg('M2.5 4h11M4.5 8h7M6.5 12h3')}</button>`;
+    const navMenu = page.createElement('div');
+    navMenu.className = 'tg-mnav-menu';
+    navMenu.setAttribute('role', 'menu');
+    navMenu.setAttribute('aria-label', 'Jump between');
+    navMenu.hidden = true;
+    const prevBtn = nav.querySelector('.tg-mnav-prev');
+    const nextBtn = nav.querySelector('.tg-mnav-next');
+    const filterBtn = nav.querySelector('.tg-mnav-filter');
+    // Clicks here are not clicks on the text below.
+    nav.addEventListener('pointerdown', (e) => e.stopPropagation());
+    navMenu.addEventListener('pointerdown', (e) => e.stopPropagation());
+    prevBtn.addEventListener('click', (e) => { e.preventDefault(); go(-1); });
+    nextBtn.addEventListener('click', (e) => { e.preventDefault(); go(1); });
+    filterBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      showMenu(navMenu.hidden);
+    });
+    navMenu.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('[data-kind]');
+      if (!b) return;
+      setFilter(b.dataset.kind, true);
+      showMenu(false);
+      filterBtn.focus();
+    });
+    navMenu.addEventListener('keydown', (e) => {
+      const items = Array.from(navMenu.querySelectorAll('[data-kind]'));
+      const i = items.indexOf(page.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        showMenu(false);
+        filterBtn.focus();
+      } else if (e.key === 'Tab') {
+        showMenu(false);
+      }
+    });
+    page.addEventListener('pointerdown', () => { if (!navMenu.hidden) showMenu(false); });
+
+    /** The kind of each note there is, in the order of the text: { kind, key, range, card }. */
+    function targets() {
+      const out = [];
+      doc.querySelectorAll('.mnote').forEach((m) => {
+        const r = page.createRange();
+        r.setStartBefore(m);
+        r.collapse(true);
+        out.push({ kind: m.classList.contains('mnote-todo') ? 'todo' : 'par', key: m, mnote: m, range: r });
+      });
+      if (study) {
+        for (const a of list) {
+          const at = placed.get(a.id);
+          if (!at) continue;
+          const r = rangeOf(at.start, at.end);
+          if (r) out.push({ kind: 'mine', key: a.id, note: a, range: r });
+        }
+      }
+      out.sort((x, y) => x.range.compareBoundaryPoints(win.Range.START_TO_START, y.range));
+      return out;
+    }
+
+    /** Where a note is, in the pane's scrolled coordinates; its block's top if it is not laid out. */
+    function rectOf(t) {
+      let rect = t.mnote ? t.mnote.getClientRects()[0] : firstRect(t.range);
+      if (!rect || (!rect.width && !rect.height && !rect.top && !rect.left)) {
+        let n = t.range.startContainer;
+        if (n.nodeType !== 1) n = n.parentElement;
+        while (n && n.parentElement && n.parentElement !== doc) n = n.parentElement;
+        rect = n && n.getBoundingClientRect ? n.getBoundingClientRect() : null;
+      }
+      return rect;
+    }
+
+    const matches = (t) => filter === 'all' || t.kind === filter;
+
+    function counts(all) {
+      const c = { all: all.length, par: 0, todo: 0, mine: 0 };
+      for (const t of all) c[t.kind]++;
+      return c;
+    }
+
+    function updateNav() {
+      const c = counts(targets());
+      if (filter !== 'all' && !c[filter]) filter = 'all';
+      const kinds = KINDS.filter((k) => k.id !== 'all' && c[k.id]).length;
+      layer.dataset.filter = filter;
+      const what = filter === 'all' ? 'note' : { par: 'margin note', todo: 'todo note', mine: 'note of yours' }[filter];
+      prevBtn.title = `Previous ${what} (Shift+N)`;
+      nextBtn.title = `Next ${what} (N)`;
+      prevBtn.setAttribute('aria-label', prevBtn.title);
+      nextBtn.setAttribute('aria-label', nextBtn.title);
+      prevBtn.disabled = nextBtn.disabled = !c[filter];
+      // Only one kind of note: nothing to choose between.
+      filterBtn.hidden = kinds < 2 && filter === 'all';
+      const label = KINDS.find((k) => k.id === filter).label;
+      filterBtn.title = `Jump between: ${label.toLowerCase()}`;
+      filterBtn.setAttribute('aria-label', filterBtn.title);
+      filterBtn.classList.toggle('tg-mnav-on', filter !== 'all');
+      navMenu.innerHTML = KINDS.filter((k) => k.id === 'all' || c[k.id]).map((k) =>
+        `<button type="button" role="menuitemradio" aria-checked="${k.id === filter}" data-kind="${k.id}"><span>${k.label}</span><span class="tg-mnav-n">${c[k.id]}</span></button>`).join('');
+    }
+
+    function showMenu(on) {
+      navMenu.hidden = !on;
+      filterBtn.setAttribute('aria-expanded', String(on));
+      if (on) {
+        updateNav();
+        const sel = navMenu.querySelector('[aria-checked="true"]') || navMenu.querySelector('button');
+        if (sel) sel.focus();
+      }
+    }
+
+    function setFilter(kind, save) {
+      if (!KINDS.some((k) => k.id === kind)) kind = 'all';
+      filter = kind;
+      current = null;
+      updateNav();
+      if (save && opts.onFilter) opts.onFilter(filter);
+    }
+
+    /** Jump to the next (dir 1) or the previous (dir -1) note of the kind chosen. Returns the note, or null. */
+    function go(dir) {
+      if (layer.hidden) return null;
+      const all = targets().filter(matches);
+      if (!all.length) return null;
+      let i = -1;
+      const at = current && (current.scroll == null || Math.abs(pane.scrollTop - current.scroll) < 4)
+        ? all.findIndex((t) => t.key === current.key) : -1;
+      if (at >= 0) {
+        i = at + dir;
+      } else {
+        // From the middle of the pane, where a jump puts a note.
+        const p = pane.getBoundingClientRect();
+        const mid = p.top + pane.clientHeight / 2;
+        const ys = all.map((t) => { const r = rectOf(t); return r ? r.top + r.height / 2 : null; });
+        if (dir > 0) i = ys.findIndex((y) => y != null && y > mid + 8);
+        else for (let k = ys.length - 1; k >= 0; k--) if (ys[k] != null && ys[k] < mid - 8) { i = k; break; }
+        if (i < 0) i = dir > 0 ? all.length : -1;
+      }
+      // Past the last note, around to the first (and back).
+      i = (i + all.length) % all.length;
+      const t = all[i];
+      current = { key: t.key, scroll: null };
+      const done = () => { if (current && current.key === t.key) current.scroll = pane.scrollTop; };
+      const target = { getBoundingClientRect: () => rectOf(t) || { top: 0, height: 0 } };
+      if (win.TeXglassScroll) win.TeXglassScroll.to(pane, target, { align: 'center', smooth: true, done });
+      else {
+        const r = target.getBoundingClientRect();
+        const p = pane.getBoundingClientRect();
+        pane.scrollTop += r.top + r.height / 2 - (p.top + pane.clientHeight / 2);
+        done();
+      }
+      pulse(t);
+      return { kind: t.kind, index: i, count: all.length };
+    }
+
+    /** Light up the note jumped to: its card, and its place in the text. */
+    function pulse(t) {
+      win.clearTimeout(pulseTimer);
+      layer.querySelectorAll('.tg-mcard-pulse').forEach((el) => el.classList.remove('tg-mcard-pulse'));
+      doc.querySelectorAll('.tg-mnote-pulse').forEach((el) => el.classList.remove('tg-mnote-pulse'));
+      const card = cards.find((c) => (t.mnote ? c.src === t.mnote : c.id === t.key));
+      if (card) {
+        void card.el.offsetWidth; // start the animation again
+        card.el.classList.add('tg-mcard-pulse');
+      }
+      if (t.mnote) t.mnote.classList.add('tg-mnote-pulse');
+      if (t.note) flash(t.note);
+      pulseTimer = win.setTimeout(() => {
+        layer.querySelectorAll('.tg-mcard-pulse').forEach((el) => el.classList.remove('tg-mcard-pulse'));
+        doc.querySelectorAll('.tg-mnote-pulse').forEach((el) => el.classList.remove('tg-mnote-pulse'));
+        if (t.note && highlights) highlights.delete('tg-hl-focus');
+      }, 1600);
+    }
+
+    // N and Shift+N, outside text fields and dialogs.
+    const typing = (el) => !!el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName) ||
+      (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(el.type)));
+    if (opts.keys !== false) {
+      page.addEventListener('keydown', (e) => {
+        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || (e.key !== 'n' && e.key !== 'N')) return;
+        if (typing(e.target) || page.querySelector('dialog[open]') || layer.hidden) return;
+        if (!go(e.shiftKey ? -1 : 1)) return;
+        e.preventDefault();
+      });
     }
 
     // --- changing annotations -----------------------------------------------------------
@@ -1126,6 +1348,12 @@
       /** Put the note pad at { right, bottom } px from the window's corner (null: the default corner). */
       setPadAt: (at) => setPadAt(at, false),
       width: () => marginW,
+      /** Jump to the next or the previous note (of the kind chosen); null when there is none. */
+      next: () => go(1),
+      previous: () => go(-1),
+      /** Which notes to jump between: 'all', 'par' (\marginpar), 'todo' or 'mine' (the reader's). */
+      setFilter: (kind) => setFilter(kind, false),
+      filter: () => filter,
     };
   }
 
