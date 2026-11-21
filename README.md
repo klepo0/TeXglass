@@ -8,7 +8,10 @@
   <b>Read LaTeX like a paper, not like code.</b><br>
   For mathematicians and scientists reading arXiv papers or writing LaTeX:
   the math rendered, theorems numbered, references live, diagrams drawn.
-  No TeX install, no compile step.
+  Then the smart part: <b>What does this use?</b> lights up everything a theorem
+  rests on, a <b>dependency map</b> shows how the results fit together, a
+  <b>hypothesis checker</b> lists what a cited lemma needs, and <b>notation on
+  hover</b> tells you what a symbol means. No TeX install, no compile step.
 </p>
 
 <p align="center">
@@ -46,8 +49,9 @@
 
 | | How | Best for |
 | --- | --- | --- |
-| **[Web viewer](https://klepo0.github.io/TeXglass/)** | Open the link. Search arXiv, paste an arXiv or GitHub link, or drop a `.tex` file. | Reading papers, on any device |
+| **[Web viewer](https://klepo0.github.io/TeXglass/)** | Open the link. Search arXiv, paste an arXiv or GitHub link, or drop a `.tex` file. | Reading papers in any browser |
 | **[VS Code extension](https://marketplace.visualstudio.com/items?itemName=klepo1.texglass)** | `ext install klepo1.texglass`, open a `.tex` file, press **Ctrl+K V**. Also on [Open VSX](https://open-vsx.org/extension/klepo1/texglass). | Writing LaTeX with a live preview |
+| **[Home Screen app](docs/GUIDE.md#on-phones-and-tablets)** | On a phone or tablet, open the [web viewer](https://klepo0.github.io/TeXglass/), then Share → **Add to Home Screen** (iPhone, iPad) or **Install TeXglass as an app** in the **…** menu (Android). | Reading on the go, offline too |
 | **[arXiv browser extension](browser/README.md)** | For **Chrome, Edge and Firefox**. Download the zips from the [latest release](https://github.com/klepo0/TeXglass/releases/latest) and follow the install steps. | One click from arXiv, alphaXiv, HAL, ResearchGate and Overleaf |
 
 There is also a command line tool: `npx texglass paper.tex -o paper.html`
