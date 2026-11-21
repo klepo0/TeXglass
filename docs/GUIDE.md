@@ -147,7 +147,7 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
 - **Footnotes**: the footnote text.
 - **Citations**: the bibliography entry, then the cited paper's title and
   abstract, looked up on DataCite and Crossref only when you hover, and kept
-  for the visit. **Open in TeXglass** opens the paper when it is on arXiv.
+  for the visit. The abstract starts folded: click **Abstract** to open it. **Open in TeXglass** opens the paper when it is on arXiv.
   Offline, the bibliography entry shows on its own.
 - **Cited theorems**: on a citation such as "[12, Theorem 4.1]" or "Theorem
   4.1 of [12]", when reference 12 is on arXiv, the preview shows Theorem 4.1
@@ -241,7 +241,10 @@ In the web viewer, the browser extension's viewer and VS Code (not the
 Overleaf panel).
 
 - **Highlight**: select text and pick a colour (yellow, green, pink, blue)
-  from the bar that appears; click a highlight to recolour or remove it.
+  from the bar that appears below the selection; click a highlight to recolour
+  or remove it. The bar stays clear of the system's own menu (copy, look up,
+  share), which opens above the selection; on a phone or tablet it also sits
+  below the selection handles, and appears once a long press has selected.
 - **Note**: the note button on that bar writes a note on the selection; or
   drag the **note pad** (bottom right) onto any line. Drag the pad's dotted
   handle to move the pad itself (arrow keys on the handle work too). Drag a

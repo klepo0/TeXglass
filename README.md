@@ -32,7 +32,7 @@ browser extension:
   (BibTeX, biblatex and amsrefs).
 - **Hover previews** of references and citations; click to jump there.
 - **Citation previews**: resting on a citation shows its bibliography entry,
-  then the cited paper's title and abstract (looked up on DataCite and Crossref
+  then the cited paper's title and a folded abstract (looked up on DataCite and Crossref
   only when you hover, and kept for the visit), with **Open in TeXglass** when the
   paper is on arXiv. Offline, the bibliography entry is shown on its own.
 - **What does this use?**: the small button by a theorem's heading lights up
