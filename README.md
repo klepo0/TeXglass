@@ -73,6 +73,9 @@ browser extension:
   the small arrow on that line, or by dragging the line all the way right; the
   notes stay as dots in the text, and clicking one (or dragging the arrow back
   out) opens the margin again. Whether it is folded is remembered too.
+  The arrows under it (or **N** and **Shift+N**) jump to the next and previous
+  note, your own notes included; the button below them narrows the jumps to
+  margin notes, todo notes or your own.
 - **Search** (Ctrl+F), **zoom**, and **light and dark themes**.
 - **No TeX install, no compile step**, and fast on long papers.
 

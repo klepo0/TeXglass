@@ -110,6 +110,16 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.nextMarginNote",
+        "title": "Next Margin Note",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.previousMarginNote",
+        "title": "Previous Margin Note",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.exportNotes",
         "title": "Export Highlights and Notes…",
         "category": "TeXglass"

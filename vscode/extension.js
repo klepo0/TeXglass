@@ -1302,6 +1302,9 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.toggleHandwriting', () =>
       setConfig('previewStyle', previewLook().look === 'notes' ? 'standard' : 'handwritten')),
     vscode.commands.registerCommand('texglass.toggleStudyTools', () => setConfig('studyTools', !studyTools())),
+    // Jump between the notes in the margin (N and Shift+N while the preview has focus).
+    vscode.commands.registerCommand('texglass.nextMarginNote', () => preview && preview.post({ type: 'margin-jump', dir: 1 })),
+    vscode.commands.registerCommand('texglass.previousMarginNote', () => preview && preview.post({ type: 'margin-jump', dir: -1 })),
     // The reader's notes: to a file and back, and synced through a private gist.
     vscode.commands.registerCommand('texglass.exportNotes', async () => {
       if (!preview) return vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
