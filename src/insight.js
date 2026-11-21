@@ -884,7 +884,7 @@
    * symbols: the ones the index lists (each once, leaving out those a proof or a
    * statement keeps to itself).
    */
-  function notationIndex(doc, definitions) {
+  function notationIndex(doc, definitions, o) {
     const macros = (definitions && definitions.macros) || {};
     const byName = new Map();
     const heads = Array.from(doc.querySelectorAll('h1, h2, h3, h4')).filter((h) => !h.closest(INSIDE_POPOVER));
@@ -906,7 +906,9 @@
       }
     }
     let inText = [];
-    try { inText = textDefinitions(doc); } catch (e) { /* never let a reading aid break the page */ }
+    if (!(o && o.words === false)) {
+      try { inText = textDefinitions(doc); } catch (e) { /* never let a reading aid break the page */ }
+    }
     if (inText.length) {
       defs.push(...inText);
       defs.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
@@ -1336,10 +1338,14 @@
     let index = null;
     let locate = null;
     let hoverOn = opts.hover !== false;
+    // Parts the reader can switch off in Settings (src/features.js): the map
+    // (Map tab, larger map, "Uses / Used in" under previews), the notation
+    // index, the "What does this use?" buttons and symbols introduced in words.
+    const feats = { map: true, notation: true, uses: true, words: true };
     const symbolCache = new Map(); // tex -> html
 
     const getGraph = () => graph || (graph = dependencyGraph(doc));
-    const getIndex = () => index || (index = notationIndex(doc, defs));
+    const getIndex = () => index || (index = notationIndex(doc, defs, { words: feats.words }));
     const getLocate = () => locate || (locate = makeLocator(doc));
     const where = (el) => getLocate()(el, getGraph());
 
@@ -1606,6 +1612,7 @@
     // --- "Used in" under a reference preview ---------------------------------------
 
     function usedByNote(target) {
+      if (!feats.map) return null;
       if (!target || !target.classList || !target.classList.contains('theorem')) return null;
       const n = getGraph().byEl.get(target);
       if (!n || (!n.usedBy.size && !n.uses.size)) return null;
@@ -2245,13 +2252,21 @@
     }
 
     function fillDialog() {
+      dialog.querySelectorAll('.insight-tabs button').forEach((b) => { b.hidden = !tabOn(b.dataset.tab); });
       dialog.classList.toggle('insight-dialog-map', dialogView.tab === 'deps');
       dialog.querySelectorAll('.insight-tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === dialogView.tab)));
       fill(dialogView);
       dialog.dataset.ms = dialogView.body.dataset.ms;
     }
 
+    const tabOn = (t) => (t === 'deps' ? feats.map : feats.notation);
     function open(which, selected) {
+      const tab = which || (dialogView && dialogView.tab) || 'notation';
+      if (!tabOn(tab)) {
+        const other = tab === 'deps' ? 'notation' : 'deps';
+        if (!tabOn(other)) return;
+        which = other;
+      }
       if (!dialog) build();
       if (which) dialogView.tab = which;
       if (selected != null) dialogView.selected = selected;
@@ -2263,6 +2278,7 @@
     const typing = (t) => !!t && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) ||
       (t.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(t.type)));
     function toggleMap() {
+      if (!feats.map) return;
       if (dialog && dialog.open && dialogView.tab === 'deps') { dialog.close(); return; }
       let selected = null;
       for (const v of views) if (v !== dialogView && v.tab === 'deps' && v.isShown() && v.selected != null) selected = v.selected;
@@ -2328,7 +2344,7 @@
     }
 
     function addUsesButton(el) {
-      if (el._usesBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
+      if (!feats.uses || el._usesBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
       const head = headOf(el);
       if (!head) return;
       const b = document_.createElement('button');
@@ -2547,6 +2563,17 @@
       setDefinitions,
       usedByNote,
       setHover: (on) => setHover(on, false),
+      /** Switch parts on or off: { map, notation, uses, words } (missing keys stay as they are). */
+      setFeatures(f) {
+        const before = Object.assign({}, feats);
+        for (const k of Object.keys(feats)) if (f && typeof f[k] === 'boolean') feats[k] = f[k];
+        doc.classList.toggle('tg-no-uses', !feats.uses);
+        if (!feats.uses && focusState) unfocus();
+        if (before.words !== feats.words) { index = null; hidePop(); }
+        if (dialog && dialog.open && !tabOn(dialogView.tab)) dialog.close();
+        if (Object.keys(feats).some((k) => before[k] !== feats[k])) refreshViews();
+      },
+      features: () => Object.assign({}, feats),
       // o: { scroll, collapse } (collapse switches on "Hide the rest")
       focus: (el, dir, o) => focus(el, dir || 'uses', !!(o && o.scroll), !!(o && o.collapse)),
       /** How many results el uses and is used in, directly or not, or null if it is not a result. */
@@ -2601,8 +2628,9 @@
     else win.addEventListener('resize', fitTabs);
 
     let tab = 'toc';
+    const off = new Set(); // tabs switched off in Settings
     function show(t, quiet) {
-      tab = view && (t === 'notation' || t === 'deps') ? t : 'toc';
+      tab = view && (t === 'notation' || t === 'deps') && !off.has(t) ? t : 'toc';
       tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sideTab === tab)));
       o.list.hidden = tab !== 'toc';
       body.hidden = tab === 'toc';
@@ -2676,6 +2704,17 @@
     return {
       show: (t) => show(t, true),
       tab: () => tab,
+      /** Show or hide the Map and Notation tabs: { deps, notation }. */
+      setTabs(f) {
+        for (const k of ['deps', 'notation']) {
+          if (f && f[k] === false) off.add(k);
+          else if (f && f[k] === true) off.delete(k);
+          const b = tabs.querySelector(`[data-side-tab="${k}"]`);
+          if (b) b.hidden = off.has(k);
+        }
+        if (off.has(tab)) show('toc', true);
+        fitTabs();
+      },
       setWidth: (w) => setWidth(w, false),
     };
   }

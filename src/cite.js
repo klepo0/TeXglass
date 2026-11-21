@@ -20,6 +20,7 @@
  *   });
  *   const note = cites.noteFor(li, { onChange() { ... }, link });   // the <li> of a bibliography entry, or null;
  *                                  //   link: the citation's <a>, whose "[12, Theorem 4.1]" shows that theorem
+ *                                  //   results: false leaves cited theorems out (Settings)
  *   cites.decorate(preview);     // after a render: an "Open in TeXglass" button on entries on arXiv
  *
  * Finding a paper on arXiv: an arXiv id in the entry (arXiv:…, an eprint
@@ -535,7 +536,7 @@
       if (!li || !li.closest || !li.closest('.bibliography')) return null;
       const entry = entryOf(li);
       // "[12, Theorem 4.1]": that theorem itself, once the paper is found on arXiv
-      const pins = results && nopts.link ? Cited.pinpointsOf(nopts.link) : [];
+      const pins = results && nopts.link && nopts.results !== false ? Cited.pinpointsOf(nopts.link) : [];
       const div = (li.ownerDocument || document).createElement('div');
       div.className = 'cite-note';
       div.addEventListener('click', (e) => {

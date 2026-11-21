@@ -208,6 +208,12 @@
         "command": "texglass.toggleContentsPosition",
         "title": "Move Contents to the Other Side",
         "category": "TeXglass"
+      },
+      {
+        "command": "texglass.showSettings",
+        "title": "Settings: Switch Reading Aids On or Off",
+        "category": "TeXglass",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -251,6 +257,11 @@
           "command": "texglass.toggleHandwriting",
           "when": "activeWebviewPanelId == 'texglass.preview'",
           "group": "navigation@3"
+        },
+        {
+          "command": "texglass.showSettings",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "navigation@4"
         },
         {
           "command": "texglass.toggleTheme",
@@ -502,6 +513,56 @@
           "type": "boolean",
           "default": true,
           "description": "A marker by each theorem, lemma, definition and proof in the preview: click it to step through unread, skimmed, read and understood, and flag a result with ? to ask about it. The Contents tab shows each section's progress, suggests what to read next and lists the ? results; the dependency map colours results by status. Kept with your highlights and notes (name.texglass.json), and synced with them."
+        },
+        "texglass.previews.references": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rest the pointer on a link to a theorem, equation, section or figure in the preview to see it without leaving your place."
+        },
+        "texglass.previews.footnotes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rest the pointer on a footnote mark in the preview to read the footnote."
+        },
+        "texglass.previews.citations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rest the pointer on a citation in the preview to see its bibliography entry."
+        },
+        "texglass.citationLookup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add the cited paper's title, authors and abstract to citation previews, looked up on DataCite, Crossref and arXiv, with a button to open it in TeXglass. The citation is sent to those services. Needs texglass.previews.citations."
+        },
+        "texglass.citedTheoremPreviews": {
+          "type": "boolean",
+          "default": true,
+          "description": "A citation such as \"[12, Theorem 4.1]\" previews that theorem, from the cited paper's source on arXiv. Needs texglass.citationLookup."
+        },
+        "texglass.hypothesisChecker": {
+          "type": "boolean",
+          "default": true,
+          "description": "A result cited in a proof previews as its hypotheses, each with a box to tick, and its conclusion. Needs texglass.previews.references."
+        },
+        "texglass.notationFromText": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notation on hover and the notation index also find symbols the text introduces in words (\"let X be\", \"denote by X\")."
+        },
+        "texglass.notationIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "The Notation tab of the preview's side panel."
+        },
+        "texglass.dependencyMap": {
+          "type": "boolean",
+          "default": true,
+          "description": "The Map tab of the preview's side panel, the larger map (M) and \"Uses / Used in\" under reference previews."
+        },
+        "texglass.whatDoesThisUse": {
+          "type": "boolean",
+          "default": true,
+          "description": "A \"What does this use?\" button by each result in the preview, which lights up the results it rests on."
         },
         "texglass.notationHover": {
           "type": "boolean",

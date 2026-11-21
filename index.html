@@ -33,6 +33,7 @@
   <script defer src="src/hypotheses.js"></script>
   <script defer src="src/cited.js"></script>
   <script defer src="src/cite.js"></script>
+  <script defer src="src/features.js"></script>
   <script defer src="vscode/ink.js"></script>
   <script defer src="app.js"></script>
   <script defer src="src/stats.js"></script>
@@ -75,6 +76,9 @@
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
     <span id="status" class="status" role="status"></span>
+    <button id="settings" class="icon-button" type="button" aria-haspopup="dialog" aria-label="Settings" title="Settings: switch reading aids on or off (previews, notation, map, notes…)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
     <button id="hand-toggle" class="icon-button" type="button" aria-pressed="false" aria-label="Show as handwritten notes" title="Show as handwritten notes (chalk on a board in the dark theme)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z M13.8 6.8l3.4 3.4 M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
     </button>
