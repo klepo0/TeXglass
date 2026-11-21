@@ -39,7 +39,7 @@
 
   /** A data-tex attribute holding a formula's LaTeX as written, for copying it from the page. */
   const texAttr = (tex) => {
-    const t = String(tex).replace(/\\label\s*\{[^}]*\}/g, '').replace(/\\(nonumber|notag)\b[ \t]*/g, '').replace(/[ \t]+$/gm, '').trim();
+    const t = String(tex).replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '').replace(/\\(nonumber|notag)\b[ \t]*/g, '').replace(/[ \t]+$/gm, '').trim();
     return t ? ` data-tex="${escapeHtml(t)}"` : '';
   };
 
@@ -346,7 +346,12 @@
     '\\fint': '\\mathop{\\rlap{\\hspace{0.32em}\\raisebox{0.05em}{\\text{-}}}{\\int}}\\nolimits',
     '\\dashint': '\\fint',
     // a \label that reaches KaTeX through a user macro: drop it
-    '\\label': (ctx) => { ctx.consumeArgs(1); return ''; },
+    '\\label': (ctx) => {
+      // cleveref's \label[type]{key}: drop the [type] too
+      if (ctx.future().text === '[') { let t; do t = ctx.popToken(); while (t.text !== ']' && t.text !== 'EOF'); }
+      ctx.consumeArgs(1);
+      return '';
+    },
     // bbm: \mathbbm{1} is the indicator 𝟙; KaTeX's \mathbb has no digits or small letters.
     '\\mathbbm': (ctx) => {
       const arg = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('');
@@ -432,6 +437,24 @@
     return tex.replace(/(\\(?:left|right|middle|[bB]igg?[lrm]?))\s*\\(ll|rr)angle(?![A-Za-z@])/g, (_, pre, d) => {
       const a = d === 'll' ? '\\langle' : '\\rangle';
       return `${pre}${a}\\mkern-4mu${pre}${a}`;
+    });
+  }
+
+  /**
+   * \left\llbracket … \right\rrbracket (stmaryrd's ⟦ ⟧, and \lBrace ⦃ ⦄), \bigl\llbracket, …:
+   * KaTeX draws these with \html@mathml, which \left and \big cannot take, so
+   * size two brackets, as KaTeX itself draws them at normal size.
+   */
+  const DOUBLE_BRACKETS = { llbracket: ['[', 3.2], rrbracket: [']', 3.2], lBrace: ['\\{', 3.2], rBrace: ['\\}', 3.2] };
+  function doubleBrackets(tex) {
+    if (!/\\(llbracket|rrbracket|lBrace|rBrace)|[\u27e6\u27e7]/.test(tex)) return tex;
+    return tex.replace(/(\\(?:left|right|middle|[bB]igg?[lrm]?))\s*(?:\\(llbracket|rrbracket|lBrace|rBrace)(?![A-Za-z@])|([\u27e6\u27e7]))/g, (_, pre, name, ch) => {
+      const key = name || (ch === '\u27e6' ? 'llbracket' : 'rrbracket');
+      const [d, mu] = DOUBLE_BRACKETS[key];
+      const inner = key === 'lBrace' ? '[' : key === 'rBrace' ? ']' : d;
+      // ⦃ is a brace then a bracket, ⦄ a bracket then a brace
+      const [a, b] = key === 'rBrace' ? [inner, d] : [d, inner];
+      return `${pre}${a}\\mkern-${mu}mu${pre}${b}`;
     });
   }
 
@@ -1033,9 +1056,8 @@
     }
 
     renderMath(tex, display) {
-      tex = tripleBars(arraySpecs(this.mathRefs(tex)), this.triple);
-      if (!this.macros.llangle && !this.macros.rrangle) tex = doubleAngles(tex);
-      tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*\{[^}]*\}/g, '');
+      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex)), this.triple));
+      tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       try {
         const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
         return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
@@ -1044,18 +1066,33 @@
       }
     }
 
+    /** \left\llangle, \big\llbracket, …, unless the paper defines these delimiters itself. */
+    sizeDoubles(tex) {
+      if (typeof tex !== 'string') return tex;
+      if (!this.macros.llangle && !this.macros.rrangle) tex = doubleAngles(tex);
+      if (!this.macros.llbracket && !this.macros.rrbracket) tex = doubleBrackets(tex);
+      return tex;
+    }
+
     katexMacros(tex) {
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS);
         for (const name in this.macros) {
           // KaTeX's own macros use \char (\neq does), so a paper's \char stays out of formulas
           if (name === 'char') continue;
-          const mac = this.macros[name];
+          let mac = this.macros[name];
+          // \newcommand{\bk}[1]{\left\llbracket#1\right\rrbracket}: KaTeX expands the
+          // body itself, so size double brackets and angles in it here
+          const body = this.sizeDoubles(mac.body);
+          if (body !== mac.body) mac = Object.assign({}, mac, { body });
           m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
         }
         // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
         if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
-        for (const name in this.paired) m['\\' + name] = pairedMacro(this.paired[name], this.triple);
+        for (const name in this.paired) {
+          const paired = pairedMacro(this.paired[name], this.triple);
+          m['\\' + name] = (ctx) => this.sizeDoubles(paired(ctx));
+        }
         for (const d of this.triple) if (!m[d]) m[d] = `{${TRIPLE_BAR}}`;
         m['\\texglassTree'] = (ctx) => {
           const name = ctx.consumeArgs(1)[0].slice().reverse().map((t) => t.text).join('').trim();
@@ -1371,7 +1408,9 @@
 
       switch (name) {
         case 'label': {
-          const a = readArg(src, i);
+          // cleveref's \label[type]{key}: the [type] only changes how \cref names it
+          const o = readOpt(src, i);
+          const a = readArg(src, o ? o.end : i);
           const t = this.target || { num: '', kind: 'none', id: this.newId('label') };
           this.setLabel(a.content, Object.assign({}, t));
           // a theorem's first label names it on the page (reading progress, src/progress.js)
@@ -2427,7 +2466,7 @@
       body = body.replace(/\\(?:minilab|setlabtype)\s*\{[^}]*\}/g, '').replace(/\\multicol\s*\{\d+\}/g, '');
       const lab = label ? `\\label{${label}}` : '';
       if (name === 'equ') {
-        return this.displayMath(label || /\\(label|tag)\s*\{/.test(body) ? 'equation' : 'equation*', body + lab);
+        return this.displayMath(label || /\\(label|tag)\s*(?:\[[^\]]*\]\s*)?\{/.test(body) ? 'equation' : 'equation*', body + lab);
       }
       if (label) {
         // One number for the block: the rows go in an aligned inside an equation.
@@ -2435,7 +2474,7 @@
         body = body.replace(/\\(?:nonumber|notag)\b/g, '').replace(/\\tag\*?\s*\{[^}]*\}/g, (t) => { tags.push(t); return ''; });
         return this.displayMath('equation', `\\begin{aligned}${body}\\end{aligned}${lab}${tags.slice(0, 1).join('')}`);
       }
-      const rows = splitTop(body, rowSep).map((r) => (!r.trim() || /\\(label|tag)\s*\{/.test(r) ? r : `${r} \\nonumber`));
+      const rows = splitTop(body, rowSep).map((r) => (!r.trim() || /\\(label|tag)\s*(?:\[[^\]]*\]\s*)?\{/.test(r) ? r : `${r} \\nonumber`));
       return this.displayMath('align', rows.join(' \\\\ '));
     }
 
@@ -2517,7 +2556,7 @@
     /** Number one equation row, registering its labels. */
     numberRow(row, numbered, id) {
       const labels = [];
-      row = row.replace(/\\label\s*\{([^}]*)\}/g, (_, l) => { labels.push(l); return ''; });
+      row = row.replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g, (_, l) => { labels.push(l); return ''; });
       if (/\\(nonumber|notag)\b/.test(row)) {
         numbered = false;
         row = row.replace(/\\(nonumber|notag)\b/g, '');

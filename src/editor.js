@@ -362,7 +362,7 @@
         const text = opts.source ? opts.source() : textarea.value;
         const close = textarea.value[pos] === '}' || textarea.value[pos] === ',' ? '' : '}';
         const keys = new Set(Object.keys(labels));
-        for (const t of text.matchAll(/\\label\{([^{}]+)\}/g)) keys.add(t[1].trim());
+        for (const t of text.matchAll(/\\label(?:\[[^\]]*\])?\{([^{}]+)\}/g)) keys.add(t[1].trim());
         const list = Array.from(keys).map((key) => {
           const info = labels[key] || {};
           const kind = info.kindName || (info.kind && info.kind !== 'none' ? info.kind : '');

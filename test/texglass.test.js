@@ -595,6 +595,32 @@ $\llangle x \rrangle + \big\llangle y \bigr\rrangle_q + \left\llangle \frac ab \
   assert.match(tex, /\\left\\langle\\mkern-4mu\\left\\langle a \\right\\rangle\\mkern-4mu\\right\\rangle/);
 });
 
+test('stmaryrd double brackets render after \\left and \\big, also inside macros', () => {
+  const r = realKatex(String.raw`
+\newcommand{\bk}[1]{\left\llbracket#1\right\rrbracket}
+\DeclarePairedDelimiter{\sem}{\llbracket}{\rrbracket}
+\begin{document}
+$\left\llbracket \frac ab \right\rrbracket + \bigl\llbracket x \bigr\rrbracket + \bk{\frac ab}_{m}
++ \sem*{\frac ab} + \sem[\Big]{y} + \sem{z} + \Bigl\lBrace w \Bigr\rBrace + \llbracket v \rrbracket$
+\end{document}`);
+  assert.doesNotMatch(r.html, /katex-error|math-error/);
+  const tex = plain(String.raw`\begin{document}$\left\llbracket a \right\rrbracket$\end{document}`).html;
+  assert.match(tex, /\\left\[\\mkern-3\.2mu\\left\[ a \\right\]\\mkern-3\.2mu\\right\]/);
+});
+
+test('cleveref \\label[type]{key} labels the key', () => {
+  const { html, warnings, labels } = plain(String.raw`\newtheorem{lemma}{Lemma}
+\begin{document}
+\begin{lemma}\label[lemma]{lem:a} x \end{lemma}
+\begin{equation}\label[equation]{eq:b} y \end{equation}
+See \cref{lem:a} and \eqref{eq:b}.
+\end{document}`);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(Object.keys(labels).sort(), ['eq:b', 'lem:a']);
+  assert.match(text(html), /See lemma 1 and \(1\)\./i);
+  assert.doesNotMatch(html, /\[lemma\]|\[equation\]/);
+});
+
 test('upgreek letters and \\talloblong render', () => {
   const r = realKatex(String.raw`\begin{document}$\uptau + \upalpha_{\Upgamma} + \talloblong x \talloblong_p$\end{document}`);
   assert.doesNotMatch(r.html, /katex-error|math-error/);
