@@ -1733,6 +1733,17 @@
           opts.jump(go._target);
           return;
         }
+        const pinB = e.target.closest('[data-pin]');
+        if (pinB) {
+          e.preventDefault();
+          togglePin(pinB.dataset.pin);
+          return;
+        }
+        if (e.target.closest('[data-pin-used]')) {
+          e.preventDefault();
+          setUsedPinned(!usedPinned, true);
+          return;
+        }
         const chip = e.target.closest('[data-chip]');
         if (chip) {
           e.preventDefault();
@@ -1880,7 +1891,7 @@
         const said = byKey.get(texTokens('\\' + e.name).join(' '));
         const body = String(e.mac.body);
         out.push({
-          id: 'm' + k, type: 'm', it: e, first: e.first,
+          id: 'm' + k, type: 'm', it: e, first: e.first, pin: 'm:' + e.name,
           text: (e.name + ' ' + body + (said ? ' ' + sentenceText(said) : '')).toLowerCase(),
           section: sectionOf(secs, e.first),
           kind: kindOfSymbol('\\' + e.name, wordsNear(said), body, e.mac.nargs || 0, ''),
@@ -1889,7 +1900,7 @@
       });
       idx.symbols.forEach((s, k) => {
         out.push({
-          id: 's' + k, type: 's', it: s, first: s.el,
+          id: 's' + k, type: 's', it: s, first: s.el, pin: 's:' + s.key,
           text: (s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase(),
           section: sectionOf(secs, s.el),
           kind: kindOfSymbol(s.tex, wordsNear(s), '', 0, s.text ? '' : s.el.dataset.tex),
@@ -1924,15 +1935,44 @@
       return out;
     }
 
+    // Rows the reader pinned stay at the top of the tab (kept per paper by the host).
+    const PIN_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.5h4l-.6 4.2 2.6 2.6v1.2H4V8.3l2.6-2.6z M8 9.5V14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+    const readPins = () => {
+      try {
+        const v = opts.pins && opts.pins.get();
+        return new Set(Array.isArray(v) ? v : []);
+      } catch (e) { return new Set(); }
+    };
+    let pinned = readPins();
+    const pinBtn = (key, what) => {
+      const on = pinned.has(key);
+      return `<button type="button" class="insight-pin" data-pin="${esc(key)}" aria-pressed="${on}" title="${on ? 'Unpin' : 'Pin to the top of the list'}" aria-label="${on ? 'Unpin' : 'Pin'} ${esc(what)}">${PIN_ICON}</button>`;
+    };
+    function togglePin(key) {
+      if (pinned.has(key)) pinned.delete(key);
+      else pinned.add(key);
+      try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
+      for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
+    }
+    // "Used in …" can be pinned too (kept for every paper)
+    let usedPinned = !!opts.usedPinned;
+    function setUsedPinned(on, fromUi) {
+      on = !!on;
+      if (on === usedPinned) return;
+      usedPinned = on;
+      for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
+      if (fromUi && opts.onUsedPinned) opts.onUsedPinned(on);
+    }
+
     function macroRow(e, id) {
       const sample = sampleOf(e);
       const body = String(e.mac.body);
       return `<tr data-k="${id}"><td class="insight-sym-cell">${sample ? `<span class="insight-sym" data-sym="${esc(sample)}"></span>` : ''}</td>` +
         `<td class="insight-cmd"><code>\\${esc(e.name)}</code></td><td class="insight-def"><code>${esc(body.length > 90 ? body.slice(0, 87) + '…' : body)}</code></td>` +
-        `<td class="insight-first"><a href="#" data-go="" data-e="${id}">${esc(where(e.first))}</a><span class="insight-uses">${e.count} formula${e.count > 1 ? 's' : ''}</span></td></tr>`;
+        `<td class="insight-first"><a href="#" data-go="" data-e="${id}">${esc(where(e.first))}</a><span class="insight-uses">${e.count} formula${e.count > 1 ? 's' : ''}</span>${pinBtn('m:' + e.name, '\\' + e.name)}</td></tr>`;
     }
     function symbolRow(s, id) {
-      return `<li data-k="${id}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><a href="#" data-go="" data-e="${id}">${esc(where(s.el))}</a></li>`;
+      return `<li data-k="${id}"><span class="insight-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span><span class="insight-sym-src"></span><span class="insight-row-end"><a href="#" data-go="" data-e="${id}">${esc(where(s.el))}</a>${pinBtn('s:' + s.key, s.tex)}</span></li>`;
     }
     function groupHtml(view, g, extra) {
       const ms = g.rows.filter((e) => e.type === 'm');
@@ -2012,7 +2052,8 @@
           (tex ? `<span class="insight-sym" data-sym="${esc(tex)}"><code>${esc(label)}</code></span>` : `<code>${esc(label)}</code>`) + '</button>';
       };
       box.innerHTML = `<details class="insight-group insight-group-used" data-group="used"${open ? ' open' : ''}>` +
-        `<summary>Used in ${esc(sec.label)} <span class="insight-count">${rows.length}</span></summary>` +
+        `<summary>Used in ${esc(sec.label)} <span class="insight-count">${rows.length}</span>` +
+        `<button type="button" class="insight-pin" data-pin-used="" aria-pressed="${usedPinned}" title="${usedPinned ? 'Unpin: let it scroll with the list' : 'Pin: keep it in view while the list scrolls'}" aria-label="${usedPinned ? 'Unpin' : 'Pin'} Used in">${PIN_ICON}</button></summary>` +
         `<div class="insight-chips">${rows.map(chip).join('')}</div></details>`;
       renderSymbols(box);
       if (view.query) filterNotation(view, view.query);
@@ -2021,7 +2062,7 @@
     /** Show a symbol's row in the list: open its group, scroll to it and flash it. */
     function showRow(view, id) {
       let row = null;
-      view.body.querySelectorAll(`[data-k="${id}"]`).forEach((r) => { if (!r.closest('.insight-used')) row = r; });
+      view.body.querySelectorAll(`[data-k="${id}"]`).forEach((r) => { if (!r.closest('.insight-used, .insight-pinned')) row = r; });
       if (!row) return;
       if (row.hidden || row.closest('.insight-group[hidden]')) {
         const f = view.body.querySelector('.insight-filter');
@@ -2045,7 +2086,7 @@
         const e = byId.get(a.dataset.e);
         if (!e) return;
         a._target = e.first;
-        if (e.type === 's') a.previousElementSibling.appendChild(shownOf(e.it));
+        if (e.type === 's') a.closest('li').querySelector('.insight-sym-src').appendChild(shownOf(e.it));
         const row = a.closest('[data-k]');
         row.dataset.text = e.text;
       });
@@ -2066,7 +2107,13 @@
         '<div class="insight-order" role="radiogroup" aria-label="Arrange the notation">' +
         ORDERS.map(([k, label, title]) => `<button type="button" role="radio" data-order="${k}" aria-checked="${k === notationOrder}" title="${esc(title)}">${label}</button>`).join('') +
         '</div></div>';
-      if (view.side) html += '<div class="insight-used"></div>';
+      pinned = readPins();
+      const pins = entries.filter((e) => pinned.has(e.pin));
+      const pinnedHtml = pins.length ? `<div class="insight-pinned">${groupHtml(view, { id: 'pinned', title: 'Pinned', rows: pins }, ' insight-group-pinned')}</div>` : '';
+      const usedHtml = view.side ? '<div class="insight-used"></div>' : '';
+      // pinned rows (and "Used in …" when pinned) stay in view while the list scrolls
+      if (view.side) html += `<div class="insight-stuck">${pinnedHtml}${usedPinned ? usedHtml : ''}</div>${usedPinned ? '' : usedHtml}`;
+      else html += pinnedHtml;
       html += groupsOf(entries, notationOrder).map((g) => groupHtml(view, g)).join('');
       html += '<p class="insight-nomatch" hidden>Nothing matches. Try a command name (norm), a letter (alpha or α) or a word from the sentence that introduces the symbol.</p>';
       if (view.side) html += hoverBox();
@@ -2091,7 +2138,7 @@
       const body = view.body;
       body.classList.toggle('insight-searching', !!q);
       let any = false;
-      body.querySelectorAll('.insight-group').forEach((g) => {
+      body.querySelectorAll('.insight-group:not(.insight-group-pinned)').forEach((g) => {
         let n = 0;
         g.querySelectorAll('[data-text]').forEach((row) => {
           row.hidden = !!q && !row.dataset.text.includes(q);
@@ -2960,6 +3007,10 @@
       /** Arrange the notation index: 'section', 'kind' or 'az'. */
       setNotationOrder: (order) => setNotationOrder(order, false),
       notationOrder: () => notationOrder,
+      /** Keep "Used in …" in view at the top of the side panel's Notation tab. */
+      setUsedPinned: (on) => setUsedPinned(on, false),
+      /** The host's pins changed (another paper opened): draw them. */
+      refreshPins: () => { pinned = readPins(); for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v); },
       /** Switch parts on or off: { map, notation, uses, words } (missing keys stay as they are). */
       setFeatures(f) {
         const before = Object.assign({}, feats);
@@ -3019,6 +3070,8 @@
     function fitTabs() {
       tabs.classList.remove('side-tabs-stacked');
       if (tabs.scrollWidth > tabs.clientWidth + 1) tabs.classList.add('side-tabs-stacked');
+      // the head's height, for what sticks under it (the Notation tab's "Used in …")
+      o.pane.style.setProperty('--side-head-h', o.head.offsetHeight + 'px');
     }
     const win = doc.defaultView || window;
     if (typeof win.ResizeObserver === 'function') new win.ResizeObserver(fitTabs).observe(o.head);

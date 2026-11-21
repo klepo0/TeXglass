@@ -252,6 +252,10 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   - **Used in …** at the top shows the symbols of the section you are reading
     and follows you as you scroll. Click (or tap) one to find its entry in the
     list.
+  - **Pin** a symbol with the pin by its entry: pinned symbols gather at the
+    top of the tab and stay in view while you scroll the list (and while you
+    search). Pins are kept per paper; click the pin again to unpin. The pin by
+    **Used in …** keeps that strip in view too.
 
 ## Understanding the logic
 

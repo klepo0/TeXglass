@@ -950,6 +950,26 @@ body.resizing.stacked, body.resizing.stacked * { cursor: row-resize !important; 
 .insight-group > summary .insight-count { font-weight: 400; margin-left: 2px; }
 .insight-group-used { background: var(--accent-soft); border-radius: 6px; padding: 2px 8px 4px; margin: 6px 0 4px; }
 .insight-group-used > summary { color: var(--accent); }
+/* Pins: a row (or "Used in …") pinned by the reader. In the side panel the
+   pinned block stays in view under the tabs while the list scrolls (the head
+   sticks at -34px from inside the panel's 20px padding). */
+.insight-pin { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; margin-left: 4px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); opacity: 0.45; cursor: pointer; vertical-align: middle; }
+.insight-pin svg { width: 14px; height: 14px; }
+.insight-pin:hover, .insight-pin:focus-visible { opacity: 1; color: var(--accent); }
+.insight-pin[aria-pressed="true"] { opacity: 1; color: var(--accent); }
+.insight-pin[aria-pressed="true"] svg path { fill: var(--accent-soft); }
+.insight-symbols li:hover .insight-pin, .insight-table tr:hover .insight-pin { opacity: 1; }
+@media (pointer: coarse) { .insight-pin { width: 36px; height: 36px; opacity: 0.8; } .insight-pin svg { width: 17px; height: 17px; } }
+.insight-row-end { display: inline-flex; align-items: center; gap: 2px; justify-content: space-between; }
+.insight-group-used > summary .insight-pin { margin-left: 6px; }
+.insight-group-pinned { background: var(--code-bg); border-radius: 6px; padding: 2px 8px 4px; margin: 6px 0 4px; }
+.insight-group-pinned .insight-table tr:first-child, .insight-group-pinned .insight-symbols li:first-child { border-top-color: transparent; }
+.side-insight .insight-stuck { position: sticky; top: calc(var(--side-head-h, 40px) - 34px); z-index: 1; background: var(--bg); max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; }
+.side-insight .insight-stuck:empty { display: none; }
+.side-insight .insight-stuck .insight-group > summary { list-style-position: inside; }
+.side-insight .insight-stuck .insight-group { margin-top: 0; margin-bottom: 4px; }
+.side-insight .insight-stuck:not(:empty) + .insight-used .insight-group-used { margin-top: 6px; }
+.side-insight .insight-symbols li, .side-insight .insight-table tr { scroll-margin-top: 30vh; }
 .insight-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; }
 .insight-chip { font: inherit; font-size: 15px; line-height: 1.2; min-width: 30px; min-height: 28px; padding: 2px 7px; border: 1px solid var(--rule); border-radius: 5px; background: var(--bg); color: var(--ink); cursor: pointer; }
 .insight-chip:hover, .insight-chip:focus-visible { border-color: var(--accent); }
