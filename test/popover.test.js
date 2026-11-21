@@ -41,7 +41,8 @@ test('a tall reference preview stays inside a small window and scrolls', { skip:
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
-    const page = await browser.newPage({ viewport: { width: 700, height: 480 } });
+    // wider than a phone (760px), where Split moves into the "…" menu
+    const page = await browser.newPage({ viewport: { width: 800, height: 480 } });
     await page.route('http://texglass.test/**', (route) => {
       const p = new URL(route.request().url()).pathname.replace(/^\//, '') || 'index.html';
       const file = path.join(ROOT, p);
