@@ -1,7 +1,7 @@
 {
   "name": "texglass",
   "displayName": "TeXglass Preview",
-  "description": "Preview LaTeX like Markdown: math, sections and numbered theorems with working references, live as you type. No TeX installation needed.",
+  "description": "Read LaTeX like a paper: a live preview with rendered math, numbered theorems and working references, plus a dependency map, notation on hover, citation previews and margin notes. No TeX installation needed.",
   "version": "1.0.3",
   "publisher": "klepo1",
   "icon": "images/icon.png",
@@ -30,6 +30,11 @@
     "preview",
     "katex",
     "math",
+    "mathematics",
+    "theorem",
+    "arxiv",
+    "bibtex",
+    "tikz",
     "github.dev",
     "vscode.dev"
   ],

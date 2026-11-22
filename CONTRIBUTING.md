@@ -31,6 +31,13 @@ viewer, the CLI and the VS Code extension. Diagrams live in `src/tikz.js` and
 step) and `npm test` runs the tests. The render dashboard is described in
 [dashboard/README.md](dashboard/README.md).
 
+The VS Code extension in `vscode/` uses the same converter and stylesheet;
+`npm run copy-shared` copies them into `vscode/shared/` (packaging and
+`npm test` do it too). Press F5 with `vscode/` open in VS Code to try changes.
+`npm run build-web` bundles the github.dev/vscode.dev version into
+`vscode/dist/web.js`, and `npm run test-web` opens it in VS Code for the Web
+with `test/fixtures/web` as the workspace.
+
 ## Keep the guide up to date
 
 [docs/GUIDE.md](docs/GUIDE.md) describes every user-visible feature, keyboard
