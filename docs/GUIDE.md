@@ -344,8 +344,8 @@ kept per paper with your notes, so it is exported, imported and synced with them
     the lit results, and of their proofs only the ones you opened.
 - **Trace**: the same, chosen by name from the Navigate bar.
 - **Step through a proof.** The **Step through** button by a proof's heading
-  shows the proof one piece at a time, like a slide reveal: a sentence, a
-  displayed equation or a list item. Works on any paper; the author changes
+  shows the proof one sentence at a time, like a slide reveal (a list item
+  is a piece of its own too). Works on any paper; the author changes
   nothing.
   - <kbd>→</kbd>, <kbd>Space</kbd>, **Next** or a click (a tap) on the proof's
     text shows the next piece; <kbd>←</kbd> or **Back** goes back. The bar
@@ -364,9 +364,13 @@ kept per paper with your notes, so it is exported, imported and synced with them
   - **Show all**, <kbd>Esc</kbd>, **Stop** on the heading, or **Done** after
     the last piece ends it and shows the whole proof again. Folding the proof
     ends it too. Proofs with fewer than three pieces have no button.
-  - Sentences are found by their full stops (not after "e.g.", "Lemma 2.",
-    initials and the like). An author using `texglass.sty` can mark the
-    pieces with `\tgstep`; a proof with such marks is cut only there.
+  - A piece ends only at a full stop (or ! or ?), never at a comma or a
+    formula: a displayed equation stays with the sentence it belongs to, and
+    so does the text after it ("…, where …") until the full stop, which may
+    be the one ending the equation. Full stops after "e.g.", "Lemma 2.",
+    initials and the like don't count. An author using `texglass.sty` can
+    mark the pieces with `\tgstep`; a proof with such marks is cut only
+    there.
   - Settings: **Step through proofs**. VS Code: `texglass.stepThroughProofs`.
 - **Show pinned results**: see only the results and numbered equations you
   pinned (see [Pins and your own map](#pins-and-your-own-map)). Start it from

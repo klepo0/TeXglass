@@ -161,6 +161,53 @@ test('step through a proof in the web viewer', { skip: !chromium && 'Playwright 
   }
 });
 
+test('a piece runs on to its full stop, over displayed equations', { skip: !chromium && 'Playwright is not installed' }, async () => {
+  const browser = await chromium.launch();
+  try {
+    const doc = [
+      '\\documentclass{article}',
+      '\\begin{document}',
+      '\\begin{proof}',
+      'Fix a widget $w$, and note that, by the bound,',
+      '\\begin{equation} w \\le 1, \\end{equation}',
+      'where $1$ is the unit. Then',
+      '\\begin{equation*} w^2 \\le w. \\end{equation*}',
+      'So $w$ is small, as $w \\le 1$. It follows.',
+      '\\end{proof}',
+      '\\end{document}',
+    ].join('\n');
+    const context = await browser.newContext({ viewport: { width: 1000, height: 800 } });
+    await serve(context);
+    const page = await context.newPage();
+    await page.addInitScript((d) => { localStorage.setItem('texglass:last', d); }, doc);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview .tg-step-btn');
+    await page.locator('.tg-step-btn').click();
+    const piece = () => page.evaluate(() => Array.from(document.querySelectorAll('.tg-step-now')).map((el) => {
+      if (el.matches('.math-display')) return '[' + el.dataset.tex.trim() + ']';
+      const c = el.cloneNode(true);
+      c.querySelectorAll('.katex-mathml, .tg-why, .tg-step-fold').forEach((x) => x.remove());
+      return c.textContent.replace(/\s+/g, ' ').trim();
+    }).join(' '));
+    // no cut at the commas or at the first display, which ends with a comma
+    assert.equal(await piece(), 'Fix a widget w, and note that, by the bound, [w \\le 1,] where 1 is the unit.');
+    await page.keyboard.press('ArrowRight');
+    // the second display ends with its own full stop
+    assert.equal(await piece(), 'Then [w^2 \\le w.]');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await piece(), 'So w is small, as w≤1.');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await piece(), 'It follows.∎');
+    assert.equal(await page.locator('.tg-step-count').textContent(), '4 / 4');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#preview .math-display:visible').count(), 1);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('author step marks replace guessed sentences', { skip: !chromium && 'Playwright is not installed' }, async () => {
   const browser = await chromium.launch();
   try {
