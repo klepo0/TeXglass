@@ -17,7 +17,8 @@ features.
    copyright in your work. The agreement lets TeXglass offer your contribution
    under both its [noncommercial license](LICENSE) and separate commercial
    licenses, which is how the project is funded. You sign once, and it covers
-   all your later contributions.
+   all your later contributions. The maintainer's own pull requests skip the
+   CLA, so they leave out that line of the pull request template.
 
 The maintainer reviews every pull request before merging. Workflows on pull
 requests from first-time contributors run only after approval.
@@ -54,7 +55,8 @@ shortcut, so check those by hand.
 
 TeXglass has **one version number**, the `"version"` in `vscode/package.json`.
 The VS Code extension and the browser extension both use it
-(`browser/build.js` reads it from there).
+(`browser/build.js` reads it from there), and the Release workflow gives the
+npm package (the root `package.json`) the same one.
 
 **Pull requests don't change the version.** Not in `vscode/package.json`, not
 in `vscode/package-lock.json`, not anywhere else. That way parallel pull

@@ -1,11 +1,49 @@
 {
   "name": "texglass",
   "version": "0.1.0",
-  "description": "View LaTeX files like a Markdown preview: math, sections, and numbered theorems with working references.",
+  "description": "Convert LaTeX papers to HTML in pure JavaScript: math, numbered theorems with working references, TikZ, bibliography. Library and CLI, with an optional interactive reader page.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "Khoa Le",
+  "homepage": "https://klepo0.github.io/TeXglass/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klepo0/TeXglass.git"
+  },
+  "bugs": "https://github.com/klepo0/TeXglass/issues",
+  "keywords": [
+    "latex",
+    "tex",
+    "katex",
+    "html",
+    "math",
+    "converter",
+    "arxiv",
+    "theorem",
+    "viewer"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "main": "src/texglass.js",
-  "bin": { "texglass": "bin/texglass.js" },
-  "files": ["src", "bin", "styles.css"],
+  "bin": {
+    "texglass": "bin/texglass.js"
+  },
+  "files": [
+    "bin/texglass.js",
+    "src/texglass.js",
+    "src/bib.js",
+    "src/tikz.js",
+    "src/export.js",
+    "src/diagrams.js",
+    "src/popover.js",
+    "src/scroll.js",
+    "src/find.js",
+    "src/copytex.js",
+    "src/insight.js",
+    "src/cite.js",
+    "src/reader.js",
+    "styles.css"
+  ],
   "scripts": {
     "start": "node bin/serve.js",
     "test": "node --test test/*.test.js"
