@@ -89,9 +89,9 @@ test('importFile explains a missing or private file', async () => {
 });
 
 test('bookmarklet opens the viewer with the current page', () => {
-  const b = G.bookmarklet('https://klepo0.github.io/TeXglass/?arxiv=1#x');
+  const b = G.bookmarklet('https://texglass.js.org/?arxiv=1#x');
   assert.match(b, /^javascript:/);
-  assert.ok(b.includes('"https://klepo0.github.io/TeXglass/?gh="'));
+  assert.ok(b.includes('"https://texglass.js.org/?gh="'));
 });
 
 test('importFile opens a chapter as part of the document that includes it', async () => {

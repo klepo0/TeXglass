@@ -118,7 +118,7 @@ sync to your own gist. The extension counts nothing.
 
 ## Also from TeXglass
 
-The same reader runs as a [web viewer](https://klepo0.github.io/TeXglass/)
+The same reader runs as a [web viewer](https://texglass.js.org/)
 for arXiv papers, as an arXiv browser extension for Chrome, Edge and Firefox,
 and as a command line tool (`npx texglass paper.tex -o paper.html`). See the
 [project page](https://github.com/klepo0/TeXglass).

@@ -1,7 +1,7 @@
 /*
  * Share: a link that opens the paper being read in the public TeXglass viewer.
  *
- * A paper from arXiv is shared as https://klepo0.github.io/TeXglass/?arxiv=<id>,
+ * A paper from arXiv is shared as https://texglass.js.org/?arxiv=<id>,
  * one from GitHub as ...?gh=<link>. Where the reader is (the section at the top
  * of the page) rides along as &goto=§2.3, which the viewer already follows
  * (the same name the Go to box takes). The link always points at the public
@@ -19,7 +19,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const PUBLIC = 'https://klepo0.github.io/TeXglass/';
+  const PUBLIC = 'https://texglass.js.org/';
 
   /** What Go to takes for a section numbered `num`: "§2.3", or "Section A" for an appendix letter. */
   function sectionName(num) {

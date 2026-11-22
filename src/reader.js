@@ -183,7 +183,7 @@
   // --- citations, notation and dependencies ------------------------------------------
 
   // A paper on arXiv opens in the TeXglass web viewer; titles and abstracts are looked up online.
-  const VIEWER = 'https://klepo0.github.io/TeXglass/';
+  const VIEWER = 'https://texglass.js.org/';
   cites = window.TeXglassCite
     ? TeXglassCite.create({
       openArxiv: (id, goto) => window.open(VIEWER + '?arxiv=' + encodeURIComponent(id) + (goto ? '&goto=' + encodeURIComponent(goto) : ''), '_blank', 'noopener'),

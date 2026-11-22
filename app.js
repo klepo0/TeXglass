@@ -3288,7 +3288,7 @@
   // Inside the browser extension the page is a chrome-extension:// or moz-extension://
   // URL that ordinary pages can't open, so the bookmarklet points at the website.
   const inExtension = /^(chrome|moz|ms-browser)-extension:$/.test(location.protocol);
-  const bookmarkletTarget = inExtension ? 'https://klepo0.github.io/TeXglass/' : location.href;
+  const bookmarkletTarget = inExtension ? 'https://texglass.js.org/' : location.href;
   if (window.TeXglassGitHub) bookmarkletLink.href = TeXglassGitHub.bookmarklet(bookmarkletTarget);
   bookmarkletLink.addEventListener('click', (e) => {
     e.preventDefault();

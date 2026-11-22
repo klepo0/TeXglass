@@ -1,5 +1,5 @@
 /*
- * Visitor counter for the public web viewer (klepo0.github.io/TeXglass).
+ * Visitor counter for the public web viewer (texglass.js.org).
  *
  * One request per page load to GoatCounter (https://www.goatcounter.com), a
  * cookieless, privacy-friendly counter. It sends only the site's path, the
@@ -19,7 +19,7 @@
   // The GoatCounter site code: counts go to https://<CODE>.goatcounter.com.
   // Empty turns counting off.
   const CODE = 'texglass';
-  const HOSTS = ['klepo0.github.io'];
+  const HOSTS = ['texglass.js.org', 'klepo0.github.io'];
 
   if (!CODE || !HOSTS.includes(location.hostname)) return;
   if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;

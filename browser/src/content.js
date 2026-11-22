@@ -20,7 +20,7 @@
 
   const TITLE = 'Render the LaTeX source of this paper in TeXglass';
 
-  const WEB_VIEWER = 'https://klepo0.github.io/TeXglass/';
+  const WEB_VIEWER = 'https://texglass.js.org/';
 
   const webUrl = (id) => `${WEB_VIEWER}?arxiv=${encodeURIComponent(id)}`;
 
