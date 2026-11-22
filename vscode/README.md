@@ -42,8 +42,11 @@ lists every feature, command, setting and shortcut.
   column level with their line, as on paper. **N** / **Shift+N** jump from
   note to note.
 - **Click a formula** to copy its LaTeX.
-- **Export to HTML** (one standalone page that works offline) and **Print /
-  Save as PDF**, laid out like a paper.
+- **Export to HTML** (one standalone page that works offline), **Export to
+  EPUB** (an e-book) and **Print / Save as PDF**, laid out like a paper.
+- **texglass.sty** (optional): `\tgdefine`, `\tguses`, `\tgstep` and friends
+  tell the preview more about your paper, and LaTeX ignores them. See
+  [latex/README.md](https://github.com/klepo0/TeXglass/blob/main/latex/README.md).
 - **Fast on long documents**: a 350-page paper converts in a few seconds, in
   a background thread, so typing is never held up.
 
@@ -67,11 +70,14 @@ lists every feature, command, setting and shortcut.
   results it rests on (or, with **Used in**, the ones that rest on it), and
   **Hide the rest** folds everything else away.
 - **Navigate**: find in the text (**Ctrl+F**), go to `Lemma 4.1` or `(3.2)`
-  (**Ctrl+G**), or trace one result. **Alt+Left** goes back to where you were
+  (**Ctrl+G**), trace one result, or search by structure with **Uses**: every
+  result that uses `Lemma 2` but not `Assumption A`. **Alt+Left** goes back to where you were
   before a jump.
 - **Pin** theorems and equations (or a result with everything it uses) and
   show and print only those; drag, hide and add your own links on the
   dependency map.
+- **Step through a proof** one piece at a time, with **why?** links to each
+  result it uses.
 - **Fold** sections and proofs, or hide every proof at once.
 
 ![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)

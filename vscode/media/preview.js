@@ -845,6 +845,9 @@
       // Trace: pick a result, see only what it uses and what uses it
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
+      // Uses: search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      uses: (q) => (insight ? insight.searchUses(q) : null),
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     })
     : null;
 
@@ -1096,6 +1099,7 @@
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => vscode.postMessage({ type: 'print-request' }),
       onFocusStart: () => { if (picker) picker.stop(); },
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
       // pins, hidden results, own links, layout and saved maps: kept by the
       // extension with the reader's notes (paper.texglass.json), synced with them
       edits: {
