@@ -790,6 +790,14 @@
       renderTex: (texs, defs) => (TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
       hover: featureOn('notationHover'),
       onHoverChange: (on) => setFeature('notationHover', on),
+      // the reader's pins, hidden results, own links and layout on the map, kept
+      // in this browser for this Overleaf project
+      edits: {
+        get: () => { try { return JSON.parse(store.get('texglass:overleaf-map:' + location.pathname) || '{}'); } catch (e) { return {}; } },
+        set: (m) => store.set('texglass:overleaf-map:' + location.pathname, JSON.stringify(m)),
+      },
+      locked: store.get('texglass:map-locked') === '1',
+      onLock: (on) => store.set('texglass:map-locked', on ? '1' : ''),
     })
     : null;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and

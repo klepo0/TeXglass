@@ -1,5 +1,5 @@
 'use strict';
-// Show selected results (src/pick.js): tick results and numbered equations,
+// Show pinned results (src/pick.js): pin results and numbered equations,
 // see only those with their proofs folded, and print exactly that; also the
 // print of "What does this use?" with Hide the rest, and the same view
 // applied to a page rendered again for printing (src/export.js, VS Code).
@@ -59,7 +59,7 @@ test('a printed page carries the view only when one is given', () => {
   assert.ok(!/<\/script><b>/.test(odd) && odd.includes('{"n":0,"keep":[0]}'));
 });
 
-test('Show selected results shows only the ticked items, proofs folded, and prints that', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('Show pinned results shows only the pinned items, proofs folded, and prints that', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -87,12 +87,12 @@ test('Show selected results shows only the ticked items, proofs folded, and prin
     });
     // Every result and numbered equation can be ticked; the unnumbered one cannot.
     const boxes = await p.evaluate(() => Array.from(document.querySelectorAll('.pick-box')).map((b) => b.getAttribute('aria-label')));
-    assert.deepEqual(boxes, ['Select (1.1)', 'Select Theorem 1', 'Select Lemma 1', 'Select (2.1)', 'Select (3.1)']);
+    assert.deepEqual(boxes, ['Pin (1.1)', 'Pin Theorem 1', 'Pin Lemma 1', 'Pin (2.1)', 'Pin (3.1)']);
 
     // Tick Theorem 1 and (3.1) by clicking them; a link inside does not jump.
     await p.click('#preview .theorem:not(.thm-env-lemma)');
     await p.click('.math-display:has(.tag) >> nth=2');
-    assert.match(await p.textContent('.pick-bar'), /2 items selected.*Theorem 1, \(3\.1\)/);
+    assert.match(await p.textContent('.pick-bar'), /2 items pinned.*Theorem 1, \(3\.1\)/);
     await p.click('.pick-bar [data-act="show"]');
 
     const state = (media) => p.evaluate(() => {

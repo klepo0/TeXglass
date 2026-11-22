@@ -69,8 +69,9 @@ lists every feature, command, setting and shortcut.
 - **Navigate**: find in the text (**Ctrl+F**), go to `Lemma 4.1` or `(3.2)`
   (**Ctrl+G**), or trace one result. **Alt+Left** goes back to where you were
   before a jump.
-- **Show selected results**: tick a few theorems and equations to see and
-  print only those.
+- **Pin** theorems and equations (or a result with everything it uses) and
+  show and print only those; drag, hide and add your own links on the
+  dependency map.
 - **Fold** sections and proofs, or hide every proof at once.
 
 ![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)

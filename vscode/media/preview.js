@@ -875,6 +875,7 @@
         if (margin && m.notePad) margin.setPadAt(m.notePad);
         if (insight && m.notationOrder) insight.setNotationOrder(m.notationOrder);
         if (insight && typeof m.notationUsedPinned === 'boolean') insight.setUsedPinned(m.notationUsedPinned);
+        if (insight && typeof m.mapLocked === 'boolean') insight.setLocked(m.mapLocked);
         if (side) {
           if (m.sideWidth) side.setWidth(m.sideWidth);
           if (m.sideTab) side.show(m.sideTab);
@@ -937,7 +938,8 @@
         break;
       }
       case 'pick':
-        if (picker) picker.start();
+        // with pins: show them; without: pin some first
+        if (picker) { if (insight && insight.pinCount()) picker.show(); else picker.start(); }
         break;
       case 'toggle-theme':
         // Switch away from what is showing now, whatever chose it.
@@ -996,6 +998,11 @@
       case 'progress':
         if (progress) progress.setMap(m.map);
         break;
+      case 'map-edits':
+        // the reader's changes to the map, from paper.texglass.json or another machine
+        mapEdits = m.map && typeof m.map === 'object' ? m.map : {};
+        if (insight) insight.refreshEdits();
+        break;
       case 'reading-progress':
         if (progress) progress.setEnabled(m.on);
         break;
@@ -1023,6 +1030,8 @@
   // extension draws the index's symbols with the document's macros.
   const texWaiting = new Map();
   let texId = 0;
+  let mapEdits = {}; // the reader's changes to the map (pins, own links…), from the extension
+
   const insight = window.TeXglassInsight
     ? window.TeXglassInsight.attach({
       root: preview,
@@ -1043,16 +1052,29 @@
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => vscode.postMessage({ type: 'print-request' }),
       onFocusStart: () => { if (picker) picker.stop(); },
+      // pins, hidden results, own links, layout and saved maps: kept by the
+      // extension with the reader's notes (paper.texglass.json), synced with them
+      edits: {
+        get: () => mapEdits,
+        set: (map) => { mapEdits = map; vscode.postMessage({ type: 'map-edits', map }); },
+      },
+      onLock: (on) => vscode.postMessage({ type: 'side-pref', key: 'texglass:map-locked', value: on }),
+      showPinned: () => { if (picker) picker.show(); },
+      onPinsChange: () => { if (picker) picker.pinsChanged(); },
     })
     : null;
 
-  // Show selected results (TeXglass: Show Selected Results…): tick results and
+  // Show pinned results (TeXglass: Show Pinned Results…): pin results and
   // numbered equations, see only those. Print asks the extension, which prints
   // in the browser what is shown here (see 'print-view').
   const picker = window.TeXglassPick
     ? window.TeXglassPick.attach({
       root: preview,
       jump: (el) => jumpTo(el),
+      items: insight ? () => insight.pinnedEls() : undefined,
+      isOn: insight ? (el) => insight.isPinned(el) : undefined,
+      toggle: insight ? (el) => insight.togglePin(el) : undefined,
+      clear: insight ? () => insight.unpinAll() : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;

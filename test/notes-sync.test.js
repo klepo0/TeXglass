@@ -178,3 +178,31 @@ test('reading progress rides along: merged result by result, later wins, kept in
   const tracked = S.track(m, []);
   assert.deepEqual(tracked.progress, m.progress);
 });
+
+test('the map changes ride along with the notes and merge entry by entry', () => {
+  const N = require('../src/notes-sync.js');
+  const a = { notes: [], map: {
+    pos: { 'label:a': { x: 10, y: 20, t: '2026-01-01T00:00:00Z' } },
+    pin: { 'label:main': { d: 'uses', t: '2026-01-01T00:00:00Z' }, bogus: { d: 'sideways' } },
+    view: { Proof: { p: { 'label:main': 'uses', 'eq:(2)': 'self' }, t: '2026-01-01T00:00:00Z' } },
+  } };
+  const b = { notes: [], map: {
+    pos: { 'label:a': { t: '2026-01-02T00:00:00Z' } }, // moved back later on another device
+    pin: { 'label:main': { d: '', t: '2025-12-01T00:00:00Z' } }, // an older unpin loses
+    link: { 'label:b > label:main': { s: 'add', t: '2026-01-01T00:00:00Z' }, nolink: { s: 'add' } },
+  } };
+  const m = N.merge(a, b).map;
+  assert.equal(m.pos['label:a'].x, undefined);
+  assert.equal(m.pin['label:main'].d, 'uses');
+  assert.equal(m.pin.bogus, undefined);
+  assert.equal(m.link['label:b > label:main'].s, 'add');
+  assert.equal(m.link.nolink, undefined);
+  assert.deepEqual(m.view.Proof.p, { 'label:main': 'uses', 'eq:(2)': 'self' });
+  assert.equal(N.isEmpty({ notes: [], map: {} }), true);
+  assert.equal(N.isEmpty({ notes: [], map: { pin: { k: { d: 'self' } } } }), false);
+  const back = Object.values(N.parseFile(N.toFile({ paper: 'tex:x', notes: [], map: m })))[0];
+  assert.deepEqual(back.map, N.cleanMap(m));
+  assert.ok(!N.equal({ notes: [], map: {} }, { notes: [], map: m }));
+  const store = JSON.parse(N.toStore({ k: { notes: [], map: m } }));
+  assert.ok(store.papers.k.map.view.Proof);
+});

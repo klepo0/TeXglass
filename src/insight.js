@@ -880,7 +880,74 @@
     cites.sort((a, b) => (a.el && b.el ? (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1) : a.el ? -1 : b.el ? 1 : a.order - b.order));
     cites.forEach((c, k) => { c.order = k; });
     const sections = sectionsOf(doc, nodes);
-    return { nodes, byEl, cites, sections };
+    // Keys that name each result (and cited work) on every device, as reading
+    // progress does (src/progress.js): its \label, else its name.
+    const seen = new Map();
+    const unique = (k) => {
+      const c = (seen.get(k) || 0) + 1;
+      seen.set(k, c);
+      return c > 1 ? k + '#' + c : k;
+    };
+    for (const n of nodes) {
+      const label = n.el.dataset.label;
+      n.key = unique(label ? 'label:' + label : 'name:' + n.name + (!/\d/.test(n.name) && n.note ? ' (' + n.note + ')' : ''));
+    }
+    for (const c of cites) c.key = unique('cite:' + (c.id || c.label));
+    return { nodes, byEl, cites, sections, byKey: new Map([...nodes, ...cites].map((x) => [x.key, x])) };
+  }
+
+  /**
+   * The reader's own links over the paper's: rebuild each result's edges, uses
+   * and usedBy from what the paper says (kept in paperEdges) and `link`, the
+   * reader's changes ({ "a > b": { s } }: 'add' an arrow from a to b, that is b
+   * uses a; 'del' take the paper's away). n.removed lists the links taken away.
+   */
+  function applyLinks(g, link) {
+    link = link || {};
+    for (const n of g.nodes) {
+      if (!n.paperEdges) n.paperEdges = new Map(n.edges);
+      n.edges = new Map();
+      n.uses.clear();
+      n.usedBy.clear();
+      n.removed = [];
+    }
+    const add = (n, dep, e) => {
+      n.edges.set(dep, e);
+      n.uses.add(dep);
+      dep.usedBy.add(n);
+    };
+    for (const n of g.nodes) {
+      for (const [dep, e] of n.paperEdges) {
+        const l = link[dep.key + ' > ' + n.key];
+        if (l && l.s === 'del') n.removed.push(dep);
+        else add(n, dep, e);
+      }
+    }
+    for (const [k, l] of Object.entries(link)) {
+      if (!l || l.s !== 'add') continue;
+      const [a, b] = k.split(' > ');
+      const dep = g.byKey.get(a);
+      const n = g.byKey.get(b);
+      if (!dep || !n || dep === n || dep.cite || n.cite || n.edges.has(dep)) continue;
+      add(n, dep, { statement: false, proof: false, guessed: false, mine: true, why: '' });
+    }
+    return g;
+  }
+
+  /** "eq:(3.4)": the key of a numbered equation, by its first number (or tag), or null. */
+  function eqKeyOf(el) {
+    if (!el || !el.classList || !el.classList.contains('math-display')) return null;
+    for (const t of el.querySelectorAll('.katex .tag, .diagram-tag')) {
+      const s = t.textContent.replace(/\s+/g, ' ').trim();
+      if (s) return 'eq:' + s;
+    }
+    return null;
+  }
+
+  /** What a numbered equation is called: "(3.4)", or "(3.4), (3.5)" for several rows. */
+  function eqNameOf(el) {
+    const tags = Array.from(el.querySelectorAll('.katex .tag, .diagram-tag')).map((t) => t.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    return tags.length ? (tags.length > 2 ? `${tags[0]}–${tags[tags.length - 1]}` : tags.join(', ')) : 'Equation';
   }
 
   /**
@@ -1162,6 +1229,12 @@
    *   o.sections   group by section
    *   o.fold       fold chains of small lemmas into the result they serve
    *   o.expanded   Set of ids of results whose folded lemmas are shown anyway
+   *   o.eqs        numbered equations to draw (pinned ones), as leaves:
+   *                [{ eq: true, key, el, name, order, usedBy: Set(node) }]
+   *   o.hidden     Set of keys the reader hid; o.showHidden draws them anyway, faded
+   *   o.pos        { key: { x, y } } where the reader dragged things
+   *   o.all        draw every result, linked or not (while the reader draws a link)
+   *   o.pinned     Map(key → 'self' | 'uses' | 'usedBy' | 'both'), o.pinSub Set of keys a pin brings along
    */
   function layout(graph, o) {
     o = o || {};
@@ -1173,27 +1246,32 @@
     }
     const drawnOf = (n) => foldedInto.get(n) || n;
     const showCites = !!o.cites && graph.cites && graph.cites.length > 0;
+    const hidden = o.hidden || new Set();
+    const gone = (x) => !o.showHidden && hidden.has(x.key);
+    const eqList = (o.eqs || []).filter((e) => !gone(e));
 
     // the edges between what is drawn, merged: [{ a, b, statement, proof, guessed, cite }]
     const edgeMap = new Map();
-    const key = (x) => (x.cite ? 'c' + x.order : String(x.order));
+    const key = (x) => (x.cite ? 'c' + x.order : x.eq ? 'e' + x.order : String(x.order));
     const addEdge = (a, b, e, cite) => {
-      if (a === b) return;
+      if (a === b || gone(a) || gone(b)) return;
       const k = key(a) + '>' + key(b);
       let d = edgeMap.get(k);
       if (!d) {
-        d = { a, b, statement: false, proof: false, guessed: true, cite: !!cite };
+        d = { a, b, statement: false, proof: false, guessed: true, cite: cite === true, eq: cite === 'eq', mine: !!e.mine };
         edgeMap.set(k, d);
       }
       d.statement = d.statement || !!e.statement;
       d.proof = d.proof || !!e.proof;
       if (!e.guessed) d.guessed = false;
+      if (!e.mine) d.mine = false;
     };
     for (const n of graph.nodes) {
       const b = drawnOf(n);
       for (const [dep, e] of n.edges) addEdge(drawnOf(dep), b, e);
       if (showCites) for (const [c, e] of n.cites) addEdge(c, b, { statement: e.statement, proof: e.proof, guessed: false }, true);
     }
+    for (const q of eqList) for (const n of q.usedBy) addEdge(q, drawnOf(n), { proof: true, guessed: false }, 'eq');
     const edges = Array.from(edgeMap.values());
     const into = new Map(); // drawn thing → [edges into it]
     const has = new Set();
@@ -1203,15 +1281,17 @@
       if (!into.has(e.b)) into.set(e.b, []);
       into.get(e.b).push(e);
     }
-    const nodes = graph.nodes.filter((n) => has.has(n));
+    // drawing an arrow of the reader's own: every result can be its other end
+    const nodes = graph.nodes.filter((n) => has.has(n) || (o.all && drawnOf(n) === n && !gone(n)));
     const cites = showCites ? graph.cites.filter((c) => has.has(c)) : [];
+    const eqs = eqList; // drawn even when no result refers to them
 
     // columns
     const col = new Map();
     const visiting = new Set();
     const colOf = (n) => {
       if (col.has(n)) return col.get(n);
-      if (n.cite) { col.set(n, 0); return 0; }
+      if (n.cite || n.eq) { col.set(n, 0); return 0; }
       if (visiting.has(n)) return 0; // a cycle: break it here
       visiting.add(n);
       let c = 0;
@@ -1222,15 +1302,16 @@
     };
     nodes.forEach(colOf);
     cites.forEach(colOf);
+    eqs.forEach(colOf);
 
     // bands: one per section, in the paper's order, or one for everything
     const sectionOf = new Map();
     for (const n of nodes) sectionOf.set(n, n.section || null);
-    for (const c of cites) {
-      // a cited work sits with the first result that cites it
+    for (const c of [...cites, ...eqs]) {
+      // a cited work (or an equation) sits with the first result that cites it
       let first = null;
       for (const e of edges) if (e.a === c && (!first || e.b.order < first.order)) first = e.b;
-      sectionOf.set(c, first ? first.section || null : null);
+      sectionOf.set(c, first ? first.section || null : c.section || null);
     }
     const used = new Set(sectionOf.values());
     const grouped = !!o.sections && used.size > 1;
@@ -1240,14 +1321,14 @@
       for (const s of graph.sections || []) if (used.has(s)) bands.push({ section: s, items: [] });
     } else bands.push({ section: null, items: [] });
     const bandOf = new Map(bands.map((b) => [b.section, b]));
-    for (const x of [...cites, ...nodes]) (grouped ? bandOf.get(sectionOf.get(x)) : bands[0]).items.push(x);
+    for (const x of [...cites, ...eqs, ...nodes]) (grouped ? bandOf.get(sectionOf.get(x)) : bands[0]).items.push(x);
 
     const ROW = 34;
     const H = 24;
     const LABEL = grouped ? 20 : 0;
     const shownFold = new Map(); // result → the lemmas folded into it, on this map
     for (const [r, list] of groups) if (has.has(r) && !(o.expanded && o.expanded.has(r.id))) shownFold.set(r, list);
-    const width = (n) => (n.cite ? Math.min(150, 16 + (n.label.length + n.who.length + 1) * 6.6) : Math.min(190, 18 + n.name.length * 7.2) + (shownFold.has(n) ? 26 : 0));
+    const width = (n) => (n.eq ? Math.min(130, 18 + n.name.length * 6.6) : n.cite ? Math.min(150, 16 + (n.label.length + n.who.length + 1) * 6.6) : Math.min(190, 18 + n.name.length * 7.2) + (shownFold.has(n) ? 26 : 0));
     const ncols = Math.max(0, ...Array.from(col.values())) + 1;
     const colW = new Array(ncols).fill(0);
     for (const [n, c] of col) colW[c] = Math.max(colW[c], width(n));
@@ -1292,19 +1373,68 @@
         ? (band.section.num ? `§${band.section.num} ` : '') + band.section.title
         : grouped ? 'Before the first section' : '';
       if (band.label.length > 60) band.label = band.label.slice(0, 58) + '…';
-      delete band.items;
     }
+    // where the reader dragged things: there instead, and the bands and the
+    // map grow to hold them
+    let w = Math.max(x - 58, 200);
+    let h = Math.max(top + 4, 40);
+    const pos = o.pos || {};
+    let moved = false;
+    for (const it of xs.keys()) {
+      const p = it.key && pos[it.key];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      xs.set(it, Math.max(2, p.x));
+      y.set(it, Math.max(2, p.y));
+      moved = true;
+    }
+    if (moved) {
+      for (const band of bands) {
+        if (!band.items.length) continue;
+        const ys = band.items.map((it) => y.get(it));
+        band.y0 = Math.min(band.y0, Math.min(...ys) - LABEL - 4);
+        band.y1 = Math.max(band.y1, Math.max(...ys) + ROW);
+      }
+      for (const [it, px] of xs) {
+        w = Math.max(w, px + width(it) + 30);
+        h = Math.max(h, y.get(it) + H + 10);
+      }
+      for (const band of bands) h = Math.max(h, band.y1 + 4);
+    }
+    for (const band of bands) delete band.items;
     return {
-      nodes, cites, edges, x: xs, y, width, H, bands: grouped ? bands : [], grouped,
-      drawnOf, foldedInto, groups, shownFold,
-      size: { w: Math.max(x - 58, 200), h: Math.max(top + 4, 40) },
+      nodes, cites, eqs, edges, x: xs, y, width, H, bands: grouped ? bands : [], grouped,
+      drawnOf, foldedInto, groups, shownFold, hidden, moved,
+      pinned: o.pinned || new Map(), pinSub: o.pinSub || new Set(),
+      size: { w, h },
     };
   }
+
+  /** The path of an arrow from a to b on a laid-out map. */
+  function edgePath(lay, a, b) {
+    const H = lay.H;
+    const x1 = lay.x.get(a) + lay.width(a);
+    const y1 = lay.y.get(a) + H / 2;
+    const x2 = lay.x.get(b);
+    const y2 = lay.y.get(b) + H / 2;
+    const back = x2 <= x1;
+    const dx = back ? 40 : Math.max(24, (x2 - x1) / 2);
+    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 4},${y2}`;
+  }
+
+  const PIN_PATH = 'M-2.6,-5.5 h5.2 l-0.9,3.6 l2.6,2.4 h-3.1 l-0.8,4.6 l-0.8,-4.6 h-3.1 l2.6,-2.4 z';
 
   function mapSvg(lay) {
     const parts = [];
     const { H } = lay;
-    const k = (x) => (x.cite ? 'c' + x.order : String(x.order));
+    const k = (x) => (x.cite ? 'c' + x.order : x.eq ? 'e' + x.order : String(x.order));
+    // what the reader did to a node: pinned (a pin by its corner), brought along by a pin, hidden
+    const marks = (x) => {
+      const d = lay.pinned.get(x.key);
+      return (d ? ' dep-pinned' + (d !== 'self' ? ' dep-pinned-' + d : '') : lay.pinSub.has(x.key) ? ' dep-pinned-sub' : '') +
+        (lay.hidden.has(x.key) ? ' dep-hidden' : '');
+    };
+    const pinMark = (x, px, py) => (lay.pinned.get(x.key) ? `<g class="dep-pin-mark" transform="translate(${px + 3},${py + 2})" aria-hidden="true"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g>` : '');
+    const said = (x) => (lay.pinned.get(x.key) ? ', pinned' : '') + (lay.hidden.has(x.key) ? ', hidden' : '');
     const w = lay.size.w + 12;
     lay.bands.forEach((b, i) => {
       parts.push(
@@ -1316,22 +1446,27 @@
       const d = e.a;
       const n = e.b;
       if (!lay.x.has(d) || !lay.x.has(n)) continue;
-      const x1 = lay.x.get(d) + lay.width(d);
-      const y1 = lay.y.get(d) + H / 2;
-      const x2 = lay.x.get(n);
-      const y2 = lay.y.get(n) + H / 2;
-      const back = x2 <= x1;
-      const dx = back ? 40 : Math.max(24, (x2 - x1) / 2);
-      const cls = 'dep-edge' + (e.cite ? ' dep-cite-edge' : e.proof ? ' dep-proof' : ' dep-stmt') + (e.guessed && !e.cite ? ' dep-guess' : '');
-      parts.push(`<path class="${cls}" data-from="${k(d)}" data-to="${k(n)}" d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2 - 4},${y2}" marker-end="url(#dep-arrow)"/>`);
+      const cls = 'dep-edge' + (e.cite ? ' dep-cite-edge' : e.eq ? ' dep-eq-edge' : e.mine ? ' dep-mine' : e.proof ? ' dep-proof' : ' dep-stmt') +
+        (e.guessed && !e.cite && !e.eq ? ' dep-guess' : '') + (lay.hidden.has(d.key) || lay.hidden.has(n.key) ? ' dep-hidden' : '');
+      parts.push(`<path class="${cls}" data-from="${k(d)}" data-to="${k(n)}" d="${edgePath(lay, d, n)}" marker-end="url(#dep-arrow)"/>`);
+    }
+    for (const q of lay.eqs) {
+      const qw = lay.width(q);
+      const qx = lay.x.get(q);
+      const qy = lay.y.get(q);
+      parts.push(
+        `<g class="dep-node dep-eqnode${marks(q)}" data-e="${q.order}" tabindex="0" role="button" aria-label="${esc('Equation ' + q.name + said(q))}">` +
+          `<rect x="${qx}" y="${qy}" width="${qw}" height="${H}" rx="${H / 2}"/>` +
+          `<text x="${qx + qw / 2}" y="${qy + H / 2 + 4.5}" text-anchor="middle">${esc(q.name)}</text>${pinMark(q, qx, qy)}</g>`
+      );
     }
     for (const c of lay.cites) {
       const cw = lay.width(c);
       const label = `${c.label} ${c.who}`.trim();
       parts.push(
-        `<g class="dep-node dep-citenode" data-c="${c.order}" tabindex="0" role="button" aria-label="${esc('Cited work ' + label)}">` +
+        `<g class="dep-node dep-citenode${marks(c)}" data-c="${c.order}" tabindex="0" role="button" aria-label="${esc('Cited work ' + label + said(c))}">` +
           `<rect x="${lay.x.get(c)}" y="${lay.y.get(c)}" width="${cw}" height="${H}" rx="${H / 2}"/>` +
-          `<text x="${lay.x.get(c) + cw / 2}" y="${lay.y.get(c) + H / 2 + 4.5}" text-anchor="middle">${esc(label.length > 22 ? label.slice(0, 21) + '…' : label)}</text></g>`
+          `<text x="${lay.x.get(c) + cw / 2}" y="${lay.y.get(c) + H / 2 + 4.5}" text-anchor="middle">${esc(label.length > 22 ? label.slice(0, 21) + '…' : label)}</text>${pinMark(c, lay.x.get(c), lay.y.get(c))}</g>`
       );
     }
     for (const n of lay.nodes) {
@@ -1343,9 +1478,9 @@
       const folded = lay.shownFold.get(n);
       const tw = folded ? nw - 26 : nw;
       parts.push(
-        `<g class="dep-node dep-${n.style}${main}${folded ? ' dep-has-fold' : ''}" data-n="${n.order}" tabindex="0" role="button" aria-label="${esc(n.name + (n.note ? ' (' + n.note + ')' : '') + (folded ? `, with ${folded.length} lemmas folded in` : ''))}">` +
+        `<g class="dep-node dep-${n.style}${main}${folded ? ' dep-has-fold' : ''}${marks(n)}" data-n="${n.order}" tabindex="0" role="button" aria-label="${esc(n.name + (n.note ? ' (' + n.note + ')' : '') + (folded ? `, with ${folded.length} lemmas folded in` : '') + said(n))}">` +
           `<rect x="${x}" y="${y}" width="${nw}" height="${H}" rx="5"/>` +
-          `<text x="${x + tw / 2}" y="${y + H / 2 + 4.5}" text-anchor="middle">${esc(label)}</text></g>`
+          `<text x="${x + tw / 2}" y="${y + H / 2 + 4.5}" text-anchor="middle">${esc(label)}</text>${pinMark(n, x, y)}</g>`
       );
       if (folded) {
         parts.push(
@@ -1375,9 +1510,11 @@
     const line = (cls) => `<svg width="34" height="10" aria-hidden="true"><path class="dep-edge ${cls}" d="M2,5 L32,5"/></svg>`;
     const items = [];
     const any = (f) => lay.edges.some(f);
-    if (any((e) => !e.cite && e.proof && !e.guessed)) items.push(`${line('dep-proof')} used in a proof`);
-    if (any((e) => !e.cite && !e.proof && !e.guessed)) items.push(`${line('dep-stmt')} named in a statement`);
-    if (any((e) => !e.cite && e.guessed)) items.push(`${line('dep-proof dep-guess')} guessed from the wording (no link)`);
+    if (any((e) => !e.cite && !e.eq && !e.mine && e.proof && !e.guessed)) items.push(`${line('dep-proof')} used in a proof`);
+    if (any((e) => !e.cite && !e.eq && !e.mine && !e.proof && !e.guessed)) items.push(`${line('dep-stmt')} named in a statement`);
+    if (any((e) => !e.cite && !e.eq && e.guessed)) items.push(`${line('dep-proof dep-guess')} guessed from the wording (no link)`);
+    if (any((e) => e.mine)) items.push(`${line('dep-mine')} your own link`);
+    if (lay.pinned.size) items.push(`<svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> pinned`);
     if (lay.cites.length) items.push('<span class="dep-key-cite" aria-hidden="true"></span> cited work');
     if (lay.shownFold.size) items.push('<span class="dep-key-fold" aria-hidden="true">+2</span> lemmas folded in (pick to show)');
     return items.length ? `<div class="dep-legend">${items.map((i) => `<span>${i}</span>`).join('')}</div>` : '';
@@ -1433,7 +1570,7 @@
     const feats = { map: true, notation: true, uses: true, words: true };
     const symbolCache = new Map(); // tex -> html
 
-    const getGraph = () => graph || (graph = dependencyGraph(doc));
+    const getGraph = () => graph || (graph = applyLinks(dependencyGraph(doc), edits.link));
     const getIndex = () => index || (index = notationIndex(doc, defs, { words: feats.words }));
     const getLocate = () => locate || (locate = makeLocator(doc));
     const where = (el) => getLocate()(el, getGraph());
@@ -1443,6 +1580,9 @@
       graph = null;
       index = null;
       locate = null;
+      eqCache = null;
+      clearTimeout(marking);
+      if (Object.keys(edits.pin).length) marking = setTimeout(markPins, 400); // once the page has settled
       hidePop();
       refreshViews();
       refocus();
@@ -1620,7 +1760,9 @@
     // the rendered statement, made only when the pointer rests on a node.
 
     function showResult(g, view) {
-      const n = g.dataset.c != null ? view.body._cites && view.body._cites[Number(g.dataset.c)] : view.body._nodes && view.body._nodes[Number(g.dataset.n)];
+      const n = g.dataset.c != null ? view.body._cites && view.body._cites[Number(g.dataset.c)]
+        : g.dataset.e != null ? view.body._eqs && view.body._eqs[Number(g.dataset.e)]
+          : view.body._nodes && view.body._nodes[Number(g.dataset.n)];
       if (!n || !n.el || !n.el.isConnected) return;
       const body = document_.createElement('div');
       body.className = 'ref-popover-body dep-preview';
@@ -1766,6 +1908,8 @@
           unfocus();
           return;
         }
+        if (!e.target.closest('.dep-node')) view.lastNodeClick = null; // a double click is two on the node, nothing between
+        if (mapClick(view, e)) return;
         const fold = e.target.closest('[data-fold]');
         if (fold) {
           e.preventDefault();
@@ -1776,8 +1920,23 @@
         const node = e.target.closest('.dep-node, [data-pick]');
         if (node) {
           e.preventDefault();
+          if (view.dragged) return; // the end of a drag
+          if (view.linking && node.dataset.c == null && node.dataset.e == null) {
+            view.lastNodeClick = null;
+            // drawing the reader's own arrow: this is the other end
+            const other = view.body._nodes[Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick)];
+            const from = getGraph().byKey.get(view.linking.key);
+            const dir = view.linking.dir;
+            view.linking = null;
+            if (other && from && other !== from) {
+              if (dir === 'uses') addLink(other.key, from.key);
+              else addLink(from.key, other.key);
+            } else fillDeps(view);
+            return;
+          }
           if (node.matches('.dep-node') && twice(view, node, e)) return;
           if (node.dataset.c != null) selectCite(view, Number(node.dataset.c));
+          else if (node.dataset.e != null) selectEq(view, Number(node.dataset.e));
           else pick(view, Number(node.dataset.n != null ? node.dataset.n : node.dataset.pick));
         }
       });
@@ -1789,6 +1948,7 @@
         if (!node) return;
         e.preventDefault();
         if (node.dataset.c != null) selectCite(view, Number(node.dataset.c));
+        else if (node.dataset.e != null) selectEq(view, Number(node.dataset.e));
         else pick(view, Number(node.dataset.n));
       });
       body.addEventListener('input', (e) => {
@@ -1796,6 +1956,7 @@
       });
       body.addEventListener('change', (e) => {
         if (e.target.matches('.insight-hover input')) setHover(e.target.checked, true);
+        if (e.target.matches('.dep-opts input[data-lock]')) { setLocked(e.target.checked, true); return; }
         if (e.target.matches('.dep-opts input[data-opt]')) {
           mapOpts[e.target.dataset.opt] = e.target.checked;
           if (e.target.dataset.opt === 'fold') for (const v of views) v.expanded = new Set();
@@ -1884,8 +2045,17 @@
           setTimeout(() => { queued = false; if (view.isShown() && view.tab === 'notation') fillUsed(view); }, 150);
         }, { passive: true });
       }
+      body.addEventListener('keydown', (e) => {
+        if (e.target.matches && e.target.matches('.dep-view-name')) {
+          if (e.key === 'Enter') { e.preventDefault(); if (saveView(e.target.value)) view.naming = false; else e.target.focus(); }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); view.naming = false; fillDeps(view); }
+          return;
+        }
+        if (e.key === 'Escape' && view.linking) { e.preventDefault(); e.stopPropagation(); view.linking = null; fillDeps(view); }
+      });
       wirePreviews(view);
       wireMapMoves(view);
+      wireNodeDrag(view);
       views.add(view);
     }
 
@@ -2261,6 +2431,419 @@
       if (none) none.hidden = !q || any;
     }
 
+    // --- the reader's changes to the map ---------------------------------------------
+    // Kept per paper by the host with the paper's notes (record.map, see
+    // src/notes-sync.js), so they are exported and synced with them:
+    // { pos, pin, hide, link, view }, each entry stamped with when it was set.
+
+    const EDIT_PARTS = ['pos', 'pin', 'hide', 'link', 'view'];
+    function readEdits() {
+      let m = null;
+      try { m = opts.edits ? opts.edits.get() : null; } catch (e) { m = null; }
+      const out = {};
+      for (const p of EDIT_PARTS) out[p] = m && m[p] && typeof m[p] === 'object' ? Object.assign({}, m[p]) : {};
+      return out;
+    }
+    let edits = readEdits();
+    let locked = !!opts.locked; // the reader locked the map: no dragging, hiding or link changes
+    let eqCache = null;
+
+    /** The numbered equations of the page: Map(key → element). */
+    function eqEls() {
+      if (eqCache) return eqCache;
+      eqCache = new Map();
+      for (const el of doc.querySelectorAll('.math-display')) {
+        if (el.closest(INSIDE_POPOVER)) continue;
+        const k = eqKeyOf(el);
+        if (k && !eqCache.has(k)) eqCache.set(k, el);
+      }
+      return eqCache;
+    }
+    const pinMap = () => new Map(Object.entries(edits.pin).filter(([, e]) => e && e.d).map(([k, e]) => [k, e.d]));
+    const hiddenSet = () => new Set(Object.entries(edits.hide).filter(([, e]) => e && e.h).map(([k]) => k));
+    const posOf = () => {
+      const out = {};
+      for (const [k, e] of Object.entries(edits.pos)) if (e && Number.isFinite(e.x) && Number.isFinite(e.y)) out[k] = e;
+      return out;
+    };
+    const savedViews = () => Object.entries(edits.view).filter(([, e]) => e && e.p && Object.keys(e.p).length).sort((a, b) => a[0].localeCompare(b[0]));
+
+    /** The pinned equations, to draw on the map: [{ eq, key, el, name, order, usedBy }]. */
+    function pinnedEqs(g) {
+      const out = [];
+      for (const k of pinMap().keys()) {
+        if (!k.startsWith('eq:')) continue;
+        const el = eqEls().get(k);
+        if (!el) continue;
+        const usedBy = new Set();
+        for (const n of g.nodes) for (const r of [...n.refs.statement, ...n.refs.proof]) if (el === r || el.contains(r)) usedBy.add(n);
+        // the section it sits in: that of the result before it (or else after it)
+        let near = null;
+        for (const n of g.nodes) { if (n.el.compareDocumentPosition(el) & 4) near = n; else { if (!near) near = n; break; } }
+        out.push({ eq: true, key: k, el, name: eqNameOf(el), order: out.length, usedBy, section: near ? near.section : null });
+      }
+      return out;
+    }
+
+    /** The element a key names: a result, a cited work's entry, an equation. */
+    function elOfKey(k) {
+      if (k.startsWith('eq:')) return eqEls().get(k) || null;
+      const x = getGraph().byKey.get(k);
+      return x ? x.el : null;
+    }
+    /** The key of a result or a numbered equation element, or null. */
+    function keyOfEl(el) {
+      if (!el) return null;
+      const n = getGraph().byEl.get(el);
+      if (n) return n.key;
+      const k = eqKeyOf(el);
+      return k && eqEls().get(k) === el ? k : null;
+    }
+
+    /** The keys a pin brings along: what a result pinned with its uses (or used in) rests on. */
+    function pinSubSet() {
+      const out = new Set();
+      const g = getGraph();
+      for (const [k, d] of pinMap()) {
+        if (d === 'self') continue;
+        const n = g.byKey.get(k);
+        if (!n || n.cite) continue;
+        for (const m of closure(n, d)) out.add(m.key);
+      }
+      return out;
+    }
+
+    /**
+     * What "Show pinned" shows: the pinned results and equations, and for a result
+     * pinned with what it uses (or is used in), those results too, with the
+     * equations, figures… it and their statements refer to, as "What does this use?" does.
+     */
+    function pinnedEls() {
+      const g = getGraph();
+      const out = new Set();
+      for (const [k, d] of pinMap()) {
+        const x = k.startsWith('eq:') ? { el: eqEls().get(k) } : g.byKey.get(k);
+        if (!x || !x.el || !doc.contains(x.el) || x.cite) continue;
+        out.add(x.el);
+        if (d === 'self' || !x.refs) continue;
+        const others = closure(x, d);
+        for (const m of others) out.add(m.el);
+        if (d !== 'usedBy') {
+          const refs = new Set([...x.refs.statement, ...x.refs.proof]);
+          for (const m of others) for (const r of m.refs.statement) refs.add(r);
+          for (const r of refs) {
+            const b = blockOf(r);
+            if (doc.contains(b) && !b.closest('.proof')) out.add(b);
+          }
+        }
+      }
+      return Array.from(out);
+    }
+
+    /** Keep a change: part 'pos' | 'pin' | 'hide' | 'link' | 'view', key, its new value. */
+    function setEdit(part, key, value, quiet) {
+      edits = Object.assign({}, edits, { [part]: Object.assign({}, edits[part], { [key]: Object.assign({}, value, { t: new Date().toISOString() }) }) });
+      if (!quiet) editsChanged(part);
+    }
+    function saveEdits() {
+      try { if (opts.edits) opts.edits.set(edits); } catch (e) { /* keep them for this visit */ }
+    }
+    function editsChanged(part) {
+      saveEdits();
+      if (part === 'link' && graph) applyLinks(graph, edits.link);
+      for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
+      markPins();
+      if (part === 'link' && focusState) refocus();
+      if ((part === 'pin' || part === 'link' || part === 'view') && opts.onPinsChange) opts.onPinsChange();
+    }
+
+    /** Pin a result, cited work or equation (by key): d 'self' | 'uses' | 'usedBy' | 'both', or '' to unpin. */
+    function setPin(key, d) {
+      if (!key) return;
+      const had = (edits.pin[key] && edits.pin[key].d) || '';
+      if (had === (d || '')) return;
+      setEdit('pin', key, { d: d || '' });
+    }
+    function unpinAll() {
+      for (const k of pinMap().keys()) setEdit('pin', k, { d: '' }, true);
+      editsChanged('pin');
+    }
+
+    /** Save the pins under a name, to bring back later (synced with the notes). */
+    function saveView(name) {
+      name = String(name || '').trim().slice(0, 80);
+      const pins = pinMap();
+      if (!name || !pins.size) return false;
+      setEdit('view', name, { p: Object.fromEntries(pins) });
+      return true;
+    }
+    /** Pin what a saved view pinned, instead of the pins now. */
+    function loadView(name) {
+      const v = edits.view[name];
+      if (!v || !v.p) return false;
+      const want = new Map(Object.entries(v.p));
+      for (const k of pinMap().keys()) if (!want.has(k)) setEdit('pin', k, { d: '' }, true);
+      for (const [k, d] of want) if (((edits.pin[k] && edits.pin[k].d) || '') !== d) setEdit('pin', k, { d }, true);
+      editsChanged('pin');
+      return true;
+    }
+    function deleteView(name) {
+      if (edits.view[name]) setEdit('view', name, { p: null });
+    }
+
+    function setHidden(key, on) {
+      if (locked || !key) return;
+      setEdit('hide', key, { h: !!on });
+    }
+
+    /** The reader's own arrow: `user` uses `dep` (keys of results). */
+    function addLink(depKey, userKey) {
+      if (locked || !depKey || !userKey || depKey === userKey) return;
+      setEdit('link', depKey + ' > ' + userKey, { s: 'add' });
+    }
+    /** Take away the link "user uses dep": the reader's own goes, the paper's is set aside. */
+    function removeLink(depKey, userKey) {
+      if (locked) return;
+      const g = getGraph();
+      const n = g.byKey.get(userKey);
+      const dep = g.byKey.get(depKey);
+      const e = n && dep && n.edges.get(dep);
+      if (!e) return;
+      setEdit('link', depKey + ' > ' + userKey, { s: e.mine ? '' : 'del' });
+    }
+    function restoreLink(depKey, userKey) {
+      if (locked) return;
+      setEdit('link', depKey + ' > ' + userKey, { s: '' });
+    }
+
+    function resetLayout() {
+      if (locked) return;
+      for (const k of Object.keys(posOf())) setEdit('pos', k, {}, true);
+      editsChanged('pos');
+    }
+
+    function setLocked(on, fromUi) {
+      locked = !!on;
+      for (const v of views) { v.linking = null; v.linkEdit = false; if (v.tab === 'deps' && v.isShown()) fillDeps(v); }
+      if (fromUi && opts.onLock) opts.onLock(locked);
+    }
+
+    // --- pins in the text: a pin by each result's heading and each equation's number ---
+
+    function addPinButton(el) {
+      if (el._pinBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
+      const isEq = el.classList.contains('math-display');
+      let at = null;
+      if (isEq) {
+        if (!eqKeyOf(el)) return;
+      } else {
+        at = headOf(el);
+        if (!at) return;
+      }
+      const b = document_.createElement('button');
+      b.type = 'button';
+      b.className = 'tg-pin-btn' + (isEq ? ' tg-pin-eq' : '');
+      b.innerHTML = PIN_ICON;
+      b.addEventListener('mousedown', (e) => e.stopPropagation());
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const k = keyOfEl(el);
+        if (!k) return;
+        setPin(k, pinMap().has(k) ? '' : 'self');
+      });
+      if (isEq) el.appendChild(b);
+      else (el._usesBtn || at).after(b);
+      el._pinBtn = b;
+      paintPinButton(el);
+    }
+    function paintPinButton(el) {
+      const b = el._pinBtn;
+      if (!b) return;
+      const on = el.classList.contains('tg-pinned');
+      const what = el.classList.contains('math-display') ? 'equation' : 'result';
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', on ? `Unpin this ${what}` : `Pin this ${what}`);
+      b.title = on ? `Pinned: click to unpin (Show pinned shows only what is pinned)` : `Pin this ${what}: Show pinned then shows only what you pinned, and it is marked on the map`;
+    }
+    doc.addEventListener('mouseover', (e) => {
+      if (!e.target.closest) return;
+      const t = e.target.closest('.theorem[id], .math-display[id]');
+      if (t && doc.contains(t)) addPinButton(t);
+    });
+    doc.addEventListener('focusin', (e) => {
+      const t = e.target.closest && e.target.closest('.theorem[id]');
+      if (t) addPinButton(t);
+    });
+
+    /** Mark the pinned results and equations in the text (tg-pinned), each with its pin showing. */
+    let marking = null;
+    function markPins() {
+      clearTimeout(marking);
+      const was = Array.from(doc.querySelectorAll('.tg-pinned'));
+      const pins = pinMap();
+      if (!pins.size && !was.length) return;
+      const now = new Set();
+      for (const k of pins.keys()) {
+        const el = elOfKey(k);
+        if (el && doc.contains(el) && !el.matches('li')) now.add(el);
+      }
+      for (const el of was) if (!now.has(el)) { el.classList.remove('tg-pinned'); paintPinButton(el); }
+      for (const el of now) {
+        el.classList.add('tg-pinned');
+        addPinButton(el);
+        paintPinButton(el);
+      }
+    }
+
+    // --- dragging a node of a map to where the reader wants it ---------------------
+
+    function wireNodeDrag(view) {
+      const body = view.body;
+      let drag = null;
+      const thingAt = (g) => thingOf(body, g.dataset.c != null ? 'c' + g.dataset.c : g.dataset.e != null ? 'e' + g.dataset.e : g.dataset.n);
+      const moveTo = (d, px, py) => {
+        const lay = view.lay;
+        lay.x.set(d.thing, Math.max(2, px));
+        lay.y.set(d.thing, Math.max(2, py));
+        const tx = lay.x.get(d.thing) - d.x0;
+        const ty = lay.y.get(d.thing) - d.y0;
+        for (const g of d.parts) g.setAttribute('transform', `translate(${tx},${ty})`);
+        for (const p of d.edges) {
+          const a = thingOf(body, p.dataset.from);
+          const b = thingOf(body, p.dataset.to);
+          if (a && b && lay.x.has(a) && lay.x.has(b)) p.setAttribute('d', edgePath(lay, a, b));
+        }
+      };
+      const begin = (d) => {
+        d.on = true;
+        hidePop();
+        clearTimeout(showTimer);
+        d.g.classList.add('dep-moving');
+        body.querySelector('.dep-wrap').classList.add('dep-node-dragging');
+      };
+      body.addEventListener('pointerdown', (e) => {
+        if (locked || e.button > 0 || !e.target.closest) return;
+        const g = e.target.closest('.dep-node');
+        const svg = g && g.closest('.dep-map');
+        if (!g || !svg || !view.lay) return;
+        const thing = thingAt(g);
+        if (!thing || !thing.key || !view.lay.x.has(thing)) return;
+        const k = g.dataset.c != null ? 'c' + g.dataset.c : g.dataset.e != null ? 'e' + g.dataset.e : g.dataset.n;
+        const parts = [g];
+        if (!thing.cite && !thing.eq) svg.querySelectorAll('.dep-fold').forEach((f) => { if (f.dataset.fold === thing.id) parts.push(f); });
+        const edges = Array.from(svg.querySelectorAll('.dep-edge')).filter((p) => p.dataset.from === k || p.dataset.to === k);
+        const scale = svg.getBoundingClientRect().width / Number(svg.getAttribute('width')) || 1;
+        drag = {
+          g, thing, parts, edges, scale, id: e.pointerId, sx: e.clientX, sy: e.clientY,
+          x0: view.lay.x.get(thing), y0: view.lay.y.get(thing), on: false, touch: e.pointerType === 'touch', timer: null,
+        };
+        // a finger holds still for a moment first, so that a swipe still scrolls the map
+        if (drag.touch) {
+          const d = drag;
+          d.timer = setTimeout(() => { if (drag === d) begin(d); }, 350);
+        }
+      });
+      const win = document_.defaultView || window;
+      win.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.sx;
+        const dy = e.clientY - drag.sy;
+        if (!drag.on) {
+          if (Math.abs(dx) + Math.abs(dy) < 5) return;
+          if (drag.touch) { clearTimeout(drag.timer); drag = null; return; } // a swipe: let it scroll
+          begin(drag);
+        }
+        e.preventDefault();
+        moveTo(drag, drag.x0 + dx / drag.scale, drag.y0 + dy / drag.scale);
+      }, { passive: false });
+      // while a finger drags a node, the page must not scroll
+      body.addEventListener('touchmove', (e) => { if (drag && drag.on) e.preventDefault(); }, { passive: false });
+      const end = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const d = drag;
+        drag = null;
+        clearTimeout(d.timer);
+        if (!d.on) return;
+        d.g.classList.remove('dep-moving');
+        const wrap = body.querySelector('.dep-wrap');
+        if (wrap) wrap.classList.remove('dep-node-dragging');
+        view.dragged = true; // the click that ends a drag picks nothing
+        setTimeout(() => { view.dragged = false; }, 0);
+        if (e.type === 'pointercancel') { fillDeps(view); return; }
+        const x = view.lay.x.get(d.thing);
+        const y = view.lay.y.get(d.thing);
+        if (Math.abs(x - d.x0) + Math.abs(y - d.y0) < 1) return;
+        setEdit('pos', d.thing.key, { x, y });
+      };
+      win.addEventListener('pointerup', end);
+      win.addEventListener('pointercancel', end);
+      // keyboard: Alt + arrows move the focused node
+      body.addEventListener('keydown', (e) => {
+        if (locked || !e.altKey || !/^Arrow/.test(e.key)) return;
+        const g = e.target.closest && e.target.closest('.dep-node');
+        if (!g || !view.lay) return;
+        const thing = thingAt(g);
+        if (!thing || !thing.key || !view.lay.x.has(thing)) return;
+        e.preventDefault();
+        const step = e.shiftKey ? 2 : 12;
+        const x = view.lay.x.get(thing) + (e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0);
+        const y = view.lay.y.get(thing) + (e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0);
+        const sel = g.getAttribute('data-n') != null ? `[data-n="${g.dataset.n}"]` : g.dataset.c != null ? `[data-c="${g.dataset.c}"]` : `[data-e="${g.dataset.e}"]`;
+        setEdit('pos', thing.key, { x: Math.max(2, x), y: Math.max(2, y) });
+        const again = body.querySelector('.dep-node' + sel);
+        if (again) again.focus();
+      });
+    }
+
+    /** The row of pins, saved maps and editing under a map's options. */
+    function pinsRowHtml(view) {
+      const pins = pinMap();
+      const saved = savedViews();
+      const parts = [];
+      if (pins.size) {
+        parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
+        if (opts.showPinned) parts.push('<button type="button" data-show-pinned title="Show only the pinned results and equations in the text, the rest hidden">Show pinned</button>');
+        parts.push(view.naming
+          ? '<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this map" aria-label="Name for the saved map" maxlength="80"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>'
+          : '<button type="button" data-save-view title="Keep these pins under a name, to bring them back later (saved with your notes)">Save…</button>');
+        parts.push('<button type="button" data-unpin-all title="Take every pin away">Unpin all</button>');
+      } else {
+        parts.push('<span class="insight-muted">Pin a result (pick it below, or the pin by its heading in the text) or an equation (the pin by its number) to show only those later.</span>');
+      }
+      if (saved.length) {
+        parts.push('<span class="dep-views"><span class="insight-usedby-k">Saved</span> ' + saved.map(([name, e]) =>
+          `<span class="dep-view"><button type="button" data-view="${esc(name)}" title="${esc(`Pin these ${Object.keys(e.p).length} again, instead of the pins now`)}">${esc(name)}</button>` +
+          `<button type="button" class="dep-view-del" data-view-del="${esc(name)}" aria-label="${esc('Delete the saved map ' + name)}" title="Delete">×</button></span>`).join('') + '</span>');
+      }
+      return `<div class="dep-pins">${parts.join('')}</div>`;
+    }
+
+    /** The detail's row for pinning, hiding and links of a result (or cited work, or equation). */
+    function editRowHtml(view, x) {
+      const d = pinMap().get(x.key) || '';
+      const pinB = (dir, label, title) => `<button type="button" data-mpin="${dir}" aria-pressed="${d === dir}" title="${esc(title)}">${label}</button>`;
+      let html = '<div class="dep-edit"><span class="insight-usedby-k">Pin</span> <span class="dep-pin-btns" role="group" aria-label="Pin">' +
+        pinB('self', 'It', 'Pin just this') +
+        (x.eq || x.cite ? '' : pinB('uses', '+ uses', 'Pin it with everything it uses, directly or not') +
+          pinB('usedBy', '+ used in', 'Pin it with everything that uses it, directly or not') +
+          pinB('both', '+ both', 'Pin it with what it uses and what uses it')) +
+        (d ? '<button type="button" data-mpin="" title="Take the pin away">Unpin</button>' : '') + '</span>';
+      if (!locked) {
+        const hid = hiddenSet().has(x.key);
+        html += ` <button type="button" data-mhide="${hid ? '0' : '1'}" title="${hid ? 'Draw it on the map again' : 'Leave it off the map (Hidden brings it back)'}">${hid ? 'Show on map' : 'Hide from map'}</button>`;
+        if (!x.eq && !x.cite) {
+          html += view.linking && view.linking.key === x.key
+            ? `<br><span class="dep-linking-hint">${view.linking.dir === 'uses' ? `Pick the result ${esc(x.name)} uses` : `Pick the result that uses ${esc(x.name)}`} on the map.</span> <button type="button" data-link-cancel>Cancel</button>`
+            : '<br><span class="insight-usedby-k">Links</span> <button type="button" data-link="uses" title="Draw your own arrow: pick a result on the map that this one uses">+ It uses…</button>' +
+              '<button type="button" data-link="usedBy" title="Draw your own arrow: pick a result on the map that uses this one">+ Used in…</button>' +
+              ((x.uses.size || x.usedBy.size || (x.removed && x.removed.length))
+                ? `<button type="button" data-link-edit aria-pressed="${!!view.linkEdit}" title="Take away links that are wrong (× by each), or bring back ones taken away">Remove…</button>` : '');
+        }
+      }
+      return html + '</div>';
+    }
+
     // How maps are drawn, shared by every map on show: cited works as leaves,
     // bands for sections, and small lemmas folded into the result they serve
     // (null: when the map is big).
@@ -2273,25 +2856,35 @@
       if (!view.expanded) view.expanded = new Set();
       const linked = g.nodes.filter((n) => n.uses.size || n.usedBy.size || n.cites.size);
       const fold = mapOpts.fold != null ? mapOpts.fold : linked.filter((n) => n.uses.size || n.usedBy.size).length > FOLD_FROM;
-      const lay = layout(g, { cites: mapOpts.cites, sections: mapOpts.sections, fold, expanded: view.expanded });
+      const eqs = pinnedEqs(g);
+      const hidden = hiddenSet();
+      const lay = layout(g, {
+        cites: mapOpts.cites, sections: mapOpts.sections, fold, expanded: view.expanded,
+        eqs, hidden, showHidden: mapOpts.showHidden, pos: posOf(), pinned: pinMap(), pinSub: pinSubSet(), all: !!view.linking,
+      });
       view.lay = lay;
       body._nodes = g.nodes;
       body._cites = g.cites;
-      if (!lay.nodes.length && !lay.cites.length) {
+      body._eqs = eqs;
+      if (!lay.nodes.length && !lay.cites.length && !lay.eqs.length && !hidden.size) {
         body.innerHTML = '<p class="insight-empty">No result in this document refers to another one, so there is nothing to map. (The map is drawn from the \\ref and \\cref links in statements and proofs, from results named by hand such as “Lemma 2.3” or “the previous lemma”, and from citations.)</p>';
         return;
       }
       let links = 0;
       let guessed = 0;
-      for (const n of g.nodes) for (const e of n.edges.values()) { links++; if (e.guessed) guessed++; }
+      let mine = 0;
+      for (const n of g.nodes) for (const e of n.edges.values()) { links++; if (e.guessed) guessed++; if (e.mine) mine++; }
       const counts = `${linked.length} result${linked.length === 1 ? '' : 's'}, ${links} link${links === 1 ? '' : 's'} between them` +
-        (guessed ? ` (${guessed} guessed from the wording)` : '') +
+        (guessed || mine ? ` (${[guessed ? `${guessed} guessed from the wording` : '', mine ? `${mine} of your own` : ''].filter(Boolean).join(', ')})` : '') +
         (g.cites.length ? `, ${g.cites.length} cited work${g.cites.length === 1 ? '' : 's'}` : '');
       const box = (k, label, on, title) => `<label title="${esc(title)}"><input type="checkbox" data-opt="${k}"${on ? ' checked' : ''}> ${label}</label>`;
       const opts_ = [];
       if (g.sections.length > 1) opts_.push(box('sections', 'Sections', mapOpts.sections, 'Group the results by the section they sit in'));
       if (g.cites.length) opts_.push(box('cites', 'Citations', mapOpts.cites, 'Show the works cited in statements and proofs'));
       if (foldGroups(g).size) opts_.push(box('fold', 'Fold lemmas', fold, 'Fold chains of lemmas that serve only one result into that result'));
+      if (hidden.size) opts_.push(box('showHidden', `Hidden (${hidden.size})`, !!mapOpts.showHidden, 'Draw the results you hid, faded, so you can bring them back'));
+      opts_.push(`<label title="Lock the map: no dragging, hiding or changing links (pins still work)"><input type="checkbox" data-lock${locked ? ' checked' : ''}> Lock</label>`);
+      if (lay.moved && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-layout title="Put every result back where TeXglass placed it">Reset layout</button>');
       // the larger map zooms: buttons, Ctrl + wheel or a pinch, and + − 0 F keys
       const zoomBar = view.zoomable
         ? '<span class="dep-zoom" role="group" aria-label="Zoom the map">' +
@@ -2300,24 +2893,27 @@
           '<button type="button" data-zoom="1" title="Zoom in (+)" aria-label="Zoom in">+</button>' +
           '<button type="button" data-zoom="fit" title="Fit the whole map in view (F)">Fit</button></span>'
         : '';
-      const controls = opts_.length || zoomBar ? `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` : '';
+      const controls = `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` + pinsRowHtml(view);
       const oldWrap = body.querySelector('.dep-wrap');
       const kept = oldWrap ? { l: oldWrap.scrollLeft, t: oldWrap.scrollTop } : null;
       body.innerHTML = view.side
-        ? `<p class="insight-lead">${counts}. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on. <a href="#" class="dep-larger" title="Open the larger map (M)">Larger map</a></p>` +
+        ? `<p class="insight-lead">${counts}. Each arrow goes to a result that uses the one it starts from; pick one to light up what it rests on${locked ? '' : ', drag one to move it'}. <a href="#" class="dep-larger" title="Open the larger map (M)">Larger map</a></p>` +
           controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`
         : `<p class="insight-lead">${counts}, read from the links in statements and proofs, from results named by hand, and from citations. ` +
           'Each arrow goes from a result to one that uses it. Pick a result to light up what it rests on and what rests on it. ' +
-          'Drag to move around; Ctrl + scroll or pinch to zoom.</p>' +
+          (locked ? 'Drag the background to move around' : 'Drag a result to move it (a finger holds still first), the background to move around') + '; Ctrl + scroll or pinch to zoom.</p>' +
           controls + `<div class="dep-wrap">${mapSvg(lay)}</div>${legendHtml(lay)}<div class="dep-detail" aria-live="polite"></div>`;
       view.synced = false;
       paintStatus(view);
       if (view.zoomable) zoomTo(view, view.scale || 1);
       const wrap = body.querySelector('.dep-wrap');
       if (kept && wrap) { wrap.scrollLeft = kept.l; wrap.scrollTop = kept.t; } // redrawn: stay where it was
-      if (focusState && syncMap(view)) return;
+      body.querySelector('.dep-map').classList.toggle('dep-linking', !!view.linking);
+      if (view.naming) { const inp = body.querySelector('.dep-view-name'); if (inp) inp.focus(); }
+      if (focusState && !view.linking && syncMap(view)) return;
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
       else if (view.selectedCite != null && g.cites[view.selectedCite]) selectCite(view, view.selectedCite);
+      else if (view.selectedEq != null && eqs.some((q) => q.key === view.selectedEq)) selectEq(view, eqs.find((q) => q.key === view.selectedEq).order);
       else body.querySelector('.dep-detail').innerHTML = '<p class="insight-muted">No result picked.</p>';
     }
 
@@ -2523,7 +3119,7 @@
      * dblclick, which phones do not all send, and the first click may redraw the node.
      */
     function twice(view, node, e) {
-      const key = node.dataset.c != null ? 'c' + node.dataset.c : node.dataset.n;
+      const key = node.dataset.c != null ? 'c' + node.dataset.c : node.dataset.e != null ? 'e' + node.dataset.e : node.dataset.n;
       const last = view.lastNodeClick;
       const near = last && last.key === key && e.timeStamp - last.t < 450 &&
         Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) < 24;
@@ -2539,21 +3135,26 @@
     }
 
     /** What a key on the map (data-n, data-from…) stands for: a result, or "c3", a cited work. */
-    const thingOf = (body, key) => (String(key)[0] === 'c' ? body._cites[Number(String(key).slice(1))] : body._nodes[Number(key)]);
+    const thingOf = (body, key) => {
+      const s = String(key);
+      if (s[0] === 'c') return body._cites[Number(s.slice(1))];
+      if (s[0] === 'e') return (body._eqs || [])[Number(s.slice(1))];
+      return body._nodes[Number(s)];
+    };
 
     /** Light up these on a map: { sel, up: Set, down: Set }, results or cited works, as drawn. */
     function lightMap(view, sel, up, down) {
       const body = view.body;
       const svg = body.querySelector('.dep-map');
       const lay = view.lay;
-      const drawn = (set) => new Set(Array.from(set, (m) => (m.cite ? m : lay.drawnOf(m))));
+      const drawn = (set) => new Set(Array.from(set, (m) => (m.cite || m.eq ? m : lay.drawnOf(m))));
       const U = drawn(up);
       const D = drawn(down);
       U.delete(sel);
       D.delete(sel);
       svg.classList.add('dep-picked');
       svg.querySelectorAll('.dep-node').forEach((g) => {
-        const m = thingOf(body, g.dataset.c != null ? 'c' + g.dataset.c : g.dataset.n);
+        const m = thingOf(body, g.dataset.c != null ? 'c' + g.dataset.c : g.dataset.e != null ? 'e' + g.dataset.e : g.dataset.n);
         g.classList.toggle('dep-sel', m === sel);
         g.classList.toggle('dep-up', U.has(m));
         g.classList.toggle('dep-down', D.has(m));
@@ -2564,7 +3165,7 @@
         const on = ((U.has(a) || a === sel) && (U.has(b) || b === sel)) || ((D.has(a) || a === sel) && (D.has(b) || b === sel));
         p.classList.toggle('dep-lit', on);
       });
-      const node = svg.querySelector(sel.cite ? `.dep-node[data-c="${sel.order}"] rect` : `.dep-node[data-n="${sel.order}"] rect`);
+      const node = svg.querySelector(sel.cite ? `.dep-node[data-c="${sel.order}"] rect` : sel.eq ? `.dep-node[data-e="${sel.order}"] rect` : `.dep-node[data-n="${sel.order}"] rect`);
       const wrap = body.querySelector('.dep-wrap');
       if (node && wrap) {
         // bring the node into the map's own scroll box, without scrolling anything else
@@ -2576,13 +3177,15 @@
     }
 
     /** "Lemma 2.1 (guessed)": a list of results to pick, each with how it is linked. */
-    function pickList(set, edgeOf) {
+    function pickList(set, edgeOf, unlinkKey) {
       if (!set.size) return '<span class="insight-muted">nothing</span>';
       return Array.from(set).sort((a, b) => a.order - b.order).map((m) => {
         const e = edgeOf && edgeOf(m);
         let tag = '';
-        if (e && e.guessed) tag = ` <span class="dep-tag dep-tag-guess" title="${esc(`No link in the text: guessed from “${e.why}”`)}">guessed</span>`;
-        else if (e && !e.proof) tag = ' <span class="dep-tag" title="Named in the statement, not in a proof">statement</span>';
+        if (unlinkKey) tag += ` <button type="button" class="dep-unlink" data-unlink="${esc(unlinkKey(m))}" aria-label="${esc('Take away the link with ' + m.name)}" title="Take this link away">×</button>`;
+        if (e && e.mine) tag = ' <span class="dep-tag dep-tag-mine" title="A link you drew">yours</span>' + tag;
+        else if (e && e.guessed) tag = ` <span class="dep-tag dep-tag-guess" title="${esc(`No link in the text: guessed from “${e.why}”`)}">guessed</span>` + tag;
+        else if (e && !e.proof) tag = ' <span class="dep-tag" title="Named in the statement, not in a proof">statement</span>' + tag;
         return `<a href="#" data-pick="${m.order}"${e && e.guessed ? ' class="dep-l-guess"' : ''}>${esc(m.name)}</a>${tag}`;
       }).join(', ');
     }
@@ -2606,6 +3209,7 @@
       }
       view.selected = k;
       view.selectedCite = null;
+      view.selectedEq = null;
       view.synced = !!dir;
       const up = dir === 'usedBy' ? new Set() : closure(n, 'uses');
       const down = dir === 'uses' ? new Set() : closure(n, 'usedBy');
@@ -2624,16 +3228,29 @@
       const lit = focusState && focusState.id === n.id;
       const folded = view.lay.shownFold.get(n);
       const cites = Array.from(n.cites.keys()).sort((a, b) => a.order - b.order);
+      const editing = view.linkEdit && !locked;
+      const unlink = (keyOf) => (editing ? keyOf : null);
+      // links taken away: where they went, and what uses n that lost its link to it
+      const lost = [];
+      if (editing) {
+        for (const dep of n.removed || []) lost.push([dep, dep.key + ' > ' + n.key]);
+        for (const m of getGraph().nodes) if ((m.removed || []).includes(n)) lost.push([m, n.key + ' > ' + m.key]);
+      }
+      const removedHtml = lost.length
+        ? `<p><span class="insight-usedby-k">Taken away</span> ${lost.map(([m, k]) => `${esc(m.name)} <button type="button" class="dep-relink" data-relink="${esc(k)}" title="Bring this link of the paper back">Restore</button>`).join(', ')}</p>`
+        : '';
       detail.innerHTML =
         `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
         (lit
           ? ` <span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
           : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
-        `<p><span class="insight-usedby-k">Uses</span> ${pickList(n.uses, (m) => n.edges.get(m))}${indirect(up, n.uses)}</p>` +
-        `<p><span class="insight-usedby-k">Used in</span> ${pickList(n.usedBy, (m) => m.edges.get(n))}${indirect(down, n.usedBy)}</p>` +
+        `<p><span class="insight-usedby-k">Uses</span> ${pickList(n.uses, (m) => n.edges.get(m), unlink((m) => m.key + ' > ' + n.key))}${indirect(up, n.uses)}</p>` +
+        `<p><span class="insight-usedby-k">Used in</span> ${pickList(n.usedBy, (m) => m.edges.get(n), unlink((m) => n.key + ' > ' + m.key))}${indirect(down, n.usedBy)}</p>` +
+        removedHtml +
         notUnderstood(n, up) +
         (cites.length ? `<p><span class="insight-usedby-k">Cites</span> ${cites.map((c) => (c.el ? `<a href="#" data-cite="${c.order}">${esc(`${c.label} ${c.who}`.trim())}</a>` : `<span>${esc(c.label)}</span>`)).join(', ')}</p>` : '') +
-        (folded ? `<p><span class="insight-usedby-k">Folded in</span> ${pickList(new Set(folded))} <a href="#" data-fold="${esc(n.id)}">Show them</a></p>` : '');
+        (folded ? `<p><span class="insight-usedby-k">Folded in</span> ${pickList(new Set(folded))} <a href="#" data-fold="${esc(n.id)}">Show them</a></p>` : '') +
+        editRowHtml(view, n);
       const go = detail.querySelector('.dep-go');
       go.dataset.go = '';
       go._target = n.el;
@@ -2664,6 +3281,7 @@
       if (!c || !view.lay || !body.querySelector(`.dep-node[data-c="${k}"]`)) return;
       view.selected = null;
       view.selectedCite = k;
+      view.selectedEq = null;
       view.synced = false;
       const down = new Set();
       for (const u of c.usedBy) {
@@ -2678,7 +3296,7 @@
       detail.innerHTML =
         `<div class="dep-detail-head"><strong>${esc(`${c.label} ${c.who}`.trim())}</strong> <span class="insight-muted">${c.el ? 'cited work' : 'cited work, not in the bibliography on this page'}</span>${c.el ? ' <a href="#" class="dep-go">Go to it</a>' : ''}</div>` +
         `<p><span class="insight-usedby-k">Cited in</span> ${pickList(direct)}` +
-        (rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${pickList(rest)}` : '') + '</p>';
+        (rest.size ? `<br><span class="insight-usedby-k">Indirectly</span> ${pickList(rest)}` : '') + '</p>' + editRowHtml(view, c);
       const go = detail.querySelector('.dep-go');
       if (go) {
         go.dataset.go = '';
@@ -2686,11 +3304,70 @@
       }
     }
 
+    /** Clicks on the map's editing controls (pins, hiding, links, saved maps). True if handled. */
+    function mapClick(view, e) {
+      const t = e.target.closest('[data-mpin], [data-mhide], [data-link], [data-link-cancel], [data-link-edit], [data-unlink], [data-relink], ' +
+        '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout]');
+      if (!t) return false;
+      e.preventDefault();
+      const cur = () => {
+        if (view.selected != null) return view.body._nodes[view.selected];
+        if (view.selectedCite != null) return view.body._cites[view.selectedCite];
+        if (view.selectedEq != null) return (view.body._eqs || []).find((q) => q.key === view.selectedEq) || { key: view.selectedEq, eq: true };
+        return null;
+      };
+      const x = cur();
+      const d = t.dataset;
+      if (d.mpin != null) { if (x) setPin(x.key, d.mpin); }
+      else if (d.mhide != null) { if (x) setHidden(x.key, d.mhide === '1'); }
+      else if (d.link != null) {
+        if (x && !locked) { view.linking = { key: x.key, dir: d.link }; view.linkEdit = false; fillDeps(view); }
+      } else if (d.linkCancel != null) { view.linking = null; fillDeps(view); }
+      else if (d.linkEdit != null) { view.linkEdit = !view.linkEdit; fillDeps(view); }
+      else if (d.unlink != null) { const [a, b] = d.unlink.split(' > '); removeLink(a, b); }
+      else if (d.relink != null) { const [a, b] = d.relink.split(' > '); restoreLink(a, b); }
+      else if (d.showPinned != null) { if (opts.showPinned) { view.leave(); opts.showPinned(); } }
+      else if (d.saveView != null) { view.naming = true; fillDeps(view); }
+      else if (d.saveCancel != null) { view.naming = false; fillDeps(view); }
+      else if (d.saveOk != null) {
+        const inp = view.body.querySelector('.dep-view-name');
+        if (inp && saveView(inp.value)) view.naming = false;
+        else if (inp) inp.focus();
+      } else if (d.unpinAll != null) unpinAll();
+      else if (d.view != null) loadView(d.view);
+      else if (d.viewDel != null) deleteView(d.viewDel);
+      else if (d.resetLayout != null) resetLayout();
+      return true;
+    }
+
+    /** Light up a pinned equation on a map, and the results that refer to it. */
+    function selectEq(view, k) {
+      const body = view.body;
+      const q = body._eqs && body._eqs[k];
+      if (!q || !view.lay || !body.querySelector(`.dep-node[data-e="${k}"]`)) return;
+      view.selected = null;
+      view.selectedCite = null;
+      view.selectedEq = q.key;
+      view.synced = false;
+      body.querySelector('.dep-map').classList.remove('dep-synced');
+      const down = new Set();
+      for (const u of q.usedBy) { down.add(u); for (const m of closure(u, 'usedBy')) down.add(m); }
+      lightMap(view, q, new Set(), down);
+      const detail = body.querySelector('.dep-detail');
+      detail.innerHTML =
+        `<div class="dep-detail-head"><strong>Equation ${esc(q.name)}</strong> <a href="#" class="dep-go">Go to it</a></div>` +
+        `<p><span class="insight-usedby-k">Referred to in</span> ${pickList(q.usedBy)}</p>` + editRowHtml(view, q);
+      const go = detail.querySelector('.dep-go');
+      go.dataset.go = '';
+      go._target = q.el;
+    }
+
     /** A map with nothing picked. */
     function clearPick(view, note) {
       const body = view.body;
       view.selected = null;
       view.selectedCite = null;
+      view.selectedEq = null;
       view.synced = false;
       const svg = body.querySelector('.dep-map');
       if (svg) {
@@ -2946,7 +3623,7 @@
     function focus(el, dir, scroll, collapse) {
       if (!el || !doc.contains(el)) return;
       if (collapse) collapseRest = true;
-      if (!focusState && opts.onFocusStart) opts.onFocusStart(); // e.g. end "Show selected results"
+      if (!focusState && opts.onFocusStart) opts.onFocusStart(); // e.g. end "Show pinned results"
       clearMarks();
       hidePop();
       const g = getGraph();
@@ -2998,7 +3675,7 @@
       doc.classList.toggle('uses-collapse', collapseRest);
       const stops = [el].concat(others.map((m) => m.el));
       const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
-      focusState = { id: el.id, dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
+      focusState = { id: el.id, key: n.key || keyOfEl(el), dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       showBar();
       syncMaps();
@@ -3036,6 +3713,10 @@
           if (!b || !focusState) return;
           if (b.dataset.act === 'done') return unfocus();
           if (b.dataset.act === 'print') return opts.print();
+          if (b.dataset.act === 'pin') {
+            setPin(focusState.key, pinMap().get(focusState.key) === focusState.dir ? '' : focusState.dir);
+            return showBar();
+          }
           if (b.dataset.act === 'collapse') {
             collapseRest = !collapseRest;
             doc.classList.toggle('uses-collapse', collapseRest);
@@ -3074,6 +3755,7 @@
         `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button>` +
         `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
         step +
+        `<button type="button" data-act="pin" aria-pressed="${pinMap().get(f.key) === f.dir}" title="Pin ${esc(f.name)} with ${f.dir === 'uses' ? 'what it uses' : f.dir === 'usedBy' ? 'what uses it' : 'what it uses and what uses it'}, to show only these later (Show pinned) or save them">${pinMap().get(f.key) === f.dir ? 'Pinned' : 'Pin'}</button>` +
         `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
         (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF (with Hide the rest on, only that; folded proofs are left out)">Print</button>' : '') +
         '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
@@ -3132,6 +3814,32 @@
       graph: getGraph,
       index: getIndex,
       notesFor,
+      // --- the reader's changes to the map (pins, hidden results, own links, layout, saved maps)
+      /** The host's copy changed (another device, an import): read it again and redraw. */
+      refreshEdits() {
+        edits = readEdits();
+        if (graph) applyLinks(graph, edits.link);
+        for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
+        markPins();
+        if (focusState) refocus();
+      },
+      /** The elements "Show pinned" shows, pins with their submaps brought along. */
+      pinnedEls,
+      /** How many things are pinned. */
+      pinCount: () => pinMap().size,
+      /** Whether a result or numbered equation element is pinned (any way). */
+      isPinned: (el) => { const k = keyOfEl(el); return !!(k && pinMap().has(k)); },
+      /** Pin (d 'self' | 'uses' | 'usedBy' | 'both') or unpin ('') a result or numbered equation element. */
+      pin: (el, d) => setPin(keyOfEl(el), d == null ? 'self' : d),
+      /** Pin or unpin it (just it). */
+      togglePin: (el) => { const k = keyOfEl(el); if (k) setPin(k, pinMap().has(k) ? '' : 'self'); },
+      unpinAll,
+      saveView,
+      loadView,
+      deleteView,
+      savedViews: () => savedViews().map(([name]) => name),
+      setLocked: (on) => setLocked(on, false),
+      locked: () => locked,
     };
   }
 

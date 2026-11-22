@@ -242,7 +242,7 @@ function keepNotes(context, key, record) {
   if (!key) return Promise.resolve();
   const all = notesStore(context);
   if (NotesSync.isEmpty(record)) delete all[key];
-  else all[key] = { title: record.title || undefined, notes: record.notes, deleted: record.deleted || {}, progress: record.progress || {} };
+  else all[key] = { title: record.title || undefined, notes: record.notes, deleted: record.deleted || {}, progress: record.progress || {}, map: record.map || {} };
   return context.globalState.update(NOTES_STATE, all);
 }
 
@@ -601,6 +601,8 @@ class Preview {
       this.notesRecord = Object.assign({}, this.notesRecord, { progress: {} });
       this.post({ type: 'annotations', list: [] });
       this.post({ type: 'progress', map: {} });
+      this.post({ type: 'map-edits', map: {} });
+      this.notesRecord.map = {};
       return this.saveNotes([]);
     }
     let rec = NotesSync.empty(key);
@@ -615,6 +617,7 @@ class Preview {
     this.notesRecord = merged;
     this.post({ type: 'annotations', list: merged.notes });
     this.post({ type: 'progress', map: merged.progress || {} });
+    this.post({ type: 'map-edits', map: merged.map || {} });
     if (!NotesSync.equal(merged, rec) && !NotesSync.isEmpty(merged)) await this.writeNotes(merged);
     await keepNotes(this.context, key, merged);
     this.syncGist();
@@ -641,6 +644,17 @@ class Preview {
     this.gistTimer = setTimeout(() => this.syncGist(), 2500);
   }
 
+  /** The reader changed the dependency map in the preview: kept with the notes, so it syncs with them. */
+  async saveMapEdits(map) {
+    const key = await this.paperKey();
+    const rec = this.notesRecord || NotesSync.empty(key);
+    this.notesRecord = Object.assign({}, rec, { paper: key, map: NotesSync.mergeMap(rec.map, map) });
+    await this.writeNotes(this.notesRecord);
+    await keepNotes(this.context, key, this.notesRecord);
+    clearTimeout(this.gistTimer);
+    this.gistTimer = setTimeout(() => this.syncGist(), 2500);
+  }
+
   /** The reader ticked (or unticked) a hypothesis: kept with the notes, so it syncs with them. */
   async saveCheck(id, on, info) {
     const key = await this.paperKey();
@@ -660,6 +674,7 @@ class Preview {
     this.notesRecord = merged;
     this.post({ type: 'annotations', list: merged.notes });
     this.post({ type: 'progress', map: merged.progress || {} });
+    this.post({ type: 'map-edits', map: merged.map || {} });
     await this.writeNotes(merged);
     await keepNotes(this.context, key, merged);
     return merged.notes.length - before.notes.length;
@@ -933,6 +948,7 @@ ${INK_FILTERS}
           sideWidth: this.context.globalState.get('texglass.sideWidth', null),
           notationOrder: this.context.globalState.get('texglass.notationOrder', null),
           notationUsedPinned: this.context.globalState.get('texglass.notationUsedPinned', false),
+          mapLocked: this.context.globalState.get('texglass.mapLocked', false),
           marginWidth: this.context.globalState.get('texglass.marginWidth', null),
           marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
           textWidth: this.context.globalState.get('texglass.textWidth', ''),
@@ -1002,6 +1018,10 @@ ${INK_FILTERS}
       case 'progress':
         if (m.map && typeof m.map === 'object') this.saveProgress(m.map);
         break;
+      case 'map-edits':
+        // pins, hidden results, own links, layout and saved maps (shared/insight.js)
+        if (m.map && typeof m.map === 'object') this.saveMapEdits(m.map);
+        break;
       case 'check':
         // a hypothesis ticked in a preview of a cited result (shared/hypotheses.js)
         if (typeof m.id === 'string') this.saveCheck(m.id, !!m.on, m.info);
@@ -1022,6 +1042,7 @@ ${INK_FILTERS}
         if (m.key === 'texglass:side-tab') this.context.globalState.update('texglass.sideTab', String(m.value));
         if (m.key === 'texglass:side-width') this.context.globalState.update('texglass.sideWidth', Number(m.value) || null);
         if (m.key === 'texglass:notation-used-pinned') this.context.globalState.update('texglass.notationUsedPinned', !!m.value);
+        if (m.key === 'texglass:map-locked') this.context.globalState.update('texglass.mapLocked', !!m.value);
         if (m.key === 'texglass:notation-order' && /^(section|kind|az)$/.test(String(m.value))) this.context.globalState.update('texglass.notationOrder', String(m.value));
         if (m.key === 'texglass:margin-width') this.context.globalState.update('texglass.marginWidth', Number(m.value) || null);
         if (m.key === 'texglass:margin-collapsed') this.context.globalState.update('texglass.marginCollapsed', !!m.value);

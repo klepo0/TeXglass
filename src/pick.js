@@ -1,5 +1,5 @@
 /*
- * Show selected results: pick theorems, lemmas, definitions… and numbered
+ * Show pinned results: pin theorems, lemmas, definitions… and numbered
  * equations, then see only those, with the rest of the document hidden. The
  * proof of a picked result comes along folded to its first line; a click
  * opens it. Printing then prints what is shown: the picked results, their
@@ -11,9 +11,15 @@
  *     proofsOf(el),       // the proofs of a result (else: the proofs right after it)
  *     print(),            // print what is shown
  *     onStart(),          // a selection starts: end other views (What does this use?)
+ *     // optional: the host keeps the pins (TeXglassInsight does, with the map):
+ *     items(),            // the elements to show (pins, with what they bring along)
+ *     isOn(el),           // whether a result or equation is pinned
+ *     toggle(el),         // pin it, or unpin it
+ *     clear(),            // unpin everything
  *   });
- *   pick.start();         // pick: click results and equations to tick them
- *   pick.show();          // show only the ticked ones
+ *   pick.start();         // pin: click results and equations to pin them
+ *   pick.show();          // show only the pinned ones
+ *   pick.pinsChanged();   // the host's pins changed: show (or tick) them again
  *   pick.stop();          // the whole document again
  *   pick.refresh();       // after a new render: the same selection again
  *
@@ -99,9 +105,12 @@
 
     const pickables = () => blocksOf(doc).filter((el) => (el.classList.contains('theorem') && el.id) || (isNumberedDisplay(el) && el.id));
     const pickedEls = () => {
-      const els = picked.map((id) => document_.getElementById(id)).filter((el) => el && doc.contains(el));
-      return els.sort((a, b) => (a.compareDocumentPosition(b) & 4 ? -1 : 1));
+      const els = opts.items
+        ? Array.from(new Set(opts.items() || [])).filter((el) => el && doc.contains(el))
+        : picked.map((id) => document_.getElementById(id)).filter((el) => el && doc.contains(el));
+      return els.sort((a, b) => (a === b ? 0 : a.compareDocumentPosition(b) & 4 ? -1 : 1));
     };
+    const isOn = (el) => (opts.isOn ? !!opts.isOn(el) : picked.includes(el.id));
 
     function proofsOf(el) {
       const given = opts.proofsOf ? opts.proofsOf(el) : null;
@@ -128,8 +137,8 @@
     // --- picking -------------------------------------------------------------
 
     function drawBoxes() {
-      const on = new Set(picked);
       for (const el of pickables()) {
+        const on = { has: () => isOn(el) }; // pinned
         el.classList.add('pick-able');
         el.classList.toggle('pick-on', on.has(el.id));
         let box = el.querySelector(':scope > .pick-box');
@@ -140,8 +149,8 @@
           el.insertBefore(box, el.firstChild);
         }
         box.setAttribute('aria-checked', String(on.has(el.id)));
-        box.setAttribute('aria-label', `Select ${nameOf(el)}`);
-        box.title = on.has(el.id) ? 'Selected: click to leave it out' : 'Click to select';
+        box.setAttribute('aria-label', `Pin ${nameOf(el)}`);
+        box.title = on.has(el.id) ? 'Pinned: click to unpin' : 'Click to pin';
       }
     }
 
@@ -156,15 +165,24 @@
 
     function toggle(el) {
       if (!el || !el.id) return;
-      const k = picked.indexOf(el.id);
-      if (k >= 0) picked.splice(k, 1);
-      else picked.push(el.id);
+      if (opts.toggle) opts.toggle(el);
+      else {
+        const k = picked.indexOf(el.id);
+        if (k >= 0) picked.splice(k, 1);
+        else picked.push(el.id);
+      }
       if (mode === 'pick') { drawBoxes(); showBar(); }
+    }
+
+    /** The host's pins changed: tick them, or show them, again (without jumping). */
+    function pinsChanged() {
+      if (mode === 'pick') { drawBoxes(); showBar(); }
+      else if (mode === 'view') refresh(true);
     }
 
     // --- showing only what is picked -------------------------------------------
 
-    function show() {
+    function show(stay) {
       const els = pickedEls();
       if (!els.length) return;
       if (opts.onStart) opts.onStart();
@@ -208,7 +226,7 @@
       walk(doc);
       doc.classList.add('pick-view');
       showBar();
-      if (opts.jump) opts.jump(els[0]);
+      if (opts.jump && !stay) opts.jump(els[0]);
     }
 
     function stop() {
@@ -219,7 +237,7 @@
     }
 
     /** After a new render: tick the same results again, or show them again. */
-    function refresh() {
+    function refresh(stay) {
       if (!mode) return;
       if (mode === 'pick') {
         drawBoxes();
@@ -228,7 +246,7 @@
         const open = new Set(marked.filter((el) => el.classList.contains('pick-open')));
         const openIdx = new Set(blocksOf(doc).map((b, i) => (open.has(b) ? i : -1)).filter((i) => i >= 0));
         if (!pickedEls().length) return stop();
-        show();
+        show(stay);
         // keep open the proofs that were open, where they still are
         blocksOf(doc).forEach((b, i) => { if (openIdx.has(i) && b.classList.contains('pick-proof')) b.classList.add('pick-open'); });
       }
@@ -246,7 +264,7 @@
           if (!b) return;
           const act = b.dataset.act;
           if (act === 'show') show();
-          else if (act === 'clear') { picked = []; drawBoxes(); showBar(); }
+          else if (act === 'clear') { if (opts.clear) opts.clear(); else picked = []; drawBoxes(); showBar(); }
           else if (act === 'edit') start();
           else if (act === 'print') { if (opts.print) opts.print(); }
           else if (act === 'done') stop();
@@ -255,18 +273,19 @@
       }
       const n = pickedEls().length;
       const what = (k) => `${k} item${k === 1 ? '' : 's'}`;
+      const blockName = (el) => (el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : null);
       if (mode === 'pick') {
-        const names = pickedEls().map(nameOf);
+        const names = pickedEls().map(blockName).filter(Boolean);
         const list = names.length ? ` <span class="pick-names" title="${esc(names.join(', '))}">${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ', …' : ''}</span>` : '';
         bar.innerHTML =
-          `<span class="uses-what">${n ? `<strong>${what(n)} selected</strong>${list}` : 'Click the results and numbered equations to show'}</span>` +
-          `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the selected results and equations">Show selected</button>` +
-          (n ? '<button type="button" data-act="clear" title="Untick everything">Clear</button>' : '') +
-          '<button type="button" data-act="done" title="Back to the whole document (Esc)">Cancel</button>';
+          `<span class="uses-what">${n ? `<strong>${what(n)} pinned</strong>${list}` : 'Click the results and numbered equations to pin'}</span>` +
+          `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the pinned results and equations">Show pinned</button>` +
+          (n ? '<button type="button" data-act="clear" title="Take every pin away">Unpin all</button>' : '') +
+          '<button type="button" data-act="done" title="Back to the whole document (Esc)">Done</button>';
       } else {
         bar.innerHTML =
-          `<span class="uses-what"><strong>Showing ${what(n)}</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
-          '<button type="button" data-act="edit" title="Add or remove results and equations">Change</button>' +
+          `<span class="uses-what"><strong>Showing ${what(n)} pinned</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
+          '<button type="button" data-act="edit" title="Pin or unpin results and equations">Change</button>' +
           (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF; folded proofs are left out">Print</button>' : '') +
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
       }
@@ -307,10 +326,11 @@
 
     return {
       start,
-      show,
+      show: () => show(),
       stop,
-      refresh,
+      refresh: () => refresh(),
       toggle,
+      pinsChanged,
       /** null, 'pick' or 'view' */
       mode: () => mode,
       picked: () => picked.slice(),
