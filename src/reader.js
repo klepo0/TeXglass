@@ -13,7 +13,7 @@
  *   - notation on hover and "What does this use?" (src/insight.js);
  *   - a side panel with Contents, the Map of which results use which, and the
  *     Notation index;
- *   - Navigate: Ctrl+F to find, Ctrl+G to go to "Lemma 4.1", Trace;
+ *   - Navigate: Ctrl+F to find, Ctrl+G to go to "Lemma 4.1", Uses;
  *   - Back and forward after a jump (Alt+Left, Alt+Right);
  *   - cited papers' titles and abstracts (online only), click a formula to copy it.
  *
@@ -299,8 +299,8 @@
       scroller: pane,
       reveal: () => {},
       onJump: hidePopover,
-      onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
-      related: (el) => (insight ? insight.related(el) : null),
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      related: (el, o) => (insight ? insight.related(el, o) : null),
       uses: (q) => (insight ? insight.searchUses(q) : null),
       onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     });

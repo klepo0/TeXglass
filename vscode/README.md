@@ -74,8 +74,9 @@ lists every feature, command, setting and shortcut.
   results it rests on (or, with **Used in**, the ones that rest on it), and
   **Hide the rest** folds everything else away.
 - **Navigate**: find in the text (**Ctrl+F**), go to `Lemma 4.1` or `(3.2)`
-  (**Ctrl+G**), trace one result, or search by structure with **Uses**: every
-  result that uses `Lemma 2` but not `Assumption A`. **Alt+Left** goes back to where you were
+  (**Ctrl+G**), or open **Uses**: pick a result to see what it uses and what
+  uses it, or search by structure for every result that uses `Lemma 2` but not
+  `Assumption A`. **Alt+Left** goes back to where you were
   before a jump.
 - **Pin** theorems and equations (or a result with everything it uses) and
   show and print only those; drag, hide and add your own links on the

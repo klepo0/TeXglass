@@ -1,6 +1,7 @@
 'use strict';
-// Search by use: the Navigate bar's Uses tab finds every result that uses a
-// lemma, an assumption or an equation (and not another), directly or not
+// Search by use: the Navigate bar's Uses tab lists what uses a lemma, an
+// assumption or an equation, and with "and", "or" or "but not" finds every
+// result that uses some (and not others), directly or not
 // (src/find.js parseUses + src/insight.js searchUses/showUses). The browser
 // part is skipped where Playwright and a browser are not installed.
 const test = require('node:test');
@@ -76,6 +77,8 @@ test('the Uses tab finds results by what they use, and lights them up', { skip: 
       finder = TeXglassFind.attach({
         root,
         scroller: document.getElementById('pane'),
+        onFocus: (el, o) => insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }),
+        related: (el, o) => insight.related(el, o),
         uses: (q) => insight.searchUses(q),
         onUses: (q, el) => insight.showUses(q, { at: el, scroll: true, collapse: true }),
       });
@@ -85,16 +88,21 @@ test('the Uses tab finds results by what they use, and lights them up', { skip: 
     const items = () => p.evaluate(() => Array.from(document.querySelectorAll('.goto-list li[data-k] .goto-name')).map((li) => li.textContent));
     const head = () => p.evaluate(() => { const h = document.querySelector('.goto-list .uses-head .uses-sum'); return h ? h.textContent : document.querySelector('.goto-list li').textContent; });
     assert.equal(await p.evaluate(() => document.querySelectorAll('.find-modes button').length), 3); // Find, Go to, Uses
-    assert.match(await head(), /Type what the results should use/);
+    assert.match(await head(), /Combine names to search by use/);
 
-    // Directly or not: Lemma 1.2 is used by Theorem 2.1, Corollary 2.2 (through it) and Proposition 2.3 (\tguses).
+    // One name: the result, what it uses, then what uses it. Directly or not:
+    // Lemma 1.2 is used by Theorem 2.1, Corollary 2.2 (through it) and Proposition 2.3 (\tguses).
     await p.keyboard.type('Lemma 1.2');
+    assert.deepEqual(await items(), ['Lemma 1.2', 'Assumption 1.1', 'Theorem 2.1', 'Corollary 2.2', 'Proposition 2.3']);
+    assert.match(await head(), /Lemma 1\.2 uses 1 result, is used in 3 results/);
+    await p.click('.uses-direct');
+    assert.deepEqual(await items(), ['Lemma 1.2', 'Assumption 1.1', 'Theorem 2.1', 'Proposition 2.3']);
+    assert.match(await head(), /is used in 2 results directly/);
+    await p.click('.uses-direct');
+    // Several names search by use.
+    await p.fill('.find-input', 'Lemma 1.2, Assumption 1.1');
     assert.deepEqual(await items(), ['Theorem 2.1', 'Corollary 2.2', 'Proposition 2.3']);
-    assert.match(await head(), /3 results use Lemma 1\.2/);
-    await p.click('.uses-direct');
-    assert.deepEqual(await items(), ['Theorem 2.1', 'Proposition 2.3']);
-    assert.match(await head(), /use directly Lemma 1\.2/);
-    await p.click('.uses-direct');
+    assert.match(await head(), /3 results use Lemma 1\.2 and Assumption 1\.1/);
 
     // An assumption, transitively; but not another result.
     await p.fill('.find-input', 'Assumption 1.1 but not Proposition 2.3');
@@ -102,7 +110,8 @@ test('the Uses tab finds results by what they use, and lights them up', { skip: 
     assert.deepEqual(await items(), ['Lemma 1.2', 'Theorem 2.1', 'Corollary 2.2']);
     // An equation; and "or".
     await p.fill('.find-input', '(1)');
-    assert.deepEqual(await items(), ['Lemma 1.3', 'Proposition 2.3']);
+    assert.deepEqual(await items(), ['Equation (1)', 'Lemma 1.3', 'Proposition 2.3']);
+    assert.match(await head(), /Equation \(1\) is used in 2 results/);
     await p.fill('.find-input', 'Theorem 2.1 or (1)');
     assert.deepEqual(await items(), ['Lemma 1.3', 'Corollary 2.2', 'Proposition 2.3']);
     // Only what to leave out: the results free of the assumption.
@@ -114,7 +123,7 @@ test('the Uses tab finds results by what they use, and lights them up', { skip: 
 
     // Picking one lights them all up and hides the rest.
     await p.fill('.find-input', 'Lemma 1.2');
-    await p.keyboard.press('ArrowDown');
+    for (let k = 0; k < 3; k++) await p.keyboard.press('ArrowDown'); // Corollary 2.2, in Used by
     await p.keyboard.press('Enter');
     assert.equal(await p.evaluate(() => window.finder.isOpen()), false);
     const state = () => p.evaluate(() => ({

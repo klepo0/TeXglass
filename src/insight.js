@@ -3953,9 +3953,10 @@
 
     /**
      * Light up what el uses (dir 'uses'), what uses it ('usedBy'), or both
-     * ('both'). collapse: also switch on "Hide the rest".
+     * ('both'). collapse: also switch on "Hide the rest". at: one of those
+     * results to start at (and scroll to) instead of el.
      */
-    function focus(el, dir, scroll, collapse) {
+    function focus(el, dir, scroll, collapse, at) {
       if (!el || !doc.contains(el)) return;
       if (collapse) collapseRest = true;
       if (!focusState && opts.onFocusStart) opts.onFocusStart(); // e.g. end "Show pinned results"
@@ -3992,11 +3993,12 @@
       const marked = markKeep(keep);
       const stops = [el].concat(others.map((m) => m.el));
       const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
-      focusState = { id: el.id, key: n.key || keyOfEl(el), dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
+      const k = at ? Math.max(0, stops.indexOf(at)) : 0;
+      focusState = { id: el.id, key: n.key || keyOfEl(el), dir, marked, stops, at: k, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       showBar();
       syncMaps();
-      if (scroll) opts.jump(el);
+      if (scroll) opts.jump(stops[k]);
     }
 
     // --- Search by use: light up every result that uses these, and none of those ---
@@ -4210,12 +4212,23 @@
         if (Object.keys(feats).some((k) => before[k] !== feats[k])) refreshViews();
       },
       features: () => Object.assign({}, feats),
-      // o: { scroll, collapse } (collapse switches on "Hide the rest")
-      focus: (el, dir, o) => focus(el, dir || 'uses', !!(o && o.scroll), !!(o && o.collapse)),
-      /** How many results el uses and is used in, directly or not, or null if it is not a result. */
-      related: (el) => {
+      // o: { scroll, collapse, at } (collapse switches on "Hide the rest"; at: the lit result to start at)
+      focus: (el, dir, o) => focus(el, dir || 'uses', !!(o && o.scroll), !!(o && o.collapse), o && o.at),
+      /**
+       * What el uses and what uses it, directly or not (o.direct: only links
+       * written in the result itself), or null if it is not a result:
+       * { uses, usedBy } counts and { usesEls, usedByEls } in document order.
+       */
+      related: (el, o) => {
         const n = getGraph().byEl.get(el);
-        return n ? { uses: closure(n, 'uses').size, usedBy: closure(n, 'usedBy').size } : null;
+        if (!n) return null;
+        const direct = !!(o && o.direct);
+        const up = direct ? new Set(n.uses) : closure(n, 'uses');
+        const down = direct ? new Set(n.usedBy) : closure(n, 'usedBy');
+        up.delete(n);
+        down.delete(n);
+        const els = (set) => Array.from(set).filter((m) => m.el && !m.cite).sort((a, b) => a.order - b.order).map((m) => m.el);
+        return { uses: up.size, usedBy: down.size, usesEls: els(up), usedByEls: els(down) };
       },
       /**
        * Search by use: { inc: [result or equation elements], exc: [...], any, direct }
