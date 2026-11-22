@@ -366,6 +366,8 @@ pinned) shows how many things are pinned, and a click lists them all, grouped:
 
 - **Results** and **Equations** pinned on the map, from the text, or with the
   pin on a reference's preview (a result pinned with what it uses says so);
+- **Proofs**: rest on a proof and click the pin at its top right; under
+  **Show only these** a pinned proof shows in full, not folded;
 - **Figures** (and tables with a caption): rest on one and click the pin at its
   top right, or the pin on its reference's preview;
 - **Notation**: symbols and macros pinned in the **Notation** tab or with the
@@ -374,7 +376,7 @@ pinned) shows how many things are pinned, and a click lists them all, grouped:
   select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
 
 Click an item to jump to it, **×** to unpin it. **Show only these** shows only
-the pinned results, equations and figures (as **Show pinned** does) and the
+the pinned results, proofs, equations and figures (as **Show pinned** does) and the
 paragraphs holding pinned text, and prints just that. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
 it opens as a sheet at the bottom, from **Pinned** in the **…** menu. Pins are

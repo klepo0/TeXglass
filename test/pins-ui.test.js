@@ -96,7 +96,21 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     assert.equal(visiblePins, 1, 'one pin on a preview');
     await page.mouse.move(5, 500);
     await page.waitForTimeout(400);
+    // a proof, from its pin on hover: listed, and shown in full under Show only these
+    const proof = page.locator('#preview .proof', { hasText: 'By Lemmas' });
+    await proof.scrollIntoViewIfNeeded();
+    await proof.hover();
+    await page.click('#preview .proof:has-text("By Lemmas") > .tg-pin-btn');
+    assert.equal(await badge(), '4');
+    await page.mouse.move(5, 500);
     await page.click('#pins');
+    assert.match(await page.textContent('.tg-pins-menu'), /Proof of Theorem 1\.3/);
+    await page.click('.tg-pins-actions [data-pins-act="show"]');
+    await page.waitForSelector('#preview.pick-view');
+    assert.equal(await page.$eval('#preview .proof:has-text("By Lemmas")', (p) => p.classList.contains('pick-on') && !p.classList.contains('pick-proof')), true, 'a pinned proof shows in full');
+    await page.keyboard.press('Escape');
+    await page.click('#pins');
+    await page.click('.tg-pins-row:has-text("Proof of") .tg-pins-x');
     await page.click('.tg-pins-row:has-text("Figure 1") .tg-pins-x');
     await page.keyboard.press('Escape');
     assert.equal(await badge(), '2');
