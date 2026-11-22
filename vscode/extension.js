@@ -795,6 +795,7 @@ ${INK_FILTERS}
 <main class="panes"><nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div><button id="toc-side" class="toc-side" type="button" aria-label="Move the contents to the right" title="Move the contents to the right"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg></button></div><ol id="toc-list" class="toc-list"></ol></nav><section class="pane" id="preview-pane"><article id="preview" class="document"></article></section></main>
 <div id="ref-popover" class="ref-popover" hidden></div>
 <div id="status" class="texglass-status" hidden></div>
+<button id="pins-float" class="pins-float" type="button" hidden aria-label="Pinned"></button>
 <div id="zoom-float" class="zoom-float" role="group" aria-label="Zoom" hidden><button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (Ctrl+−)">−</button><button id="zoom-level" class="zoom-level" type="button" title="Reset the zoom to 100% (Ctrl+0)">100%</button><button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (Ctrl++)">+</button></div>
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
@@ -806,6 +807,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'margin.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pick.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'pins.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'steps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'params.js')}"></script>

@@ -24,6 +24,7 @@ for (const [from, to] of [
   ['src/notes-sync.js', 'notes-sync.js'],
   ['src/insight.js', 'insight.js'],
   ['src/pick.js', 'pick.js'],
+  ['src/pins.js', 'pins.js'],
   ['src/progress.js', 'progress.js'],
   ['src/steps.js', 'steps.js'],
   ['src/params.js', 'params.js'],

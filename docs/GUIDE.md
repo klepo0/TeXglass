@@ -22,6 +22,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Finding your way: Navigate, Go to, Uses](#finding-your-way-navigate-go-to-uses)
 - [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
   - [Pins and your own map](#pins-and-your-own-map)
+  - [Everything pinned in one place](#everything-pinned-in-one-place)
 - [Understanding the logic](#understanding-the-logic)
 - [Comparing versions](#comparing-versions)
 - [Your own highlights and notes](#your-own-highlights-and-notes)
@@ -113,8 +114,9 @@ Rebind any of them in **Keyboard Shortcuts** (Ctrl+K Ctrl+S) by searching for
 - **Click a formula** to copy its LaTeX, as written (labels left out).
   "Copied LaTeX" shows by the pointer. VS Code: `texglass.clickToCopyMath`.
 - **Fold** a section or a proof with the arrow beside it, or by clicking a
-  section heading or a folded proof. **Hide proofs** folds or unfolds every
-  proof at once. Folds are remembered.
+  section heading or a folded proof. **Hide proofs** (the toolbar button with
+  two arrows meeting at a line) folds or unfolds every proof at once; its
+  tooltip says which it will do. Folds are remembered.
 - **Diagrams** are drawn: `tikz-cd`, `xymatrix` and TikZ pictures (heavier
   TikZ shows its source). Pictures wider than the column shrink to fit.
 - **Margin notes**: `\marginpar`, `\marginnote` and `\todo` sit in a margin
@@ -154,7 +156,9 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
 
 - **References** (`\ref`, `\eqref`, …): the theorem, equation, figure or
   section they point to, and for a result also what it **uses** and where it
-  is **used in**. Click to jump there.
+  is **used in**. Click to jump there. For a result or a numbered equation,
+  the **pin** at the preview's top right pins it (see
+  [Everything pinned in one place](#everything-pinned-in-one-place)).
 - **Footnotes**: the footnote text.
 - **Citations**: the bibliography entry, then the cited paper's title and
   abstract, looked up on DataCite and Crossref only when you hover, and kept
@@ -178,8 +182,9 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
   from: the paper's own macros (`\newcommand`, with their definition and
   first use), symbols defined with `:=`, and symbols the text introduces in
   words ("let X be", "denote by X", "where X is"), with a link to the
-  definition. Turn it off with the checkbox in the **Notation** tab, or
-  `texglass.notationHover` in VS Code.
+  definition. The **pin** beside each symbol or macro pins it to the top of the
+  **Notation** tab and to the **Pinned** list. Turn it off with the checkbox in
+  the **Notation** tab, or `texglass.notationHover` in VS Code.
 - **Map nodes**: resting on a result in the map (small or large) previews its
   statement.
 
@@ -247,7 +252,7 @@ screen doesn't count.
 
 ## The side panel: Contents, Map, Notation
 
-**Contents** (toolbar button; VS Code: **TeXglass: Show or Hide Contents**)
+**Contents** (the toolbar button with three lines; VS Code: **TeXglass: Show or Hide Contents**)
 opens the side panel. Drag its edge, or use <kbd>←</kbd> <kbd>→</kbd> on it, to
 resize; the width and tab are remembered, and on a narrow panel the tabs stack.
 The button at its top moves it to the other side (VS Code: **TeXglass: Move
@@ -352,6 +357,26 @@ kept per paper with your notes, so it is exported, imported and synced with them
   **Restore**).
 - **Lock** (checkbox above the map) stops dragging, hiding and link changes
   until you untick it; it is remembered for every paper.
+
+### Everything pinned in one place
+
+The **pin** in the toolbar (web viewer, browser extension and the Overleaf
+panel; in VS Code it floats at the top right of the preview once something is
+pinned) shows how many things are pinned, and a click lists them all, grouped:
+
+- **Results** and **Equations** pinned on the map, from the text, or with the
+  pin on a reference's preview (a result pinned with what it uses says so);
+- **Notation**: symbols and macros pinned in the **Notation** tab or with the
+  pin on a notation preview;
+- **Text**: passages pinned with the pin on the bar that appears when you
+  select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
+
+Click an item to jump to it, **×** to unpin it. **Show only these** shows only
+the pinned results and equations (as **Show pinned** does). With nothing pinned
+the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
+it opens as a sheet at the bottom, from **Pinned** in the **…** menu. Pins are
+kept with your notes, so they sync with them (in the Overleaf panel they stay in
+this browser).
 
 ## Understanding the logic
 
@@ -466,6 +491,11 @@ Overleaf panel).
   or remove it. The bar stays clear of the system's own menu (copy, look up,
   share), which opens above the selection; on a phone or tablet it also sits
   below the selection handles, and appears once a long press has selected.
+- **Pin**: the pin on that bar pins the selected text (it is highlighted
+  yellow unless it already has a colour), so it shows under **Text** in the
+  toolbar's **Pinned** list; click there to come back to it. Click a pinned
+  highlight and the pin again to unpin it (the highlight stays). Pinned text
+  syncs with your notes.
 - **Note**: the note button on that bar writes a note on the selection; or
   drag the **note pad** (bottom right) onto any line. Drag the pad's dotted
   handle to move the pad itself (arrow keys on the handle work too). Drag a
@@ -574,7 +604,7 @@ install; after the first visit it opens and renders offline.
 
 **Opening a document**
 
-- **Open** (<kbd>Ctrl+K</kbd>) is one dialog for everything:
+- **Open** (the folder button, <kbd>Ctrl+K</kbd>) is one dialog for everything:
   - type words, a title or an author to **search arXiv** (through
     [DataCite](https://datacite.org), which holds every arXiv DOI, with
     OpenAlex and Semantic Scholar as fallbacks, since arXiv's own search can't
@@ -589,7 +619,7 @@ install; after the first visit it opens and renders offline.
   figures come too. Several files at once work as well, and so does dropping
   a file or folder on the page. TeXglass finds the main file. In Chrome and
   Edge a folder chosen this way re-renders when you save any of its files.
-- **OAI preprints** lists the manuscripts in
+- **OAI preprints…** (at the top of the **…** menu) lists the manuscripts in
   [openai/math](https://github.com/openai/math), searchable and filtered by
   discipline.
 - **Take the tour**: on the welcome page, at the end of the **…** menu, or
@@ -647,20 +677,30 @@ install; after the first visit it opens and renders offline.
   <kbd>Tab</kbd> steps out of brackets.
 - **Edit on GitHub** appears for a document opened from GitHub.
 
-**The … menu**: **Save** (<kbd>Ctrl+S</kbd>, back to the file, with live
-reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
-standalone page that works offline), **Export with reading tools** (the same
-page with reference previews, notation on hover, the side panel and Navigate;
-see [Command line](#command-line) for what it holds), **Export as EPUB** (an
-e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned results…** (see
-[Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
-(<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
-rest** prints as shown), **Copy AI prompt for authors** (see
-[Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)), **Save for offline** and **Saved papers…** (see
-above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
-notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Take
-the tour** (see above) and **Support TeXglass ☕**, which opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
-page.
+**The … menu**, in groups:
+
+- **Papers**: **OAI preprints…**, **Saved papers…**, **Save for offline** (see
+  above) and **Compare versions…** (see [Comparing versions](#comparing-versions)).
+- **Save and export**: **Save** (<kbd>Ctrl+S</kbd>, back to the file, with live
+  reload when it changes on disk in Chrome and Edge), **Print or save as PDF**
+  (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
+  rest** prints as shown), **Export as HTML** (one standalone page that works
+  offline), **Export with reading tools** (the same page with reference previews,
+  notation on hover, the side panel and Navigate; see [Command line](#command-line)
+  for what it holds) and **Export as EPUB** (an e-book for e-readers; see
+  [E-books (EPUB)](#e-books-epub)).
+- **Reading**: **Show pinned results…** (see
+  [Understanding the logic](#understanding-the-logic)), **Highlights and notes**
+  and **Reading progress**.
+- **Your notes**: **Sync notes with GitHub…** (**Syncing with GitHub…** once
+  signed in), **Export notes** and **Import notes…**.
+- **For authors**: **Copy AI prompt for authors** (see
+  [Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)).
+- At the very end, **Take the tour** (see above).
+
+**☕ Support** beside the TeXglass name in the toolbar opens its
+[Buy Me a Coffee](https://buymeacoffee.com/texglass) page (on a phone, where the
+name is hidden, it is **Support TeXglass ☕** at the end of the **…** menu).
 
 **Status** at the top counts undefined references and duplicate labels.
 
@@ -706,8 +746,9 @@ editor.
   and marks the paragraph holding the cursor.
 - Click in the preview to move the editor's cursor there (a formula: Ctrl+click
   or double-click); text from an `\input` file opens that file first.
-- Click a formula to copy it, hover previews, folding and **Proofs**,
-  **Contents** (left or right), **Navigate** (<kbd>Ctrl+F</kbd>,
+- Click a formula to copy it, hover previews, folding and **Hide proofs**,
+  **Contents** (left or right), the **pin** with everything pinned (see
+  [Everything pinned in one place](#everything-pinned-in-one-place)), **Navigate** (<kbd>Ctrl+F</kbd>,
   <kbd>Ctrl+G</kbd>), [Back](#back-to-where-you-were) after a jump
   (<kbd>Alt+Left</kbd>), the map and notation, light and dark.
 - **Text width**: drag either edge of the text (double-click for the usual
@@ -742,7 +783,9 @@ any GitHub repository, preview, edit, commit. Prefer a file? Every
   (`texglass.exportEmbedFonts`). **Export to EPUB**: an e-book (see
   [E-books (EPUB)](#e-books-epub)). **Print / Save as PDF**, laid out like a paper.
 - Title-bar buttons: Navigate, Contents, Hide/Show proofs, handwriting,
-  Settings (gear), light/dark, scroll sync; the `…` menu has the rest.
+  Settings (gear), light/dark, scroll sync; the `…` menu has the rest. Once
+  something is pinned, a **pin** at the top right of the preview lists it all
+  (see [Everything pinned in one place](#everything-pinned-in-one-place)).
 
 ### Commands
 
@@ -900,8 +943,8 @@ offline reading](#web-viewer)).
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Open**, the side panel (the three lines), **Navigate** (the
 magnifier), **Save offline** (the bookmark), **Share**, the theme toggle
-and **…**. The mode switch (Preview, Edit, Split), **OAI preprints**, zoom,
-**Hide proofs**, **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
+and **…**. The mode switch (Preview, Edit, Split), zoom, **Hide proofs**,
+**Pinned**, **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is
 wider.
 

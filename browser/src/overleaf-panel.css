@@ -17,6 +17,8 @@
 .ol-toolbar #close { font-size: 18px; line-height: 1; padding: 2px 8px; }
 .ol-toolbar .icon-button { padding: 3px 6px !important; }
 .ol-toolbar .icon-button svg { width: 16px; height: 16px; }
+.ol-toolbar .tb-iconic { padding: 3px 7px; }
+.ol-toolbar .tb-iconic .tb-icon { width: 16px; height: 16px; }
 
 /* The contents: a column beside the document when the panel is wide, a drawer when it is narrow (styles.css). */
 .toc-pane { flex-basis: var(--side-width, 250px); }

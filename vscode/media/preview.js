@@ -94,6 +94,8 @@
       blocks: () => allAnchors,
       files: () => sourceFiles,
       save: (list) => vscode.postMessage({ type: 'annotations', list }),
+      // text pinned from the selection bar shows in the Pinned list (the pin at the top right)
+      onPins: () => { try { if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => new Promise((resolve) => {
         const id = ++noteSeq;
         noteWaiting.set(id, resolve);
@@ -795,6 +797,9 @@
       const split = hypotheses && featureOn('hypotheses') && hypotheses.viewFor(target, a, clone);
       body.appendChild(split || clone);
     }
+    // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
+    const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
+    if (refPin) body.prepend(refPin);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up by the extension now.
@@ -1161,6 +1166,20 @@
       },
       print: () => vscode.postMessage({ type: 'print-request' }),
       onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
+    })
+    : null;
+
+  // Once something is pinned, a pin at the top right shows how many, and lists them
+  // all (results and equations on the map, rows in the Notation tab) to jump to.
+  const pinsButton = window.TeXglassPins && insight
+    ? window.TeXglassPins.attach({
+      button: document.getElementById('pins-float'),
+      insight,
+      margin,
+      jump: (el) => jumpTo(el),
+      showPinned: picker ? () => picker.show() : undefined,
+      hideWhenEmpty: true,
+      onOpen: () => hidePopover(),
     })
     : null;
 

@@ -1763,17 +1763,17 @@
       if (n.kind === 'symbol' && n.s.author) {
         const sym = `<span class="insight-sym" data-sym="${esc(n.s.tex)}"><code>${esc(n.s.tex)}</code></span>`;
         return `<div class="insight-note"><div class="insight-note-what">${sym}: </div>` +
-          `<div class="insight-note-where">The author's description${n.s.everywhere ? '' : `, in <a href="#" data-go="s">${esc(where(n.s.el))}</a>`}</div></div>`;
+          `<div class="insight-note-where">The author's description${n.s.everywhere ? '' : `, in <a href="#" data-go="s">${esc(where(n.s.el))}</a>`}</div>${popPinBtn('s:' + n.s.key, n.s.tex)}</div>`;
       }
       if (n.kind === 'symbol') {
         return `<div class="insight-note"><div class="insight-note-what"></div>` +
-          `<div class="insight-note-where">${n.s.text ? `${n.group.map((d) => `<span class="insight-sym" data-sym="${esc(d.tex)}"><code>${esc(d.tex)}</code></span>`).join(', ')} introduced in` : 'Defined in'} <a href="#" data-go="s">${esc(where(n.s.el))}</a></div></div>`;
+          `<div class="insight-note-where">${n.s.text ? `${n.group.map((d) => `<span class="insight-sym" data-sym="${esc(d.tex)}"><code>${esc(d.tex)}</code></span>`).join(', ')} introduced in` : 'Defined in'} <a href="#" data-go="s">${esc(where(n.s.el))}</a></div>${popPinBtn('s:' + n.s.key, n.s.tex)}</div>`;
       }
       const e = n.e;
       const sample = sampleOf(e);
       const first = e.first === el ? 'first used here' : `first used in <a href="#" data-go="m">${esc(where(e.first))}</a>`;
       return `<div class="insight-note"><div class="insight-note-what">${sample ? `<span class="insight-sym" data-sym="${esc(sample)}"></span> ` : ''}<code>${esc(definitionOf(e))}</code></div>` +
-        `<div class="insight-note-where">Macro, ${first}${e.count > 1 ? ` · ${e.count} formulas` : ''}</div></div>`;
+        `<div class="insight-note-where">Macro, ${first}${e.count > 1 ? ` · ${e.count} formulas` : ''}</div>${popPinBtn('m:' + e.name, '\\' + e.name)}</div>`;
     }
 
     function showNotes(el) {
@@ -1832,6 +1832,14 @@
       hideTimer = setTimeout(() => hidePop(true), 250);
     });
     pop.addEventListener('click', (e) => {
+      const pin = e.target.closest('[data-pop-pin]');
+      if (pin) {
+        // pin a symbol or macro from its preview: it joins the Notation tab's pinned rows
+        e.preventDefault();
+        togglePin(pin.dataset.popPin);
+        setPinPressed(pin, pinned.has(pin.dataset.popPin), pin.dataset.what);
+        return;
+      }
       const a = e.target.closest('a[data-go]');
       if (!a || !a._target) return;
       e.preventDefault();
@@ -2264,6 +2272,46 @@
       return out;
     }
 
+    /** The pin on a notation preview: pins the symbol (or macro) to the Notation tab. */
+    function popPinBtn(key, what) {
+      const on = pinned.has(key);
+      return `<button type="button" class="insight-pin insight-pop-pin" data-pop-pin="${esc(key)}" data-what="${esc(what)}" aria-pressed="${on}" title="${on ? 'Pinned: click to unpin' : 'Pin it: it stays at the top of the Notation tab and joins the Pinned list'}" aria-label="${on ? 'Unpin' : 'Pin'} ${esc(what)}">${PIN_ICON}</button>`;
+    }
+    function setPinPressed(b, on, what) {
+      b.setAttribute('aria-pressed', String(on));
+      b.title = on ? 'Pinned: click to unpin' : 'Pin it';
+      b.setAttribute('aria-label', (on ? 'Unpin ' : 'Pin ') + (what || ''));
+    }
+    /**
+     * A pin for a reference's preview: pins the result or numbered equation
+     * `target` (as the map's pin does), or null if it is neither.
+     */
+    function pinButtonFor(target) {
+      if (!target || !target.closest) return null;
+      const el = target.closest('.theorem') || target.closest('.math-display');
+      const key = el && keyOfEl(el);
+      if (!key) return null;
+      const n = key.startsWith('eq:') ? null : getGraph().byKey.get(key);
+      const what = n ? n.name : eqNameOf(el);
+      const b = document_.createElement('button');
+      b.type = 'button';
+      b.className = 'insight-pin insight-pop-pin tg-ref-pin';
+      b.innerHTML = PIN_ICON;
+      const sync = () => {
+        const on = pinMap().has(key);
+        setPinPressed(b, on, what);
+        b.title = on ? `${what} is pinned: click to unpin` : `Pin ${what}: it joins the Pinned list and the map`;
+      };
+      sync();
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setPin(key, pinMap().has(key) ? '' : 'self');
+        sync();
+      });
+      return b;
+    }
+
     // Rows the reader pinned stay at the top of the tab (kept per paper by the host).
     const PIN_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.5h4l-.6 4.2 2.6 2.6v1.2H4V8.3l2.6-2.6z M8 9.5V14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
     const readPins = () => {
@@ -2282,6 +2330,7 @@
       else pinned.add(key);
       try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
       for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
+      pinsChanged();
     }
     /** Keep the pinned rows in this order (keys; pins left out keep their place after them). */
     function orderPins(keys, focusKey) {
@@ -2290,6 +2339,7 @@
       if (Array.from(next).join('\n') === Array.from(pinned).join('\n')) return;
       pinned = next;
       try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
+      pinsChanged();
       for (const v of views) {
         if (v.tab !== 'notation' || !v.isShown()) continue;
         fillNotation(v);
@@ -2725,6 +2775,52 @@
       markPins();
       if ((all || part === 'link') && focusState) refocus();
       if ((all || part === 'pin' || part === 'link' || part === 'view') && opts.onPinsChange) opts.onPinsChange();
+      if (all || part === 'pin' || part === 'view') pinsChanged();
+    }
+
+    // Whoever shows the pins (src/pins.js: the toolbar's pin and its list) hears of every change.
+    const pinListeners = new Set();
+    function pinsChanged() {
+      for (const fn of pinListeners) { try { fn(); } catch (e) { /* one listener does not stop the others */ } }
+    }
+
+    /**
+     * Everything pinned, in one list: the map's results and equations, then the
+     * Notation tab's rows, each { key, kind: 'result' | 'equation' | 'notation',
+     * name, note, el (where to jump), d (for a result: 'self', 'uses', 'usedBy', 'both'),
+     * tex (notation: what to draw), code (notation: a macro's name) }.
+     */
+    function pinnedList() {
+      const out = [];
+      const g = getGraph();
+      for (const [k, d] of pinMap()) {
+        if (k.startsWith('eq:')) {
+          const el = eqEls().get(k);
+          out.push({ key: k, kind: 'equation', name: el ? eqNameOf(el) : k.slice(3), el: el && doc.contains(el) ? el : null, d });
+        } else {
+          const n = g.byKey.get(k);
+          if (n && n.cite) continue;
+          const name = n ? n.name : k.replace(/^(label|name):/, '');
+          out.push({ key: k, kind: 'result', name, note: n && n.note && !String(name).includes(n.note) ? n.note : '', el: n && n.el && doc.contains(n.el) ? n.el : null, d });
+        }
+      }
+      if (pinned.size) {
+        const entries = new Map();
+        try { for (const e of entriesOf(getIndex())) entries.set(e.pin, e); } catch (err) { /* no index: names only */ }
+        for (const k of pinned) {
+          const e = entries.get(k);
+          const isMacro = k.startsWith('m:');
+          const tex = e ? (isMacro ? sampleOf(e.it) || '' : e.it.tex) : (isMacro ? '' : k.slice(2));
+          out.push({ key: k, kind: 'notation', name: isMacro ? '\\' + k.slice(2) : tex, tex, code: isMacro ? '\\' + k.slice(2) : '', el: e && e.first && doc.contains(e.first) ? e.first : null });
+        }
+      }
+      return out;
+    }
+
+    /** Unpin one thing by its key (from pinnedList). */
+    function unpinKey(key) {
+      if (pinned.has(key)) togglePin(key);
+      else setPin(key, '');
     }
 
     /** Write the values of `target` wherever the changes differ from it. */
@@ -4200,7 +4296,7 @@
       /** Keep "Used in …" in view at the top of the side panel's Notation tab. */
       setUsedPinned: (on) => setUsedPinned(on, false),
       /** The host's pins changed (another paper opened): draw them. */
-      refreshPins: () => { pinned = readPins(); for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v); },
+      refreshPins: () => { pinned = readPins(); for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v); pinsChanged(); },
       /** Switch parts on or off: { map, notation, uses, words } (missing keys stay as they are). */
       setFeatures(f) {
         const before = Object.assign({}, feats);
@@ -4254,11 +4350,24 @@
         for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
         markPins();
         if (focusState) refocus();
+        pinsChanged();
       },
       /** The elements "Show pinned" shows, pins with their submaps brought along. */
       pinnedEls,
-      /** How many things are pinned. */
+      /** How many results and equations are pinned (on the map). */
       pinCount: () => pinMap().size,
+      /** Everything pinned: map pins and Notation rows (see pinnedList above). */
+      pinnedList,
+      /** How many things are pinned anywhere: map pins and Notation rows. */
+      allPinCount: () => pinMap().size + pinned.size,
+      /** A pin button for the preview of a result or numbered equation (null for anything else). */
+      pinButtonFor,
+      /** Unpin one item of pinnedList by its key. */
+      unpinKey,
+      /** Hear of every change to the pins; returns a function that stops it. */
+      onPins: (fn) => { pinListeners.add(fn); return () => pinListeners.delete(fn); },
+      /** Fill elements carrying data-sym (TeX) with the rendered symbol, the document's macros known. */
+      renderSymbols,
       /** Whether a result or numbered equation element is pinned (any way). */
       isPinned: (el) => { const k = keyOfEl(el); return !!(k && pinMap().has(k)); },
       /** Pin (d 'self' | 'uses' | 'usedBy' | 'both') or unpin ('') a result or numbered equation element. */
