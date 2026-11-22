@@ -15,6 +15,8 @@
 # zips, with notes generated from the pull requests merged since the previous
 # tag, and the .vsix goes to the VS Code Marketplace (and Open VSX). The
 # Firefox build goes to Firefox Add-ons when the AMO_JWT_* secrets are set.
+# The converter and CLI (root package.json, same version) go to npm as
+# "texglass" once that package exists there (see "Publish to npm").
 name: Release
 
 on:
@@ -65,6 +67,8 @@ jobs:
         run: |
           (cd vscode && npm version "$BUMP" --no-git-tag-version)
           v=$(node -p "require('./vscode/package.json').version")
+          # the npm package (root package.json) carries the same version
+          npm version "$v" --no-git-tag-version --allow-same-version
           if git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then
             echo "::error::Tag v$v already exists"
             exit 1
@@ -85,6 +89,8 @@ jobs:
             exit 1
           fi
           echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          # the npm package is published with the same version (not committed here)
+          npm version "$tag" --no-git-tag-version --allow-same-version
 
       - name: Install
         run: |
@@ -208,3 +214,26 @@ jobs:
             exit 0
           fi
           exit "$status"
+
+      # npm: the converter and CLI (root package.json, its "files") as the
+      # package "texglass", with the release's version. Trusted publishing: no
+      # token. npm can only trust a workflow for a package that exists, so the
+      # first version is published by hand from a clone (npm login, then
+      # npm publish --access public); then, on npmjs.com, the package's
+      # Settings > Trusted Publisher names GitHub Actions, klepo0/TeXglass,
+      # workflow release.yml. Until then this step only warns.
+      - name: Publish to npm
+        run: |
+          v="${TAG#v}"
+          if ! npm view texglass name >/dev/null 2>&1; then
+            echo "::notice::texglass is not on npm yet; publish its first version by hand (see the comment above this step)"
+            exit 0
+          fi
+          if [ "$(npm view "texglass@$v" version 2>/dev/null)" = "$v" ]; then
+            echo "::notice::texglass $v is already on npm"
+            exit 0
+          fi
+          # trusted publishing needs npm 11.5.1 or later
+          if ! npx --yes npm@11.6.2 publish --provenance --access public; then
+            echo "::warning::Could not publish texglass $v to npm: is release.yml its Trusted Publisher on npmjs.com?"
+          fi
