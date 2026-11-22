@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* Convert a .tex file to a standalone HTML page or an EPUB e-book:
- * texglass paper.tex [-o paper.html] [--reader] [--link-katex] [--epub] */
+ * texglass paper.tex [-o paper.html] [--reader] [--link-katex] [--epub]
+ * texglass --sty  (copies texglass.sty, the optional LaTeX package, here) */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -11,12 +12,25 @@ const TeXglassEpub = require('../src/epub.js');
 
 const args = process.argv.slice(2);
 if (!args.length || args.includes('-h') || args.includes('--help')) {
-  console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex] [--epub]\n\n' +
+  console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex] [--epub]\n' +
+    '       texglass --sty\n\n' +
     '  --reader      add the reading tools: reference previews, notation on hover, the side panel\n' +
     '                (contents, map, notation index), Navigate (Ctrl+F, Ctrl+G) and Back\n' +
     '  --link-katex  load KaTeX\'s stylesheet and fonts from a CDN instead of putting them in the page\n' +
-    '  --epub        write an EPUB e-book (out.epub) instead, with the maths as MathML, for e-readers');
+    '  --epub        write an EPUB e-book (out.epub) instead, with the maths as MathML, for e-readers\n' +
+    '  --sty         copy texglass.sty into this folder: optional hints for TeXglass that LaTeX ignores');
   process.exit(args.length ? 0 : 1);
+}
+if (args[0] === '--sty') {
+  // texglass.sty (latex/texglass.sty), for authors; docs/GUIDE.md "Hints for TeXglass in your own papers"
+  const to = path.resolve('texglass.sty');
+  if (fs.existsSync(to)) {
+    console.error('texglass.sty is already here; remove it first to replace it.');
+    process.exit(1);
+  }
+  fs.copyFileSync(path.join(__dirname, '..', 'latex', 'texglass.sty'), to);
+  console.log(`Wrote ${to}`);
+  process.exit(0);
 }
 const input = args[0];
 const o = args.indexOf('-o');

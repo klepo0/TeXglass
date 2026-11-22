@@ -43,7 +43,8 @@
     "src/insight.js",
     "src/cite.js",
     "src/reader.js",
-    "styles.css"
+    "styles.css",
+    "latex/texglass.sty"
   ],
   "scripts": {
     "start": "node bin/serve.js",

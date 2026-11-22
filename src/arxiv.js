@@ -190,6 +190,8 @@
    */
   const NATIVE_PACKAGES = new Set([
     'mhequ',
+    // TeXglass's own package (latex/texglass.sty): its commands are read natively
+    'texglass',
     'amsmath', 'amssymb', 'amsthm', 'amsfonts', 'mathtools', 'graphicx', 'graphics', 'color', 'xcolor',
     'hyperref', 'url', 'geometry', 'fullpage', 'natbib', 'cite', 'enumitem', 'enumerate', 'footmisc',
     'caption', 'caption3', 'subcaption', 'subfig', 'subfigure', 'float', 'booktabs', 'multirow',

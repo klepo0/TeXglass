@@ -850,6 +850,19 @@
     'startlocaldefs', 'endlocaldefs',
   ]);
 
+  /** Commands texglass.sty defines: TeXglass reads them itself, so a copy of the package never redefines them. */
+  const TG_COMMANDS = new Set(['tgdefine', 'tguses', 'tgparam', 'tgstep', 'tghide', 'tgonly']);
+  const TG_ENVS = new Set(['tghide', 'tgonly']);
+  /** HTML of only the empty markers they leave. */
+  const TG_MARKERS = /^(?:<span class="tg-(?:define|param|stepmark)"[^>]*><\/span>\s*)+$/;
+
+  /** The symbol of \tgdefine{…}: TeX for a formula, with any $…$ or \(…\) around it taken off. */
+  function tgSymbol(s) {
+    s = String(s).trim();
+    const m = /^\$([^$]*)\$$/.exec(s) || /^\\\(([\s\S]*)\\\)$/.exec(s);
+    return (m ? m[1] : s).trim();
+  }
+
   /** Commands whose arguments are dropped entirely. */
   const DROP_ARGS = new Set([
     'usepackage', 'RequirePackage', 'setlength', 'addtolength', 'vspace', 'hspace', 'pagestyle',
@@ -1208,7 +1221,9 @@
         this.topLevel = 'chapter';
         this.counters.section.parent = 'chapter';
       }
+      this.inPreamble = true;
       this.flow(pre, false); // preamble: definitions only, output discarded
+      this.inPreamble = false;
       this.trackDepth = this.depth + 1;
       this.trackBase = bodyStart;
       this.trackText = src;
@@ -1222,6 +1237,12 @@
           '</ol></section>';
         html += '\n' + notes;
         if (this.blocks) this.blocks.push(notes);
+      }
+      if (this.tgPreamble && this.tgPreamble.length) {
+        // texglass.sty hints from the preamble hold for the whole paper
+        const marks = this.tgPreamble.join('');
+        html += '\n' + marks;
+        if (this.blocks) this.blocks.push(marks);
       }
       return html;
     }
@@ -1252,7 +1273,8 @@
       const flush = (pos) => {
         const t = para.trim();
         if (t) {
-          out.push(inline ? para : `<p>${t}</p>`);
+          // a paragraph of nothing but texglass.sty markers is no paragraph
+          out.push(inline ? para : TG_MARKERS.test(t) ? t : `<p>${t}</p>`);
           if (track) spans[out.length - 1] = [paraStart, pos];
         } else if (inline && para) out.push(para);
         para = '';
@@ -1432,7 +1454,7 @@
       if (this.isCond(name)) return res('', this.conditional(name, src, i));
       if (name === 'newif') {
         const t = readToken(src, i);
-        if (/^\\if[A-Za-z@]+$/.test(t.tok)) {
+        if (/^\\if[A-Za-z@]+$/.test(t.tok) && t.tok !== '\\iftexglass') {
           this.flags.set(t.tok.slice(1), false);
           this._katexMacros = null;
         }
@@ -1441,7 +1463,7 @@
       {
         const f = /^(.+)(true|false)$/.exec(name);
         if (f && this.flags.has('if' + f[1]) && !this.macros[name]) {
-          this.flags.set('if' + f[1], f[2] === 'true');
+          if (f[1] !== 'texglass') this.flags.set('if' + f[1], f[2] === 'true');
           this._katexMacros = null;
           return res('', i);
         }
@@ -1513,6 +1535,61 @@
       if (DROP_ARGS.has(name)) return res('', dropArgs(src, i));
 
       switch (name) {
+        // texglass.sty (docs/GUIDE.md, "Hints for TeXglass in your own papers"):
+        // hints that ordinary LaTeX ignores, read here.
+        case 'tgdefine': {
+          // \tgdefine{symbol}{meaning}: what a symbol means, for notation hovers and the index
+          const s = readArg(src, i);
+          const m = readArg(src, s.end);
+          const sym = tgSymbol(s.content);
+          if (!sym) return res('', m.end);
+          // the meaning goes in an attribute, so that it is no running text of the page
+          const meaning = escapeHtml(this.flow(m.content, true).trim());
+          if (this.inPreamble) {
+            (this.tgPreamble || (this.tgPreamble = [])).push(`<span class="tg-define" data-tg-sym="${escapeHtml(sym)}" data-tg-meaning="${meaning}" data-tg-scope="document"></span>`);
+            return res('', m.end);
+          }
+          return res(`<span class="tg-define" data-tg-sym="${escapeHtml(sym)}" data-tg-meaning="${meaning}"></span>`, m.end);
+        }
+        case 'tguses': {
+          // \tguses{lem:a,thm:b}: links for the dependency map that the text does not state
+          const a = readArg(src, i);
+          const links = a.content.split(',').map((k) => k.trim()).filter(Boolean).map((key) => {
+            const info = this.lookup(key);
+            if (!info) {
+              if (this.known) this.warnings.push(`Undefined reference "${key}" in \\tguses.`);
+              return '';
+            }
+            return `<a class="ref tg-uses" href="#${info.id}" data-label="${escapeHtml(key)}" aria-hidden="true" tabindex="-1"></a>`;
+          });
+          return res(links.join(''), a.end);
+        }
+        case 'tgparam': {
+          // \tgparam[start]{name}{min}{max}: a parameter for live sliders (recorded; sliders to come)
+          const o = readOpt(src, i);
+          const n = readArg(src, o ? o.end : i);
+          const lo = readArg(src, n.end);
+          const hi = readArg(src, lo.end);
+          const attr = (k, v) => ` data-${k}="${escapeHtml(v.trim())}"`;
+          return res(`<span class="tg-param"${attr('name', n.content)}${attr('min', lo.content)}${attr('max', hi.content)}${o ? attr('value', o.content) : ''} hidden></span>`, hi.end);
+        }
+        case 'tgstep': {
+          // \tgstep[title]: an author's step break in a proof, for stepping through it (src/steps.js)
+          const o = readOpt(src, i);
+          const title = o ? stripTags(this.flow(o.content, true)).replace(/\s+/g, ' ').trim() : '';
+          return res(`<span class="tg-stepmark" data-tg-step="${escapeHtml(title)}"></span>`, o ? o.end : i);
+        }
+        case 'tghide': {
+          // \tghide{…}: in the PDF only
+          const a = readArg(src, i);
+          return res('', a.end);
+        }
+        case 'tgonly': {
+          // \tgonly{…}: in TeXglass only (LaTeX leaves it out)
+          const a = readArg(src, i);
+          const pad = (re) => (re.test(a.content) ? ' ' : '');
+          return res(pad(/^\s/) + this.flow(a.content, true).trim() + pad(/\s$/), a.end);
+        }
         case 'label': {
           // cleveref's \label[type]{key}: the [type] only changes how \cref names it
           const o = readOpt(src, i);
@@ -1731,6 +1808,7 @@
           if (def) j = def.end;
           const body = readArg(src, j);
           const key = nm.content.trim().replace(/^\\/, '');
+          if (TG_COMMANDS.has(key)) return res('', body.end);
           if (name !== 'providecommand' || !this.macros[key]) {
             this.macros[key] = { nargs: nargs ? parseInt(nargs.content, 10) || 0 : 0, def: def ? def.content : null, body: body.content };
             this._katexMacros = null;
@@ -1754,6 +1832,7 @@
           // KaTeX has no \csname, so \<b0> goes through \texglassTree, which
           // draws the symbol (see treeMarker).
           if (nm.content === '\\<' && /\\csname/.test(mac.body)) mac.body = '\\texglassTree{#1}';
+          if (TG_COMMANDS.has(nm.content.replace(/^\\/, ''))) return res('', body.end);
           this.macros[nm.content.replace(/^\\/, '')] = mac;
           this._katexMacros = null;
           return res('', body.end);
@@ -1859,6 +1938,7 @@
           if (def) j = def.end;
           const begin = readArg(src, j);
           const end = readArg(src, begin.end);
+          if (TG_ENVS.has(nm.content.trim())) return res('', end.end);
           this.envs[nm.content.trim()] = {
             nargs: nargs ? parseInt(nargs.content, 10) || 0 : 0, def: def ? def.content : null,
             begin: begin.content, end: end.content,
@@ -2289,6 +2369,10 @@
 
       switch (name) {
         case 'document':
+          return this.flow(body, false);
+        case 'tghide': // texglass.sty: in the PDF only
+          return '';
+        case 'tgonly': // texglass.sty: in TeXglass only
           return this.flow(body, false);
         case 'frontmatter': {
           // imsart, elsarticle: \title, \author, … and the abstract inside, with
@@ -2893,6 +2977,8 @@
   const DEFAULT_FLAGS = {
     ifpdf: true, ifPDFTeX: true, ifpdftex: true, ifxetex: false, ifXeTeX: false, ifluatex: false, ifLuaTeX: false,
     ifvtex: false, iftutex: false, ifdraft: false,
+    // texglass.sty: false in LaTeX, true here (\newif\iftexglass and \texglassfalse leave it so)
+    iftexglass: true,
   };
 
   /** Read one token: a control sequence (with the spaces after a word) or a character. */
