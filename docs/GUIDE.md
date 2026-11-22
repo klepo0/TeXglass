@@ -905,6 +905,10 @@ text still works as usual.
   usual symbol.
 - **Text in formulas**: `\mbox`, `\text`, `\parbox`, `\textsc` and
   `\footnote` inside maths, with `$…$` of their own.
+- **Plain TeX**: `\eqno` and `\leqno`, `\buildrel … \over`, `\eqalign`,
+  `\displaylines`, `\centerline`, `\romannumeral`, names made with
+  `\csname … \endcsname`; page sizes and spacing (`\textwidth 16cm`,
+  `\vskip 2pt plus 1pt`) are skipped without leaving their sizes in the text.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
   enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`,

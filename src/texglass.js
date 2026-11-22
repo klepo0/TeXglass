@@ -325,6 +325,18 @@
   /** KaTeX macros for commands from common packages that KaTeX lacks. */
   const MATH_MACROS = {
     '\\hdots': '\\ldots',
+    // symbols from fdsymbol/MnSymbol and amsmath spacing that KaTeX lacks
+    '\\shortleftarrow': '\\mathrel{\\scriptstyle\\leftarrow}',
+    '\\shortrightarrow': '\\mathrel{\\scriptstyle\\rightarrow}',
+    '\\mspace': '\\mskip#1',
+    // rules that stretch to fill a box: drawn at a fixed width in a formula
+    '\\hrulefill': '\\rule[0.25em]{1.5em}{0.4pt}',
+    '\\leftarrowfill': '\\xleftarrow{\\quad}',
+    '\\rightarrowfill': '\\xrightarrow{\\quad}',
+    '\\expandafter': '',
+    // plain TeX displays: \eqalign{a &= b\cr …} and \displaylines{…\cr …}
+    '\\eqalign': '\\begin{aligned}#1\\end{aligned}',
+    '\\displaylines': '\\begin{gathered}#1\\end{gathered}',
     // \ensuremath{…} is just its argument once in math (user macros like
     // \newcommand{\R}{\ensuremath{\mathbb R}} used inside $…$); \xspace adds nothing there.
     '\\ensuremath': '#1',
@@ -845,7 +857,7 @@
     'makeatletter', 'makeatother', 'normalsize', 'selectfont', 'onecolumn', 'twocolumn', 'mainmatter',
     'frontmatter', 'backmatter', 'printbibliography', 'listoffigures', 'listoftables', 'qedhere', 'xspace',
     'ignorespaces', 'unskip', 'allowbreak', 'break', 'nolinebreak', 'leavevmode', 'displaybreak',
-    'long', 'outer', 'listoftodos', 'reversemarginpar', 'normalmarginpar',
+    'long', 'outer', 'listoftodos', 'reversemarginpar', 'normalmarginpar', 'expandafter',
     // imsart (IMS journals) wraps the preamble's definitions in these
     'startlocaldefs', 'endlocaldefs',
   ]);
@@ -861,6 +873,65 @@
     s = String(s).trim();
     const m = /^\$([^$]*)\$$/.exec(s) || /^\\\(([\s\S]*)\\\)$/.exec(s);
     return (m ? m[1] : s).trim();
+  }
+
+  /**
+   * Plain TeX in formulas that KaTeX does not read: \eqno and \leqno (an
+   * equation number, as \tag), \buildrel A \over B (as \stackrel), and the
+   * corners \ulcorner … \urcorner after \left and \right (KaTeX does not
+   * stretch them, so they are drawn at their own size).
+   */
+  function plainTexMath(tex, display) {
+    if (/\\l?eqno(?![A-Za-z@])/.test(tex)) {
+      const tags = tex.match(/\\l?eqno(?![A-Za-z@])/g).length;
+      tex = tex.replace(/\\l?eqno(?![A-Za-z@])\s*((?:[^\\]|\\(?!\\|cr(?![A-Za-z@])|end(?![A-Za-z@])))*)/g, (_, num) => {
+        const n = num.trim();
+        if (!n) return '';
+        // one number on a whole display: an equation tag; several (one per row), text at the row's end
+        if (display && tags === 1) return `\\tag{${n.replace(/^\(([\s\S]*)\)$/, '$1').replace(/^\$([\s\S]*)\$$/, '$1')}}`;
+        return `\\qquad ${n}`;
+      });
+    }
+    // a superscript or subscript on a space (\fix^{k} with \newcommand{\fix}{\theta\,}):
+    // TeX puts it on an empty box, KaTeX stops with an error
+    tex = tex.replace(/(?<!\\)(\\(?:[,;:!>]|(?:q?quad|thinspace|medspace|thickspace|enspace|negthinspace|negmedspace|negthickspace)(?![A-Za-z@])))(\s*)(?=[\^_]|$)/g, '$1{}$2');
+    // \uppercase\expandafter{\romannumeral 2} (II) and \romannumeral 2 (ii)
+    if (/\\romannumeral/.test(tex)) {
+      tex = tex.replace(/\\uppercase\s*(?:\\expandafter\s*)?\{\s*\\romannumeral\s*(\d+)\s*\}/g, (_, n) => `\\mathrm{${roman(+n).toUpperCase()}}`)
+        .replace(/\\romannumeral\s*(\d+)/g, (_, n) => `\\mathrm{${roman(+n)}}`);
+    }
+    if (/\\buildrel(?![A-Za-z@])/.test(tex)) {
+      tex = tex.replace(/\\buildrel(?![A-Za-z@])\s*((?:[^\\]|\\(?!over(?![A-Za-z@])))*?)\\over(?![A-Za-z@])\s*(\\[A-Za-z@]+|\{[^{}]*\}|\S)/g,
+        (_, top, rel) => `\\stackrel{${top.trim()}}{${rel}}`);
+    }
+    if (/\\(?:left|right)\s*\\(?:ul|ur|ll|lr)corner/.test(tex)) {
+      tex = tex.replace(/\\left\s*\\((?:ul|ll|ur|lr)corner)(?![A-Za-z@])/g, '\\mathopen{\\$1}').replace(/\\right\s*\\((?:ul|ll|ur|lr)corner)(?![A-Za-z@])/g, '\\mathclose{\\$1}');
+    }
+    return tex;
+  }
+
+  /** TeX length registers set in preambles, as in \textwidth 16cm or \topmargin=-1in. */
+  const TEX_LENGTHS = new Set([
+    'textwidth', 'textheight', 'oddsidemargin', 'evensidemargin', 'topmargin', 'headheight', 'headsep',
+    'footskip', 'marginparwidth', 'marginparsep', 'marginparpush', 'hoffset', 'voffset', 'columnsep',
+    'columnseprule', 'parindent', 'parskip', 'baselineskip', 'lineskip', 'lineskiplimit', 'topskip',
+    'footnotesep', 'arraycolsep', 'tabcolsep', 'arrayrulewidth', 'doublerulesep', 'jot', 'mathindent',
+    'abovedisplayskip', 'belowdisplayskip', 'abovedisplayshortskip', 'belowdisplayshortskip',
+    'labelsep', 'labelwidth', 'leftmargin', 'rightmargin', 'itemsep', 'itemindent', 'listparindent',
+    'partopsep', 'topsep', 'emergencystretch', 'hsize', 'vsize', 'unitlength', 'fboxsep', 'fboxrule',
+    'leftmargini', 'leftmarginii', 'leftmarginiii', 'textfloatsep', 'floatsep', 'intextsep', 'parfillskip',
+  ]);
+  /** Plain TeX spacing commands that take a size without braces. */
+  const TEX_SKIPS = new Set(['vskip', 'hskip', 'kern', 'mkern', 'vglue', 'hglue', 'moveleft', 'moveright']);
+
+  /** The end of a TeX size after src[i], as in "=-1in", " 2pt plus 1pt minus 1fil" or " 0.5\textwidth". */
+  function skipGlue(src, i) {
+    const num = '[-+]?\\s*(?:\\d+(?:[.,]\\d*)?|[.,]\\d+)';
+    const unit = '(?:true\\s*)?(?:pt|cm|mm|in|em|ex|bp|pc|sp|dd|cc|mu|fil+)\\b';
+    const size = `(?:${num}\\s*(?:${unit}|\\\\[A-Za-z@]+)|[-+]?\\s*\\\\[A-Za-z@]+)`;
+    const re = new RegExp(`^\\s*=?\\s*${size}(?:\\s*plus\\s*${size})?(?:\\s*minus\\s*${size})?`);
+    const m = re.exec(src.slice(i, i + 200));
+    return m ? i + m[0].length : i;
   }
 
   /** Commands whose arguments are dropped entirely. */
@@ -1095,6 +1166,7 @@
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex)), this.triple));
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
+      tex = plainTexMath(tex, display);
       try {
         const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
         return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
@@ -1177,7 +1249,7 @@
           // body itself, so size double brackets and angles in it here. KaTeX
           // also reads a space from the body between a command and its argument
           // ({…}\n {…} after \mathchoice), which TeX skips.
-          const body = this.sizeDoubles(mac.body).replace(/\}\s+(?=\{)/g, '}');
+          const body = plainTexMath(this.sizeDoubles(mac.body).replace(/\}\s+(?=\{)/g, '}'), false);
           if (body !== mac.body) mac = Object.assign({}, mac, { body });
           const own = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
           m['\\' + name] = isLowLevel(name, 0) ? lowLevelMacro('\\' + name, own) : own;
@@ -1816,7 +1888,14 @@
           return res('', body.end);
         }
         case 'def': case 'gdef': case 'edef': case 'xdef': {
-          const nm = readArg(src, i);
+          let nm = readArg(src, i);
+          // \expandafter\def\csname name\endcsname{…}: a name built from text
+          // (the \expandafter itself is dropped as an unknown command)
+          if (nm && nm.content === '\\csname') {
+            const e = src.indexOf('\\endcsname', nm.end);
+            const cs = e >= 0 && src.slice(nm.end, e).trim();
+            if (cs && /^[A-Za-z@]+$/.test(cs)) nm = { content: '\\' + cs, end: e + '\\endcsname'.length };
+          }
           let j = nm.end;
           // The parameter text runs up to the body's brace. Besides #1#2 it
           // may hold delimiters, as in \def\pair(#1,#2){…}.
@@ -2026,6 +2105,22 @@
         const alias = !mac.nargs && !mac.delims && /^\s*\\([A-Za-z@]+)\s*$/.exec(mac.body);
         if (alias && alias[1] !== name && !this.isMathBody(mac.body, 0) && !this.macros[alias[1]] && !this.isCond(alias[1])) return this.command(alias[1], src, i, inline);
         return this.expandMacro(mac, src, i, inline);
+      }
+
+      // Page-layout lengths and plain TeX spacing (\textwidth 16cm, \vskip 2pt plus 1pt):
+      // nothing to show, and their sizes must not end up in the text.
+      if (TEX_LENGTHS.has(name) || TEX_SKIPS.has(name)) return res('', skipGlue(src, i));
+      if (name === 'newblock') return res(' ', i);
+      if (name === 'romannumeral' || name === 'uppercase') {
+        const m = /^\s*(?:\\expandafter\s*)?(\{\s*\\romannumeral\s*)?(\d+)\s*(\})?/.exec(src.slice(i));
+        if (m && (name === 'romannumeral' ? !m[1] : m[1] && m[3])) {
+          const r = roman(+m[2]);
+          return res(name === 'uppercase' ? r.toUpperCase() : r, i + m[0].length);
+        }
+      }
+      if (name === 'centerline') {
+        const a = readArg(src, i);
+        if (a) return res(`<span class="center" style="display:block">${this.flow(a.content, true)}</span>`, a.end);
       }
 
       // Unknown command: drop the name, show its arguments.
