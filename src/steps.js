@@ -15,14 +15,11 @@
  * open while you step through them and fold into their first line once you
  * have stepped past them, with a button to open them again.
  *
- * Each reference or citation in a piece gets a small "why?" chip: it opens
- * the referenced result (or bibliography entry) in the host's usual preview,
- * a popover or, on a touch screen, a bottom sheet, without leaving your place.
+ * References and citations keep the host's usual previews (on hover, or a
+ * bottom sheet on a tap): a tap on a link never counts as "next".
  *
  *   const steps = TeXglassSteps.attach({
  *     root: preview,                // the rendered document
- *     preview(link, chip) { ... },  // show the preview of a reference link
- *     closePreview() { ... },       // hide it
  *     reveal(proof) { ... },        // optional: unfold a folded proof
  *     previewOpen() { ... },        // optional: whether a preview shows (Esc closes it first)
  *     dismissPreview() { ... },     // optional: close any preview, on Esc
@@ -159,7 +156,7 @@
         if (v) tail = v;
         return;
       }
-      if (n.nodeType !== 1 || n.matches('.katex-mathml, .qed, button, .tg-why, .tg-step-fold, .rp-marks, sup.fn, .tg-margin, .marginnote, script, style')) return;
+      if (n.nodeType !== 1 || n.matches('.katex-mathml, .qed, button, .tg-step-fold, .rp-marks, sup.fn, .tg-margin, .marginnote, script, style')) return;
       if (n.matches('.math')) { tail = texTail(n.getAttribute('data-tex')) || 'x'; return; }
       for (let c = n.lastChild; c && !tail; c = c.previousSibling) walk(c);
     };
@@ -319,7 +316,7 @@
     }
 
     function build(proof) {
-      const made = { spans: [], chips: [], toggles: [] };
+      const made = { spans: [], toggles: [] };
       const steps = []; // { el, els, group }: el is the first element of the piece, els all of them
       const groups = []; // { head, from, to, el(s), kind, open: null|bool, toggle }
 
@@ -469,34 +466,11 @@
         made.toggles.push(t);
       }
 
-      // "why?" chips after references and citations.
-      steps.forEach((s) => {
-        const links = [].concat(...s.els.map((e) => (e.matches('a.ref, .cite') ? [e] : Array.from(e.querySelectorAll('a.ref, .cite')))));
-        for (const l of links) {
-          if (l.closest('.math, .katex, .ref-popover, .tg-step-bar')) continue;
-          if (l.matches('.cite') && l.parentElement.closest('.cite')) continue;
-          const a = l.matches('a') ? l : l.querySelector('a[href^="#"]');
-          if (!a || !/^#/.test(a.getAttribute('href') || '')) continue;
-          const target = doc.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
-          if (!target || proof.contains(target) && !target.matches('.math-display, .theorem')) continue;
-          const chip = doc.createElement('button');
-          chip.type = 'button';
-          chip.className = 'tg-why';
-          chip.textContent = 'why?';
-          chip.title = 'Show what this refers to, without leaving the proof';
-          chip.setAttribute('aria-label', 'Show ' + (a.textContent.trim() || 'the reference') + ' here');
-          chip._tgLink = a;
-          l.after(chip);
-          made.chips.push(chip);
-        }
-      });
-
       return { steps, groups, boxes, made };
     }
 
     function unbuild(st) {
       const { made, proof } = st;
-      made.chips.forEach((c) => c.remove());
       made.toggles.forEach((t) => t.remove());
       const parents = new Set();
       made.spans.forEach((s) => {
@@ -608,7 +582,6 @@
       if (!state) return;
       const n = state.steps.length;
       const at = Math.max(0, Math.min(n - 1, i));
-      if (opts.closePreview) opts.closePreview();
       // a part folded by hand opens again when you step into it
       for (const g of state.groups) if (at >= g.from && at <= g.to && g.open === false) g.open = null;
       state.at = at;
@@ -635,7 +608,6 @@
       if (!state) return;
       const st = state;
       state = null;
-      if (opts.closePreview) opts.closePreview();
       unbuild(st);
     }
 
@@ -662,13 +634,6 @@
         if (a === 'next') next();
         else if (a === 'back') back();
         else if (a === 'all') stop();
-        return;
-      }
-      const why = e.target.closest('.tg-why');
-      if (why) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (opts.preview) opts.preview(why._tgLink, why);
         return;
       }
       const fold = e.target.closest('.tg-step-fold');
@@ -703,7 +668,7 @@
       else if (e.key === 'Home') go(0);
       else if (e.key === 'End') go(state.steps.length - 1);
       else if (e.key === 'Escape') {
-        if (opts.previewOpen && opts.previewOpen()) (opts.dismissPreview || opts.closePreview || (() => {}))();
+        if (opts.previewOpen && opts.previewOpen()) (opts.dismissPreview || (() => {}))();
         else stop();
       } else handled = false;
       if (handled) { e.preventDefault(); e.stopPropagation(); }

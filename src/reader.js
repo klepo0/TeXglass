@@ -195,6 +195,7 @@
     ? TeXglassInsight.attach({
       root: preview,
       jump: (el) => jumpTo(el),
+      onEditSearch: () => { if (finder) finder.open('uses'); },
       renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
       hover: store.get('texglass:notationHover') !== 'off',
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
@@ -288,17 +289,20 @@
   showToc();
   spyToc();
 
-  // --- Navigate: find, go to, trace ---------------------------------------------------
+  // --- Navigate: find, go to, trace, uses ---------------------------------------------------
 
   const findButton = $('find');
+  let finder = null;
   if (window.TeXglassFind) {
-    const finder = TeXglassFind.attach({
+    finder = TeXglassFind.attach({
       root: preview,
       scroller: pane,
       reveal: () => {},
       onJump: hidePopover,
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
+      uses: (q) => (insight ? insight.searchUses(q) : null),
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     });
     TeXglassFind.bindKeys(window, finder);
     if (findButton) findButton.addEventListener('click', () => finder.open('find'));
