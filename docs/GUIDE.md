@@ -50,11 +50,12 @@ letters are ignored while you type in a text field.
 | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> | Next / previous match while the bar is open. In the Find box, <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> do the same. |
 | <kbd>Alt+Left</kbd> / <kbd>Alt+Right</kbd> | [Back](#back-to-where-you-were) to where you were before a jump, and forward again (<kbd>Option</kbd> on a Mac). Not while you type in a text field. |
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to** and **Trace**: move through the list and pick. |
-| <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", or the contents drawer on a narrow window. |
+| <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", stepping through a proof, or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
 | <kbd>Alt</kbd> + arrow keys | On the map: move the focused result (unless the map is locked). |
 | <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> | On the map: undo / redo the last change to it (also <kbd>Ctrl+Y</kbd>). |
 | <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> <kbd>F</kbd> | In the larger map: zoom in, zoom out, 100%, fit the whole map. Ctrl + scroll or a pinch zooms at the pointer; drag the background to move. |
+| <kbd>→</kbd> / <kbd>←</kbd> | While [stepping through a proof](#understanding-the-logic): the next / previous piece. <kbd>Space</kbd> and <kbd>Shift+Space</kbd>, <kbd>PageDown</kbd> and <kbd>PageUp</kbd> do the same; <kbd>Home</kbd> / <kbd>End</kbd> go to the first / last piece; <kbd>Esc</kbd> stops. |
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
 | Click a formula | Copy its LaTeX. |
@@ -341,6 +342,31 @@ kept per paper with your notes, so it is exported, imported and synced with them
   - **Print** on the bar prints what is shown: with **Hide the rest** on, only
     the lit results, and of their proofs only the ones you opened.
 - **Trace**: the same, chosen by name from the Navigate bar.
+- **Step through a proof.** The **Step through** button by a proof's heading
+  shows the proof one piece at a time, like a slide reveal: a sentence, a
+  displayed equation or a list item. Works on any paper; the author changes
+  nothing.
+  - <kbd>→</kbd>, <kbd>Space</kbd>, **Next** or a click (a tap) on the proof's
+    text shows the next piece; <kbd>←</kbd> or **Back** goes back. The bar
+    under the proof stays in view and counts the pieces ("5 / 20").
+  - The piece just shown is highlighted; the rest of the proof is hidden until
+    you get there.
+  - **Nested parts** open while you step through them and fold to their first
+    line once you are past them: a claim with its own proof, a proof inside
+    the proof, a paragraph starting "Case 1.", "Step 2:", "Part (ii)." and
+    what follows it, a long list item. **▸ 3 more** opens a folded part
+    again; **▾ fold** folds it.
+  - Every reference and citation in a piece gets a small **why?** chip: it
+    opens the lemma, equation or bibliography entry in the usual preview (a
+    bottom sheet on a phone) without leaving your place. Click elsewhere or
+    press <kbd>Esc</kbd> to close it.
+  - **Show all**, <kbd>Esc</kbd>, **Stop** on the heading, or **Done** after
+    the last piece ends it and shows the whole proof again. Folding the proof
+    ends it too. Proofs with fewer than three pieces have no button.
+  - Sentences are found by their full stops (not after "e.g.", "Lemma 2.",
+    initials and the like). An author using `texglass.sty` can mark the
+    pieces with `\tgstep`; a proof with such marks is cut only there.
+  - Settings: **Step through proofs**. VS Code: `texglass.stepThroughProofs`.
 - **Show pinned results**: see only the results and numbered equations you
   pinned (see [Pins and your own map](#pins-and-your-own-map)). Start it from
   the map's **Show pinned**, the … menu (web viewer) or **TeXglass: Show
@@ -456,6 +482,7 @@ restores them. Choices apply to every paper at once.
 | | "What does this use?" buttons | The button by each result. |
 | Study | Highlights and notes | Same as the `…` menu item. |
 | | Reading progress | Same as the `…` menu item. |
+| | Step through proofs | The **Step through** button by each proof. |
 | Page | Click a formula to copy its LaTeX | |
 | | Handwritten notes look | Same as the pen button. |
 
@@ -695,6 +722,7 @@ All in the Command Palette under **TeXglass:**.
 | `texglass.notationIndex` | `true` | The Notation tab. |
 | `texglass.dependencyMap` | `true` | The Map tab, larger map and "Uses / Used in" under previews. |
 | `texglass.whatDoesThisUse` | `true` | "What does this use?" buttons. |
+| `texglass.stepThroughProofs` | `true` | The "Step through" button by each proof. |
 | `texglass.previews.references` | `true` | Previews of references. |
 | `texglass.previews.footnotes` | `true` | Previews of footnotes. |
 | `texglass.previews.citations` | `true` | Previews of citations (the bibliography entry). |
@@ -808,7 +836,8 @@ it on a computer.
 
 **Previews open on a tap.** On a touch screen, the previews that a mouse shows
 on hover open as a sheet at the bottom of the screen. That covers references,
-citations, footnotes, notation and the map's results.
+citations, footnotes, notation and the map's results, and the **why?** chips
+when you step through a proof (tap the proof to show its next piece).
 
 - A tap on a reference or citation shows it, without leaving your place.
   **Go there** in the sheet jumps to it, and the **Back** button at the top

@@ -789,6 +789,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'insight.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pick.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'steps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>

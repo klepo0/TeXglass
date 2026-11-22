@@ -1508,6 +1508,8 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
+  .tg-step-btn, .tg-step-bar, .tg-why, .tg-step-fold { display: none !important; }
+  #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
   .uses-focus .uses-fade { opacity: 1 !important; }
   .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
@@ -2457,3 +2459,65 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .pick-names { color: var(--muted); font-size: 0.9em; }
 .pick-bar button:disabled { opacity: 0.5; cursor: default; }
 
+
+/* Stepping through a proof (src/steps.js) */
+.tg-step-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin: 0 0.35em; padding: 1px 8px 1px 6px;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--paper); color: var(--muted);
+  font: 500 12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-style: normal; vertical-align: 0.1em; cursor: pointer;
+  opacity: 0.55; transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.tg-step-btn svg { width: 9px; height: 9px; }
+.proof:hover .tg-step-btn, .tg-step-btn:focus-visible { opacity: 1; }
+.tg-step-btn:hover { color: var(--accent); border-color: var(--accent); }
+.tg-step-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.proof.folded .tg-step-btn { display: none; }
+.tg-stepping .tg-step-btn { opacity: 1; color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.tg-stepping .tg-step-btn span { display: none; }
+.tg-stepping .tg-step-btn::after { content: "Stop"; }
+.tg-stepping .tg-step-btn svg { display: none; }
+@media (hover: none) { .tg-step-btn { opacity: 0.85; padding: 3px 10px 3px 8px; font-size: 13px; } }
+
+.tg-stepping { cursor: pointer; }
+.tg-stepping .tg-step-hidden { display: none !important; }
+.tg-stepping .tg-step-now { background: var(--flash); border-radius: 3px; box-shadow: 0 0 0 2px var(--flash); scroll-margin: 90px 0; }
+.tg-stepping .tg-step-now:not(.tg-step-text) { box-shadow: -8px 0 0 0 var(--flash), 0 0 0 2px var(--flash); }
+.tg-stepping .tg-step-text { transition: background-color 0.25s; }
+.tg-stepping .tg-step-folded:not(.tg-step-now) { color: var(--muted); }
+.tg-stepping .tg-stepmark[data-tg-step]:not([data-tg-step=""])::before { content: attr(data-tg-step) ". "; font-weight: 600; }
+.tg-step-fold, .tg-why {
+  margin: 0 0.25em; padding: 0 6px;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--paper); color: var(--accent);
+  font: 500 11px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-style: normal; vertical-align: 0.12em; cursor: pointer; white-space: nowrap;
+}
+.tg-why { color: var(--muted); }
+.tg-why:hover, .tg-step-fold:hover { color: var(--accent); border-color: var(--accent); }
+.tg-step-fold[hidden] { display: none; }
+.tg-step-bar {
+  position: sticky; bottom: 10px; z-index: 6;
+  display: flex; align-items: center; gap: 6px; width: max-content; max-width: 100%;
+  margin: 10px auto 0; padding: 5px 6px;
+  border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--toolbar); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; font-style: normal;
+  cursor: default; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.tg-step-bar button {
+  padding: 4px 12px; border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--paper); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tg-step-bar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tg-step-bar button:disabled { opacity: 0.4; cursor: default; }
+.tg-step-bar .tg-step-next { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tg-step-bar .tg-step-next:hover { color: var(--on-accent) !important; filter: brightness(1.08); }
+.tg-step-count { min-width: 4.2em; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) {
+  .tg-step-bar { bottom: max(12px, env(safe-area-inset-bottom)); gap: 8px; }
+  .tg-step-bar button { min-height: 40px; padding: 6px 16px; }
+  .tg-why, .tg-step-fold { padding: 2px 9px; font-size: 12px; }
+}
