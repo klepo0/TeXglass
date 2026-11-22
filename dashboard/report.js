@@ -125,7 +125,8 @@ function changes(papers, prev) {
       for (const k of Object.keys(keys)) if (!((q.problems || {})[kind] || {})[k]) fresh.push(k);
     }
     const slower = p.ms != null && q.ms != null && p.ms > q.ms * 1.5 && p.ms - q.ms > 3000;
-    if (dr > 0 || (dr === 0 && dn > 0) || slower) out.push({ id: p.id, change: 'worse', from: q.status, to: p.status, problems: [problemTotal(q), problemTotal(p)], ms: [q.ms, p.ms], fresh: fresh.slice(0, 8) });
+    // A paper that now renders better counts as better even if it got slower.
+    if (dr > 0 || (dr === 0 && (dn > 0 || (dn === 0 && slower)))) out.push({ id: p.id, change: 'worse', from: q.status, to: p.status, problems: [problemTotal(q), problemTotal(p)], ms: [q.ms, p.ms], fresh: fresh.slice(0, 8) });
     else if (dr < 0 || dn < 0) out.push({ id: p.id, change: 'better', from: q.status, to: p.status, problems: [problemTotal(q), problemTotal(p)], ms: [q.ms, p.ms] });
   }
   const order = { worse: 0, new: 1, better: 2 };
