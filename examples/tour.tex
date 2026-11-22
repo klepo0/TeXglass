@@ -238,29 +238,48 @@ Item~\ref{it:lipschitz} is \cref{thm:stability} read as a statement about
 $\Phi_t$.
 \end{proof}
 
+% A parameter readers can vary: TeXglass shows a slider by the figure and the
+% paragraph below it; the PDF shows the start value. (\L is LaTeX's letter L
+% with a stroke, so the value is written \tgvalue{L}.)
+\tgparam[start=0.5, step=0.05, label={$L$}]{L}{0}{1}%
 \begin{figure}[ht]
 \centering
 \begin{tikzpicture}[scale=1.1]
-  \fill[blue!10] plot[domain=0:3, samples=40] (\x, {0.5*exp(0.5*\x)})
-    -- plot[domain=3:0, samples=40] (\x, {0.9*exp(0.5*\x)}) -- cycle;
+  \begin{scope}
+  \clip (-0.2, -0.2) rectangle (3.2, 4.4);
+  \fill[blue!10] plot[domain=0:3, samples=40] (\x, {0.5*exp(\tgvalue{L}*\x)})
+    -- plot[domain=3:0, samples=40] (\x, {0.9*exp(\tgvalue{L}*\x)}) -- cycle;
+  \draw[thick, blue, domain=0:3, samples=40] plot (\x, {0.5*exp(\tgvalue{L}*\x)});
+  \draw[thick, red, domain=0:3, samples=40] plot (\x, {0.9*exp(\tgvalue{L}*\x)});
+  \end{scope}
   \draw[->] (-0.2, 0) -- (3.4, 0) node[right] {$t$};
   \draw[->] (0, -0.2) -- (0, 4.4);
-  \draw[thick, blue, domain=0:3, samples=40] plot (\x, {0.5*exp(0.5*\x)})
-    node[right] {$\Phi_t(x)$};
-  \draw[thick, red, domain=0:3, samples=40] plot (\x, {0.9*exp(0.5*\x)})
-    node[right] {$\Phi_t(x')$};
   \fill (0, 0.5) circle (1.5pt) node[left] {$x$};
   \fill (0, 0.9) circle (1.5pt) node[left] {$x'$};
+  \node[blue, right] at (3.2, {min(3.6, 0.5*exp(3*\tgvalue{L}))}) {$\Phi_t(x)$};
+  \node[red, right] at (3.2, {min(4.2, 0.9*exp(3*\tgvalue{L}))}) {$\Phi_t(x')$};
 \end{tikzpicture}
-\caption{Two solutions of $\dv{y}{t} = L y$ with $L = \tfrac12$: the gap
+\caption{Two solutions of $\dv{y}{t} = L y$ with $L = \tgvalue{L}$: the gap
 between them grows exactly like $e^{Lt}$, as in \cref{ex:sharp}.}
 \label{fig:flow}
 \end{figure}
 
-\tgparam[0.5]{L}{0}{2}%
-\Cref{fig:flow} shows the case of \cref{ex:sharp}: the shaded gap between
-$\Phi_t(x)$ and $\Phi_t(x')$ is exactly the bound of
+\Cref{fig:flow} shows the case of \cref{ex:sharp}: the shaded gap
+\[
+  \abs{\Phi_t(x) - \Phi_t(x')} = e^{\tgvalue{L}\, t} \abs{x - x'}
+\]
+is exactly the bound of
 \cref{prop:flow}\ref{it:lipschitz}.\todo{A picture for a nonlinear field?}
+
+\begin{tgonly}
+\begin{tryit}
+Drag the slider for $L$ under \cref{fig:flow} or under the display above:
+the picture, its caption and the formula all follow, and \textbf{Reset}
+puts $L = 0.5$ back. The author declared it with
+\verb|\tgparam[start=0.5, step=0.05, label={$L$}]{L}{0}{1}| and wrote
+\verb|\tgvalue{L}| where the value goes; the PDF shows $0.5$.
+\end{tryit}
+\end{tgonly}
 
 \begin{tgonly}
 \begin{tryit}
@@ -307,9 +326,7 @@ look with the pen; drag an edge of the text to change its width; select a
 phrase to highlight it or write a note on it, which syncs through your own
 GitHub gist. \textbf{Share} links to a section, the bookmark saves a paper
 for offline reading, and the \textbf{\dots} menu exports this page as HTML
-or as an EPUB e-book. \texttt{texglass.sty} also records the
-parameter $L$ of \cref{fig:flow} with \verb|\tgparam|, ready for live
-sliders, which are still to come.
+or as an EPUB e-book.
 \end{tryit}
 \end{tgonly}
 
