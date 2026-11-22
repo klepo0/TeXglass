@@ -80,7 +80,7 @@ jobs:
           cp "$RUNNER_TEMP/out/results.json" "$dir/results.json"
           printf '%s\n' '# Render dashboard results' '' \
             'Written every night by .github/workflows/render-dashboard.yml on main.' \
-            'See https://klepo0.github.io/TeXglass/dashboard/' > "$dir/README.md"
+            'See https://texglass.js.org/dashboard/' > "$dir/README.md"
           git -C "$dir" add results.json README.md
           git -C "$dir" commit --quiet -m "Render dashboard run $(date -u +%Y-%m-%d)"
           git -C "$dir" push origin render-dashboard

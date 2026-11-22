@@ -103,7 +103,7 @@ figures. This is the same code as the **Open** dialog of the web viewer.
 By default papers open in a copy of the viewer bundled with the extension, so
 nothing else needs to be online apart from arxiv.org. The extension's options
 can switch to the TeXglass website instead (default
-`https://klepo0.github.io/TeXglass/`, which takes `?arxiv=<id>`).
+`https://texglass.js.org/`, which takes `?arxiv=<id>`).
 
 ## Install
 

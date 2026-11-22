@@ -160,7 +160,7 @@ function stepSummary(r) {
   const better = r.changes.filter((c) => c.change === 'better');
   if (better.length) lines.push(`${better.length} papers better than the last run, ${better.filter((c) => c.to === 'ok').length} of them now OK.`, '');
   if (r.top.math.length) lines.push('### Most common maths errors', '', ...r.top.math.slice(0, 10).map((e) => `- \`${e.key}\`: ${e.papers.length} papers`), '');
-  lines.push('Full results: https://klepo0.github.io/TeXglass/dashboard/', '');
+  lines.push('Full results: https://texglass.js.org/dashboard/', '');
   return lines.join('\n');
 }
 

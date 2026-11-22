@@ -1063,7 +1063,7 @@ ${INK_FILTERS}
         // A cited paper on arXiv: open it in the TeXglass web viewer (at a cited result, given goto).
         if (/^[\w.\/-]+$/.test(String(m.id || ''))) {
           const goto = typeof m.goto === 'string' && m.goto.length < 80 ? `&goto=${encodeURIComponent(m.goto)}` : '';
-          vscode.env.openExternal(vscode.Uri.parse(`https://klepo0.github.io/TeXglass/?arxiv=${encodeURIComponent(m.id)}${goto}`));
+          vscode.env.openExternal(vscode.Uri.parse(`https://texglass.js.org/?arxiv=${encodeURIComponent(m.id)}${goto}`));
         }
         break;
       default:

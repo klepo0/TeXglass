@@ -11,7 +11,7 @@ import path people use) in headless Chromium and records:
 - papers that never finished rendering (2 minutes) or took longer than 20 seconds.
 
 The results go to the `render-dashboard` branch as `results.json`, and
-[the dashboard page](https://klepo0.github.io/TeXglass/dashboard/) reads them
+[the dashboard page](https://texglass.js.org/dashboard/) reads them
 from there: the clean-render rate and median load time over time, newly broken
 and newly fixed papers since the last run, how many papers have each kind of
 failure, the macros, commands, figure types and packages affecting the most

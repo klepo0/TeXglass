@@ -1,7 +1,7 @@
 'use strict';
 (function () {
   const api = globalThis.browser || globalThis.chrome;
-  const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/', openFiles: true };
+  const DEFAULTS = { viewer: 'builtin', webUrl: 'https://texglass.js.org/', openFiles: true };
   const form = document.getElementById('form');
   const webUrl = document.getElementById('webUrl');
   const status = document.getElementById('status');

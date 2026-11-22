@@ -93,15 +93,15 @@ test('menus are created on install and the toolbar button opens the paper next t
 });
 
 test('the right-click menu and page links open the paper; the web viewer can be chosen instead', async () => {
-  const fake = fakeBrowser({ viewer: 'web', webUrl: 'https://klepo0.github.io/TeXglass/' });
+  const fake = fakeBrowser({ viewer: 'web', webUrl: 'https://texglass.js.org/' });
   loadBackground(fake);
   fake.listeners.menu({ menuItemId: 'texglass-link', linkUrl: 'https://arxiv.org/abs/math/0211159' }, { id: 1, index: 0 });
   fake.listeners.menu({ menuItemId: 'texglass-link', linkUrl: 'https://example.com/' }, { id: 1, index: 0 });
   fake.listeners.message({ type: 'texglass-open', id: '2301.00001' }, { tab: { id: 2, index: 4 } });
   await settle();
   assert.deepStrictEqual(fake.tabs.map((t) => t.url), [
-    'https://klepo0.github.io/TeXglass/?arxiv=math%2F0211159',
-    'https://klepo0.github.io/TeXglass/?arxiv=2301.00001',
+    'https://texglass.js.org/?arxiv=math%2F0211159',
+    'https://texglass.js.org/?arxiv=2301.00001',
   ]);
 });
 
@@ -247,7 +247,7 @@ test('.tex files on this computer: the menu item, the toolbar button and file://
   // The menu item opens the chosen viewer with its "open from this computer" dialog.
   await fake.listeners.menu({ menuItemId: 'texglass-local' }, { id: 1, index: 0 });
   await settle();
-  assert.strictEqual(fake.tabs[0].url, 'https://klepo0.github.io/TeXglass/?open');
+  assert.strictEqual(fake.tabs[0].url, 'https://texglass.js.org/?open');
 
   // A file:// .tex address always goes to the bundled viewer, which may read it.
   const file = 'file:///C:/Users/me/My%20paper/main.tex';

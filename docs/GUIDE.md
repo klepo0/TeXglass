@@ -6,7 +6,7 @@ TeXglass runs in four places that share one reader:
 
 | Where | What it is |
 | --- | --- |
-| [Web viewer](#web-viewer) | [klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/): open a `.tex` file, an arXiv paper or a GitHub repository in the browser. |
+| [Web viewer](#web-viewer) | [texglass.js.org](https://texglass.js.org/): open a `.tex` file, an arXiv paper or a GitHub repository in the browser. |
 | [Browser extension](#browser-extension) | Chrome, Edge and Firefox: open arXiv, alphaXiv, HAL and ResearchGate papers in TeXglass, and a live preview beside Overleaf's editor. |
 | [VS Code extension](#vs-code-extension) | A live preview beside your `.tex` file, with jump to source and notes saved beside the file. |
 | [Command line](#command-line) | `npx texglass paper.tex -o paper.html` makes a standalone page. |
@@ -412,8 +412,16 @@ one is kept:
 
 ## Web viewer
 
-[klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/). Nothing to
+[texglass.js.org](https://texglass.js.org/). Nothing to
 install; after the first visit it opens and renders offline.
+
+The viewer used to live at `klepo0.github.io/TeXglass`; that address and its
+links forward here. Notes, highlights, saved papers and settings stay with the
+address they were made at. If you used the old one with **Sync** on, sign in
+to Sync here and they come back. Otherwise, open the old address while offline
+(its saved copy still opens), use **Export notes**, then **Import notes…**
+here. A Home Screen app added from the old address should be added again from
+the new one.
 
 **Opening a document**
 
@@ -443,7 +451,7 @@ install; after the first visit it opens and renders offline.
 **Sharing a paper**
 
 - **Share** (in the toolbar) gives a link that opens the paper in the
-  [web viewer](https://klepo0.github.io/TeXglass/), at the section you are
+  [web viewer](https://texglass.js.org/), at the section you are
   reading: `?arxiv=2301.00001&goto=§2.3`. On a computer it is copied to the
   clipboard; on a phone or tablet the system share sheet opens, to send it by
   message, mail or any app.
@@ -781,7 +789,7 @@ step, and long papers stay fast.
 
 ## Render dashboard
 
-Every night the [render dashboard](https://klepo0.github.io/TeXglass/dashboard/)
+Every night the [render dashboard](https://texglass.js.org/dashboard/)
 opens about 200 arXiv papers in the web viewer and lists what broke: maths
 KaTeX could not render, missing figures, undrawn diagrams, papers that froze,
 and slow loads, with what changed since the night before. See [dashboard/README.md](../dashboard/README.md).

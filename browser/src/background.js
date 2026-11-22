@@ -44,7 +44,7 @@ if (typeof importScripts === 'function' && typeof TeXglassArxiv === 'undefined')
 
 const api = globalThis.browser || globalThis.chrome;
 
-const DEFAULTS = { viewer: 'builtin', webUrl: 'https://klepo0.github.io/TeXglass/', openFiles: true };
+const DEFAULTS = { viewer: 'builtin', webUrl: 'https://texglass.js.org/', openFiles: true };
 
 const ARXIV_PATHS = ['abs', 'pdf', 'html', 'src', 'e-print'];
 const ALPHAXIV_PATHS = ['abs', 'overview', 'pdf'];

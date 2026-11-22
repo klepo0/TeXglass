@@ -18,9 +18,9 @@ const ROOT = path.join(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 
 test('links open the paper in the public viewer, at a section', () => {
-  assert.equal(Share.link({ arxiv: '2301.00001' }), 'https://klepo0.github.io/TeXglass/?arxiv=2301.00001');
-  assert.equal(Share.link({ arxiv: 'math/0601001v2', goto: '§2.3' }), 'https://klepo0.github.io/TeXglass/?arxiv=math/0601001v2&goto=§2.3');
-  assert.equal(Share.link({ arxiv: 'arXiv:2301.00001', goto: 'Section A' }), 'https://klepo0.github.io/TeXglass/?arxiv=2301.00001&goto=Section+A');
+  assert.equal(Share.link({ arxiv: '2301.00001' }), 'https://texglass.js.org/?arxiv=2301.00001');
+  assert.equal(Share.link({ arxiv: 'math/0601001v2', goto: '§2.3' }), 'https://texglass.js.org/?arxiv=math/0601001v2&goto=§2.3');
+  assert.equal(Share.link({ arxiv: 'arXiv:2301.00001', goto: 'Section A' }), 'https://texglass.js.org/?arxiv=2301.00001&goto=Section+A');
   const gh = Share.link({ gh: 'https://github.com/a/b/blob/main/x y&z.tex' });
   assert.equal(new URL(gh).searchParams.get('gh'), 'https://github.com/a/b/blob/main/x y&z.tex');
   assert.equal(new URL(Share.link({ arxiv: '1', goto: '§2.3' })).searchParams.get('goto'), '§2.3');
@@ -106,7 +106,7 @@ test('on a computer: Share copies a link that reopens the paper at the same sect
     // at the top: just the paper
     await page.click('#share');
     await page.waitForFunction(() => window.__copied.length === 1);
-    assert.equal((await page.evaluate(() => window.__copied))[0], 'https://klepo0.github.io/TeXglass/?arxiv=2301.00001');
+    assert.equal((await page.evaluate(() => window.__copied))[0], 'https://texglass.js.org/?arxiv=2301.00001');
     assert.match(await page.textContent('#status'), /Link copied/);
 
     // read on into section 2: the link opens there
@@ -119,11 +119,11 @@ test('on a computer: Share copies a link that reopens the paper at the same sect
     await page.click('#share');
     await page.waitForFunction(() => window.__copied.length === 2);
     const link = (await page.evaluate(() => window.__copied))[1];
-    assert.equal(link, 'https://klepo0.github.io/TeXglass/?arxiv=2301.00001&goto=§2');
+    assert.equal(link, 'https://texglass.js.org/?arxiv=2301.00001&goto=§2');
     assert.match(await page.textContent('#status'), /opens at §2/);
 
     const other = await ctx.newPage();
-    await other.goto(link.replace('https://klepo0.github.io/TeXglass/', 'http://texglass.test/index.html'));
+    await other.goto(link.replace('https://texglass.js.org/', 'http://texglass.test/index.html'));
     await other.waitForFunction(() => /Shared heat bounds/.test(document.getElementById('preview').textContent));
     await other.waitForTimeout(1200);
     // Go to shows the heading in the middle of the window
@@ -163,7 +163,7 @@ test('on a phone: Share opens the share sheet, and the toolbar still fits', { sk
       await page.tap('#share');
       await page.waitForFunction(() => window.__shared.length === 1);
       const d = (await page.evaluate(() => window.__shared))[0];
-      assert.equal(d.url, 'https://klepo0.github.io/TeXglass/?arxiv=2301.00001');
+      assert.equal(d.url, 'https://texglass.js.org/?arxiv=2301.00001');
       assert.equal(d.title, 'Shared heat bounds');
       await ctx.close();
     }

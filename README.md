@@ -18,13 +18,13 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=klepo1.texglass"><img src="https://vsmarketplacebadges.dev/version-short/klepo1.texglass.svg" alt="VS Code Marketplace version"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=klepo1.texglass"><img src="https://vsmarketplacebadges.dev/installs-short/klepo1.texglass.svg" alt="VS Code Marketplace installs"></a>
   <a href="https://open-vsx.org/extension/klepo1/texglass"><img src="https://img.shields.io/open-vsx/dt/klepo1/texglass?label=Open%20VSX" alt="Open VSX downloads"></a>
-  <a href="https://klepo0.github.io/TeXglass/dashboard/"><img src="https://img.shields.io/badge/render%20dashboard-nightly-2f6fb2" alt="Render dashboard"></a>
+  <a href="https://texglass.js.org/dashboard/"><img src="https://img.shields.io/badge/render%20dashboard-nightly-2f6fb2" alt="Render dashboard"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-555" alt="License: PolyForm Noncommercial 1.0.0"></a>
   <a href="https://buymeacoffee.com/texglass"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&amp;logoColor=black" alt="Support TeXglass on Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
-  <a href="https://klepo0.github.io/TeXglass/?arxiv=2106.10340"><b>▶ Try it now</b></a>: <i>Rough stochastic differential equations</i> from arXiv, opened in the web viewer.
+  <a href="https://texglass.js.org/?arxiv=2106.10340"><b>▶ Try it now</b></a>: <i>Rough stochastic differential equations</i> from arXiv, opened in the web viewer.
 </p>
 
 <p align="center">
@@ -51,9 +51,9 @@
 
 | | How | Best for |
 | --- | --- | --- |
-| **[Web viewer](https://klepo0.github.io/TeXglass/)** | Open the link. Search arXiv, paste an arXiv or GitHub link, or drop a `.tex` file. | Reading papers in any browser |
+| **[Web viewer](https://texglass.js.org/)** | Open the link. Search arXiv, paste an arXiv or GitHub link, or drop a `.tex` file. | Reading papers in any browser |
 | **[VS Code extension](https://marketplace.visualstudio.com/items?itemName=klepo1.texglass)** | `ext install klepo1.texglass`, open a `.tex` file, press **Ctrl+K V**. Also on [Open VSX](https://open-vsx.org/extension/klepo1/texglass). | Writing LaTeX with a live preview |
-| **[Home Screen app](docs/GUIDE.md#on-phones-and-tablets)** | On a phone or tablet, open the [web viewer](https://klepo0.github.io/TeXglass/), then Share → **Add to Home Screen** (iPhone, iPad) or **Install TeXglass as an app** in the **…** menu (Android). | Reading on the go, offline too |
+| **[Home Screen app](docs/GUIDE.md#on-phones-and-tablets)** | On a phone or tablet, open the [web viewer](https://texglass.js.org/), then Share → **Add to Home Screen** (iPhone, iPad) or **Install TeXglass as an app** in the **…** menu (Android). | Reading on the go, offline too |
 | **[arXiv browser extension](browser/README.md)** | For **Chrome, Edge and Firefox**. Download the zips from the [latest release](https://github.com/klepo0/TeXglass/releases/latest) and follow the install steps. | One click from arXiv, alphaXiv, HAL, ResearchGate and Overleaf |
 
 There is also a command line tool: `npx texglass paper.tex -o paper.html`
@@ -118,7 +118,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 
 ## Reliability, privacy and offline use
 
-- **Tested every night**: the [render dashboard](https://klepo0.github.io/TeXglass/dashboard/)
+- **Tested every night**: the [render dashboard](https://texglass.js.org/dashboard/)
   opens about 200 arXiv papers across maths, physics and computer science and
   lists what broke.
 - **Private**: your files and papers stay in your browser or editor. Citation

@@ -29,7 +29,7 @@
 
   const ID = '(?:\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[A-Z]{2})?\\/\\d{7})(?:v\\d+)?';
 
-  const WEB_VIEWER = 'https://klepo0.github.io/TeXglass/';
+  const WEB_VIEWER = 'https://texglass.js.org/';
 
   /** Whether this script can still talk to the extension (not after an update or reload). */
   const connected = () => {
