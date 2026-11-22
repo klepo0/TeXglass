@@ -4,7 +4,7 @@
   "description": "Convert LaTeX papers to HTML in pure JavaScript: math, numbered theorems with working references, TikZ, bibliography. Library and CLI, with an optional interactive reader page.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "author": "Khoa Le",
-  "homepage": "https://klepo0.github.io/TeXglass/",
+  "homepage": "https://texglass.js.org/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/klepo0/TeXglass.git"
