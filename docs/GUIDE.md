@@ -156,8 +156,8 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
 
 - **References** (`\ref`, `\eqref`, …): the theorem, equation, figure or
   section they point to, and for a result also what it **uses** and where it
-  is **used in**. Click to jump there. For a result or a numbered equation,
-  the **pin** at the preview's top right pins it (see
+  is **used in**. Click to jump there. For a result, a numbered equation or a
+  figure, the **pin** at the preview's top right pins it (see
   [Everything pinned in one place](#everything-pinned-in-one-place)).
 - **Footnotes**: the footnote text.
 - **Citations**: the bibliography entry, then the cited paper's title and
@@ -366,13 +366,18 @@ pinned) shows how many things are pinned, and a click lists them all, grouped:
 
 - **Results** and **Equations** pinned on the map, from the text, or with the
   pin on a reference's preview (a result pinned with what it uses says so);
+- **Proofs**: rest on a proof and click the pin at its top right; under
+  **Show only these** a pinned proof shows in full, not folded;
+- **Figures** (and tables with a caption): rest on one and click the pin at its
+  top right, or the pin on its reference's preview;
 - **Notation**: symbols and macros pinned in the **Notation** tab or with the
   pin on a notation preview;
 - **Text**: passages pinned with the pin on the bar that appears when you
   select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
 
 Click an item to jump to it, **×** to unpin it. **Show only these** shows only
-the pinned results and equations (as **Show pinned** does). With nothing pinned
+the pinned results, proofs, equations and figures (as **Show pinned** does) and the
+paragraphs holding pinned text, and prints just that. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
 it opens as a sheet at the bottom, from **Pinned** in the **…** menu. Pins are
 kept with your notes, so they sync with them (in the Overleaf panel they stay in

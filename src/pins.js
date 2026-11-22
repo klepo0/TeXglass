@@ -35,19 +35,19 @@
   const ICON = '<svg class="tb-icon tg-pin-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-.9 6.3L18 13.2V15H6v-1.8l3.9-3.9z M12 15v6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
   const ALONG = { uses: 'with what it uses', usedBy: 'with what uses it', both: 'with what it uses and what uses it' };
-  const GROUPS = [['result', 'Results'], ['equation', 'Equations'], ['notation', 'Notation'], ['text', 'Text']];
+  const GROUPS = [['result', 'Results'], ['proof', 'Proofs'], ['equation', 'Equations'], ['figure', 'Figures'], ['notation', 'Notation'], ['text', 'Text']];
 
   /** The list's HTML for items from insight.pinnedList(). */
   function listHtml(items, o) {
     o = o || {};
     if (!items.length) {
       return '<div class="tg-pins-head"><strong>Nothing pinned yet</strong></div>' +
-        '<p class="tg-pins-empty">Pin a result or a numbered equation with the pin by its corner on the <b>Map</b> (or the pin at an equation’s left), ' +
+        '<p class="tg-pins-empty">Pin a result or a numbered equation with the pin by its corner on the <b>Map</b> (or the pin at an equation’s left, or a figure’s top right), ' +
         'a symbol with the pin on its row in the <b>Notation</b> tab, or anything with the pin on its preview. ' +
         'Select some text to pin it too. Pinned things gather here.</p>' +
         (o.pinMore ? '<div class="tg-pins-actions"><button type="button" data-pins-act="more">Pin results…</button></div>' : '');
     }
-    const maps = items.filter((x) => x.kind === 'result' || x.kind === 'equation').length;
+    const maps = items.filter((x) => x.kind !== 'notation').length;
     let html = `<div class="tg-pins-head"><strong>Pinned</strong> <span class="tg-pins-count">${items.length}</span></div><div class="tg-pins-list">`;
     for (const [kind, title] of GROUPS) {
       const rows = items.filter((x) => x.kind === kind);
@@ -69,7 +69,7 @@
     }
     html += '</div>';
     if (maps && o.showPinned) {
-      html += '<div class="tg-pins-actions"><button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations, their proofs folded (and print them)">Show only these</button></div>';
+      html += '<div class="tg-pins-actions"><button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text; print them too">Show only these</button></div>';
     }
     return html;
   }

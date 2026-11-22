@@ -20,7 +20,7 @@ const DOC = '\\documentclass{article}\n\\title{Pins}\n\\newtheorem{lemma}{Lemma}
   'Let $f\\colon \\R \\to \\R$ be smooth and write $\\Lambda := \\sup_x |f(x)|$.\n\\begin{equation}\\label{eq:a} \\Lambda = \\|f\\|_\\infty \\end{equation}\n' +
   '\\begin{lemma}[Bound]\\label{first} By \\eqref{eq:a}, $\\Lambda < \\infty$ on $\\R$.\\end{lemma}\\begin{proof} Clear.\\end{proof}\n' +
   '\\begin{lemma}\\label{second} Second.\\end{lemma}\\begin{proof} Clear.\\end{proof}\n' +
-  'Middle words.\n\\begin{equation}\\label{eq:b} c = \\Lambda^2 \\end{equation}\n' +
+  'Middle words.\n\\begin{figure}\\centering A picture.\\caption{A figure}\\label{fig:one}\\end{figure}\nSee Figure~\\ref{fig:one}.\n\\begin{equation}\\label{eq:b} c = \\Lambda^2 \\end{equation}\n' +
   '\\begin{theorem}\\label{main} Last.\\end{theorem}\\begin{proof} By Lemmas~\\ref{first} and~\\ref{second}, and \\eqref{eq:b}.\\end{proof}\n\\end{document}';
 
 async function serve(page) {
@@ -85,9 +85,42 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     await page.mouse.move(5, 500);
     await page.waitForTimeout(400);
 
-    // a symbol from its notation preview
+    // a figure, from its pin on hover; a preview's copy of the text has no dead second pin
+    await page.locator('#preview figure.float').hover();
+    await page.click('#preview figure.float > .tg-pin-btn');
+    assert.equal(await badge(), '3');
+    await page.mouse.move(5, 500);
+    await page.locator('#preview a.ref', { hasText: '1.1' }).first().hover();
+    await page.waitForSelector('#ref-popover:not([hidden])');
+    const visiblePins = await page.$$eval('#ref-popover button', (bs) => bs.filter((b) => /pin/i.test(b.className) && b.getClientRects().length).length);
+    assert.equal(visiblePins, 1, 'one pin on a preview');
+    await page.mouse.move(5, 500);
+    await page.waitForTimeout(400);
+    // a proof, from its pin on hover: listed, and shown in full under Show only these
+    const proof = page.locator('#preview .proof', { hasText: 'By Lemmas' });
+    await proof.scrollIntoViewIfNeeded();
+    await proof.hover();
+    await page.click('#preview .proof:has-text("By Lemmas") > .tg-pin-btn');
+    assert.equal(await badge(), '4');
+    await page.mouse.move(5, 500);
+    await page.click('#pins');
+    assert.match(await page.textContent('.tg-pins-menu'), /Proof of Theorem 1\.3/);
+    await page.click('.tg-pins-actions [data-pins-act="show"]');
+    await page.waitForSelector('#preview.pick-view');
+    assert.equal(await page.$eval('#preview .proof:has-text("By Lemmas")', (p) => p.classList.contains('pick-on') && !p.classList.contains('pick-proof')), true, 'a pinned proof shows in full');
+    await page.keyboard.press('Escape');
+    await page.click('#pins');
+    await page.click('.tg-pins-row:has-text("Proof of") .tg-pins-x');
+    await page.click('.tg-pins-row:has-text("Figure 1") .tg-pins-x');
+    await page.keyboard.press('Escape');
+    assert.equal(await badge(), '2');
+
+        // a symbol from its notation preview
+    await page.evaluate(() => { document.getElementById('preview-pane').scrollTop = 0; });
+    await page.waitForTimeout(200);
     const f = await page.locator('#preview .theorem .katex').first().boundingBox();
-    await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2);
+    await page.mouse.move(f.x + 2, f.y + f.height / 2);
+    await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2, { steps: 3 });
     await page.waitForSelector('.insight-popover:not([hidden]) .insight-pop-pin', { timeout: 5000 });
     await page.click('.insight-popover:not([hidden]) .insight-pop-pin');
     assert.equal(await badge(), '3');
@@ -95,6 +128,8 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     await page.waitForTimeout(400);
 
     // text, from the selection bar
+    await page.locator('#preview p', { hasText: 'Middle words' }).first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
     const mid = await page.locator('#preview p', { hasText: 'Middle words' }).first().boundingBox();
     await page.mouse.move(mid.x + 2, mid.y + mid.height / 2);
     await page.mouse.down();
@@ -120,6 +155,15 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     await page.click('.tg-pins-row:has-text("Lemma 1.1") .tg-pins-x');
     assert.equal(await badge(), '3');
     assert.doesNotMatch(await page.textContent('.tg-pins-menu'), /Lemma 1\.1/, 'the list follows');
+    // Show only these keeps the paragraph holding the pinned text in view
+    await page.keyboard.press('Escape');
+    await page.click('#pins');
+    await page.click('.tg-pins-actions [data-pins-act="show"]');
+    await page.waitForSelector('#preview.pick-view');
+    assert.equal(await page.isVisible('#preview p:has-text("Middle words")'), true, 'the pinned text\'s paragraph shows');
+    assert.equal(await page.isVisible('#preview .math-display:has-text("(2)")'), true, 'the pinned equation shows');
+    assert.equal(await page.isVisible('#preview .theorem:has-text("Second")'), false, 'the rest is hidden');
+    await page.keyboard.press('Escape');
     // the text pin is a highlight marked pin, kept with the notes
     const pinned = await page.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join('\n'));
     assert.match(pinned, /"quote":"Middle words\."[^}]*\}[^}]*"pin":true/);

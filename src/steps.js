@@ -106,7 +106,7 @@
   // ---------------------------------------------------------------------------
 
   // Leading parts of a paragraph that are never a sentence of their own.
-  const HEADISH = '.proof-head, .thm-head, .item-label, .fold-toggle, .rp-marks, .uses-btn, .tg-step-btn, .thm-name';
+  const HEADISH = '.proof-head, .thm-head, .item-label, .fold-toggle, .rp-marks, .uses-btn, .tg-step-btn, .thm-name, .tg-pin-btn';
   const NOT_TEXT = '.katex-mathml, script, style';
   const INTERACTIVE = 'a, button, input, textarea, select, label, summary, .math, .katex, .tg-margin, .marginnote, .tg-step-bar, [contenteditable]';
   const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .cited-box, .tg-margin, .uses-bar, .pick-bar, .diff-old';
@@ -116,7 +116,7 @@
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   /** The proof's own direct children that are content (not the stepping bar). */
-  const blocksOf = (el) => Array.from(el.children).filter((c) => !c.classList.contains('tg-step-bar') && !c.matches('script, style'));
+  const blocksOf = (el) => Array.from(el.children).filter((c) => !c.classList.contains('tg-step-bar') && !c.classList.contains('tg-pin-btn') && !c.matches('script, style'));
 
   /** Opening text of a block, without its heading, for nested-part headers. */
   function openingText(el) {
@@ -124,7 +124,7 @@
     const walk = (n) => {
       if (s.length > 60) return;
       if (n.nodeType === 3) { s += n.nodeValue; return; }
-      if (n.nodeType !== 1 || n.matches(NOT_TEXT) || n.matches('.fold-toggle, .rp-marks, .uses-btn, .tg-step-btn, .proof-head')) return;
+      if (n.nodeType !== 1 || n.matches(NOT_TEXT) || n.matches('.fold-toggle, .rp-marks, .uses-btn, .tg-step-btn, .proof-head, .tg-pin-btn')) return;
       n.childNodes.forEach(walk);
     };
     walk(el);

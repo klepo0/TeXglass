@@ -17,7 +17,7 @@
       // the reader's highlights and notes, kept per paper (see "the reader's notes" below)
       save: (list) => notesChanged(list),
       // text pinned from the selection bar shows in the toolbar's Pinned list
-      onPins: () => { try { if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
+      onPins: () => { try { if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => {
         const at = doc.indexOf('\\begin{document}');
         const preamble = at >= 0 ? doc.slice(0, at) : '';
@@ -2863,7 +2863,8 @@
     ? TeXglassPick.attach({
       root: preview,
       jump: (el) => jumpTo(el),
-      items: insight ? () => insight.pinnedEls() : undefined,
+      // pinned results and equations (with what their pins bring along), and the paragraphs holding pinned text
+      items: insight ? () => insight.pinnedEls().concat(margin && margin.pinnedTextEls ? margin.pinnedTextEls() : []) : undefined,
       isOn: insight ? (el) => insight.isPinned(el) : undefined,
       toggle: insight ? (el) => insight.togglePin(el) : undefined,
       clear: insight ? () => insight.unpinAll() : undefined,

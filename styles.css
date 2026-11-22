@@ -1347,7 +1347,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .fold-hidden { display: none; }
 
 .proof .fold-toggle { font-size: 0.95em; margin-left: 0; }
-.proof.folded > :not(:first-child) { display: none; }
+.proof.folded > :not(:first-child):not(.tg-pin-btn) { display: none; }
 .proof.folded > p:first-child {
   white-space: nowrap;
   overflow: hidden;
@@ -2165,6 +2165,14 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-pin-btn:hover, .tg-pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 .math-display.tg-pinned, .math-display:has(> .tg-pin-btn) { position: relative; }
 .tg-pin-btn.tg-pin-eq { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 15px; }
+figure.float.tg-pinned, figure.float:has(> .tg-pin-btn) { position: relative; }
+.tg-pin-btn.tg-pin-fig { position: absolute; right: 0; top: 0; font-size: 15px; }
+figure.float:hover > .tg-pin-btn { opacity: 1; }
+.proof.tg-pinned, .proof:has(> .tg-pin-btn) { position: relative; }
+.tg-pin-btn.tg-pin-proof { position: absolute; right: 0; top: 0; font-size: 15px; }
+.proof:hover > .tg-pin-btn { opacity: 1; }
+/* a preview is a copy of the text: the copied in-text pin would do nothing there (the preview has its own) */
+.ref-popover .tg-pin-btn, .insight-popover .tg-pin-btn, .insight-dialog .dep-preview .tg-pin-btn { display: none !important; }
 @media (hover: none) { .tg-pin-btn { opacity: 0.6; } }
 
 .uses-focus .uses-fade { opacity: 0.22; transition: opacity 0.2s; }

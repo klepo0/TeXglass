@@ -95,7 +95,7 @@
       files: () => sourceFiles,
       save: (list) => vscode.postMessage({ type: 'annotations', list }),
       // text pinned from the selection bar shows in the Pinned list (the pin at the top right)
-      onPins: () => { try { if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
+      onPins: () => { try { if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => new Promise((resolve) => {
         const id = ++noteSeq;
         noteWaiting.set(id, resolve);
@@ -1156,7 +1156,8 @@
     ? window.TeXglassPick.attach({
       root: preview,
       jump: (el) => jumpTo(el),
-      items: insight ? () => insight.pinnedEls() : undefined,
+      // pinned results and equations (with what their pins bring along), and the paragraphs holding pinned text
+      items: insight ? () => insight.pinnedEls().concat(margin && margin.pinnedTextEls ? margin.pinnedTextEls() : []) : undefined,
       isOn: insight ? (el) => insight.isPinned(el) : undefined,
       toggle: insight ? (el) => insight.togglePin(el) : undefined,
       clear: insight ? () => insight.unpinAll() : undefined,
