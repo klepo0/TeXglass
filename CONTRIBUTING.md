@@ -55,7 +55,8 @@ shortcut, so check those by hand.
 
 TeXglass has **one version number**, the `"version"` in `vscode/package.json`.
 The VS Code extension and the browser extension both use it
-(`browser/build.js` reads it from there).
+(`browser/build.js` reads it from there), and the Release workflow gives the
+npm package (the root `package.json`) the same one.
 
 **Pull requests don't change the version.** Not in `vscode/package.json`, not
 in `vscode/package-lock.json`, not anywhere else. That way parallel pull
