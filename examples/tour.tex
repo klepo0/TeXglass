@@ -1,0 +1,349 @@
+% A tour of TeXglass, written as a short paper.
+%
+% Open it in TeXglass (https://klepo0.github.io/TeXglass/?tour) and follow the
+% "Try it" notes, or compile it with pdflatex for the PDF, which leaves those
+% notes out. It needs texglass.sty beside it (`npx texglass --sty` copies it,
+% or take latex/texglass.sty from the TeXglass repository).
+\documentclass{amsart}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{physics}
+\usepackage{enumitem}
+\usepackage{tikz,tikz-cd}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage{hyperref}
+\usepackage[capitalise]{cleveref}
+\IfFileExists{texglass.sty}{\usepackage{texglass}}{%
+  \IfFileExists{../latex/texglass.sty}{\usepackage{../latex/texglass}}{%
+    \PackageError{tour}{texglass.sty not found}{Run `npx texglass --sty' here,
+      or copy latex/texglass.sty from the TeXglass repository.}}}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\numberwithin{equation}{section}
+
+% The "Try it" notes of the tour. They sit inside tgonly, so only TeXglass shows them.
+\newenvironment{tryit}{\begin{quote}\small\textbf{Try it.}}{\end{quote}}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Id}{\mathrm{id}}
+
+% What a symbol means, for notation on hover and the Notation tab.
+\tgdefine{\Phi_t}{the flow of $b$: $\Phi_t(x)$ is the solution at time $t$ started from $x$}
+\tgdefine{L}{the Lipschitz constant of the vector field $b$}
+
+\title{Gr\"onwall's inequality and the stability of flows}
+\author{A short tour of TeXglass}
+\date{November 2026}
+
+\begin{document}
+
+\begin{abstract}
+We prove Gr\"onwall's inequality and use it to show that solutions of an
+ordinary differential equation with a Lipschitz vector field depend
+continuously on their starting point, with an exponential rate that cannot be
+improved. As a consequence, the equation defines a flow of Lipschitz maps. We
+end with a pointer to the rough analogue.\iftexglass{} Along the way, notes
+headed \emph{Try it} show what TeXglass does with each part.\fi
+\end{abstract}
+
+\maketitle
+
+\tableofcontents
+
+\section{Introduction}\label{sec:intro}
+
+How far apart can two solutions of $\dv{y}{t} = b(y)$ drift if they start
+close together? For a Lipschitz field $b$ the answer is: no faster than
+$e^{Lt}$, where $L$ is the Lipschitz constant of $b$. The tool is an
+inequality of Gr\"onwall~\cite{gronwall},\footnote{Gr\"onwall's note proves
+it on the way to differentiating solutions with respect to a parameter. The
+integral form below is often called the Gr\"onwall--Bellman inequality.}
+which turns an estimate that refers to itself into an explicit bound.
+
+\Cref{sec:gronwall} proves the inequality (\cref{lem:gronwall}) and the
+stability estimate (\cref{thm:stability}); \cref{sec:flow} builds the flow and
+draws a picture of it; \cref{sec:rough} points to what changes when the
+equation is driven by a rough signal.
+
+\tghide{This paper is also a tour of TeXglass. Open it in the TeXglass viewer
+(\url{https://klepo0.github.io/TeXglass/?tour}) to see notes on what to try
+at each step.}
+
+\begin{tgonly}
+\begin{tryit}
+This short paper is also a tour of TeXglass: these notes, which only
+TeXglass shows (they sit in a \texttt{tgonly} environment of
+\texttt{texglass.sty}), say what to try. Every reference is a link: rest the
+pointer on ``\cref{thm:stability}'' above to read it in place, click it to
+jump, then press \textbf{Back} (top left, or Alt+Left) to come back here.
+Hover the footnote mark too. \textbf{Contents} opens the side panel with the
+sections, the \textbf{Map} and the \textbf{Notation}.
+\end{tryit}
+\end{tgonly}
+
+\section{Gr\"onwall's inequality}\label{sec:gronwall}
+
+Throughout, $\abs{\cdot}$ is the Euclidean norm on $\R^d$ and $T > 0$ is a
+time horizon.
+
+\begin{assumption}\label{ass:lip}
+Throughout this section, $b \colon \R^d \to \R^d$ is Lipschitz: there is
+$L \ge 0$ such that
+\begin{equation}\label{eq:lip}
+  \abs{b(x) - b(x')} \le L \abs{x - x'} \qquad \text{for all } x, x' \in \R^d .
+\end{equation}
+\end{assumption}
+
+A \emph{solution} started from $x \in \R^d$ is a continuous
+$y \colon [0, T] \to \R^d$ with
+\begin{equation}\label{eq:integral}
+  y(t) = x + \int_0^t b\qty(y(s)) \dd{s} \qquad \text{for all } t \in [0, T],
+\end{equation}
+which is the integral form of $\dv{y}{t} = b(y)$, $y(0) = x$.
+
+\begin{lemma}[Gr\"onwall]\label{lem:gronwall}
+Let $u \colon [0, T] \to [0, \infty)$ be continuous and let $a, L \ge 0$.
+Suppose that
+\begin{equation}\label{eq:gronwall-hyp}
+  u(t) \le a + L \int_0^t u(s) \dd{s} \qquad \text{for all } t \in [0, T].
+\end{equation}
+Then $u(t) \le a\, e^{Lt}$ for all $t \in [0, T]$.
+\end{lemma}
+
+\begin{proof}
+Set $U(t) \coloneqq a + L \int_0^t u(s) \dd{s}$, the right-hand side
+of~\eqref{eq:gronwall-hyp}. Since $u$ is continuous, $U$ is continuously
+differentiable, and \eqref{eq:gronwall-hyp} says that $u \le U$, so
+\[
+  U'(t) = L\, u(t) \le L\, U(t).
+\]
+Hence the function $t \mapsto e^{-Lt} U(t)$ does not increase:
+\[
+  \dv{t} \qty(e^{-Lt} U(t)) = e^{-Lt} \qty(U'(t) - L\, U(t)) \le 0 .
+\]
+Therefore $e^{-Lt} U(t) \le U(0) = a$. We conclude that
+$u(t) \le U(t) \le a\, e^{Lt}$.
+\end{proof}
+
+\marginpar{Equality holds for $u(t) = a e^{Lt}$, so the lemma is sharp.}%
+The lemma turns the implicit bound~\eqref{eq:gronwall-hyp}, in which $u$
+appears on both sides, into an explicit one.
+
+\begin{theorem}[Stability]\label{thm:stability}
+Let $y$ and $z$ be solutions started from $x$ and $x'$. Then
+\begin{equation}\label{eq:stability}
+  \abs{y(t) - z(t)} \le e^{Lt} \abs{x - x'} \qquad \text{for all } t \in [0, T].
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+\tgstep[Compare the integral equations]
+Subtracting the two copies of~\eqref{eq:integral} and using the Lipschitz
+bound~\eqref{eq:lip}, we find
+\begin{align*}
+  \abs{y(t) - z(t)}
+    &\le \abs{x - x'} + \int_0^t \abs{b\qty(y(s)) - b\qty(z(s))} \dd{s} \\
+    &\le \abs{x - x'} + L \int_0^t \abs{y(s) - z(s)} \dd{s} .
+\end{align*}
+\tgstep[Apply Gr\"onwall]
+The function $u(t) = \abs{y(t) - z(t)}$ is continuous and nonnegative, and
+the last display is~\eqref{eq:gronwall-hyp} with $a = \abs{x - x'}$. By
+\cref{lem:gronwall}, $u(t) \le e^{Lt} \abs{x - x'}$, which
+is~\eqref{eq:stability}.
+\end{proof}
+
+\begin{tgonly}
+\begin{tryit}
+Rest on ``\cref{lem:gronwall}'' in the proof above: the preview splits the
+lemma into its \textbf{hypotheses}, each with a box to tick once you have
+checked it, and its \textbf{conclusion}; the standing
+\cref{ass:lip} is listed too. Then press \textbf{Step through} by the proof's
+heading and use the arrow keys. This proof is cut where the author put
+\verb|\tgstep| marks, with their titles; the proof of \cref{lem:gronwall}
+has no marks, so it is cut at its full stops, and a display stays with its
+sentence. Rest on a reference inside a step to preview it without losing
+your place.
+\end{tryit}
+\end{tgonly}
+
+\begin{corollary}[Uniqueness]\label{cor:unique}
+Two solutions started from the same point are equal.
+\end{corollary}
+
+\begin{proof}
+Take $x = x'$ in \cref{thm:stability}.
+\end{proof}
+
+\begin{example}[Sharpness]\label{ex:sharp}
+\tguses{lem:gronwall}%
+For the linear field $b(y) = L y$ on $\R$, the solutions are
+$y(t) = x e^{Lt}$, so $\abs{y(t) - z(t)} = e^{Lt} \abs{x - x'}$ and
+\eqref{eq:stability} is an equality. Neither the constant nor the rate in
+\cref{thm:stability} can be improved.
+\end{example}
+
+\begin{tgonly}
+\begin{tryit}
+Press the small \textbf{What does this use?} button by the heading of
+\cref{cor:unique}: everything it rests on lights up, the proofs and the
+equations included, and the rest fades. Switch to \textbf{Used in} for the
+other direction, or tick \textbf{Hide the rest}. \textbf{Navigate}
+(Ctrl+G) does the same by name under \textbf{Trace}, and its \textbf{Go to}
+tab jumps to ``(2.3)'' or ``Lemma 2.2''. Its \textbf{Uses} tab searches by
+structure: type ``Lemma 2.2'' for every result that rests on Gr\"onwall's
+inequality, or ``Lemma 2.2 but not Corollary 2.4'' to leave out what goes
+through uniqueness.
+\end{tryit}
+\end{tgonly}
+
+\section{The flow}\label{sec:flow}
+
+\Cref{ass:lip} stays in force. By the Picard--Lindel\"of theorem (see for
+instance~\cite{hartman}), a solution started from any $x$ exists on $[0, T]$
+for every $T$, and by \cref{cor:unique} it is unique. We denote by
+$\Phi_t(x)$ its value at time $t \ge 0$, and call the maps
+$\Phi_t \colon \R^d \to \R^d$ the \emph{flow} of $b$.
+
+\begin{proposition}\label{prop:flow}
+The flow has the following properties.
+\begin{enumerate}[label=(\roman*)]
+  \item\label{it:identity} $\Phi_0 = \Id$.
+  \item\label{it:semigroup} $\Phi_{t+s} = \Phi_t \circ \Phi_s$ for all
+    $s, t \ge 0$; that is, the diagram~\eqref{eq:triangle} commutes.
+  \item\label{it:lipschitz} Each $\Phi_t$ is Lipschitz with constant
+    $e^{Lt}$.
+\end{enumerate}
+\begin{equation}\label{eq:triangle}
+\begin{tikzcd}[column sep=large]
+  \R^d \arrow[r, "\Phi_s"] \arrow[rr, bend right=30, "\Phi_{t+s}"'] & \R^d \arrow[r, "\Phi_t"] & \R^d
+\end{tikzcd}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Item~\ref{it:identity} is~\eqref{eq:integral} at $t = 0$. For
+item~\ref{it:semigroup}, fix $s$ and $x$. Both
+$t \mapsto \Phi_{t+s}(x)$ and $t \mapsto \Phi_t\qty(\Phi_s(x))$ are solutions
+started from $\Phi_s(x)$, so they agree by \cref{cor:unique}.
+Item~\ref{it:lipschitz} is \cref{thm:stability} read as a statement about
+$\Phi_t$.
+\end{proof}
+
+% A parameter readers can vary: TeXglass shows a slider by the figure and the
+% paragraph below it; the PDF shows the start value. (\L is LaTeX's letter L
+% with a stroke, so the value is written \tgvalue{L}.)
+\tgparam[start=0.5, step=0.05, label={$L$}]{L}{0}{1}%
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[scale=1.1]
+  \begin{scope}
+  \clip (-0.2, -0.2) rectangle (3.2, 4.4);
+  \fill[blue!10] plot[domain=0:3, samples=40] (\x, {0.5*exp(\tgvalue{L}*\x)})
+    -- plot[domain=3:0, samples=40] (\x, {0.9*exp(\tgvalue{L}*\x)}) -- cycle;
+  \draw[thick, blue, domain=0:3, samples=40] plot (\x, {0.5*exp(\tgvalue{L}*\x)});
+  \draw[thick, red, domain=0:3, samples=40] plot (\x, {0.9*exp(\tgvalue{L}*\x)});
+  \end{scope}
+  \draw[->] (-0.2, 0) -- (3.4, 0) node[right] {$t$};
+  \draw[->] (0, -0.2) -- (0, 4.4);
+  \fill (0, 0.5) circle (1.5pt) node[left] {$x$};
+  \fill (0, 0.9) circle (1.5pt) node[left] {$x'$};
+  \node[blue, right] at (3.2, {min(3.6, 0.5*exp(3*\tgvalue{L}))}) {$\Phi_t(x)$};
+  \node[red, right] at (3.2, {min(4.2, 0.9*exp(3*\tgvalue{L}))}) {$\Phi_t(x')$};
+\end{tikzpicture}
+\caption{Two solutions of $\dv{y}{t} = L y$ with $L = \tgvalue{L}$: the gap
+between them grows exactly like $e^{Lt}$, as in \cref{ex:sharp}.}
+\label{fig:flow}
+\end{figure}
+
+\Cref{fig:flow} shows the case of \cref{ex:sharp}: the shaded gap
+\[
+  \abs{\Phi_t(x) - \Phi_t(x')} = e^{\tgvalue{L}\, t} \abs{x - x'}
+\]
+is exactly the bound of
+\cref{prop:flow}\ref{it:lipschitz}.\todo{A picture for a nonlinear field?}
+
+\begin{tgonly}
+\begin{tryit}
+Drag the slider for $L$ under \cref{fig:flow} or under the display above:
+the picture, its caption and the formula all follow, and \textbf{Reset}
+puts $L = 0.5$ back. The author declared it with
+\verb|\tgparam[start=0.5, step=0.05, label={$L$}]{L}{0}{1}| and wrote
+\verb|\tgvalue{L}| where the value goes; the PDF shows $0.5$.
+\end{tryit}
+\end{tgonly}
+
+\begin{tgonly}
+\begin{tryit}
+Open the \textbf{Map} tab in the side panel, or press M for the larger map.
+Solid lines come from proofs; the line from \cref{ex:sharp} to
+\cref{lem:gronwall} was added by the author with \verb|\tguses|, since the
+text never cites the lemma there. Drag a result to move it, pick
+\cref{prop:flow} and choose \textbf{Pin: + uses}, then \textbf{Save as\dots}
+to keep that map, and \textbf{Show pinned} to read (or print) only those
+results. Rest on the diagram's equation number to pin~\eqref{eq:triangle}
+too. Everything you change has Undo and Redo, and \textbf{Reset map} puts the
+paper's map back. The margin note by \cref{lem:gronwall} and the todo note
+above sit in the margin; N and Shift+N jump between them.
+\end{tryit}
+\end{tgonly}
+
+\section{Rough perspective}\label{sec:rough}
+
+\begin{remark}\label{rem:rough}
+When $\dd{t}$ is replaced by the increments of a rough path, as in the
+equations driven by an irregular signal studied in~\cite{gubinelli}, the
+proof of \cref{thm:stability} breaks down: there is no integral to estimate
+term by term. Existence and uniqueness then rest on sewing arguments instead.
+For rough stochastic differential equations, which mix a Brownian motion with
+a rough path, see~\cite[Theorem~4.6]{fhl}.
+\end{remark}
+
+\begin{tgonly}
+\begin{tryit}
+Rest on the citation ``\cite[Theorem~4.6]{fhl}'' above: since that paper is
+on arXiv, the preview shows its Theorem~4.6 itself, rendered from the
+paper's source. The other citations show the cited paper's title and
+abstract when you are online. Under \textbf{Notation}, $\Phi_t$ and $L$ carry
+the author's descriptions (written with \verb|\tgdefine|), and $U$ the
+definition made with \verb|\coloneqq|; search the tab for ``flow''. Physics
+macros such as \verb|\abs|, \verb|\qty| and \verb|\dv| just work.
+\end{tryit}
+\end{tgonly}
+
+\begin{tgonly}
+\begin{tryit}
+Make it yours: switch to dark with the moon button, or to the handwritten
+look with the pen; drag an edge of the text to change its width; select a
+phrase to highlight it or write a note on it, which syncs through your own
+GitHub gist. \textbf{Share} links to a section, the bookmark saves a paper
+for offline reading, and the \textbf{\dots} menu exports this page as HTML
+or as an EPUB e-book. \textbf{Compare versions\dots}, also in that menu,
+marks what changed between two versions of a paper, matched by label, so a
+renumbered lemma is still the same lemma. Try it on the paper cited in
+\cref{rem:rough}: \href{?arxiv=2106.10340v2&compare=v1}{its v1 against v2}.
+\end{tryit}
+\end{tgonly}
+
+\begin{thebibliography}{9}
+\bibitem{fhl} P.~K. Friz, A.~Hocquet and K.~L\^e, \emph{Rough stochastic
+  differential equations}, arXiv:2106.10340.
+\bibitem{gronwall} T.~H. Gronwall, \emph{Note on the derivatives with respect
+  to a parameter of the solutions of a system of differential equations},
+  Ann. of Math. (2) \textbf{20} (1919), no.~4, 292--296,
+  \href{https://doi.org/10.2307/1967124}{doi:10.2307/1967124}.
+\bibitem{gubinelli} M.~Gubinelli, \emph{Controlling rough paths}, J. Funct.
+  Anal. \textbf{216} (2004), no.~1, 86--140, arXiv:math/0306433.
+\bibitem{hartman} P.~Hartman, \emph{Ordinary differential equations}, 2nd
+  ed., Classics in Applied Mathematics~38, SIAM, Philadelphia, 2002.
+\end{thebibliography}
+
+\end{document}

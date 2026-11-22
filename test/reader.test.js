@@ -19,7 +19,7 @@ const ROOT = path.join(__dirname, '..');
 
 function cliPage(extra) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-reader-'));
-  fs.copyFileSync(path.join(ROOT, 'examples/sample.tex'), path.join(dir, 'paper.tex'));
+  fs.copyFileSync(path.join(ROOT, 'examples/tour.tex'), path.join(dir, 'paper.tex'));
   execFileSync(process.execPath, [path.join(ROOT, 'bin/texglass.js'), path.join(dir, 'paper.tex'), ...extra], { stdio: 'pipe' });
   return path.join(dir, 'paper.html');
 }
@@ -67,17 +67,20 @@ test('the reader page: previews, notation, side panel, Navigate', { skip: !playw
     assert.ok((await page.$$('#toc-list a[data-id]')).length >= 3);
 
     // a reference previews its target, with what it uses
-    await page.hover('#preview a.ref');
+    // (scroll first: scrolling closes previews)
+    await page.$eval('#preview a.ref[data-label="thm:stability"]', (a) => a.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300);
+    await page.hover('#preview a.ref[data-label="thm:stability"]');
     await page.waitForSelector('#ref-popover:not([hidden])');
-    assert.match(await page.textContent('#ref-popover'), /Theorem 2\.1/);
+    assert.match(await page.textContent('#ref-popover'), /Theorem 2\.3/);
     await page.mouse.move(2, 400);
 
     // notation on hover, from the paper's own macros
-    const norm = await page.$$eval('#preview .math[data-tex]', (els) => els.findIndex((e) => e.dataset.tex.includes('\\norm')));
+    const norm = await page.$$eval('#preview .math[data-tex]', (els) => els.findIndex((e) => e.dataset.tex.includes('\\Id')));
     assert.ok(norm >= 0);
     await (await page.$$('#preview .math[data-tex]'))[norm].hover();
     await page.waitForSelector('.insight-popover:not([hidden])');
-    assert.match(await page.textContent('.insight-popover'), /\\norm/);
+    assert.match(await page.textContent('.insight-popover'), /\\Id/);
 
     // the notation index draws its symbols with the converter inside the page
     await page.click('#toc-pane [role=tab]:has-text("Notation")');

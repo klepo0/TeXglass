@@ -586,9 +586,15 @@ install; after the first visit it opens and renders offline.
 - **OAI preprints** lists the manuscripts in
   [openai/math](https://github.com/openai/math), searchable and filtered by
   discipline.
+- **Take the tour**: on the welcome page, at the end of the **…** menu, or
+  `?tour`. It opens [`examples/tour.tex`](../examples/tour.tex), a short paper
+  on Grönwall's inequality whose **Try it** notes say what to try at each step:
+  previews, the hypothesis checker, stepping through proofs, What does this
+  use?, the map, notation, cited theorems, margin notes and the
+  `texglass.sty` hints. It also compiles with pdfLaTeX, without the notes.
 - **Links**: `?arxiv=2301.00001` (add `&goto=Theorem 4.1` to land on a
   result), a bare `?arxiv` for the search dialog, `?gh=<GitHub link>`,
-  `?preprint=<folder>`. A **bookmarklet** in the Open dialog opens the GitHub
+  `?preprint=<folder>`, `?tour`. A **bookmarklet** in the Open dialog opens the GitHub
   page you are on.
 
 **Sharing a paper**
@@ -646,8 +652,8 @@ e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned result
 rest** prints as shown), **Copy AI prompt for authors** (see
 [Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
-notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Support
-TeXglass ☕** opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
+notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Take
+the tour** (see above) and **Support TeXglass ☕**, which opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
 page.
 
 **Status** at the top counts undefined references and duplicate labels.
@@ -984,9 +990,10 @@ text still works as usual.
   `\vskip 2pt plus 1pt`) are skipped without leaving their sizes in the text.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
-  enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`,
-  `\Cref`, `\autoref`, `\nameref`.
-- **Structure**: `\maketitle`, abstract, lists, footnotes, `tabular`,
+  enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`
+  (capitalised with cleveref's `capitalise` option), `\Cref`, `\autoref`,
+  `\nameref`.
+- **Structure**: `\maketitle`, abstract (placed under the title in `amsart`, as LaTeX does), lists, footnotes, `tabular`,
   `verbatim`, links, ulem underlines.
 - **Bibliographies**: `thebibliography`, `.bbl` (BibTeX or biber), `.bib`
   files (BibTeX and biblatex) and amsrefs records
@@ -1029,6 +1036,11 @@ TeXglass reads the commands itself either way.
 
 The package is free to share under the LaTeX Project Public License, so it can
 go into your paper's sources and onto arXiv with them.
+
+[`examples/tour.tex`](../examples/tour.tex), the paper behind **Take the
+tour**, uses every command above: its **Try it** notes are `tgonly`, its
+pointer to the viewer is `tghide`, and it has `\tgdefine`, `\tguses`,
+`\tgstep` and `\tgparam` in place.
 
 ### Live parameters
 

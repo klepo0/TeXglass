@@ -1199,7 +1199,7 @@
           else if (cmd === 'cref' || cmd === 'Cref' || cmd === 'autoref' || cmd === 'Autoref') {
             const kind = KIND_NAMES[info.kind];
             let name = info.kindName || (kind ? kind[1] : '');
-            if (cmd === 'cref') name = kind ? kind[0] : name.toLowerCase();
+            if (cmd === 'cref' && !this.crefCap) name = kind ? kind[0] : name.toLowerCase();
             if (info.kind === 'equation' && cmd !== 'autoref' && cmd !== 'Autoref') text = `(${text})`;
             text = (name ? escapeHtml(name) + '&nbsp;' : '') + text;
           }
@@ -1366,6 +1366,11 @@
         if (end) body = body.slice(0, end.at);
       }
       this.preamble = pre;
+      // amsart, amsproc: an abstract written before \maketitle goes under the title
+      this.amsTitle = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{\s*ams(?:art|proc)\s*\}/.test(pre) && /\\maketitle\b/.test(body);
+      this.heldAbstract = '';
+      // cleveref's capitalise option: \cref says "Lemma 2.1", as \Cref does
+      this.crefCap = /\\usepackage\s*\[[^\]]*\bcapitali[sz]e\b[^\]]*\]\s*\{[^}]*\bcleveref\b[^}]*\}/.test(pre);
       this.startParams(src);
       this.ulemEmph = /\\usepackage\s*(?:\[(?![^\]]*\bnormalem\b)[^\]]*\])?\s*\{[^}]*\bulem\b[^}]*\}/.test(pre);
       if (/\\chapter\b/.test(src)) {
@@ -2040,9 +2045,12 @@
           else this.meta[name] = a.content;
           return res('', a.end);
         }
-        case 'maketitle':
+        case 'maketitle': {
           this.titleShown = true;
-          return res(this.titleBlock(), i, { block: true });
+          const held = this.heldAbstract || '';
+          this.heldAbstract = '';
+          return res(this.titleBlock() + held, i, { block: true });
+        }
         case 'thankstext': case 'tnotetext': case 'fntext': case 'cortext': {
           // imsart \thankstext{key}{text}, elsarticle \fntext[key]{text}: the
           // note that \thanksref{key} / \fnref{key} attach to a name
@@ -2732,8 +2740,15 @@
           const head = cls ? `${cls[1]} subject classifications` : 'Keywords';
           return `<div class="keywords"><span class="keywords-head">${escapeHtml(head)}:</span> ${items.map((t) => this.flow(t, true)).join(', ')}</div>`;
         }
-        case 'abstract':
-          return `<div class="abstract"><div class="abstract-title">Abstract</div>${this.flow(body, false)}</div>`;
+        case 'abstract': {
+          const html = `<div class="abstract"><div class="abstract-title">Abstract</div>${this.flow(body, false)}</div>`;
+          // AMS classes want the abstract before \maketitle and print it under the title
+          if (this.amsTitle && !this.titleShown) {
+            this.heldAbstract = (this.heldAbstract || '') + html;
+            return '';
+          }
+          return html;
+        }
         case 'itemize': case 'enumerate': case 'description': case 'compactitem': case 'compactenum':
         case 'inparaenum': case 'asparaenum':
           return this.list(name, body);
