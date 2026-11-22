@@ -762,3 +762,97 @@ See \ref{p1}, \ref{p3}, \ref{s4}, \ref{r1}, \ref{r3}.`);
   assert.match(t, /See \(1a\), \(1c\), S4, \(i\), 3\./);
   assert.deepEqual(warnings, []);
 });
+
+// Render with real KaTeX and fail on any formula it cannot draw.
+const strictKatex = (src) => TeXglass.render(src, {
+  renderMath: (t, d, m) => katex.renderToString(t, { displayMode: d, macros: m, throwOnError: true, strict: 'ignore' }),
+});
+const noMathErrors = (html) => assert.doesNotMatch(html, /math-error/);
+
+test('TeX conditionals in text run one branch', () => {
+  const { html } = plain(String.raw`
+\newif\ifdraft
+\newif\iflong \longtrue
+\makeatletter
+\def\pick{\ifx\opt\undefined NONE\else SOME\fi}
+\makeatother
+\begin{document}
+\iffalse hidden \else shown \fi
+\ifdraft DRAFT\else FINAL\fi, \iflong LONG\fi{} \pick; \def\opt{x}\pick{}
+\ifnum 3>2 big\else small\fi, \ifcase 2 zero\or one\or two\else many\fi
+\ifmmode MATH\else TEXT\fi \if@twocolumn TWO\fi \ifpdf PDF\fi
+\end{document}`);
+  const t = text(html);
+  assert.match(t, /shown FINAL, LONG NONE; SOME big, two TEXT PDF/);
+  assert.doesNotMatch(t, /hidden|DRAFT|small|zero|one|many|MATH|TWO/);
+});
+
+test('TeX conditionals in macros run one branch inside formulas', () => {
+  const { html } = strictKatex(String.raw`
+\newif\ifbold
+\def\vect#1{\ifbold\mathbf{#1}\else\vec{#1}\fi}
+\def\sym{\relax\ifmmode\alpha\else$\alpha$\fi}
+\def\opt#1{\ifx\relax#1\relax\emptyset\else#1\fi}
+\makeatletter
+\def\old{\if@compatibility X\else\beta\fi}
+\def\boxsize{\ifdim\wd0>1pt\mathrm{wide}\else\mathrm{narrow}\fi}
+\makeatother
+\begin{document}
+$\vect{v} + \sym + \opt{} + \opt{y} + \old + \boxsize$
+\end{document}`);
+  noMathErrors(html);
+  assert.match(text(html), /narrow/);
+  assert.doesNotMatch(text(html), /wide/);
+});
+
+test('a command KaTeX knows, redefined with TeX internals, keeps its KaTeX meaning', () => {
+  // Scientific WorkPlace's tcilatex: \def\delta{{\Greekmath 010E}}, \Greekmath built from \mathchar
+  const { html } = strictKatex(String.raw`
+\makeatletter
+\def\Greekmath#1#2#3#4{\if@compatibility\mathchar"#1#2#3#4\else\mathchar"#1#2#3#4\fi}
+\def\delta{{\Greekmath 010E}}
+\def\dint{\msi@int\displaystyle\int}
+\def\msi@int#1#2{\futurelet\@nextcs\@int}
+\let\oldcirc=\circ
+\renewcommand{\circ}{\mathchoice
+    {\mathbin{\scriptstyle\oldcirc}}{\mathbin{\scriptstyle\oldcirc}}
+    {\mathbin{\scriptscriptstyle\oldcirc}}{\mathbin{\scriptscriptstyle\oldcirc}}}
+\makeatother
+\begin{document}
+$\delta^{2} + \dint_0^1 f\circ g$
+\end{document}`);
+  noMathErrors(html);
+  assert.match(html, /δ/);
+  assert.match(html, /∘/);
+});
+
+test('macros for half an environment (\\be … \\ee) make the whole environment', () => {
+  const { html } = plain(String.raw`
+\def\beqa{\begin{eqnarray}}
+\def\eeqa{\end{eqnarray}}
+\newcommand{\newcom}{\newcommand}
+\newcom{\be}{\begin{equation}}
+\newcom{\ee}{\end{equation}}
+\def\f{\frac}
+\begin{document}
+p \beqa V=\f{1}{2} \eeqa q
+\be\label{e} x=1 \ee
+See (\ref{e}).
+\end{document}`);
+  const t = text(html);
+  assert.match(t, /\[D:\\begin\{align\*\} V=\\f\{1\}\{2\} \\tag\{1\}\\end\{align\*\}\]\s*q/);
+  assert.match(t, /\[D:x=1\s*\\tag\{2\}\]/);
+  assert.match(t, /See \(2\)\./);
+});
+
+test('text with $…$ in a formula: \\footnote, \\parbox, \\textsc, \\ooalign, \\tag*', () => {
+  const { html } = strictKatex(String.raw`
+\newcommand\preceqdot{\mathrel{\ooalign{$\preceq$\cr\hidewidth\raise0.225ex\hbox{$\cdot\mkern0.5mu$}\cr}}}
+\begin{document}
+\begin{equation} a = b,\footnote{Here $b$ is fixed.} \end{equation}
+$x\preceqdot y$, $\textsc{$\lambda$-terms}$, $\inf\{t;\ \parbox[t]{8em}{done in $t$ steps}\}$
+\[ z \tag*{$\mathsf{R_{ab}}(A)$} \]
+\end{document}`);
+  noMathErrors(html);
+  assert.match(text(html), /Here .* is fixed/);
+});
