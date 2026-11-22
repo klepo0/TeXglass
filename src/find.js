@@ -133,6 +133,38 @@
     return out.slice(0, max).map((x) => x.t);
   }
 
+  /**
+   * Read a search by use: "Lemma 2, (3.1) but not Assumption A" →
+   * { inc: ['Lemma 2', '(3.1)'], exc: ['Assumption A'], any: false, direct: false }.
+   * Terms are split at commas, "and", "&" and "+"; "or" between them asks for
+   * any one instead of all. Everything after "not" ("but not", "without",
+   * "except") is left out, as is a single term written "-Lemma 3". A leading
+   * "uses" or "using" is dropped, and "directly" counts only links written in
+   * the result itself.
+   */
+  function parseUses(query) {
+    let q = String(query || '').replace(/\s+/g, ' ').trim();
+    let direct = false;
+    q = q.replace(/\bdirect(ly)?\b/gi, () => { direct = true; return ' '; }).replace(/\s+/g, ' ').trim();
+    q = q.replace(/^(?:(?:results?|everything|what)\s+)?(?:that\s+|which\s+)?(?:uses?|using|needs?|needing|rel(?:y|ies|ying)\s+on|depends?\s+on|depending\s+on)\b\s*/i, '');
+    const cut = /(?:^|[\s,;])(?:but\s+not|and\s+not|not|without|except|excluding|minus)(?=\s|$)/i.exec(q);
+    const before = cut ? q.slice(0, cut.index) : q;
+    const after = cut ? q.slice(cut.index + cut[0].length) : '';
+    const SPLIT = /\s*(?:[,;&+]|\band\b|\bor\b)\s*|\s+(?=[-!−]\S)/i;
+    const any = /\bor\b/i.test(before);
+    const inc = [];
+    const exc = [];
+    for (const raw of before.split(SPLIT)) {
+      const t = (raw || '').trim();
+      if (/^[-!−]/.test(t)) { if (t.slice(1).trim()) exc.push(t.slice(1).trim()); } else if (t) inc.push(t);
+    }
+    for (const raw of after.split(SPLIT)) {
+      const t = (raw || '').trim().replace(/^[-!−]\s*/, '');
+      if (t) exc.push(t);
+    }
+    return { inc, exc, any: any && inc.length > 1, direct };
+  }
+
   // ---------------------------------------------------------------------------
   // Reading the rendered document
   // ---------------------------------------------------------------------------
@@ -279,7 +311,11 @@
    *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target,
    *   onFocus(el): optional; adds a Trace tab to pick a theorem, lemma, definition…
    *     and show only what it uses and what uses it (TeXglassInsight focus),
-   *   related(el): optional, { uses, usedBy } counts shown in that list }
+   *   related(el): optional, { uses, usedBy } counts shown in that list,
+   *   uses(q): optional; adds a Uses tab, search by use: q is { inc: [element],
+   *     exc: [element], any, direct } (results and displayed equations), and it
+   *     returns { results: [result elements], text } (TeXglassInsight searchUses),
+   *   onUses(q, el): picking one of those results: light them all up, at el }
    * Returns { open(mode, text), close(), next(), prev(), refresh(), state() }.
    */
   function attach(options) {
@@ -300,6 +336,7 @@
       '<button type="button" role="tab" data-mode="find" title="Search the text (Ctrl+F)">Find</button>' +
       '<button type="button" role="tab" data-mode="goto" title="Go to a theorem, equation or section by its number (Ctrl+G)">Go to</button>' +
       (options.onFocus ? '<button type="button" role="tab" data-mode="trace" title="Pick a theorem, lemma or definition and show only what it uses and what uses it">Trace</button>' : '') +
+      (options.uses ? '<button type="button" role="tab" data-mode="uses" title="Search by use: every result that uses a lemma, an assumption or an equation, and not another">Uses</button>' : '') +
       '</div>' +
       '<input class="find-input" type="text" spellcheck="false" autocomplete="off" aria-label="Search">' +
       '<span class="find-count" aria-live="polite"></span>' +
@@ -321,7 +358,9 @@
     let capped = false;
     let results = []; // Go to: targets shown in the list
     let selected = 0;
-    let queries = { find: '', goto: '', trace: '' };
+    let queries = { find: '', goto: '', trace: '', uses: '' };
+    let usesDirect = false; // the Directly button in the Uses tab
+    let usesQuery = null; // the search the Uses list shows: { inc, exc, any, direct }
     let searchTimer = 0;
     let stale = false;
     let lastQuery = '';
@@ -468,7 +507,57 @@
       if (c.usedBy) parts.push(`used in ${c.usedBy}`);
       return `<span class="goto-rel">${parts.length ? parts.join(' · ') : 'stands alone'}</span>`;
     }
+    /** The Uses tab: read the search, find what it names, list the results. */
+    function showUses() {
+      const p = parseUses(input.value);
+      const q = input.value.trim();
+      results = [];
+      selected = 0;
+      usesQuery = null;
+      let html = '';
+      if (!p.inc.length && !p.exc.length) {
+        html = '<li class="goto-empty uses-help">Type what the results should use: <b>Lemma 2</b>, <b>(3.1)</b>, ' +
+          '<b>Lemma 2, Assumption A</b> (both), <b>Lemma 2 or Lemma 3</b> (either), <b>Theorem 1 but not Assumption A</b>, or <b>not Assumption A</b> alone.</li>';
+      } else {
+        const targets = collectTargets(rootEl).filter((t) => (t.type === 'theorem' && t.el.id) || t.type === 'equation');
+        const pick = (term) => {
+          const t = rankTargets(targets, term, 1)[0];
+          return t ? (t.type === 'equation' ? t.block : t.el) : null;
+        };
+        const inc = p.inc.map(pick);
+        const exc = p.exc.map(pick);
+        const missing = p.inc.concat(p.exc).filter((term, k) => !(k < p.inc.length ? inc[k] : exc[k - p.inc.length]));
+        const direct = p.direct || usesDirect;
+        let res = null;
+        if (!missing.length) {
+          usesQuery = { inc, exc, any: p.any, direct };
+          try { res = options.uses(usesQuery); } catch (e) { res = null; }
+        }
+        if (!res) {
+          usesQuery = null;
+          html = `<li class="goto-empty">${missing.length ? 'No theorem, lemma or equation matches “' + escapeHtml(missing[0]) + '”' : 'Nothing to search by.'}</li>`;
+        } else {
+          const byEl = new Map(targets.map((t) => [t.el, t]));
+          results = res.results.map((el) => byEl.get(el) || { el, block: el, type: 'theorem', label: (el.querySelector('.thm-name') || el).textContent.trim(), num: '', title: '' });
+          const n = results.length;
+          html = `<li class="uses-head"><span class="uses-sum"><strong>${n ? n + ' result' + (n > 1 ? 's' : '') : 'No result'}</strong> ${escapeHtml(res.text)}</span>` +
+            `<button type="button" class="uses-direct" aria-pressed="${direct}"${p.direct ? ' disabled' : ''} title="Count only links written in a result itself, not what it uses through other results">Directly</button></li>` +
+            results.map((t, k) =>
+              `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}"${k === 0 ? ' aria-selected="true"' : ''}>` +
+              `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
+              (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
+              '</li>').join('');
+        }
+      }
+      list.innerHTML = html;
+      list.hidden = false;
+      count.textContent = '';
+      bar.classList.toggle('no-match', !!q && !results.length);
+      input.setAttribute('aria-activedescendant', results.length ? 'goto-0' : '');
+    }
+
     function showGoto() {
+      if (mode === 'uses') return showUses();
       const related = mode === 'trace';
       let targets = collectTargets(rootEl);
       if (related) targets = targets.filter((t) => t.type === 'theorem' && t.el.id);
@@ -507,6 +596,12 @@
       if (!t || !t.el.isConnected) return;
       close();
       reveal(t.el);
+      if (mode === 'uses') {
+        // light up every result found, starting at this one
+        if (options.onUses && usesQuery) options.onUses(usesQuery, t.el);
+        if (options.onJump) options.onJump(t.el);
+        return;
+      }
       if (mode === 'trace') {
         // light up what it uses and what uses it, and hide the rest
         options.onFocus(t.el);
@@ -534,10 +629,10 @@
       bar.dataset.mode = m;
       bar.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
       input.value = queries[m];
-      input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : 'Pick a result: Lemma 4.1, or a name';
-      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : 'Pick a result to show what it uses and what uses it');
+      input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : m === 'uses' ? 'Lemma 2, (3.1) but not Assumption A' : 'Pick a result: Lemma 4.1, or a name';
+      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : m === 'uses' ? 'Search by use: what the results should use, and not' : 'Pick a result to show what it uses and what uses it');
       input.setAttribute('role', m === 'find' ? 'searchbox' : 'combobox');
-      list.setAttribute('aria-label', m === 'trace' ? 'Results' : 'Places to go to');
+      list.setAttribute('aria-label', m === 'trace' || m === 'uses' ? 'Results' : 'Places to go to');
       if (m !== 'find') input.setAttribute('aria-expanded', 'true');
       else input.removeAttribute('aria-expanded');
       prevBtn.hidden = nextBtn.hidden = m !== 'find';
@@ -554,6 +649,7 @@
 
     function open(m, text) {
       if (m === 'trace' && !options.onFocus) m = 'goto';
+      if (m === 'uses' && !options.uses) m = 'goto';
       const wasOpen = !bar.hidden;
       if (!wasOpen) searchMoved = false;
       bar.hidden = false;
@@ -637,6 +733,12 @@
         input.focus();
         return;
       }
+      if (e.target.closest('.uses-direct')) {
+        usesDirect = !usesDirect;
+        showUses();
+        input.focus();
+        return;
+      }
       if (e.target.closest('.find-prev')) step(-1);
       else if (e.target.closest('.find-next')) step(1);
       else if (e.target.closest('.find-close')) close();
@@ -714,5 +816,5 @@
     return s && s.length <= 100 && !/\n/.test(s) ? s : null;
   }
 
-  return { attach, bindKeys, findRegex, parseJump, rankTargets, collectTargets, indexText, locate, displayName };
+  return { attach, bindKeys, findRegex, parseJump, parseUses, rankTargets, collectTargets, indexText, locate, displayName };
 });

@@ -53,8 +53,9 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
     LaTeX**, **hovering a reference or citation previews** what it points to,
     and **sections and proofs fold** (click a heading or the arrow; *Proofs*
     folds or unfolds every proof);
-  - has a **table of contents** (*Contents*, on the left or the right), **Navigate**: find (Ctrl+F) and go to
-    (Ctrl+G: "Lemma 4.1", "(3.2)", "§2"), and a **light or dark theme** (the
+  - has a **table of contents** (*Contents*, on the left or the right), **Navigate**: find (Ctrl+F), go to
+    (Ctrl+G: "Lemma 4.1", "(3.2)", "§2") and search by what results use
+    ("Lemma 2 but not Assumption A"), and a **light or dark theme** (the
     moon button; it follows your system until you choose). Scrolling the
     preview yourself or jumping with these holds it in place until the editor
     scrolls again;

@@ -856,3 +856,35 @@ $x\preceqdot y$, $\textsc{$\lambda$-terms}$, $\inf\{t;\ \parbox[t]{8em}{done in 
   noMathErrors(html);
   assert.match(text(html), /Here .* is fixed/);
 });
+
+test('plain TeX in formulas: \\eqno, \\buildrel, \\eqalign, corners after \\left, a space before ^', () => {
+  const { html } = strictKatex(String.raw`
+\newcommand{\fix}{\theta\,}
+\newcommand{\norm}[1]{\left\ulcorner #1\right\urcorner}
+\def\defemb#1#2{\expandafter\def\csname #1\endcsname{\relax\ifmmode #2\else\hbox{$#2$}\fi}}
+\defemb{cP}{{\cal P}}
+\begin{document}
+$\fix^{k}$, $x\,_{n}$, $\norm{t}$, $\cP$, $a \buildrel \rm def \over = b$, $\mspace{3mu} a \shortleftarrow b$
+\[ x = y \eqno(3.1) \]
+$$\eqalign{a&=b\cr c&=d\cr}$$
+$$\displaylines{a\cr b}$$
+regions $\uppercase\expandafter{\romannumeral4}$ and \uppercase\expandafter{\romannumeral2}
+\end{document}`);
+  noMathErrors(html);
+  assert.match(html, /mathrm[^]*IV|>IV</);
+  assert.match(html, /and II/);
+  assert.match(html, /\(3\.1\)/, 'the \\eqno number becomes the equation tag');
+});
+
+test('page sizes and plain TeX spacing leave no sizes in the text; \\centerline and \\newblock', () => {
+  const { html, unknownCommands } = plain(String.raw`
+\textwidth 16cm \oddsidemargin=-0.5in \topmargin -1in
+\begin{document}
+A \vskip 2pt plus 1pt minus 1pt B \hskip-.5\parindent C \kern 3pt D \textheight 20cm E.
+\centerline{Centred line}
+\begin{thebibliography}{9}\bibitem{a} X. \newblock Title.\end{thebibliography}
+\end{document}`);
+  assert.doesNotMatch(text(html), /\d(cm|pt|in)|plus|minus/);
+  assert.match(html, /class="center"[^>]*>Centred line/);
+  assert.deepEqual(unknownCommands, []);
+});

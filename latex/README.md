@@ -11,7 +11,7 @@ exactly as without the package.
 \usepackage{texglass}
 
 \tgdefine{L^p}{the space of $p$-integrable functions}  % notation hovers and index
-\tguses{lem:key}                % a dependency-map link the text doesn't state
+\tguses{lem:key}                % a dependency-map link the text doesn't state (Map, Uses search)
 \tgstep[Reduce to balls]        % a step of a proof, for step-through mode
 \tghide{PDF only} \tgonly{web only}
 \begin{tgonly} ... \end{tgonly} % also: tghide environment, \iftexglass ... \else ... \fi

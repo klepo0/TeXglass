@@ -809,6 +809,7 @@
       },
       locked: store.get('texglass:map-locked') === '1',
       onLock: (on) => store.set('texglass:map-locked', on ? '1' : ''),
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
     })
     : null;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
@@ -839,8 +840,9 @@
   // --- find and go to ----------------------------------------------------------------
 
   // Ctrl+F searches the preview; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2" (src/find.js).
+  let finder = null;
   if (window.TeXglassFind) {
-    const finder = TeXglassFind.attach({
+    finder = TeXglassFind.attach({
       root: preview,
       scroller: pane,
       reveal,
@@ -848,6 +850,9 @@
       // Trace: pick a result, see only what it uses and what uses it
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
+      // Uses: search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      uses: (q) => (insight ? insight.searchUses(q) : null),
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     });
     TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));

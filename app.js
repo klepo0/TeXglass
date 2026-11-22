@@ -2557,12 +2557,10 @@
   const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
-  let popoverChip = null; // the "why?" chip that opened it (src/steps.js)
   function hidePopover() {
     clearTimeout(hideTimer);
     popover.hidden = true;
     popoverLink = null;
-    popoverChip = null;
   }
   function hidePopoverSoon() {
     clearTimeout(hideTimer);
@@ -2697,8 +2695,9 @@
   // --- find and go to ----------------------------------------------------------------
 
   // Ctrl+F searches the rendered text; Ctrl+G goes to "Lemma 4.1", "(3.2)", "§2".
+  let finder = null;
   if (window.TeXglassFind) {
-    const finder = window.TeXglassFind.attach({
+    finder = window.TeXglassFind.attach({
       root: preview,
       scroller: previewPane,
       reveal,
@@ -2706,6 +2705,9 @@
       // Trace: pick a result, see only what it uses and what uses it
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
+      // Uses: search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      uses: (q) => (insight ? insight.searchUses(q) : null),
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     });
     window.TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));
@@ -2808,6 +2810,7 @@
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => window.print(),
       onFocusStart: () => { if (picker) picker.stop(); },
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
       // the reader's pins, hidden results, own links, layout and saved maps
       edits: {
         get: () => (paper && NotesSync ? paper.record.map : looseMap),
@@ -2890,20 +2893,12 @@
 
   // --- stepping through a proof -----------------------------------------------------
   // "Step through" by each proof (src/steps.js): one piece at a time, nested parts
-  // folding once passed, and "why?" by each reference opening its usual preview.
+  // folding once passed. Esc closes a preview before it stops the stepping.
   steps = window.TeXglassSteps
     ? TeXglassSteps.attach({
       root: preview,
       enabled: featureOn('proofSteps') && mode !== 'edit',
       reveal,
-      preview: (a, chip) => {
-        const target = document.getElementById(decodeURIComponent((a.getAttribute('href') || '').slice(1)));
-        if (!target) return;
-        if (popoverLink === a && !popover.hidden) { hidePopover(); return; } // a second press closes it
-        showPopover(a, target);
-        popoverChip = chip;
-      },
-      closePreview: () => { if (popoverChip) hidePopover(); },
       previewOpen: () => !popover.hidden,
       dismissPreview: hidePopover,
     })
@@ -2917,12 +2912,6 @@
       render: (piece, values) => Promise.resolve(TeXglass.renderLive(renderedDoc || doc, piece, values)),
     })
     : null;
-  // A preview opened by a "why?" chip stays until a click elsewhere (the pointer never rested on the link).
-  document.addEventListener('pointerdown', (e) => {
-    if (!popoverChip || popover.hidden) return;
-    if (popover.contains(e.target) || e.target.closest('.tg-why')) return;
-    hidePopover();
-  }, true);
 
   // --- settings: switching reading aids on or off ---------------------------------
 
