@@ -52,7 +52,8 @@ test('Ctrl+K and Cmd+K open the arXiv dialog; a bare ?arxiv opens it on load', {
     await page.keyboard.press('Escape');
 
     // Not while another dialog is open.
-    await page.click('#preprints');
+    await page.click('#more');
+    await page.click('#preprints'); // OAI preprints, in the "…" menu
     await page.keyboard.press('Control+k');
     assert.equal(await isOpen(page), false);
     await page.keyboard.press('Escape');

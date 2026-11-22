@@ -312,7 +312,8 @@
     const proofs = preview.querySelectorAll('.proof').length;
     const allFolded = proofs > 0 && preview.querySelectorAll('.proof.folded').length === proofs;
     foldProofs.setAttribute('aria-pressed', String(allFolded));
-    foldProofs.title = proofs === 0 ? 'This file has no proofs' : allFolded ? 'Unfold every proof' : 'Fold every proof';
+    foldProofs.title = proofs === 0 ? 'This file has no proofs' : allFolded ? 'Show proofs: unfold every proof' : 'Hide proofs: fold every proof to its first line';
+    foldProofs.setAttribute('aria-label', allFolded ? 'Show proofs' : 'Hide proofs');
     foldProofs.disabled = proofs === 0;
   }
 
@@ -572,6 +573,9 @@
       body.appendChild(clone);
     }
     // What the result uses and where it is used (src/insight.js).
+    // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
+    const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
+    if (refPin) body.prepend(refPin);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
@@ -812,6 +816,11 @@
       onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
     })
     : null;
+  // The pin in the toolbar: how many things are pinned on the map, and a list to jump to.
+  const pinsButton = window.TeXglassPins && insight
+    ? TeXglassPins.attach({ button: $('pins'), insight, jump: (el) => jumpTo(el), onOpen: () => hidePopover() })
+    : null;
+  if (!pinsButton) $('pins').hidden = true;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
   // width are kept apart from the full viewer's, since this panel is usually narrower.
   let sideView = null;

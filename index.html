@@ -43,6 +43,7 @@
   <script defer src="src/share.js"></script>
   <script defer src="src/insight.js"></script>
   <script defer src="src/pick.js"></script>
+  <script defer src="src/pins.js"></script>
   <script defer src="src/progress.js"></script>
   <script defer src="src/steps.js"></script>
   <script defer src="src/params.js"></script>
@@ -59,38 +60,46 @@
 <body>
   <header class="toolbar">
     <div class="brand">T<sub>e</sub>Xglass</div>
+    <a id="support-bar" class="support-link" href="https://buymeacoffee.com/texglass" target="_blank" rel="noopener" title="TeXglass is free. If it helps you, you can buy its maker a coffee (Buy Me a Coffee)" aria-label="Support TeXglass (Buy Me a Coffee)"><span aria-hidden="true">☕</span><span class="tb-label">Support</span></a>
     <div class="mode-switch" role="group" aria-label="Mode">
       <button id="mode-preview" type="button" aria-pressed="true" title="Read the rendered document (Ctrl+E)">Preview</button>
       <button id="mode-edit" type="button" aria-pressed="false" title="Click any part of the document to edit it (Ctrl+E)">Edit</button>
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
-    <button id="open" type="button" title="Open a paper from arXiv, a repository from GitHub, or a .tex file from this computer (Ctrl+K). Ctrl+O picks a .tex file; Shift+click or Ctrl+Shift+O, a folder" aria-keyshortcuts="Control+K Meta+K">Open</button>
-    <button id="preprints" type="button" title="Browse OpenAI's mathematical preprints on GitHub and open one">OAI preprints</button>
+    <button id="open" type="button" class="tb-iconic" title="Open a paper from arXiv, a repository from GitHub, or a .tex file from this computer (Ctrl+K). Ctrl+O picks a .tex file; Shift+click or Ctrl+Shift+O, a folder" aria-label="Open" aria-keyshortcuts="Control+K Meta+K"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 18.5V6a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H18A1.5 1.5 0 0 1 19.5 8.2V10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M3.5 18.5l2.6-7.1a1.5 1.5 0 0 1 1.4-1h13.1a1 1 0 0 1 .9 1.3l-2.3 6.1a1.5 1.5 0 0 1-1.4.9H3.5Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Open</span></button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory hidden>
     <input id="notes-file" type="file" accept=".json,application/json" hidden>
     <div class="more-group">
-      <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: save, export, print, notes" title="Save, export or print; your highlights and notes">…</button>
+      <button id="more" class="more-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More: papers, save and export, reading, notes" title="More: OAI preprints and saved papers, save, export and print, reading tools, your highlights and notes">…</button>
       <div id="more-menu" class="more-menu" role="menu" aria-labelledby="more" hidden>
         <!-- On a phone the toolbar keeps a few large buttons; the rest move up here (app.js, compact toolbar). -->
         <div id="more-compact" class="more-compact" hidden></div>
+        <div class="more-head" role="presentation">Papers</div>
+        <button id="preprints" type="button" role="menuitem" title="Browse OpenAI's mathematical preprints on GitHub and open one">OAI preprints…</button>
+        <button id="library-open" type="button" role="menuitem" title="The papers you saved for offline reading">Saved papers…</button>
+        <button id="library-save" type="button" role="menuitemcheckbox" aria-checked="false" title="Keep this paper on this device, figures and all, to read it with no connection">Save for offline</button>
+        <button id="compare-open" type="button" role="menuitem" title="Compare two versions of this paper (arXiv v1 and v2, or another .tex file): changed, new and removed theorems, proofs, equations and text are marked">Compare versions…</button>
+        <div class="more-sep" role="separator"></div>
+        <div class="more-head" role="presentation">Save and export</div>
         <button id="save" type="button" role="menuitem" title="Save your changes (Ctrl+S)">Save<kbd>Ctrl+S</kbd></button>
+        <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
         <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
         <button id="export-reader" type="button" role="menuitem" title="Download the document as a standalone HTML page with the reading tools: reference previews, notation on hover, contents, map, notation index and Navigate">Export with reading tools</button>
         <button id="export-epub" type="button" role="menuitem" title="Download the document as an EPUB e-book for Apple Books, Kobo, Kindle (Send to Kindle) or any e-book app: formulas as MathML, which grow with the reader's font size">Export as EPUB</button>
-        <button id="compare-open" type="button" role="menuitem" title="Compare two versions of this paper (arXiv v1 and v2, or another .tex file): changed, new and removed theorems, proofs, equations and text are marked">Compare versions…</button>
+        <div class="more-sep" role="separator"></div>
+        <div class="more-head" role="presentation">Reading</div>
         <button id="pick-results" type="button" role="menuitem" title="Show only the results and numbered equations you pinned (their proofs folded), and print them; with nothing pinned yet, pin some first">Show pinned results…</button>
-        <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
-        <button id="ai-prompt" type="button" role="menuitem" title="For authors: copy a prompt to paste into an AI chatbot with your .tex file; it suggests texglass.sty hints (what symbols mean, links for the map, proof steps) that leave your PDF unchanged">Copy AI prompt for authors</button>
-        <div class="more-sep" role="separator"></div>
-        <button id="library-save" type="button" role="menuitemcheckbox" aria-checked="false" title="Keep this paper on this device, figures and all, to read it with no connection">Save for offline</button>
-        <button id="library-open" type="button" role="menuitem" title="The papers you saved for offline reading">Saved papers…</button>
-        <div class="more-sep" role="separator"></div>
         <button id="notes-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="Select text in the preview to highlight it or write a note beside it">Highlights and notes</button>
+        <button id="progress-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="A marker by each theorem, lemma, definition and proof to note how far you have read it (unread, skimmed, read, understood, or ? to ask about); progress shows in Contents and on the map">Reading progress</button>
+        <div class="more-sep" role="separator"></div>
+        <div class="more-head" role="presentation">Your notes</div>
+        <button id="notes-sync" type="button" role="menuitem" title="Keep your highlights and notes in step on all your devices, through a private gist on your GitHub account">Sync notes with GitHub…</button>
         <button id="notes-export" type="button" role="menuitem" title="Download this paper's highlights and notes as a file (paper.texglass.json)">Export notes</button>
         <button id="notes-import" type="button" role="menuitem" title="Add the highlights and notes from an exported file to this paper">Import notes…</button>
-        <button id="notes-sync" type="button" role="menuitem" title="Keep your highlights and notes in step on all your devices, through a private gist on your GitHub account">Sync notes with GitHub…</button>
-        <button id="progress-toggle" type="button" role="menuitemcheckbox" aria-checked="true" title="A marker by each theorem, lemma, definition and proof to note how far you have read it (unread, skimmed, read, understood, or ? to ask about); progress shows in Contents and on the map">Reading progress</button>
+        <div class="more-sep" role="separator"></div>
+        <div class="more-head" role="presentation">For authors</div>
+        <button id="ai-prompt" type="button" role="menuitem" title="For authors: copy a prompt to paste into an AI chatbot with your .tex file; it suggests texglass.sty hints (what symbols mean, links for the map, proof steps) that leave your PDF unchanged">Copy AI prompt for authors</button>
         <div class="more-sep" role="separator" hidden id="install-sep"></div>
         <button id="install" type="button" role="menuitem" title="Add TeXglass to your home screen or apps, to open it like an app, offline too" hidden>Install TeXglass as an app</button>
         <div class="more-sep" role="separator"></div>
@@ -98,16 +107,17 @@
         <a id="support" class="more-support" role="menuitem" href="https://buymeacoffee.com/texglass" target="_blank" rel="noopener" title="TeXglass is free. If it helps you, you can buy its maker a coffee (Buy Me a Coffee)">Support TeXglass ☕</a>
       </div>
     </div>
-    <button id="toc-toggle" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which" aria-label="Contents"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Contents</span></button>
+    <button id="toc-toggle" class="tb-iconic" type="button" aria-pressed="true" aria-controls="toc-pane" title="Show or hide the side panel: contents, notation index and the map of which results use which" aria-label="Contents"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h11M4 18h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Contents</span></button>
     <div class="zoom-group" role="group" aria-label="Zoom">
       <button id="zoom-out" type="button" aria-label="Zoom out" title="Make the document smaller (Ctrl+−)">−</button>
       <button id="zoom-level" class="zoom-level" type="button" title="Reset the zoom to 100% (Ctrl+0)">100%</button>
       <button id="zoom-in" type="button" aria-label="Zoom in" title="Make the document larger (Ctrl++)">+</button>
     </div>
     <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)" aria-label="Navigate"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Navigate</span></button>
-    <button id="save-offline" type="button" aria-pressed="false" title="Save this paper on this device, figures and all, to read it with no connection" aria-label="Save for offline"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="save-offline-mark" d="M7 3.5h10a1 1 0 0 1 1 1V20.5l-6-4.2-6 4.2V4.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Save offline</span></button>
-    <button id="share" type="button" disabled title="Share a link that opens this paper in TeXglass, at the section you are reading" aria-label="Share"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="18" cy="18.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Share</span></button>
-    <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
+    <button id="pins" class="tb-iconic" type="button" aria-label="Pinned" title="Pinned: results, equations and symbols you pin gather here"><span class="tb-label">Pinned</span></button>
+    <button id="save-offline" class="tb-iconic" type="button" aria-pressed="false" title="Save this paper on this device, figures and all, to read it with no connection" aria-label="Save for offline"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="save-offline-mark" d="M7 3.5h10a1 1 0 0 1 1 1V20.5l-6-4.2-6 4.2V4.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Save offline</span></button>
+    <button id="share" class="tb-iconic" type="button" disabled title="Share a link that opens this paper in TeXglass, at the section you are reading" aria-label="Share"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="18" cy="18.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Share</span></button>
+    <button id="fold-proofs" class="tb-iconic" type="button" aria-pressed="false" title="Hide proofs: fold every proof to its first line" aria-label="Hide proofs"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="fold-mark-hide" d="M7 4.5l5 4.5 5-4.5M7 19.5l5-4.5 5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path class="fold-mark-show" d="M7 9l5-4.5L17 9M7 15l5 4.5 5-4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Hide proofs</span></button>
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
     <span id="status" class="status" role="status"></span>

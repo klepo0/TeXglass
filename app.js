@@ -16,6 +16,8 @@
       study: false, // turned on once a paper is open (notes, below)
       // the reader's highlights and notes, kept per paper (see "the reader's notes" below)
       save: (list) => notesChanged(list),
+      // text pinned from the selection bar shows in the toolbar's Pinned list
+      onPins: () => { try { if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => {
         const at = doc.indexOf('\\begin{document}');
         const preamble = at >= 0 ? doc.slice(0, at) : '';
@@ -57,6 +59,7 @@
   let steps = null; // stepping through a proof (src/steps.js)
   let params = null; // sliders for texglass.sty's \tgparam (src/params.js)
   let picker = null; // "Show pinned results" (src/pick.js)
+  let pinsButton = null; // the toolbar's pin: everything pinned (src/pins.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
   let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
@@ -698,7 +701,12 @@
     const proofs = preview.querySelectorAll('.proof').length;
     const allFolded = proofs > 0 && preview.querySelectorAll('.proof.folded').length === proofs;
     const fp = $('fold-proofs');
-    fp.textContent = allFolded ? 'Show proofs' : 'Hide proofs';
+    const fpLabel = allFolded ? 'Show proofs' : 'Hide proofs';
+    const fpText = fp.querySelector('.tb-label');
+    if (fpText) fpText.textContent = fpLabel;
+    else fp.textContent = fpLabel;
+    fp.setAttribute('aria-label', fpLabel);
+    fp.title = proofs === 0 ? 'This document has no proofs' : allFolded ? 'Show proofs: unfold every proof' : 'Hide proofs: fold every proof to its first line';
     fp.setAttribute('aria-pressed', String(allFolded));
     fp.disabled = proofs === 0;
     anchors = null; // folding moves things around
@@ -1597,7 +1605,7 @@
   // --- the "…" menu: Save, Export, Print ---------------------------------------
   const moreBtn = $('more');
   const moreMenu = $('more-menu');
-  const menuItems = () => [...moreMenu.querySelectorAll('[role^="menuitem"]')].filter((b) => !b.hidden && !b.disabled);
+  const menuItems = () => [...moreMenu.querySelectorAll('[role^="menuitem"]')].filter((b) => !b.hidden && !b.disabled && b.getClientRects().length);
   function setMenu(open, focusFirst) {
     moreMenu.hidden = !open;
     moreBtn.setAttribute('aria-expanded', String(open));
@@ -1634,7 +1642,7 @@
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link', '#settings', '#hand-toggle']
+  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#fold-proofs', '#pins', '#gh-link', '#settings', '#hand-toggle']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
@@ -2616,6 +2624,9 @@
       const split = hypotheses && featureOn('hypotheses') && hypotheses.viewFor(target, a, clone);
       body.appendChild(split || clone);
     }
+    // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
+    const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
+    if (refPin) body.prepend(refPin);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
@@ -2864,6 +2875,20 @@
       onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
     })
     : null;
+  // The pin in the toolbar: how many things are pinned, and a list of them all
+  // (results and equations on the map, rows in the Notation tab) to jump to.
+  pinsButton = window.TeXglassPins && insight && $('pins')
+    ? TeXglassPins.attach({
+      button: $('pins'),
+      insight,
+      margin,
+      jump: (el) => jumpTo(el),
+      showPinned: picker ? () => picker.show() : undefined,
+      pinMore: picker ? () => picker.start() : undefined,
+      onOpen: () => { setMenu(false); hidePopover(); },
+    })
+    : null;
+  if (!pinsButton && $('pins')) $('pins').hidden = true;
   if ($('pick-results')) {
     // with pins: show them; without: pin some first
     if (picker) $('pick-results').addEventListener('click', () => { if (insight && insight.pinCount()) picker.show(); else picker.start(); });

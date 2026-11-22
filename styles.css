@@ -144,6 +144,10 @@ body {
   margin-right: 8px;
 }
 .brand sub { font-size: 0.8em; vertical-align: -0.25em; margin: 0 -0.08em; }
+/* Support TeXglass (Buy Me a Coffee), beside the name; on a phone, where the name is hidden, it stays in the "…" menu */
+.support-link { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px 0 -4px; padding: 3px 9px; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); font-size: 12.5px; text-decoration: none; white-space: nowrap; }
+.support-link:hover, .support-link:focus-visible { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.toolbar .more-menu .more-support { display: none; }
 
 .toolbar button {
   font: inherit;
@@ -193,6 +197,7 @@ body {
 .toolbar .more-menu button:hover, .toolbar .more-menu button:focus-visible { background: var(--accent-soft); outline: none; }
 .more-menu kbd, .more-menu .more-hint { font: inherit; font-size: 12px; color: var(--muted); }
 .more-menu .more-sep { height: 1px; margin: 4px 6px; background: var(--rule); }
+.more-menu .more-head { padding: 6px 10px 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .toolbar .more-menu button[role="menuitemcheckbox"]::after { content: ''; width: 1em; text-align: right; color: var(--accent); }
 .toolbar .more-menu button[role="menuitemcheckbox"][aria-checked="true"]::after { content: '✓'; }
 .toolbar .more-menu button:disabled { opacity: 0.45; cursor: default; background: none; }
@@ -564,6 +569,15 @@ body.toc-right .toc-side svg { transform: scaleX(-1); }
   opacity: 0.92;
 }
 .zoom-float[hidden] { display: none; }
+/* VS Code: once something is pinned, a pin at the top right lists it all (src/pins.js) */
+.pins-float {
+  position: fixed; top: 10px; right: 16px; z-index: 40; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 30px; padding: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); cursor: pointer;
+}
+.pins-float:hover { border-color: var(--accent); }
+.pins-float[hidden] { display: none; }
+.pins-float .tb-icon { display: block; width: 18px; height: 18px; }
 .zoom-float button { font: inherit; color: inherit; background: none; border: 0; padding: 1px 8px; cursor: pointer; }
 .zoom-float button:hover { color: var(--ink); }
 .zoom-float .zoom-level { min-width: 3.6em; font-variant-numeric: tabular-nums; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); }
@@ -1009,6 +1023,11 @@ body.text-resizing #preview { transition: none; }
 .insight-pin[aria-pressed="true"] svg path { fill: var(--accent-soft); }
 .insight-symbols li:hover .insight-pin, .insight-table tr:hover .insight-pin { opacity: 1; }
 @media (pointer: coarse) { .insight-pin { width: 36px; height: 36px; opacity: 0.8; } .insight-pin svg { width: 17px; height: 17px; } }
+/* the pin on a preview: a symbol to the Notation tab, a referenced result or equation to the map (both to Pinned) */
+.insight-note { position: relative; }
+.insight-note > .insight-pop-pin { position: absolute; top: 0; right: -4px; opacity: 0.7; }
+.insight-note:has(> .insight-pop-pin) { padding-right: 26px; }
+.tg-ref-pin { float: right; position: relative; z-index: 1; margin: -2px -4px 2px 8px; opacity: 0.7; }
 .insight-row-end { display: inline-flex; align-items: center; gap: 2px; justify-content: space-between; }
 .insight-group-used > summary .insight-pin { margin-left: 6px; }
 .insight-group-pinned { background: var(--code-bg); border-radius: 6px; padding: 2px 8px 4px; margin: 6px 0 4px; }
@@ -1553,7 +1572,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   }
 
   /* Everything but the document. */
-  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float, .text-resizer,
+  .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float, .pins-float, .tg-pins-menu, .tg-ref-pin, .text-resizer,
   .fold-toggle, .tg-sliders, .find-bar, .diff-bar, .diff-tag, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
@@ -2013,7 +2032,9 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 .tg-hlbar .tg-swatch:hover { background: var(--sw); transform: scale(1.15); }
-.tg-hlbar-note, .tg-hlbar-del { width: 24px; height: 24px; border-radius: 4px; }
+.tg-hlbar-note, .tg-hlbar-pin, .tg-hlbar-del { width: 24px; height: 24px; border-radius: 4px; }
+.tg-hlbar-pin[aria-pressed="true"] { color: var(--accent); }
+.tg-hlbar-pin[aria-pressed="true"] svg path { fill: var(--accent-soft); }
 .tg-hlbar svg { width: 16px; height: 16px; }
 .tg-hlbar-del { display: none !important; }
 .tg-hlbar-existing .tg-hlbar-del { display: inline-flex !important; }
@@ -2260,14 +2281,69 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tb-icon { display: none; width: 20px; height: 20px; flex: none; }
 /* Save for offline: a bookmark, filled once the paper is saved */
 #save-offline { display: inline-flex; align-items: center; gap: 5px; }
-#save-offline .tb-icon { display: block; width: 16px; height: 16px; }
+#save-offline .tb-icon { display: block; width: 18px; height: 18px; }
 #save-offline[aria-pressed="true"] .save-offline-mark { fill: currentColor; }
 #save-offline[aria-pressed="true"] { color: var(--accent); }
 #save-offline[hidden] { display: none; }
 #share { display: inline-flex; align-items: center; gap: 5px; }
-#share .tb-icon { display: block; width: 16px; height: 16px; }
+#share .tb-icon { display: block; width: 18px; height: 18px; }
 #share[hidden] { display: none; }
 #settings .tb-label, #hand-toggle .tb-label { display: none; }
+/* Open, Contents, Pinned and Hide proofs: icons, their names in the tooltip (and in
+   the "…" menu on a phone, where Hide proofs and Pinned move) */
+.toolbar .tb-iconic { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 9px; position: relative; }
+.toolbar .tb-iconic .tb-icon { display: block; width: 18px; height: 18px; }
+.toolbar .tb-iconic .tb-label { display: none; }
+.toolbar .tb-iconic[hidden] { display: none; }
+.toolbar .more-compact .tb-iconic { padding: 6px 12px; }
+.toolbar .more-compact .tb-iconic .tb-label { display: inline; }
+.toolbar .tb-iconic:disabled { opacity: 0.45; cursor: default; }
+#fold-proofs .fold-mark-show { display: none; }
+#fold-proofs[aria-pressed="true"] .fold-mark-show { display: inline; }
+#fold-proofs[aria-pressed="true"] .fold-mark-hide { display: none; }
+
+/* Pinned: a pin with a count; a click lists everything pinned (src/pins.js) */
+.tg-pins-some .tg-pin-icon path { fill: var(--accent-soft); }
+.tg-pins-some { color: var(--accent); }
+.tg-pins-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: var(--accent); color: var(--paper); font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.tg-pins-badge[hidden] { display: none; }
+.more-compact .tg-pins-badge { position: static; margin-left: 2px; }
+.tg-pins-menu {
+  position: fixed; z-index: 60; width: min(340px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; overscroll-behavior: contain;
+  box-sizing: border-box; padding: 6px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18); font-size: 14px;
+}
+.tg-pins-menu[hidden] { display: none; }
+.tg-pins-menu.tg-pins-sheet {
+  left: 0; right: 0; top: auto; bottom: 0; width: 100%; max-height: 70dvh; border-radius: 14px 14px 0 0;
+  padding: 10px 10px max(12px, env(safe-area-inset-bottom));
+}
+.tg-pins-head { display: flex; align-items: baseline; gap: 8px; padding: 4px 8px 6px; }
+.tg-pins-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tg-pins-empty { margin: 0 8px 8px; color: var(--muted); line-height: 1.45; }
+.tg-pins-title { padding: 6px 8px 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.tg-pins-row { display: flex; align-items: stretch; border-radius: 6px; }
+.tg-pins-row:hover { background: var(--accent-soft); }
+.tg-pins-menu button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; border-radius: 6px; }
+.tg-pins-go { flex: 1; min-width: 0; text-align: left; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; }
+.tg-pins-go:disabled { opacity: 0.5; cursor: default; }
+.tg-pins-go:focus-visible, .tg-pins-x:focus-visible, .tg-pins-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tg-pins-x { flex: none; width: 32px; color: var(--muted); font-size: 17px; line-height: 1; }
+.tg-pins-x:hover { color: var(--ink); }
+.tg-pins-note, .tg-pins-along, .tg-pins-code { color: var(--muted); }
+.tg-pins-along { font-size: 12.5px; }
+.tg-pins-sym .katex { font-size: 1.05em; }
+.tg-pins-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 4px 2px; margin-top: 4px; border-top: 1px solid var(--rule); }
+.tg-pins-menu .tg-pins-actions button { border: 1px solid var(--rule); padding: 5px 12px; }
+.tg-pins-menu .tg-pins-actions button:hover { border-color: var(--accent); }
+@media (max-width: 760px) {
+  .tg-pins-go, .tg-pins-x { min-height: 44px; }
+  .tg-pins-x { width: 44px; }
+}
 .toolbar .more-compact #settings, .toolbar .more-compact #hand-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
 .more-compact #settings .tb-label, .more-compact #hand-toggle .tb-label { display: inline; }
 .toolbar .more-compact #settings svg, .toolbar .more-compact #hand-toggle svg { width: 18px; height: 18px; }
@@ -2309,10 +2385,14 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
     padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
   }
   .brand { display: none; }
+  .support-link { display: none; }
+  .toolbar .more-menu .more-support { display: flex; }
   .toolbar button { min-height: 44px; min-width: 44px; font-size: 15px; padding: 6px 12px; }
   .toolbar .icon-button svg, .tb-icon { width: 22px; height: 22px; }
   .tb-icon { display: block; }
   #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label, #share .tb-label { display: none; }
+  .toolbar .tb-iconic .tb-icon { width: 22px; height: 22px; }
+  .toolbar .more-compact .tb-iconic .tb-icon { width: 18px; height: 18px; }
   #save-offline .tb-icon, #share .tb-icon { width: 22px; height: 22px; }
   #toc-toggle, #find, #save-offline, #share { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
   .toolbar .more-button { padding: 6px 12px; font-size: 18px; line-height: 1; }

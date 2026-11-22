@@ -274,6 +274,7 @@
 
   const ICONS = {
     note: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10v7l-3.5 4H3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9.5 13.5v-4H13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 5.5h5M5.5 8h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    pin: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.5h4l-.6 4.2 2.6 2.6v1.2H4V8.3l2.6-2.6z M8 9.5V14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>',
     trash: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>',
     edit: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13l.6-2.6L10.5 3.5l2 2-6.9 6.9z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
   };
@@ -1018,6 +1019,7 @@
       paintHighlights();
       build();
       if (opts.save) opts.save(list.map((a) => Object.assign({}, a)));
+      if (opts.onPins) opts.onPins();
     }
 
     function anchorFor(start, end) {
@@ -1048,6 +1050,7 @@
     bar.setAttribute('aria-label', 'Highlight');
     bar.innerHTML = COLORS.map((c) => `<button type="button" class="tg-swatch" data-color="${c}" style="--sw: var(--tg-hl-${c})" aria-label="Highlight ${c}" title="Highlight ${c}"></button>`).join('') +
       `<button type="button" class="tg-hlbar-note" aria-label="Add a note" title="Add a note">${ICONS.note}</button>` +
+      `<button type="button" class="tg-hlbar-pin" aria-pressed="false" aria-label="Pin this text" title="Pin this text: it joins the Pinned list in the toolbar, to come back to">${ICONS.pin}</button>` +
       `<button type="button" class="tg-hlbar-del" aria-label="Remove highlight" title="Remove highlight">${ICONS.trash}</button>`;
     pane.appendChild(bar);
     let barFor = null; // { start, end } of a selection, or { id } of a highlight
@@ -1077,6 +1080,11 @@
     function showBar(rect, target) {
       barFor = target;
       bar.classList.toggle('tg-hlbar-existing', !!target.id);
+      const pinOn = !!(target.id && byId(target.id) && byId(target.id).pin);
+      const pinB = bar.querySelector('.tg-hlbar-pin');
+      pinB.setAttribute('aria-pressed', String(pinOn));
+      pinB.setAttribute('aria-label', pinOn ? 'Unpin this text' : 'Pin this text');
+      pinB.title = pinOn ? 'Pinned: click to unpin (the highlight stays)' : 'Pin this text: it joins the Pinned list in the toolbar, to come back to';
       bar.hidden = false;
       const p = pane.getBoundingClientRect();
       const w = bar.offsetWidth;
@@ -1175,6 +1183,14 @@
         hideBar();
         changed();
         edit(a.id, true);
+      } else if (b.classList.contains('tg-hlbar-pin')) {
+        // a pinned passage is a highlight (yellow unless it has a colour) marked pin: it syncs with the notes
+        if (!a) a = add(target.start, target.end, { color: 'yellow', pin: true });
+        else if (a.pin) delete a.pin;
+        else a.pin = true;
+        win.getSelection().removeAllRanges();
+        hideBar();
+        changed();
       } else if (b.classList.contains('tg-hlbar-del') && a) {
         hideBar();
         remove(a.id);
@@ -1643,6 +1659,7 @@
       list = Array.isArray(next) ? next.filter((a) => a && typeof a.id === 'string' && a.anchor && a.kind !== 'check') : [];
       editing = null;
       refresh();
+      if (opts.onPins) opts.onPins();
     }
 
     function setStudy(on) {
@@ -1658,8 +1675,40 @@
       return list.map((a) => Object.assign({}, a));
     }
 
+    /** The passages pinned from the selection bar: [{ id, quote, placed }] in the order of the text. */
+    function pinnedTexts() {
+      const out = list.filter((a) => a.pin && a.anchor && a.anchor.quote).map((a) => ({ id: a.id, quote: a.anchor.quote, placed: placed.has(a.id), at: placed.has(a.id) ? placed.get(a.id).start : Infinity }));
+      return out.sort((x, y) => x.at - y.at).map(({ id, quote, placed: p }) => ({ id, quote, placed: p }));
+    }
+    /** Scroll to a note or highlight by its id, and light it up; false if it is not in the text. */
+    function goTo(id) {
+      const a = byId(id);
+      const at = a && placed.get(id);
+      const r = at && rangeOf(at.start, at.end);
+      if (!r) return false;
+      const t = { kind: 'mine', key: id, note: a, range: r };
+      current = { key: id, scroll: null };
+      const target = { getBoundingClientRect: () => rectOf(t) || { top: 0, height: 0 } };
+      if (win.TeXglassScroll) win.TeXglassScroll.to(pane, target, { align: 'center', smooth: true });
+      else {
+        const rr = target.getBoundingClientRect();
+        const p = pane.getBoundingClientRect();
+        pane.scrollTop += rr.top + rr.height / 2 - (p.top + pane.clientHeight / 2);
+      }
+      pulse(t);
+      return true;
+    }
+    /** Unpin a passage (its highlight stays). */
+    function unpinText(id) {
+      const a = byId(id);
+      if (!a || !a.pin) return;
+      delete a.pin;
+      changed();
+    }
+
     return {
       refresh, setAnnotations, setStudy, layout, notes,
+      pinnedTexts, goTo, unpinText,
       /** The margin's width in px (null: automatic). */
       setWidth: (w) => setUserW(w > 0 ? w : null, false),
       /** Fold the margin away (true) or bring it back. */

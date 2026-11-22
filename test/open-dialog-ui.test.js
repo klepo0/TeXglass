@@ -112,9 +112,10 @@ test('Save, Export and Print sit in the "…" menu', { skip: !chromium && 'Playw
     // (focus is on the button after a click, so Escape from the menu needs focus inside it)
     await page.focus('#more');
     await page.keyboard.press('ArrowDown');
-    assert.equal(await page.evaluate(() => document.activeElement.id), 'save');
+    // (the menu starts with Papers: OAI preprints, then Saved papers)
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'preprints');
     await page.keyboard.press('ArrowDown');
-    assert.equal(await page.evaluate(() => document.activeElement.id), 'export');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'library-open');
     await page.keyboard.press('Escape');
     assert.equal(await page.isVisible('#more-menu'), false);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'more');
