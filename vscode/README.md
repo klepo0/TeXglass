@@ -76,8 +76,7 @@ lists every feature, command, setting and shortcut.
 - **Pin** theorems and equations (or a result with everything it uses) and
   show and print only those; drag, hide and add your own links on the
   dependency map.
-- **Step through a proof** one piece at a time, with **why?** links to each
-  result it uses.
+- **Step through a proof** one piece at a time, like a slide reveal.
 - **Fold** sections and proofs, or hide every proof at once.
 
 ![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)

@@ -79,7 +79,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **What does this use?** lights up everything a result rests on, or everything that uses it.
 - **Search by structure**: every result that uses a lemma, an assumption or an equation, and not another ("Theorem 1 but not Assumption A").
 - **Hypothesis checker**: a cited lemma's hypotheses split out, each with a box to tick.
-- **Step through a proof** one sentence or equation at a time, with **why?** links to each lemma it uses.
+- **Step through a proof** one sentence, equation or list item at a time, like a slide reveal.
 - **Notation on hover** and a **notation index** of the paper's macros and defined symbols.
 - **Reading progress** per result and section, with **What should I read next?**
 
