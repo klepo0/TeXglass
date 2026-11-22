@@ -457,11 +457,14 @@
       if (!collapsed || !e.target.closest || !e.target.closest('.mnote')) return;
       setCollapsed(false, true);
     });
-    // The button stays in view while the document scrolls.
-    let scrollFrame = 0;
-    pane.addEventListener('scroll', () => {
-      if (!scrollFrame) scrollFrame = win.requestAnimationFrame(() => { scrollFrame = 0; placeToggle(); });
-    }, { passive: true });
+    // The button (and the note arrows under it, below) stay put on screen while the
+    // document scrolls: they sit in a sticky box that runs down a rail as tall as the
+    // text, so the browser keeps them still itself instead of chasing each scroll.
+    const rail = page.createElement('div');
+    rail.className = 'tg-margin-rail';
+    const stick = page.createElement('div');
+    stick.className = 'tg-margin-stick';
+    rail.appendChild(stick);
 
     const highlights = win.CSS && win.CSS.highlights && typeof win.Highlight === 'function' ? win.CSS.highlights : null;
 
@@ -646,9 +649,8 @@
       cards = texCards().concat(readerCards());
       for (const c of cards) layer.appendChild(c.el);
       layer.appendChild(grip);
-      layer.appendChild(toggle);
-      layer.appendChild(nav);
-      layer.appendChild(navMenu);
+      stick.replaceChildren(toggle, nav, navMenu);
+      layer.appendChild(rail);
       layer.appendChild(dots);
       if (inkLive) layer.appendChild(inkLive.svg);
       cards.forEach((c) => ro && ro.observe(c.el));
@@ -663,10 +665,8 @@
     let marginW = 0;
     function placeToggle() {
       if (layer.hidden) return;
-      const top = Math.max(0, Math.min(pane.scrollTop + 10, doc.offsetHeight - 80));
-      toggle.style.top = top + 'px';
-      nav.style.top = top + 24 + 'px';
-      navMenu.style.top = top + 24 + 'px';
+      // The sticky box stops where the text ends.
+      rail.style.height = doc.offsetHeight + 'px';
     }
 
     function layout() {
