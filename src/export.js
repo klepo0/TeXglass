@@ -64,7 +64,7 @@ body { display: block; }
 })();
 `;
 
-  // For a page printed with a view (VS Code: "Show selected results", or "What
+  // For a page printed with a view (VS Code: "Show pinned results", or "What
   // does this use?" with Hide the rest): the preview says which of its blocks
   // show (TeXglassPick.snapshot, by their place among VIEW_BLOCKS); the page
   // hides the others. If the page's blocks do not match the preview's, the

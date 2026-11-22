@@ -1104,6 +1104,44 @@ body.text-resizing #preview { transition: none; }
 .dep-fold text { fill: var(--accent); font-size: 10.5px; font-weight: 600; }
 .dep-fold:hover rect, .dep-fold:focus-visible rect { stroke-width: 2; }
 .dep-node.dep-has-fold rect { stroke-width: 2; }
+/* The reader's changes to the map: pins, hidden results, their own links, dragging. */
+.dep-pin-mark circle { fill: var(--accent); stroke: var(--paper); stroke-width: 1.2; }
+.dep-pin-mark path { fill: var(--paper); }
+.dep-node.dep-pinned rect { stroke: var(--accent); stroke-width: 2.2; }
+.dep-node.dep-pinned-sub rect { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 4 2; }
+.dep-node.dep-hidden, .dep-edge.dep-hidden { opacity: 0.3; }
+.dep-node.dep-hidden rect { stroke-dasharray: 2 2; }
+.dep-edge.dep-mine { stroke: var(--accent); stroke-width: 1.6; opacity: 0.8; stroke-dasharray: 8 3; }
+.dep-edge.dep-eq-edge { stroke-width: 0.9; opacity: 0.45; stroke-dasharray: 1 2.5; stroke-linecap: round; }
+.dep-node.dep-eqnode rect { fill: var(--bg); stroke: var(--accent); stroke-width: 1; }
+.dep-node.dep-eqnode text { fill: var(--accent); font-size: 11.5px; }
+.dep-node.dep-eqnode.dep-sel text { fill: var(--paper); }
+.dep-node.dep-moving { cursor: grabbing; }
+.dep-node.dep-moving rect { stroke: var(--accent); stroke-width: 2; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25)); }
+.dep-wrap.dep-node-dragging { user-select: none; cursor: grabbing; }
+.dep-map:not(.dep-linking) .dep-node { touch-action: pan-x pan-y; }
+.dep-map.dep-linking .dep-node { cursor: crosshair; }
+.dep-map.dep-linking .dep-node:hover rect { stroke: var(--accent); stroke-width: 2.5; }
+.dep-opts button, .dep-pins button, .dep-edit button {
+  font: inherit; font-size: 12px; padding: 1px 7px; border: 1px solid var(--rule); border-radius: 5px;
+  background: var(--paper); color: var(--ink); cursor: pointer; line-height: 1.5;
+}
+.dep-opts button:hover, .dep-pins button:hover, .dep-edit button:hover { border-color: var(--accent); color: var(--accent); }
+.dep-edit button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.dep-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 6px; font-size: 12.5px; color: var(--muted); }
+.dep-pins-count { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.dep-views { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dep-view { display: inline-flex; }
+.dep-view button:first-child { border-radius: 5px 0 0 5px; }
+.dep-view .dep-view-del { border-left: 0; border-radius: 0 5px 5px 0; padding: 1px 5px; color: var(--muted); }
+.dep-view-new { display: inline-flex; gap: 4px; }
+.dep-view-name { font: inherit; font-size: 12.5px; padding: 1px 6px; border: 1px solid var(--accent); border-radius: 5px; background: var(--paper); color: var(--ink); width: 11em; }
+.dep-edit { margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--rule); line-height: 2; }
+.dep-pin-btns { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.dep-linking-hint { color: var(--accent); font-weight: 600; }
+.dep-unlink, .dep-relink { font: inherit; font-size: 11px; line-height: 1.2; padding: 0 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--muted); cursor: pointer; }
+.dep-unlink:hover { color: var(--warn); border-color: var(--warn); }
+.dep-tag-mine { color: var(--accent); border-color: var(--accent); }
 .dep-opts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
 .dep-opts label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .dep-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 6px 2px 0; font-size: 12px; color: var(--muted); }
@@ -1454,7 +1492,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
-  .uses-btn, .uses-bar, .rp-marks { display: none !important; }
+  .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
   .uses-focus .uses-fade { opacity: 1 !important; }
   .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
   /* Print what the view shows: with "Hide the rest" or "Show selected results"
@@ -2055,6 +2093,20 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .theorem:hover .uses-btn, .uses-btn:focus-visible, .uses-btn[aria-pressed="true"] { opacity: 1; }
 .uses-btn:hover, .uses-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 @media (hover: none) { .uses-btn { opacity: 0.6; } }
+/* Pins (src/insight.js): a pin by each result's heading and each numbered equation's number. */
+.tg-pin-btn {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.12em;
+  width: 1.25em; height: 1.25em; margin: 0 0.15em; padding: 0; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 0.15s; font-style: normal;
+}
+.tg-pin-btn svg { width: 0.95em; height: 0.95em; }
+.theorem:hover > * > .tg-pin-btn, .theorem:hover > .tg-pin-btn, .theorem:hover .thm-head ~ .tg-pin-btn, .math-display:hover > .tg-pin-btn,
+.tg-pin-btn:focus-visible, .tg-pinned > .tg-pin-btn, .tg-pinned > * > .tg-pin-btn, .tg-pin-btn[aria-pressed="true"] { opacity: 1; }
+.tg-pin-btn:hover, .tg-pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.math-display.tg-pinned, .math-display:has(> .tg-pin-btn) { position: relative; }
+.tg-pin-btn.tg-pin-eq { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 15px; }
+@media (hover: none) { .tg-pin-btn { opacity: 0.6; } }
+
 .uses-focus .uses-fade { opacity: 0.22; transition: opacity 0.2s; }
 .uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6, .uses-head) { opacity: 0.5; }
 .uses-focus .uses-fade:hover { opacity: 0.6; }

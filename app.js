@@ -54,7 +54,7 @@
   let opened = { images: null, gh: null, arxiv: null }; // the open document's figures (Blobs) and where it came from, to save it for offline reading
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let progress = null; // reading progress on the results (src/progress.js)
-  let picker = null; // "Show selected results" (src/pick.js)
+  let picker = null; // "Show pinned results" (src/pick.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
   let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
@@ -1710,6 +1710,7 @@
     else margin.setAnnotations([]);
     updateStudy();
     updateProgress();
+    if (insight) insight.refreshEdits();
     if (paper) syncNotes(true);
   }
 
@@ -1739,6 +1740,7 @@
     paper.record = merged;
     writeNotes(paper.key, merged);
     if (progress) progress.setMap(merged.progress);
+    if (insight) insight.refreshEdits();
     // Not while a note is being written: try again a little later.
     const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.tg-mcard-input');
     if (typing) setTimeout(() => paper && showNotes(), 4000);
@@ -1752,7 +1754,7 @@
     try {
       const got = (await extApi.storage.sync.get(item))[item];
       const merged = NotesSync.merge(record, got ? Object.assign({}, got, { paper: key }) : null);
-      const slim = { notes: merged.notes, deleted: merged.deleted, progress: merged.progress };
+      const slim = { notes: merged.notes, deleted: merged.deleted, progress: merged.progress, map: merged.map };
       if (!got || !NotesSync.equal(merged, Object.assign(NotesSync.empty(key), got))) {
         if (JSON.stringify(slim).length + item.length < EXT_ITEM_MAX) await extApi.storage.sync.set({ [item]: slim });
       }
@@ -2387,6 +2389,19 @@
     clearTimeout(notesPushTimer);
     notesPushTimer = setTimeout(() => syncNotes(true), 2500);
   }
+  // --- the reader's changes to the dependency map --------------------------------------
+  // Pins, hidden results, their own links, where they dragged things and saved
+  // maps (src/insight.js), kept with the paper's notes (record.map), so they are
+  // exported, imported and synced with them. Without a paper: for this visit.
+  let looseMap = {};
+  function mapEditsChanged(m) {
+    if (!paper || !NotesSync) { looseMap = m; return; }
+    paper.record = Object.assign({}, paper.record, { map: m });
+    writeNotes(paper.key, paper.record);
+    clearTimeout(notesPushTimer);
+    notesPushTimer = setTimeout(() => syncNotes(true), 2500);
+  }
+
   if ($('progress-toggle')) {
     $('progress-toggle').addEventListener('click', () => {
       setFeature('progress', !progressOn());
@@ -2737,13 +2752,27 @@
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => window.print(),
       onFocusStart: () => { if (picker) picker.stop(); },
+      // the reader's pins, hidden results, own links, layout and saved maps
+      edits: {
+        get: () => (paper && NotesSync ? paper.record.map : looseMap),
+        set: mapEditsChanged,
+      },
+      locked: store.get('texglass:map-locked') === '1',
+      onLock: (on) => store.set('texglass:map-locked', on ? '1' : ''),
+      showPinned: () => { if (picker) picker.show(); },
+      onPinsChange: () => { if (picker) picker.pinsChanged(); },
     })
     : null;
-  // Show selected results: tick results and numbered equations, see (and print) only those.
+  // Show pinned results: pin results and numbered equations, see (and print) only
+  // those. The pins are the map's (src/insight.js), kept with the paper's notes.
   picker = window.TeXglassPick
     ? TeXglassPick.attach({
       root: preview,
       jump: (el) => jumpTo(el),
+      items: insight ? () => insight.pinnedEls() : undefined,
+      isOn: insight ? (el) => insight.isPinned(el) : undefined,
+      toggle: insight ? (el) => insight.togglePin(el) : undefined,
+      clear: insight ? () => insight.unpinAll() : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;
@@ -2753,7 +2782,8 @@
     })
     : null;
   if ($('pick-results')) {
-    if (picker) $('pick-results').addEventListener('click', () => picker.start());
+    // with pins: show them; without: pin some first
+    if (picker) $('pick-results').addEventListener('click', () => { if (insight && insight.pinCount()) picker.show(); else picker.start(); });
     else $('pick-results').hidden = true;
   }
   // A result cited in a proof previews as its hypotheses and conclusion; the

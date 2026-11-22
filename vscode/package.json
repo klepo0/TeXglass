@@ -160,7 +160,7 @@
       },
       {
         "command": "texglass.selectResults",
-        "title": "Show Selected Results…",
+        "title": "Show Pinned Results…",
         "category": "TeXglass"
       },
       {

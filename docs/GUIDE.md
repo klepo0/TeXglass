@@ -21,6 +21,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Previews on hover](#previews-on-hover)
 - [Finding your way: Navigate, Go to, Trace](#finding-your-way-navigate-go-to-trace)
 - [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
+  - [Pins and your own map](#pins-and-your-own-map)
 - [Understanding the logic](#understanding-the-logic)
 - [Your own highlights and notes](#your-own-highlights-and-notes)
 - [Looks: themes, handwritten notes, zoom](#looks-themes-handwritten-notes-zoom)
@@ -51,6 +52,7 @@ letters are ignored while you type in a text field.
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to** and **Trace**: move through the list and pick. |
 | <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
+| <kbd>Alt</kbd> + arrow keys | On the map: move the focused result (unless the map is locked). |
 | <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> <kbd>F</kbd> | In the larger map: zoom in, zoom out, 100%, fit the whole map. Ctrl + scroll or a pinch zooms at the pointer; drag the background to move. |
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
@@ -235,11 +237,16 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   - Click a result to light up what it uses and what uses it; double-click
     (double-tap on a touch screen) to jump to it in the text, which also
     closes the larger map. **Back** returns you.
-  - Drag to pan. **Show what it uses** starts "What does this use?" there.
+  - Drag the background to pan. **Show what it uses** starts "What does this
+    use?" there.
   - <kbd>M</kbd> (or **Larger map**; VS Code: **TeXglass: Show Larger
     Dependency Map**) opens the map filling the window: drag to move, Ctrl +
     scroll or pinch to zoom, or **−**, **100%**, **+**, **Fit** (keys
     <kbd>−</kbd> <kbd>+</kbd> <kbd>0</kbd> <kbd>F</kbd>).
+  - **Editing the map** (see [Pins and your own map](#pins-and-your-own-map)):
+    drag a result to move it, pin results and equations, hide results, and
+    draw your own links or take wrong ones away. **Lock** stops all of that
+    (pins still work).
 - **Notation**: an index of the paper's macros and defined symbols, with
   their meaning in words where the text gives one and a link to the first use.
   The checkbox turns notation on hover off and on.
@@ -263,6 +270,49 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     is kept with the pins. The pin by
     **Used in …** keeps that strip in view too.
 
+### Pins and your own map
+
+The map is drawn from the paper, but you can make it yours. Everything below is
+kept per paper with your notes, so it is exported, imported and synced with them
+(gist, browser sync, VS Code's `paper.texglass.json` and Settings Sync).
+
+- **Move**: drag a result (or a cited work) to where you want it; on a touch
+  screen hold your finger still for a moment first, so a swipe still scrolls.
+  <kbd>Alt</kbd> + arrow keys move the focused result. **Reset layout** puts
+  everything back.
+- **Pin**: pick a result on the map and choose under **Pin**: **It** (just
+  the result), **+ uses** (with everything it uses, directly or not), **+ used
+  in** (with everything that uses it) or **+ both**. Pinned results get a pin on
+  the map; what a pin brings along gets a dashed outline. You can also pin from
+  the text: a pin appears by a result's heading when you rest on it, and
+  **Pin** on the "What does this use?" bar pins the result with what is lit.
+- **Pin an equation**: rest on a numbered equation and click the pin that
+  appears at its left (or tick it in **Show pinned results**). A pinned equation
+  shows on the map as a small round node, linked to the results that refer to
+  it. Equations a result's statement or proof refers to come along with a
+  **+ uses** pin anyway.
+- **Show pinned**: on the map, or **Show pinned results…** in the … menu
+  (VS Code: **TeXglass: Show Pinned Results…**), shows only what is pinned,
+  with the headings of their sections and the title; the rest is hidden. Proofs
+  come along folded to their first line; click one to open it. **Print** prints
+  exactly that view. **Change** lets you pin or unpin by ticking results and
+  equations in the text; **Done** or <kbd>Esc</kbd> shows the whole paper.
+  With nothing pinned, the menu item starts with the ticking.
+- **Save** the pins under a name (**Save…** above the map, then type a name):
+  the saved maps are listed beside **Saved**; click one to pin exactly those
+  again, **×** deletes it. **Unpin all** clears the pins, not the saved maps.
+- **Hide**: **Hide from map** leaves a result off the map. **Hidden (n)**
+  above the map draws the hidden ones faded, so you can pick one and **Show on
+  map** again.
+- **Your own links**: pick a result, then **+ It uses…** or **+ Used in…** and
+  pick the other result on the map (every result shows while you do, linked or
+  not). Your links are drawn in a dashed accent line and count everywhere a
+  link counts: "What does this use?", Trace, previews and pins. **Remove…**
+  puts a **×** by each link to take it away (the paper's links come back with
+  **Restore**).
+- **Lock** (checkbox above the map) stops dragging, hiding and link changes
+  until you untick it; it is remembered for every paper.
+
 ## Understanding the logic
 
 - **What does this use?** The small button by a theorem's heading lights up
@@ -280,20 +330,20 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   - **Print** on the bar prints what is shown: with **Hide the rest** on, only
     the lit results, and of their proofs only the ones you opened.
 - **Trace**: the same, chosen by name from the Navigate bar.
-- **Show selected results**: pick theorems, lemmas, definitions and numbered
-  equations, and see only those. Start it from the … menu (web viewer) or
-  **TeXglass: Show Selected Results…** (VS Code, also in the preview's `…`
-  menu).
-  - Every result and numbered equation gets a tick box; click a result or an
-    equation to tick it, again to untick it. **Show selected** shows only the
-    ticked ones, with the headings of their sections and the paper's title.
-  - The proof of a selected result comes along folded to its first line.
-    Click it to open it; its fold arrow folds it again.
+- **Show pinned results**: see only the results and numbered equations you
+  pinned (see [Pins and your own map](#pins-and-your-own-map)). Start it from
+  the map's **Show pinned**, the … menu (web viewer) or **TeXglass: Show
+  Pinned Results…** (VS Code, also in the preview's `…` menu).
+  - With nothing pinned yet, every result and numbered equation gets a tick
+    box; click one to pin it, again to unpin it. **Show pinned** shows only
+    those, with the headings of their sections and the paper's title.
+  - The proof of a shown result comes along folded to its first line. Click
+    it to open it; its fold arrow folds it again.
   - **Print** on the bar prints exactly that view, to a printer or as a PDF:
-    the selected results and equations, and only the proofs you opened. For
-    example, tick Theorem 1, (1.1) and (3.4), open the proof of Theorem 1, and
-    print. <kbd>Ctrl+P</kbd> (web viewer) and **TeXglass: Print / Save as
-    PDF** print the view too.
+    the pinned results and equations, and only the proofs you opened. For
+    example, pin Theorem 1 with what it uses and (3.4), open the proof of
+    Theorem 1, and print. <kbd>Ctrl+P</kbd> (web viewer) and **TeXglass:
+    Print / Save as PDF** print the view too.
   - **Change** goes back to ticking; **Done** or <kbd>Esc</kbd> shows the
     whole document again.
 - **Hypothesis checker** and **cited theorems**: see
@@ -488,9 +538,9 @@ install; after the first visit it opens and renders offline.
 reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
 standalone page that works offline), **Export with reading tools** (the same
 page with reference previews, notation on hover, the side panel and Navigate;
-see [Command line](#command-line) for what it holds), **Show selected results…** (see
+see [Command line](#command-line) for what it holds), **Show pinned results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
-(<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
+(<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
 rest** prints as shown), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
 notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Support
@@ -611,9 +661,9 @@ All in the Command Palette under **TeXglass:**.
 | Show Notation Index | The Notation tab. |
 | Show Dependency Map of the Results | The Map tab. |
 | Show Larger Dependency Map | <kbd>M</kbd> in the preview. |
-| Show Selected Results… | Tick results and numbered equations, then show (and print) only those. |
+| Show Pinned Results… | Show (and print) only the pinned results and equations; with none pinned, tick some first. |
 | Export to HTML | A standalone page. |
-| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (a selection, or **Hide the rest**). |
+| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (pinned results, or **Hide the rest**). |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |

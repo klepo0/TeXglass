@@ -20,6 +20,18 @@
  * was set. Results are keyed by their \label, so progress survives a revision.
  * Two copies are merged result by result: the later setting wins.
  *
+ * The reader's changes to the dependency map (src/insight.js) ride along too,
+ * as "map": { pos, pin, hide, link, view }, each keyed like progress (a result's
+ * key, "cite:…" for a cited work, "eq:(3.4)" for a numbered equation; a link
+ * is "<from> > <to>", an arrow from the result used to the one using it):
+ *   pos:  { key: { x, y, t } }       where the reader dragged it (no x: back in place)
+ *   pin:  { key: { d, t } }          pinned: d 'self', 'uses', 'usedBy', 'both' ('' unpinned)
+ *   hide: { key: { h, t } }          hidden from the map (h false: shown again)
+ *   link: { "a > b": { s, t } }      s 'add' (the reader's own arrow), 'del' (a link
+ *                                    of the paper taken away) or '' (as the paper has it)
+ *   view: { name: { p, t } }         a saved set of pins (p: { key: d }; null: deleted)
+ * Two copies are merged entry by entry, the later one winning, as for progress.
+ *
  * Two copies of a paper's notes are merged by note id: of two versions of a
  * note the later one wins, and a deleted note stays deleted (the "deleted"
  * list remembers it), so nothing is lost when two devices edit at once.
@@ -109,7 +121,7 @@
 
   /** An empty record for a paper. */
   function empty(key, title) {
-    return { paper: key || null, title: title || '', notes: [], deleted: {}, progress: {} };
+    return { paper: key || null, title: title || '', notes: [], deleted: {}, progress: {}, map: {} };
   }
 
   // --- reading progress --------------------------------------------------------------------
@@ -143,8 +155,64 @@
 
   /** Whether a record holds any reading progress worth keeping. */
   const hasProgress = (r) => !!(r && r.progress && Object.keys(r.progress).length);
-  /** Whether a record holds anything worth keeping: notes, deletions or progress. */
-  const isEmpty = (r) => !r || (!(r.notes || []).length && !Object.keys(r.deleted || {}).length && !hasProgress(r));
+
+  // --- the reader's changes to the dependency map ---------------------------------------------
+
+  const PIN_DIRS = ['', 'self', 'uses', 'usedBy', 'both'];
+  const LINK_STATES = ['', 'add', 'del'];
+  /** Each part of the map's changes: how to clean one entry (null drops it). */
+  const MAP_PARTS = {
+    pos: (e) => (Number.isFinite(e.x) && Number.isFinite(e.y) ? { x: Math.round(e.x * 10) / 10, y: Math.round(e.y * 10) / 10 } : {}),
+    pin: (e) => (PIN_DIRS.includes(e.d || '') ? { d: e.d || '' } : null),
+    hide: (e) => ({ h: !!e.h }),
+    link: (e, k) => (LINK_STATES.includes(e.s || '') && / > /.test(k) ? { s: e.s || '' } : null),
+    view: (e) => {
+      if (!e.p || typeof e.p !== 'object' || Array.isArray(e.p)) return { p: null };
+      const p = {};
+      for (const [k, d] of Object.entries(e.p)) if (k && PIN_DIRS.includes(d) && d) p[k] = d;
+      return { p };
+    },
+  };
+
+  /** The map's changes with only well-formed entries: { pos, pin, hide, link, view }, parts left out when empty. */
+  function cleanMap(m) {
+    const out = {};
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return out;
+    for (const [part, clean] of Object.entries(MAP_PARTS)) {
+      const src = m[part];
+      if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
+      const kept = {};
+      for (const [k, e] of Object.entries(src)) {
+        if (!k || !e || typeof e !== 'object') continue;
+        const c = clean(e, k);
+        if (!c) continue;
+        if (e.t) c.t = String(e.t);
+        kept[k] = c;
+      }
+      if (Object.keys(kept).length) out[part] = kept;
+    }
+    return out;
+  }
+
+  /** Two copies of the map's changes merged entry by entry: the later one wins. */
+  function mergeMap(a, b) {
+    const out = cleanMap(a);
+    const other = cleanMap(b);
+    for (const part of Object.keys(MAP_PARTS)) {
+      if (!other[part]) continue;
+      const into = out[part] || (out[part] = {});
+      for (const [k, e] of Object.entries(other[part])) {
+        const had = into[k];
+        if (!had || (Date.parse(e.t || '') || 0) > (Date.parse(had.t || '') || 0)) into[k] = e;
+      }
+    }
+    return out;
+  }
+
+  /** Whether a record holds changes to the map worth keeping. */
+  const hasMap = (r) => !!(r && r.map && Object.keys(cleanMap(r.map)).length);
+  /** Whether a record holds anything worth keeping: notes, deletions, progress or map changes. */
+  const isEmpty = (r) => !r || (!(r.notes || []).length && !Object.keys(r.deleted || {}).length && !hasProgress(r) && !hasMap(r));
 
   /**
    * After the reader changed the notes (margin.js save(list)): the paper's new
@@ -240,6 +308,7 @@
       notes,
       deleted: prune(deleted, now),
       progress: mergeProgress(a.progress, b.progress),
+      map: mergeMap(a.map, b.map),
     };
   }
 
@@ -249,8 +318,15 @@
       notes: ((r && r.notes) || []).slice().sort((x, y) => (x.id < y.id ? -1 : 1)),
       deleted: Object.keys((r && r.deleted) || {}).sort(),
       progress: Object.entries(cleanProgress(r && r.progress)).sort((x, y) => (x[0] < y[0] ? -1 : 1)),
+      map: sortedMap(r && r.map),
     });
     return norm(a) === norm(b);
+  }
+
+  /** The map's changes as sorted entries, for comparing. */
+  function sortedMap(m) {
+    const c = cleanMap(m);
+    return Object.keys(c).sort().map((part) => [part, Object.entries(c[part]).sort((x, y) => (x[0] < y[0] ? -1 : 1))]);
   }
 
   // --- the file ----------------------------------------------------------------------------
@@ -267,6 +343,7 @@
     };
     if (r.deleted && Object.keys(r.deleted).length) out.deleted = r.deleted;
     if (hasProgress(r)) out.progress = cleanProgress(r.progress);
+    if (hasMap(r)) out.map = cleanMap(r.map);
     return JSON.stringify(out, null, 2) + '\n';
   }
 
@@ -283,13 +360,14 @@
       const deleted = d && !Array.isArray(d) && d.deleted && typeof d.deleted === 'object' ? Object.assign({}, d.deleted) : {};
       const title = d && !Array.isArray(d) && typeof d.title === 'string' ? d.title : '';
       const progress = d && !Array.isArray(d) ? cleanProgress(d.progress) : {};
-      return { paper: key || null, title, notes, deleted, progress };
+      const map = d && !Array.isArray(d) ? cleanMap(d.map) : {};
+      return { paper: key || null, title, notes, deleted, progress, map };
     };
     if (data && !Array.isArray(data) && data.papers && typeof data.papers === 'object') {
       for (const [k, d] of Object.entries(data.papers)) out[k] = one(k, d);
       return out;
     }
-    if (Array.isArray(data) || (data && (Array.isArray(data.notes) || (data.progress && typeof data.progress === 'object')))) {
+    if (Array.isArray(data) || (data && (Array.isArray(data.notes) || (data.progress && typeof data.progress === 'object') || (data.map && typeof data.map === 'object')))) {
       const key = (!Array.isArray(data) && typeof data.paper === 'string' && data.paper) || fallbackKey || '';
       out[key] = one(key || null, data);
       return out;
@@ -306,6 +384,7 @@
       out[k] = { title: r.title || undefined, notes: r.notes || [] };
       if (Object.keys(r.deleted || {}).length) out[k].deleted = r.deleted;
       if (hasProgress(r)) out[k].progress = cleanProgress(r.progress);
+      if (hasMap(r)) out[k].map = cleanMap(r.map);
     }
     return JSON.stringify({
       about: 'Highlights and notes made in TeXglass, by paper. Kept here by TeXglass to sync them between your devices.',
@@ -423,5 +502,5 @@
     return { find, read, write, sync, id: () => id };
   }
 
-  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, isEmpty, equal, toFile, parseFile, toStore, gist };
+  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, mergeMap, cleanMap, isEmpty, equal, toFile, parseFile, toStore, gist };
 });
