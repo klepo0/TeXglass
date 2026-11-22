@@ -2288,11 +2288,11 @@
      */
     function pinButtonFor(target) {
       if (!target || !target.closest) return null;
-      const el = target.closest('.theorem') || target.closest('.math-display');
+      const el = target.closest('.theorem') || target.closest('.math-display') || target.closest('figure.float');
       const key = el && keyOfEl(el);
       if (!key) return null;
-      const n = key.startsWith('eq:') ? null : getGraph().byKey.get(key);
-      const what = n ? n.name : eqNameOf(el);
+      const n = key.startsWith('eq:') || key.startsWith('fig:') ? null : getGraph().byKey.get(key);
+      const what = n ? n.name : key.startsWith('fig:') ? key.slice(4) : eqNameOf(el);
       const b = document_.createElement('button');
       b.type = 'button';
       b.className = 'insight-pin insight-pop-pin tg-ref-pin';
@@ -2630,8 +2630,25 @@
     }
 
     /** The element a key names: a result, a cited work's entry, an equation. */
+    /** A figure (or table) float by its caption's name: key "fig:Figure 2". */
+    function figKeyOf(el) {
+      if (!el || !el.matches || !el.matches('figure.float')) return null;
+      const h = el.querySelector(':scope > .caption .caption-head, :scope .caption-head');
+      const t = h && h.textContent.replace(/\s+/g, ' ').replace(/[.:]\s*$/, '').trim();
+      return t ? 'fig:' + t : null;
+    }
+    function figEls() {
+      const out = new Map();
+      for (const f of doc.querySelectorAll('figure.float')) {
+        if (f.closest(INSIDE_POPOVER)) continue;
+        const k = figKeyOf(f);
+        if (k && !out.has(k)) out.set(k, f);
+      }
+      return out;
+    }
     function elOfKey(k) {
       if (k.startsWith('eq:')) return eqEls().get(k) || null;
+      if (k.startsWith('fig:')) return figEls().get(k) || null;
       const x = getGraph().byKey.get(k);
       return x ? x.el : null;
     }
@@ -2641,7 +2658,9 @@
       const n = getGraph().byEl.get(el);
       if (n) return n.key;
       const k = eqKeyOf(el);
-      return k && eqEls().get(k) === el ? k : null;
+      if (k) return eqEls().get(k) === el ? k : null;
+      const f = figKeyOf(el);
+      return f && figEls().get(f) === el ? f : null;
     }
 
     /** The keys a pin brings along: what a result pinned with its uses (or used in) rests on. */
@@ -2666,7 +2685,7 @@
       const g = getGraph();
       const out = new Set();
       for (const [k, d] of pinMap()) {
-        const x = k.startsWith('eq:') ? { el: eqEls().get(k) } : g.byKey.get(k);
+        const x = k.startsWith('eq:') ? { el: eqEls().get(k) } : k.startsWith('fig:') ? { el: figEls().get(k) } : g.byKey.get(k);
         if (!x || !x.el || !doc.contains(x.el) || x.cite) continue;
         out.add(x.el);
         if (d === 'self' || !x.refs) continue;
@@ -2722,6 +2741,7 @@
     /** What a key is called: "Lemma 2", "equation (3.1)". */
     function nameOfKey(k) {
       if (k.startsWith('eq:')) return 'equation ' + k.slice(3);
+      if (k.startsWith('fig:')) return k.slice(4);
       const x = getGraph().byKey.get(k);
       if (x) return x.cite ? `${x.label} ${x.who}`.trim() : x.name;
       return k.replace(/^(label|name|cite):/, '');
@@ -2797,6 +2817,12 @@
         if (k.startsWith('eq:')) {
           const el = eqEls().get(k);
           out.push({ key: k, kind: 'equation', name: el ? eqNameOf(el) : k.slice(3), el: el && doc.contains(el) ? el : null, d });
+        } else if (k.startsWith('fig:')) {
+          const el = figEls().get(k);
+          const cap = el && el.querySelector('.caption');
+          const head = cap && cap.querySelector('.caption-head');
+          const note = cap ? cap.textContent.slice(head ? head.textContent.length : 0).replace(/\s+/g, ' ').trim() : '';
+          out.push({ key: k, kind: 'figure', name: k.slice(4), note: note.length > 50 ? note.slice(0, 48) + '…' : note, el: el || null, d });
         } else {
           const n = g.byKey.get(k);
           if (n && n.cite) continue;
@@ -2964,10 +2990,13 @@
     // --- pins in the text: a pin by each result's heading and each equation's number ---
 
     function addPinButton(el) {
-      if (el._pinBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
+      const isFig = el.matches('figure.float');
+      if (el._pinBtn || (!el.id && !isFig) || el.closest(INSIDE_POPOVER)) return;
       const isEq = el.classList.contains('math-display');
       let at = null;
-      if (isEq) {
+      if (isFig) {
+        if (!figKeyOf(el)) return;
+      } else if (isEq) {
         if (!eqKeyOf(el)) return;
       } else {
         at = headOf(el);
@@ -2975,7 +3004,7 @@
       }
       const b = document_.createElement('button');
       b.type = 'button';
-      b.className = 'tg-pin-btn' + (isEq ? ' tg-pin-eq' : '');
+      b.className = 'tg-pin-btn' + (isEq ? ' tg-pin-eq' : isFig ? ' tg-pin-fig' : '');
       b.innerHTML = PIN_ICON;
       b.addEventListener('mousedown', (e) => e.stopPropagation());
       b.addEventListener('click', (e) => {
@@ -2985,7 +3014,7 @@
         if (!k) return;
         setPin(k, pinMap().has(k) ? '' : 'self');
       });
-      if (isEq) el.appendChild(b);
+      if (isEq || isFig) el.appendChild(b);
       else (el._usesBtn || at).after(b);
       el._pinBtn = b;
       paintPinButton(el);
@@ -2994,14 +3023,14 @@
       const b = el._pinBtn;
       if (!b) return;
       const on = el.classList.contains('tg-pinned');
-      const what = el.classList.contains('math-display') ? 'equation' : 'result';
+      const what = el.classList.contains('math-display') ? 'equation' : el.matches('figure.float') ? (figKeyOf(el) || 'fig:figure').slice(4).replace(/\s.*$/, '').toLowerCase() : 'result';
       b.setAttribute('aria-pressed', String(on));
       b.setAttribute('aria-label', on ? `Unpin this ${what}` : `Pin this ${what}`);
       b.title = on ? `Pinned: click to unpin (Show pinned shows only what is pinned)` : `Pin this ${what}: Show pinned then shows only what you pinned, and it is marked on the map`;
     }
     doc.addEventListener('mouseover', (e) => {
       if (!e.target.closest) return;
-      const t = e.target.closest('.theorem[id], .math-display[id]');
+      const t = e.target.closest('.theorem[id], .math-display[id], figure.float');
       if (t && doc.contains(t)) addPinButton(t);
     });
     doc.addEventListener('focusin', (e) => {
