@@ -53,6 +53,7 @@ letters are ignored while you type in a text field.
 | <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
 | <kbd>Alt</kbd> + arrow keys | On the map: move the focused result (unless the map is locked). |
+| <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> | On the map: undo / redo the last change to it (also <kbd>Ctrl+Y</kbd>). |
 | <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> <kbd>F</kbd> | In the larger map: zoom in, zoom out, 100%, fit the whole map. Ctrl + scroll or a pinch zooms at the pointer; drag the background to move. |
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
@@ -276,6 +277,13 @@ The map is drawn from the paper, but you can make it yours. Everything below is
 kept per paper with your notes, so it is exported, imported and synced with them
 (gist, browser sync, VS Code's `paper.texglass.json` and Settings Sync).
 
+- **Undo** and **Redo** (the ↶ ↷ buttons above the map, or <kbd>Ctrl+Z</kbd>
+  and <kbd>Ctrl+Shift+Z</kbd>) take back or redo each change: a drag, a pin,
+  a hidden result, a link, a saved map. After each change a short note says
+  what happened ("Hid Lemma 2") with an **Undo** button.
+- **Reset map…** puts the map back as the paper has it: TeXglass's layout,
+  nothing hidden or pinned, only the paper's links. It asks first, **saved
+  maps stay** as they are, and Undo brings everything back.
 - **Move**: drag a result (or a cited work) to where you want it; on a touch
   screen hold your finger still for a moment first, so a swipe still scrolls.
   <kbd>Alt</kbd> + arrow keys move the focused result. **Reset layout** puts
@@ -298,9 +306,12 @@ kept per paper with your notes, so it is exported, imported and synced with them
   exactly that view. **Change** lets you pin or unpin by ticking results and
   equations in the text; **Done** or <kbd>Esc</kbd> shows the whole paper.
   With nothing pinned, the menu item starts with the ticking.
-- **Save** the pins under a name (**Save…** above the map, then type a name):
+- **Save** the pins under a name (**Save as…** above the map; a name is
+  suggested, such as "Theorem 2 with what it uses", which you can type over):
   the saved maps are listed beside **Saved**; click one to pin exactly those
-  again, **×** deletes it. **Unpin all** clears the pins, not the saved maps.
+  again, **×** deletes it. The saved map whose pins are showing is
+  highlighted; once you change those pins, **Update “name”** keeps the new
+  pins under the same name. **Unpin all** clears the pins, not the saved maps.
 - **Hide**: **Hide from map** leaves a result off the map. **Hidden (n)**
   above the map draws the hidden ones faded, so you can pick one and **Show on
   map** again.
