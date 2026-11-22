@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Convert a .tex file to a standalone HTML page or an EPUB e-book:
  * texglass paper.tex [-o paper.html] [--reader] [--link-katex] [--epub]
- * texglass --sty  (copies texglass.sty, the optional LaTeX package, here) */
+ * texglass --sty  (copies texglass.sty, the optional LaTeX package, here)
+ * texglass --ai-prompt  (prints the prompt that asks an AI chatbot for texglass.sty hints) */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -13,12 +14,14 @@ const TeXglassEpub = require('../src/epub.js');
 const args = process.argv.slice(2);
 if (!args.length || args.includes('-h') || args.includes('--help')) {
   console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex] [--epub]\n' +
-    '       texglass --sty\n\n' +
+    '       texglass --sty\n' +
+    '       texglass --ai-prompt\n\n' +
     '  --reader      add the reading tools: reference previews, notation on hover, the side panel\n' +
     '                (contents, map, notation index), Navigate (Ctrl+F, Ctrl+G) and Back\n' +
     '  --link-katex  load KaTeX\'s stylesheet and fonts from a CDN instead of putting them in the page\n' +
     '  --epub        write an EPUB e-book (out.epub) instead, with the maths as MathML, for e-readers\n' +
-    '  --sty         copy texglass.sty into this folder: optional hints for TeXglass that LaTeX ignores');
+    '  --sty         copy texglass.sty into this folder: optional hints for TeXglass that LaTeX ignores\n' +
+    '  --ai-prompt   print a prompt to give an AI chatbot with your .tex file; it suggests texglass.sty hints');
   process.exit(args.length ? 0 : 1);
 }
 if (args[0] === '--sty') {
@@ -30,6 +33,12 @@ if (args[0] === '--sty') {
   }
   fs.copyFileSync(path.join(__dirname, '..', 'latex', 'texglass.sty'), to);
   console.log(`Wrote ${to}`);
+  process.exit(0);
+}
+if (args[0] === '--ai-prompt') {
+  // latex/AI-PROMPT.md, the part between its ai-prompt markers
+  const md = fs.readFileSync(path.join(__dirname, '..', 'latex', 'AI-PROMPT.md'), 'utf8');
+  process.stdout.write(/<!-- ai-prompt:start -->\s*````text\n([\s\S]*?)\n````/.exec(md)[1] + '\n');
   process.exit(0);
 }
 const input = args[0];

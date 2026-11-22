@@ -44,7 +44,8 @@
     "src/cite.js",
     "src/reader.js",
     "styles.css",
-    "latex/texglass.sty"
+    "latex/texglass.sty",
+    "latex/AI-PROMPT.md"
   ],
   "scripts": {
     "start": "node bin/serve.js",

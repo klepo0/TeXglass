@@ -11,12 +11,16 @@ exactly as without the package.
 \usepackage{texglass}
 
 \tgdefine{L^p}{the space of $p$-integrable functions}  % notation hovers and index
-\tguses{lem:key}                % a dependency-map link the text doesn't state
+\tguses{lem:key}                % a dependency-map link the text doesn't state (Map, Uses search)
 \tgstep[Reduce to balls]        % a step of a proof, for step-through mode
 \tghide{PDF only} \tgonly{web only}
 \begin{tgonly} ... \end{tgonly} % also: tghide environment, \iftexglass ... \else ... \fi
 \tgparam[2]{p}{1}{4}            % a parameter for live sliders (to come)
 ```
+
+To have an AI chatbot suggest these hints for a whole paper, give it the
+prompt in [AI-PROMPT.md](AI-PROMPT.md) with your `.tex` file
+(`npx texglass --ai-prompt` prints it).
 
 The full description is in the
 [TeXglass guide](https://github.com/klepo0/TeXglass/blob/main/docs/GUIDE.md#hints-for-texglass-in-your-own-papers).

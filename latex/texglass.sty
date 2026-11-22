@@ -31,11 +31,18 @@
 \ProvidesPackage{texglass}[2026/11/22 Hints for TeXglass, ignored by LaTeX]
 
 % Hints that leave nothing on the page. \@bsphack/\@esphack keep the spacing
-% as if the command were not there, as \label and \index do.
-\newcommand*\tgdefine[2]{\@bsphack\@esphack}
-\newcommand*\tguses[1]{\@bsphack\@esphack}
-\newcommand*\tgparam[4][]{\@bsphack\@esphack}
-\newcommand*\tgstep[1][]{\@bsphack\@esphack}
+% as if the command were not there, as \label and \index do. A hint that
+% starts the text after a displayed equation (where TeX skips the spaces at
+% the start of the line) also skips the space after it: nothing is on the
+% line yet, which e-TeX's \lastnodetype tells (-1).
+\newcommand*\tgdefine[2]{\@bsphack\@esphack\tg@start}
+\newcommand*\tguses[1]{\@bsphack\@esphack\tg@start}
+\newcommand*\tgparam[4][]{\@bsphack\@esphack\tg@start}
+\newcommand*\tgstep[1][]{\@bsphack\@esphack\tg@start}
+\def\tg@start{%
+  \ifhmode\ifnum\lastnodetype<\z@
+    \expandafter\expandafter\expandafter\ignorespaces
+  \fi\fi}
 
 % PDF-only and web-only text, as commands and as environments. \begin{foo}
 % runs \foo, so each command looks at \@currenvir to see which it is.

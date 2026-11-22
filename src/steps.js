@@ -3,9 +3,10 @@
  * extension's viewer and the VS Code preview.
  *
  * A "Step through" button by each proof's heading shows the proof as a slide
- * reveal: one sentence, displayed equation or list item at a time. → (or
- * Space, or a tap on the proof) shows the next piece, ← goes back, Escape or
- * "Show all" ends it. The rendered proof is not split ahead of time: its
+ * reveal: one sentence (or list item) at a time. → (or Space, or a tap on
+ * the proof) shows the next piece, ← goes back, Escape or "Show all" ends it.
+ * A piece ends only at a full stop: a displayed equation, and the text after
+ * it ("…, where …"), stay with the sentence they belong to. The rendered proof is not split ahead of time: its
  * paragraphs are cut into sentences only while it is being stepped through,
  * and put back together after.
  *
@@ -14,14 +15,11 @@
  * open while you step through them and fold into their first line once you
  * have stepped past them, with a button to open them again.
  *
- * Each reference or citation in a piece gets a small "why?" chip: it opens
- * the referenced result (or bibliography entry) in the host's usual preview,
- * a popover or, on a touch screen, a bottom sheet, without leaving your place.
+ * References and citations keep the host's usual previews (on hover, or a
+ * bottom sheet on a tap): a tap on a link never counts as "next".
  *
  *   const steps = TeXglassSteps.attach({
  *     root: preview,                // the rendered document
- *     preview(link, chip) { ... },  // show the preview of a reference link
- *     closePreview() { ... },       // hide it
  *     reveal(proof) { ... },        // optional: unfold a folded proof
  *     previewOpen() { ... },        // optional: whether a preview shows (Esc closes it first)
  *     dismissPreview() { ... },     // optional: close any preview, on Esc
@@ -131,6 +129,39 @@
     };
     walk(el);
     return s.trim();
+  }
+
+  /** A formula's LaTeX without what follows its last character on the page (\tag, \label, spacing, \end{...}). */
+  function texTail(tex) {
+    let t = String(tex || '');
+    let prev;
+    do {
+      prev = t;
+      t = t.replace(/\\(?:tag\*?|label|notag|nonumber)(?:\{[^{}]*\})?\s*$/, '')
+        .replace(/(?:\\[,;:!> ]|\\q?quad|~|\s|\\\\)+$/, '')
+        .replace(/\\end\{[^{}]*\}\s*$/, '')
+        .replace(/\\(?:right|big|Big|bigg|Bigg)r?[.)\]|]?\s*$/, (m) => (/\.\s*$/.test(m) ? '' : m))
+        .replace(/\\(?:text|mbox|textrm|mathrm)\{\s*([.!?]?)\s*\}$/, '$1');
+    } while (t !== prev);
+    return t;
+  }
+
+  /** Whether a piece's text ends a sentence: a full stop (or ! ?) at its end, in the text or in a formula ending it. */
+  function endsSentence(el) {
+    let tail = '';
+    const walk = (n) => {
+      if (tail) return;
+      if (n.nodeType === 3) {
+        const v = n.nodeValue.replace(/[\s\u00a0]+$/, '');
+        if (v) tail = v;
+        return;
+      }
+      if (n.nodeType !== 1 || n.matches('.katex-mathml, .qed, button, .tg-step-fold, .rp-marks, sup.fn, .tg-margin, .marginnote, script, style')) return;
+      if (n.matches('.math')) { tail = texTail(n.getAttribute('data-tex')) || 'x'; return; }
+      for (let c = n.lastChild; c && !tail; c = c.previousSibling) walk(c);
+    };
+    walk(el);
+    return /[.!?]["'”’)\]]*$/.test(tail);
   }
 
   /** A quick count of the pieces a proof would be cut into, without changing it. */
@@ -285,21 +316,29 @@
     }
 
     function build(proof) {
-      const made = { spans: [], chips: [], toggles: [] };
-      const steps = []; // { el, group }
+      const made = { spans: [], toggles: [] };
+      const steps = []; // { el, els, group }: el is the first element of the piece, els all of them
       const groups = []; // { head, from, to, el(s), kind, open: null|bool, toggle }
 
       // The author marked the steps: break at those marks only (and between blocks).
       const byMarks = !!proof.querySelector('.tg-stepmark');
-      const add = (el, group) => { el.classList.add('tg-step'); steps.push({ el, group }); return steps.length - 1; };
+      const add = (el, group) => { el.classList.add('tg-step'); steps.push({ el, els: [el], group }); return steps.length - 1; };
+      // a piece goes on over a displayed equation and the paragraph after it until its sentence ends
+      const join = (i, el) => { el.classList.add('tg-step'); steps[i].els.push(el); };
 
       /** Pieces of one block; returns [first, last] step indices, or null. */
-      function blockSteps(b, group) {
+      function blockSteps(b, group, joinTo) {
         const from = steps.length;
         if (b.tagName === 'P') {
           const spans = splitParagraph(b, made, byMarks);
-          if (!spans.length) add(b, group);
+          const startsWithMark = spans.length && spans[0].firstChild && spans[0].firstChild.nodeType === 1 && spans[0].firstChild.matches('.tg-stepmark');
+          if (joinTo !== undefined && !startsWithMark && !b.querySelector(':scope > .proof-head, :scope > .thm-head')) {
+            if (!spans.length) join(joinTo, b);
+            else { join(joinTo, spans[0]); spans.slice(1).forEach((s) => add(s, group)); }
+          } else if (!spans.length) add(b, group);
           else spans.forEach((s) => add(s, group));
+        } else if (b.matches('.math-display') && joinTo !== undefined) {
+          join(joinTo, b);
         } else if (b.matches('ul, ol')) {
           const items = Array.from(b.children).filter((li) => li.tagName === 'LI');
           if (!items.length) add(b, group);
@@ -378,9 +417,17 @@
             k = e - 1;
             continue;
           }
-          blockSteps(b, group);
+          // a displayed equation, or a paragraph, after a sentence that has not ended yet joins it
+          let joinTo;
+          const last = steps.length - 1;
+          if (k > 0 && last >= 0 && steps[last].group === group && lastFrom === blocks[k - 1] && b.matches('p, .math-display')) {
+            if (byMarks || !endsSentence(steps[last].els[steps[last].els.length - 1])) joinTo = last;
+          }
+          blockSteps(b, group, joinTo);
+          lastFrom = b;
         }
       }
+      let lastFrom = null; // the block the last piece came from (so pieces join only across siblings)
 
       function dissolve(g) {
         groups.splice(groups.indexOf(g), 1);
@@ -389,14 +436,17 @@
       }
 
       seq(blocksOf(proof), null);
+      steps.forEach((st) => { st.last = st.els[st.els.length - 1]; });
 
       // Boxes: elements that hold pieces (paragraphs, lists, items, nested proofs),
       // hidden while none of their pieces shows.
       const boxes = new Map();
       steps.forEach((s, i) => {
-        for (let el = s.el.parentElement; el && el !== proof; el = el.parentElement) {
-          const r = boxes.get(el);
-          if (r) r.push(i); else boxes.set(el, [i]);
+        for (const piece of s.els) {
+          for (let el = piece.parentElement; el && el !== proof; el = el.parentElement) {
+            const r = boxes.get(el);
+            if (!r) boxes.set(el, [i]); else if (r[r.length - 1] !== i) r.push(i);
+          }
         }
       });
 
@@ -407,7 +457,7 @@
         t.className = 'tg-step-fold';
         t._tgGroup = g;
         g.toggle = t;
-        const head = steps[g.from].el;
+        const head = steps[g.from].last;
         if (head.classList.contains('tg-step-text')) head.after(t);
         else {
           const p = head.matches('p') ? head : head.querySelector('p');
@@ -416,34 +466,11 @@
         made.toggles.push(t);
       }
 
-      // "why?" chips after references and citations.
-      steps.forEach((s) => {
-        const links = s.el.matches('a.ref, .cite') ? [s.el] : Array.from(s.el.querySelectorAll('a.ref, .cite'));
-        for (const l of links) {
-          if (l.closest('.math, .katex, .ref-popover, .tg-step-bar')) continue;
-          if (l.matches('.cite') && l.parentElement.closest('.cite')) continue;
-          const a = l.matches('a') ? l : l.querySelector('a[href^="#"]');
-          if (!a || !/^#/.test(a.getAttribute('href') || '')) continue;
-          const target = doc.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
-          if (!target || proof.contains(target) && !target.matches('.math-display, .theorem')) continue;
-          const chip = doc.createElement('button');
-          chip.type = 'button';
-          chip.className = 'tg-why';
-          chip.textContent = 'why?';
-          chip.title = 'Show what this refers to, without leaving the proof';
-          chip.setAttribute('aria-label', 'Show ' + (a.textContent.trim() || 'the reference') + ' here');
-          chip._tgLink = a;
-          l.after(chip);
-          made.chips.push(chip);
-        }
-      });
-
       return { steps, groups, boxes, made };
     }
 
     function unbuild(st) {
       const { made, proof } = st;
-      made.chips.forEach((c) => c.remove());
       made.toggles.forEach((t) => t.remove());
       const parents = new Set();
       made.spans.forEach((s) => {
@@ -481,7 +508,7 @@
       }
       for (const g of groups) {
         const f = isFolded.get(g);
-        steps[g.from].el.classList.toggle('tg-step-folded', f);
+        steps[g.from].els.forEach((e) => e.classList.toggle('tg-step-folded', f));
         const t = g.toggle;
         const n = g.to - g.from;
         // shown once you are past the part's first line, while that line shows
@@ -491,8 +518,10 @@
         t.setAttribute('aria-expanded', String(!f));
       }
       steps.forEach((s, i) => {
-        s.el.classList.toggle('tg-step-hidden', !shown[i]);
-        s.el.classList.toggle('tg-step-now', i === at);
+        s.els.forEach((e) => {
+          e.classList.toggle('tg-step-hidden', !shown[i]);
+          e.classList.toggle('tg-step-now', i === at);
+        });
       });
       boxes.forEach((idx, el) => {
         el.classList.add('tg-step-box');
@@ -509,7 +538,7 @@
     }
 
     function scrollToNow() {
-      const el = state && state.steps[state.at] && state.steps[state.at].el;
+      const el = state && state.steps[state.at] && state.steps[state.at].last;
       if (!el || !el.getBoundingClientRect) return;
       const r = el.getBoundingClientRect();
       const barH = state.bar ? state.bar.getBoundingClientRect().height + 16 : 60;
@@ -553,7 +582,6 @@
       if (!state) return;
       const n = state.steps.length;
       const at = Math.max(0, Math.min(n - 1, i));
-      if (opts.closePreview) opts.closePreview();
       // a part folded by hand opens again when you step into it
       for (const g of state.groups) if (at >= g.from && at <= g.to && g.open === false) g.open = null;
       state.at = at;
@@ -580,7 +608,6 @@
       if (!state) return;
       const st = state;
       state = null;
-      if (opts.closePreview) opts.closePreview();
       unbuild(st);
     }
 
@@ -607,13 +634,6 @@
         if (a === 'next') next();
         else if (a === 'back') back();
         else if (a === 'all') stop();
-        return;
-      }
-      const why = e.target.closest('.tg-why');
-      if (why) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (opts.preview) opts.preview(why._tgLink, why);
         return;
       }
       const fold = e.target.closest('.tg-step-fold');
@@ -648,7 +668,7 @@
       else if (e.key === 'Home') go(0);
       else if (e.key === 'End') go(state.steps.length - 1);
       else if (e.key === 'Escape') {
-        if (opts.previewOpen && opts.previewOpen()) (opts.dismissPreview || opts.closePreview || (() => {}))();
+        if (opts.previewOpen && opts.previewOpen()) (opts.dismissPreview || (() => {}))();
         else stop();
       } else handled = false;
       if (handled) { e.preventDefault(); e.stopPropagation(); }
@@ -670,5 +690,5 @@
     };
   }
 
-  return { attach, sentenceEnds, partHeader, countPieces };
+  return { attach, sentenceEnds, partHeader, countPieces, endsSentence, texTail };
 });

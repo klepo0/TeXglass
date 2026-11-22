@@ -111,6 +111,43 @@ test('a paper with texglass.sty compiles with pdflatex', { skip: !tex && 'pdflat
   }
 });
 
+test('the hints leave the PDF byte for byte as without them, after a display too', { skip: !tex && 'pdflatex is not installed' }, () => {
+  // After a displayed equation TeX skips the spaces that start the next line,
+  // so "\tgstep[T] For" there must not leave the space after ] on the page.
+  const withHints = String.raw`\pdftrailerid{}\documentclass{article}
+\usepackage{amsmath}
+\usepackage{texglass}
+\tgdefine{X}{a thing}
+\begin{document}
+Some text with a display
+\begin{align}
+  a &= b
+\end{align}
+	\tgstep[After a display] For the next step, see.\tgstep[After a full stop] Then more,
+and a mark mid-line \tgstep after a space.
+\[ x \]
+\tguses{x} After a display, again.
+\end{document}
+`;
+  const without = withHints.replace(/\\usepackage\{texglass\}\n|\\tgdefine\{X\}\{a thing\}\n/g, '')
+    .replace(/\\tgstep\[After a display\] |\\tgstep\[After a full stop\]|\\tgstep |\\tguses\{x\} /g, '');
+  assert.doesNotMatch(without, /\\tg/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'texglass-sty-'));
+  try {
+    fs.copyFileSync(path.join(ROOT, 'latex/texglass.sty'), path.join(dir, 'texglass.sty'));
+    const pdf = (name, body) => {
+      fs.writeFileSync(path.join(dir, `${name}.tex`), body);
+      execFileSync(tex, ['-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
+        cwd: dir, stdio: 'ignore', env: { ...process.env, SOURCE_DATE_EPOCH: '0', FORCE_SOURCE_DATE: '1' },
+      });
+      return fs.readFileSync(path.join(dir, `${name}.pdf`));
+    };
+    assert.ok(pdf('with', withHints).equals(pdf('without', without)), 'the PDFs differ');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('notation hovers and the index use \\tgdefine; the map uses \\tguses', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }

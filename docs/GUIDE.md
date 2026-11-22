@@ -19,7 +19,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Reading a paper](#reading-a-paper)
 - [Previews on hover](#previews-on-hover)
-- [Finding your way: Navigate, Go to, Trace](#finding-your-way-navigate-go-to-trace)
+- [Finding your way: Navigate, Go to, Trace, Uses](#finding-your-way-navigate-go-to-trace-uses)
 - [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
   - [Pins and your own map](#pins-and-your-own-map)
 - [Understanding the logic](#understanding-the-logic)
@@ -51,7 +51,7 @@ letters are ignored while you type in a text field.
 | <kbd>Ctrl+G</kbd> | Go to a theorem, equation, section, figure or table by number (**Navigate** on **Go to**). |
 | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> | Next / previous match while the bar is open. In the Find box, <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> do the same. |
 | <kbd>Alt+Left</kbd> / <kbd>Alt+Right</kbd> | [Back](#back-to-where-you-were) to where you were before a jump, and forward again (<kbd>Option</kbd> on a Mac). Not while you type in a text field. |
-| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to** and **Trace**: move through the list and pick. |
+| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to**, **Trace** and **Uses**: move through the list and pick. |
 | <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", stepping through a proof, or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
 | <kbd>Alt</kbd> + arrow keys | On the map: move the focused result (unless the map is locked). |
@@ -183,10 +183,10 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
 - **Map nodes**: resting on a result in the map (small or large) previews its
   statement.
 
-## Finding your way: Navigate, Go to, Trace
+## Finding your way: Navigate, Go to, Trace, Uses
 
 The **Navigate** button (<kbd>Ctrl+F</kbd> / <kbd>Ctrl+G</kbd>) opens a bar
-with three tabs:
+with four tabs:
 
 - **Find**: search the text. Matches are highlighted; <kbd>Enter</kbd>,
   <kbd>F3</kbd> next, <kbd>Shift+Enter</kbd>, <kbd>Shift+F3</kbd> previous. A
@@ -196,6 +196,26 @@ with three tabs:
 - **Trace**: pick a theorem, lemma or definition (the list shows "uses 3 ·
   used in 5") to see only what it uses and what uses it. It starts
   [What does this use?](#understanding-the-logic) on that result.
+- **Uses**: search by structure. Type what the results should use and get
+  every result that does, directly or through other results:
+  - `Lemma 2` (every result that rests on Lemma 2), `(3.1)` (on an equation),
+    `Assumption A`, a definition, or a number alone;
+  - several, separated by commas or `and`, for results that use all of them;
+    `Lemma 2 or Lemma 3` for either;
+  - `but not`, `not`, `without` or `except` leaves out every result that uses
+    what follows: `Theorem 1 but not Assumption A`. A single term can be left
+    out as `-Lemma 3`, and `not Assumption A` alone lists every result that
+    doesn't need the assumption;
+  - **Directly** (or typing `directly`) counts only the links written in a
+    result itself, not what it uses through other results.
+
+  The list counts what it found ("3 results use Lemma 2 but not Assumption
+  A"). Picking one lights them all up in the text, with **Hide the rest** on,
+  starting at the one you picked; the bar steps through them, **Change**
+  reopens the search, **Done** or <kbd>Esc</kbd> ends it. A map on show
+  lights up the same results. The search follows the same links as the
+  [Map](#the-side-panel-contents-map-notation): your own links and
+  `\tguses` hints count, links you took away don't.
 
 Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
 
@@ -204,7 +224,7 @@ Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
 Every jump remembers where you were reading: clicking a reference or a
 citation, an entry in **Contents**, a result on the **Map** (double-click, or
 **Go there**) or in the notation
-index, **Go to**, **Trace**, the first match of **Find**, **Go there** in a
+index, **Go to**, **Trace**, **Uses**, the first match of **Find**, **Go there** in a
 preview, and the next or previous margin note. A jump to something already on
 screen doesn't count.
 
@@ -344,9 +364,12 @@ kept per paper with your notes, so it is exported, imported and synced with them
   - **Print** on the bar prints what is shown: with **Hide the rest** on, only
     the lit results, and of their proofs only the ones you opened.
 - **Trace**: the same, chosen by name from the Navigate bar.
+- **Uses**: the other way round, every result that uses a given lemma,
+  assumption or equation, and not another; see
+  [Uses](#finding-your-way-navigate-go-to-trace-uses).
 - **Step through a proof.** The **Step through** button by a proof's heading
-  shows the proof one piece at a time, like a slide reveal: a sentence, a
-  displayed equation or a list item. Works on any paper; the author changes
+  shows the proof one sentence at a time, like a slide reveal (a list item
+  is a piece of its own too). Works on any paper; the author changes
   nothing.
   - <kbd>→</kbd>, <kbd>Space</kbd>, **Next** or a click (a tap) on the proof's
     text shows the next piece; <kbd>←</kbd> or **Back** goes back. The bar
@@ -358,16 +381,20 @@ kept per paper with your notes, so it is exported, imported and synced with them
     the proof, a paragraph starting "Case 1.", "Step 2:", "Part (ii)." and
     what follows it, a long list item. **▸ 3 more** opens a folded part
     again; **▾ fold** folds it.
-  - Every reference and citation in a piece gets a small **why?** chip: it
-    opens the lemma, equation or bibliography entry in the usual preview (a
-    bottom sheet on a phone) without leaving your place. Click elsewhere or
-    press <kbd>Esc</kbd> to close it.
+  - References and citations show their usual previews while you step
+    (on hover, or a bottom sheet when you tap one on a phone), so you can
+    look up a lemma without leaving your place. <kbd>Esc</kbd> closes an open
+    preview first.
   - **Show all**, <kbd>Esc</kbd>, **Stop** on the heading, or **Done** after
     the last piece ends it and shows the whole proof again. Folding the proof
     ends it too. Proofs with fewer than three pieces have no button.
-  - Sentences are found by their full stops (not after "e.g.", "Lemma 2.",
-    initials and the like). An author using `texglass.sty` can mark the
-    pieces with `\tgstep`; a proof with such marks is cut only there.
+  - A piece ends only at a full stop (or ! or ?), never at a comma or a
+    formula: a displayed equation stays with the sentence it belongs to, and
+    so does the text after it ("…, where …") until the full stop, which may
+    be the one ending the equation. Full stops after "e.g.", "Lemma 2.",
+    initials and the like don't count. An author using `texglass.sty` can
+    mark the pieces with `\tgstep`; a proof with such marks is cut only
+    there.
   - Settings: **Step through proofs**. VS Code: `texglass.stepThroughProofs`.
 - **Show pinned results**: see only the results and numbered equations you
   pinned (see [Pins and your own map](#pins-and-your-own-map)). Start it from
@@ -616,7 +643,8 @@ see [Command line](#command-line) for what it holds), **Export as EPUB** (an
 e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
-rest** prints as shown), **Save for offline** and **Saved papers…** (see
+rest** prints as shown), **Copy AI prompt for authors** (see
+[Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
 notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Support
 TeXglass ☕** opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
@@ -791,7 +819,9 @@ Writes the same standalone page as **Export**. `--link-katex` loads KaTeX's
 stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
 `-h` or `--help` prints the usage. `npx texglass --sty` copies
 [`texglass.sty`](#hints-for-texglass-in-your-own-papers) into the current
-folder.
+folder, and `npx texglass --ai-prompt` prints the
+[prompt for an AI chatbot](#let-an-ai-chatbot-suggest-the-hints) that suggests
+its hints.
 
 `--reader` (or **Export with reading tools** in the web viewer's **…** menu)
 adds the reading tools to the page, about 650 KB more, still one file that
@@ -802,7 +832,7 @@ works offline:
 - notation on hover and **What does this use?** by each result;
 - the side panel with **Contents**, **Map** and **Notation**;
 - **Navigate**: <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+G</kbd> to go to a
-  number, **Trace**; **Back** and **Forward** after a jump;
+  number, **Trace**, **Uses** (search by what results use); **Back** and **Forward** after a jump;
 - click a formula to copy its LaTeX; light and dark.
 
 Cited papers' titles and abstracts show when the page is online. Your own
@@ -879,8 +909,9 @@ it on a computer.
 
 **Previews open on a tap.** On a touch screen, the previews that a mouse shows
 on hover open as a sheet at the bottom of the screen. That covers references,
-citations, footnotes, notation and the map's results, and the **why?** chips
-when you step through a proof (tap the proof to show its next piece).
+citations, footnotes, notation and the map's results. When you step through a
+proof, tap its text to show the next piece; a tap on a reference opens its
+preview instead.
 
 - A tap on a reference or citation shows it, without leaving your place.
   **Go there** in the sheet jumps to it, and the **Back** button at the top
@@ -947,6 +978,10 @@ text still works as usual.
   usual symbol.
 - **Text in formulas**: `\mbox`, `\text`, `\parbox`, `\textsc` and
   `\footnote` inside maths, with `$…$` of their own.
+- **Plain TeX**: `\eqno` and `\leqno`, `\buildrel … \over`, `\eqalign`,
+  `\displaylines`, `\centerline`, `\romannumeral`, names made with
+  `\csname … \endcsname`; page sizes and spacing (`\textwidth 16cm`,
+  `\vskip 2pt plus 1pt`) are skipped without leaving their sizes in the text.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
   enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`,
@@ -985,7 +1020,7 @@ TeXglass reads the commands itself either way.
 | Command | In TeXglass | In LaTeX |
 | --- | --- | --- |
 | `\tgdefine{L^p}{the space of $p$-integrable functions}` | What a symbol means: notation on hover shows it (as **The author's description**) and the **Notation** tab lists it, searchable by its words. It comes before what TeXglass reads from the text. In the preamble it holds for the whole paper; in the text, from that point on (inside a proof, for that proof). The symbol is TeX, with or without `$…$`. | Nothing |
-| `\tguses{lem:key}` or `\tguses{lem:a,thm:b}` | Links on the **Map** that the text doesn't state: put it in a result's statement or proof, and that result uses the labelled ones. | Nothing |
+| `\tguses{lem:key}` or `\tguses{lem:a,thm:b}` | Links on the **Map** that the text doesn't state: put it in a result's statement or proof, and that result uses the labelled ones (also in **Uses** searches). | Nothing |
 | `\tgstep` or `\tgstep[title]` | Marks where a new step of a proof starts, with an optional title, for stepping through the proof: a proof with these marks is split at them (and at displayed equations, list items and claims) rather than at sentences. | Nothing |
 | `\tghide{…}`, `\begin{tghide}…\end{tghide}` | Left out. | Shown |
 | `\tgonly{…}`, `\begin{tgonly}…\end{tgonly}` | Shown. | Left out, unread (so it may hold commands LaTeX doesn't know; a `tgonly` can't hold another) |
@@ -994,6 +1029,18 @@ TeXglass reads the commands itself either way.
 
 The package is free to share under the LaTeX Project Public License, so it can
 go into your paper's sources and onto arXiv with them.
+
+### Let an AI chatbot suggest the hints
+
+[`latex/AI-PROMPT.md`](../latex/AI-PROMPT.md) holds a ready-made prompt: paste
+it into an AI chatbot (Claude, ChatGPT, Gemini, …) with your `.tex` file, and
+it answers with a block of `\tgdefine` lines for your preamble and a numbered
+list of `\tguses` and `\tgstep` commands, each with the exact place it goes
+("right after `\label{lem:young}`"). It is told not to touch your maths or
+wording and to leave out anything it would have to guess, so your PDF stays
+the same; read its suggestions before you paste them. Get the prompt from
+**Copy AI prompt for authors** in the web viewer's **…** menu, from that page,
+or with `npx texglass --ai-prompt`.
 
 ## Render dashboard
 

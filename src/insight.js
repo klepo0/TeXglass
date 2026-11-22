@@ -737,6 +737,7 @@
         n = {
           el, id: el.id, name: thmName(el), note: thmNote(el), kind: kindOf(el), style: styleOf(el), uses: new Set(), usedBy: new Set(), order: nodes.length,
           proofs: [], refs: { statement: new Set(), proof: new Set() }, // its proofs, and the equations, figures… it refers to
+          eqs: new Set(), // every displayed equation it refers to, wherever it sits (search by use)
           edges: new Map(), cites: new Map(), section: null,
         };
         byEl.set(el, n);
@@ -831,6 +832,8 @@
         }
         if (!a.classList.contains('ref')) continue;
         const dep = resultOf(target);
+        const md = target.closest('.math-display');
+        if (md) owner.eqs.add(md);
         if (!target.closest('.theorem[id]') && !/^H[1-6]$/.test(target.tagName) && !target.closest('section > h1, section > h2')) {
           owner.refs[part].add(target); // an equation, a figure, a numbered item
         }
@@ -1594,6 +1597,46 @@
       }
     }
     return out;
+  }
+
+  /**
+   * The results that use `t`, directly (direct) or not: t is a result of the
+   * graph, or { eq: true, el } for a displayed equation, used by the results
+   * that refer to it and, unless direct, by whatever rests on those.
+   */
+  function usersOf(g, t, direct) {
+    const first = t.eq
+      ? g.nodes.filter((n) => n.eqs && Array.from(n.eqs).some((m) => m === t.el || t.el.contains(m) || m.contains(t.el)))
+      : Array.from(t.usedBy || []);
+    const out = new Set(first);
+    if (!direct) for (const n of first) for (const m of closure(n, 'usedBy')) out.add(m);
+    if (!t.eq) out.delete(t);
+    return out;
+  }
+
+  /**
+   * Search by structure: the results that use every one of q.inc (any one, with
+   * q.any) and none of q.exc, in document order. With no q.inc, every result
+   * that uses none of q.exc. q.direct counts only links written in the result
+   * itself, not what it uses through other results. Terms as for usersOf().
+   */
+  function searchByUse(g, q) {
+    const inc = (q && q.inc) || [];
+    const exc = (q && q.exc) || [];
+    const direct = !!(q && q.direct);
+    let pool;
+    if (!inc.length) pool = new Set(g.nodes);
+    else {
+      const sets = inc.map((t) => usersOf(g, t, direct));
+      pool = q.any
+        ? new Set(sets.flatMap((s) => Array.from(s)))
+        : new Set(Array.from(sets[0]).filter((n) => sets.every((s) => s.has(n))));
+    }
+    for (const t of exc) {
+      for (const m of usersOf(g, t, direct)) pool.delete(m);
+      if (!t.eq) pool.delete(t);
+    }
+    return Array.from(pool).sort((a, b) => a.order - b.order);
   }
 
   // ---------------------------------------------------------------------------
@@ -3318,7 +3361,7 @@
     function pick(view, k) {
       const n = view.body._nodes && view.body._nodes[k];
       if (!n) return;
-      if (focusState && n.el && doc.contains(n.el)) focus(n.el, focusState.dir, true);
+      if (focusState && !focusState.set && n.el && doc.contains(n.el)) focus(n.el, focusState.dir, true);
       else select(view, k);
     }
 
@@ -3616,6 +3659,7 @@
         if (view.synced) clearPick(view);
         return false;
       }
+      if (focusState.set) return lightSet(view);
       const n = nodes.find((m) => m.id === focusState.id);
       const drawn = n && view.lay && view.lay.drawnOf(n);
       if (n && drawn !== n) {
@@ -3626,6 +3670,31 @@
       }
       if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) select(view, n.order, focusState.dir);
       else clearPick(view, `${esc(focusState.name)} is lit up in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
+      view.synced = true;
+      return true;
+    }
+
+    /** A search by use on a map: its results lit, what was searched for picked. */
+    function lightSet(view) {
+      const body = view.body;
+      const svg = body.querySelector('.dep-map');
+      if (!svg || !view.lay) return false;
+      const g = getGraph();
+      const on = new Set(focusState.stops.map((el) => g.byEl.get(el)).filter(Boolean).map((m) => view.lay.drawnOf(m)));
+      const sel = new Set(focusState.set.inc.map((k) => g.byKey.get(k)).filter(Boolean).map((m) => view.lay.drawnOf(m)));
+      svg.classList.add('dep-picked', 'dep-synced');
+      svg.querySelectorAll('.dep-node').forEach((node) => {
+        const m = node.dataset.n != null ? body._nodes[Number(node.dataset.n)] : null;
+        node.classList.toggle('dep-sel', !!m && sel.has(m));
+        node.classList.toggle('dep-down', !!m && on.has(m));
+        node.classList.remove('dep-up');
+      });
+      svg.querySelectorAll('.dep-edge').forEach((p) => p.classList.remove('dep-lit'));
+      const detail = body.querySelector('.dep-detail');
+      if (detail) {
+        detail.innerHTML = `<p><strong>${focusState.stops.length || 'No'} result${focusState.stops.length === 1 ? '' : 's'}</strong> ${esc(focusState.text)} ` +
+          '<span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></p>';
+      }
       view.synced = true;
       return true;
     }
@@ -3844,6 +3913,44 @@
       if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
     }
 
+    /** Mark the page: keep (Map element → classes) lit, fade the rest. Returns what was marked. */
+    function markKeep(keep) {
+      // Fade every block that holds nothing lit; go inside the ones that do.
+      const lit = new Set();
+      for (const k of keep.keys()) for (let p = k.parentElement; p && p !== doc; p = p.parentElement) lit.add(p);
+      const marked = [];
+      const walk = (node) => {
+        for (const c of node.children) {
+          const cls = keep.get(c);
+          if (cls) { c.classList.add(...cls.split(' ')); marked.push(c); }
+          else if (lit.has(c)) walk(c);
+          else if (!c.classList.contains('uses-btn')) {
+            c.classList.add('uses-fade');
+            if (HEADING.test(c.tagName) || (c.children.length === 1 && HEADING.test(c.firstElementChild.tagName))) c.classList.add('uses-head');
+            marked.push(c);
+          }
+        }
+      };
+      walk(doc);
+      doc.classList.add('uses-focus');
+      doc.classList.toggle('uses-collapse', collapseRest);
+      return marked;
+    }
+
+    /** The blocks a set of results refers to (equations, figures, cited works), lit with them. */
+    function addRefs(keep, nodes) {
+      const refs = new Set();
+      for (const m of nodes) {
+        for (const r of m.refs.statement) refs.add(r);
+        for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
+      }
+      for (const r of refs) {
+        const b = blockOf(r);
+        if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
+        keep.set(b, 'uses-ref');
+      }
+    }
+
     /**
      * Light up what el uses (dir 'uses'), what uses it ('usedBy'), or both
      * ('both'). collapse: also switch on "Hide the rest".
@@ -3882,25 +3989,7 @@
         if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
         keep.set(p, 'uses-fade uses-proof');
       }
-      // Fade every block that holds nothing lit; go inside the ones that do.
-      const lit = new Set();
-      for (const k of keep.keys()) for (let p = k.parentElement; p && p !== doc; p = p.parentElement) lit.add(p);
-      const marked = [];
-      const walk = (node) => {
-        for (const c of node.children) {
-          const cls = keep.get(c);
-          if (cls) { c.classList.add(...cls.split(' ')); marked.push(c); }
-          else if (lit.has(c)) walk(c);
-          else if (!c.classList.contains('uses-btn')) {
-            c.classList.add('uses-fade');
-            if (HEADING.test(c.tagName) || (c.children.length === 1 && HEADING.test(c.firstElementChild.tagName))) c.classList.add('uses-head');
-            marked.push(c);
-          }
-        }
-      };
-      walk(doc);
-      doc.classList.add('uses-focus');
-      doc.classList.toggle('uses-collapse', collapseRest);
+      const marked = markKeep(keep);
       const stops = [el].concat(others.map((m) => m.el));
       const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
       focusState = { id: el.id, key: n.key || keyOfEl(el), dir, marked, stops, at: 0, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
@@ -3908,6 +3997,77 @@
       showBar();
       syncMaps();
       if (scroll) opts.jump(el);
+    }
+
+    // --- Search by use: light up every result that uses these, and none of those ---
+
+    /** A search term from a result or displayed-equation element (or a key): a graph node, or { eq, el, key }. */
+    function termOf(x) {
+      const g = getGraph();
+      if (typeof x === 'string') {
+        if (x.startsWith('eq:')) { const el = eqEls().get(x); return el ? { eq: true, el, key: x, name: eqNameOf(el) } : null; }
+        const n = g.byKey.get(x);
+        return n && !n.cite ? n : null;
+      }
+      if (!x) return null;
+      const n = g.byEl.get(x);
+      if (n) return n;
+      const el = x.closest && x.closest('.math-display');
+      return el ? { eq: true, el, key: eqKeyOf(el), name: eqNameOf(el) } : null;
+    }
+
+    /** "Lemma 2 and (3.1)", "Lemma 2 or Lemma 3". */
+    const joinNames = (terms, word) => {
+      const names = terms.map((t) => t.name);
+      return names.length < 3 ? names.join(` ${word} `) : names.slice(0, -1).join(', ') + ` ${word} ` + names[names.length - 1];
+    };
+
+    /**
+     * Search by use. q: { inc: [element or key], exc: [...], any, direct }.
+     * Returns { results: [result elements], inc: [names], exc: [names], text } or
+     * null when a term is neither a result nor a displayed equation.
+     */
+    function searchUses(q) {
+      const g = getGraph();
+      const inc = (q.inc || []).map(termOf);
+      const exc = (q.exc || []).map(termOf);
+      if (inc.some((t) => !t) || exc.some((t) => !t)) return null;
+      const found = searchByUse(g, { inc, exc, any: !!q.any, direct: !!q.direct });
+      let text = inc.length ? `use${q.direct ? ' directly' : ''} ${joinNames(inc, q.any ? 'or' : 'and')}` : '';
+      if (exc.length) text += (inc.length ? ' but not ' : `do not use${q.direct ? ' directly' : ''} `) + joinNames(exc, 'or');
+      return { results: found.map((n) => n.el), nodes: found, inc, exc, text };
+    }
+
+    /** Light up the results a search by use finds, and fade the rest. at: the result to go to. */
+    function showUses(q, at, scroll, collapse) {
+      const res = searchUses(q);
+      if (!res) return null;
+      if (collapse) collapseRest = true;
+      if (!focusState && opts.onFocusStart) opts.onFocusStart();
+      clearMarks();
+      hidePop();
+      const keep = new Map();
+      // what was searched for stays lit; what was searched against stays visible, not lit
+      for (const t of res.inc) if (doc.contains(t.el)) keep.set(t.el, 'uses-sel');
+      for (const t of res.exc) if (doc.contains(t.el) && !keep.has(t.el)) keep.set(t.el, 'uses-ref');
+      for (const n of res.nodes) if (!keep.has(n.el)) keep.set(n.el, 'uses-on');
+      for (const n of res.nodes) for (const p of n.proofs) {
+        if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
+        keep.set(p, 'uses-fade uses-proof');
+      }
+      addRefs(keep, res.nodes);
+      const marked = markKeep(keep);
+      const stops = res.nodes.map((n) => n.el);
+      let k = at ? stops.indexOf(at) : 0;
+      if (k < 0) k = 0;
+      focusState = {
+        id: null, key: null, dir: 'set', marked, stops, at: k, btn: null, name: '', count: stops.length, guessed: 0,
+        set: { inc: res.inc.map((t) => t.key), exc: res.exc.map((t) => t.key), any: !!q.any, direct: !!q.direct }, text: res.text,
+      };
+      showBar();
+      syncMaps();
+      if (scroll && stops[k]) opts.jump(stops[k]);
+      return res;
     }
 
     function unfocus() {
@@ -3920,8 +4080,16 @@
     /** After a new render: light up the same result again, if it is still there. */
     function refocus() {
       if (!focusState) return;
-      const { id, dir } = focusState;
+      const { id, dir, set } = focusState;
       focusState = null;
+      if (set) {
+        if (!showUses(set)) {
+          doc.classList.remove('uses-focus');
+          if (bar) bar.hidden = true;
+          syncMaps();
+        }
+        return;
+      }
       const el = document_.getElementById(id);
       if (el && doc.contains(el) && el.classList.contains('theorem')) focus(el, dir);
       else {
@@ -3941,6 +4109,7 @@
           if (!b || !focusState) return;
           if (b.dataset.act === 'done') return unfocus();
           if (b.dataset.act === 'print') return opts.print();
+          if (b.dataset.act === 'edit') return opts.onEditSearch(focusState.set);
           if (b.dataset.act === 'pin') {
             setPin(focusState.key, pinMap().get(focusState.key) === focusState.dir ? '' : focusState.dir);
             return showBar();
@@ -3958,6 +4127,7 @@
             return focus(el, b.dataset.dir);
           }
           const k = focusState.stops.length;
+          if (!k) return;
           focusState.at = (focusState.at + (b.dataset.act === 'next' ? 1 : -1) + k) % k;
           opts.jump(focusState.stops[focusState.at]);
           showBar();
@@ -3966,6 +4136,22 @@
       }
       const f = focusState;
       const results = (k) => `${k} result${k > 1 ? 's' : ''}`;
+      const step = f.stops.length > 1
+        ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
+        : '';
+      const rest =
+        `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
+        (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF (with Hide the rest on, only that; folded proofs are left out)">Print</button>' : '') +
+        '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
+      if (f.set) {
+        const n = f.stops.length;
+        bar.innerHTML =
+          `<span class="uses-what"><strong>${n ? results(n) : 'No result'}</strong> ${esc(f.text)}</span>` +
+          (opts.onEditSearch ? '<button type="button" data-act="edit" title="Change the search">Change</button>' : '') +
+          step + rest;
+        bar.hidden = false;
+        return;
+      }
       const what = f.dir === 'uses'
         ? (f.count ? `uses ${results(f.count)}` : 'uses no other numbered result')
         : f.dir === 'usedBy'
@@ -3974,9 +4160,6 @@
             ? `uses ${f.counts.up ? results(f.counts.up) : 'none'}, is used in ${f.counts.down ? results(f.counts.down) : 'none'}`
             : 'neither uses nor is used in any numbered result');
       const guess = f.guessed ? ` <span class="uses-guessed" title="Named in the text without a link (“the previous lemma”, “Lemma 2.3”), so TeXglass guessed which result is meant. These have a dashed outline.">(${f.guessed} guessed)</span>` : '';
-      const step = f.stops.length > 1
-        ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
-        : '';
       bar.innerHTML =
         `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}${guess}</span>` +
         `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
@@ -3984,9 +4167,7 @@
         `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
         step +
         `<button type="button" data-act="pin" aria-pressed="${pinMap().get(f.key) === f.dir}" title="Pin ${esc(f.name)} with ${f.dir === 'uses' ? 'what it uses' : f.dir === 'usedBy' ? 'what uses it' : 'what it uses and what uses it'}, to show only these later (Show pinned) or save them">${pinMap().get(f.key) === f.dir ? 'Pinned' : 'Pin'}</button>` +
-        `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
-        (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF (with Hide the rest on, only that; folded proofs are left out)">Print</button>' : '') +
-        '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
+        rest;
       bar.hidden = false;
     }
 
@@ -4036,9 +4217,16 @@
         const n = getGraph().byEl.get(el);
         return n ? { uses: closure(n, 'uses').size, usedBy: closure(n, 'usedBy').size } : null;
       },
+      /**
+       * Search by use: { inc: [result or equation elements], exc: [...], any, direct }
+       * → { results: [elements], text } (null if a term is not a result or equation).
+       */
+      searchUses: (q) => { const r = searchUses(q); return r && { results: r.results, text: r.text }; },
+      /** Light up what searchUses(q) finds and fade the rest; o: { at: element, scroll, collapse }. */
+      showUses: (q, o) => !!showUses(q, o && o.at, !!(o && o.scroll), !!(o && o.collapse)),
       unfocus,
       repaint,
-      focused: () => (focusState ? { id: focusState.id, dir: focusState.dir } : null),
+      focused: () => (focusState ? { id: focusState.id, dir: focusState.dir, search: focusState.set ? Object.assign({ text: focusState.text }, focusState.set) : null } : null),
       graph: getGraph,
       index: getIndex,
       notesFor,
@@ -4208,7 +4396,7 @@
     };
   }
 
-  const api = { attach, sidePanel, dependencyGraph, notationIndex, kindOfSymbol, alphaOf, greekQuery, definedSymbol, proseDefinitions, texTokens, patternOf, occurrences, layout, foldGroups, mentionsIn };
+  const api = { attach, sidePanel, dependencyGraph, usersOf, searchByUse, notationIndex, kindOfSymbol, alphaOf, greekQuery, definedSymbol, proseDefinitions, texTokens, patternOf, occurrences, layout, foldGroups, mentionsIn };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassInsight = api;
 })(typeof self !== 'undefined' ? self : this);

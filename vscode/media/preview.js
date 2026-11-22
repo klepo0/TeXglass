@@ -748,12 +748,10 @@
   const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
-  let popoverChip = null; // the "why?" chip that opened it (shared/steps.js)
   function hidePopover() {
     clearTimeout(hideTimer);
     popover.hidden = true;
     popoverLink = null;
-    popoverChip = null;
   }
   function hidePopoverSoon() {
     clearTimeout(hideTimer);
@@ -870,6 +868,9 @@
       // Trace: pick a result, see only what it uses and what uses it
       onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
       related: (el) => (insight ? insight.related(el) : null),
+      // Uses: search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      uses: (q) => (insight ? insight.searchUses(q) : null),
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     })
     : null;
 
@@ -1123,6 +1124,7 @@
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
       print: () => vscode.postMessage({ type: 'print-request' }),
       onFocusStart: () => { if (picker) picker.stop(); },
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
       // pins, hidden results, own links, layout and saved maps: kept by the
       // extension with the reader's notes (paper.texglass.json), synced with them
       edits: {
@@ -1206,30 +1208,16 @@
     : null;
 
   // Stepping through a proof (shared/steps.js): "Step through" by each proof, one
-  // piece at a time, with "why?" by each reference opening its usual preview.
+  // piece at a time. Esc closes a preview before it stops the stepping.
   var steps = window.TeXglassSteps
     ? window.TeXglassSteps.attach({
       root: preview,
       enabled: featureOn('proofSteps'),
       reveal,
-      preview: (a, chip) => {
-        const target = document.getElementById(decodeURIComponent((a.getAttribute('href') || '').slice(1)));
-        if (!target) return;
-        if (popoverLink === a && !popover.hidden) { hidePopover(); return; } // a second press closes it
-        showPopover(a, target);
-        popoverChip = chip;
-      },
-      closePreview: () => { if (popoverChip) hidePopover(); },
       previewOpen: () => !popover.hidden,
       dismissPreview: hidePopover,
     })
     : null;
-  // A preview opened by a "why?" chip stays until a click elsewhere.
-  document.addEventListener('pointerdown', (e) => {
-    if (!popoverChip || popover.hidden) return;
-    if (popover.contains(e.target) || e.target.closest('.tg-why')) return;
-    hidePopover();
-  }, true);
 
   // --- settings: switching reading aids on or off ------------------------------------
   // The panel changes the texglass.* settings; the extension sends them back ('features').
