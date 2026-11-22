@@ -34,6 +34,7 @@
     "src/bib.js",
     "src/tikz.js",
     "src/export.js",
+    "src/epub.js",
     "src/diagrams.js",
     "src/popover.js",
     "src/scroll.js",

@@ -649,18 +649,52 @@
     for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
     return out;
   };
-  async function drawFigure(src, kind) {
+  /** A .pdf or .eps figure drawn as an image Blob, or null. */
+  async function figureImage(src, kind) {
     try {
       const blob = await (await fetch(src)).blob();
-      if (kind === 'pdf') {
-        const image = window.TeXglassPdf ? await window.TeXglassPdf.toImage(blob) : null;
-        return image ? URL.createObjectURL(image) : null;
-      }
+      if (kind === 'pdf') return window.TeXglassPdf ? await window.TeXglassPdf.toImage(blob) : null;
       const r = window.TeXglassEps ? window.TeXglassEps.toSvg(latin1(new Uint8Array(await blob.arrayBuffer()))) : null;
-      return r ? URL.createObjectURL(new Blob([r.svg], { type: 'image/svg+xml' })) : null;
+      return r ? new Blob([r.svg], { type: 'image/svg+xml' }) : null;
     } catch (e) {
       return null;
     }
+  }
+  async function drawFigure(src, kind) {
+    const image = await figureImage(src, kind);
+    return image ? URL.createObjectURL(image) : null;
+  }
+  /**
+   * A document's HTML ready for an e-book (src/epub.js): every figure as a
+   * data: URL, PDF and EPS figures drawn as images first, and the diagrams
+   * drawn, since e-readers do not run this page's scripts.
+   */
+  async function prepareEpub(html) {
+    const box = document.createElement('template');
+    box.innerHTML = html;
+    const toDataUrl = (blob) => new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+    const done = new Map();
+    for (const img of box.content.querySelectorAll('img')) {
+      const src = img.getAttribute('src') || '';
+      if (!src || src.startsWith('data:')) continue;
+      if (!done.has(src)) {
+        done.set(src, (async () => {
+          const kind = /\.pdf(\?|$)/i.test(src) ? 'pdf' : /\.e?ps(\?|$)/i.test(src) ? 'eps' : null;
+          const blob = kind ? await figureImage(src, kind) : await (await fetch(src)).blob();
+          return blob ? toDataUrl(blob) : null;
+        })().catch(() => null));
+      }
+      const data = await done.get(src);
+      if (data) img.setAttribute('src', data);
+    }
+    let out = box.innerHTML;
+    if (window.TeXglassEpub && /class="tg-diagram/.test(out)) out = await window.TeXglassEpub.drawDiagrams(out, document);
+    return out;
   }
   function drawFigures() {
     for (const img of preview.querySelectorAll('img.graphic')) {
@@ -1005,6 +1039,12 @@
         break;
       case 'reading-progress':
         if (progress) progress.setEnabled(m.on);
+        break;
+      case 'epub-prepare': // Export to EPUB: figures inside, diagrams drawn
+        prepareEpub(m.html).then(
+          (html) => vscode.postMessage({ type: 'epub-prepared', id: m.id, html }),
+          () => vscode.postMessage({ type: 'epub-prepared', id: m.id, html: null })
+        );
         break;
       case 'note-html': {
         const done = noteWaiting.get(m.id);

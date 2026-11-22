@@ -24,6 +24,7 @@ const { assemble, locate, findRoot } = require('./project.js');
 const { withFiles } = require('./vfs.js');
 const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
+const TeXglassEpub = require('./shared/epub.js');
 const TeXglassFeatures = require('./shared/features.js');
 const NotesSync = require('./shared/notes-sync.js');
 
@@ -779,6 +780,7 @@ ${INK_FILTERS}
 <div id="zoom-float" class="zoom-float" role="group" aria-label="Zoom" hidden><button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out (Ctrl+−)">−</button><button id="zoom-level" class="zoom-level" type="button" title="Reset the zoom to 100% (Ctrl+0)">100%</button><button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in (Ctrl++)">+</button></div>
 <script nonce="${nonce}" src="${res('shared', 'find.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'diagrams.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'epub.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'zoom.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'scroll.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'popover.js')}"></script>
@@ -927,8 +929,28 @@ ${INK_FILTERS}
     if (!this.disposed) this.panel.webview.postMessage(message);
   }
 
+  /**
+   * HTML made ready for an e-book in the preview, which is a browser page:
+   * figures as data: URLs (PDF and EPS ones drawn first) and diagrams drawn
+   * (src/epub.js drawDiagrams). Null if the preview does not answer.
+   */
+  prepareEpub(html) {
+    return new Promise((resolve) => {
+      if (!this.epubWaiting) this.epubWaiting = new Map();
+      const id = (this.epubId = (this.epubId || 0) + 1);
+      const timer = setTimeout(() => { this.epubWaiting.delete(id); resolve(null); }, 120000);
+      this.epubWaiting.set(id, (h) => { clearTimeout(timer); resolve(h); });
+      this.post({ type: 'epub-prepare', id, html });
+    });
+  }
+
   onMessage(m) {
     switch (m.type) {
+      case 'epub-prepared': {
+        const done = this.epubWaiting && this.epubWaiting.get(m.id);
+        if (done) { this.epubWaiting.delete(m.id); done(typeof m.html === 'string' ? m.html : null); }
+        break;
+      }
       case 'print-request': // Print on the bar of a selection or of "What does this use?"
         vscode.commands.executeCommand('texglass.print');
         break;
@@ -1361,6 +1383,80 @@ async function exportHtml(context, converter, uri, out, print, view) {
   });
 }
 
+/**
+ * Export the document as an EPUB e-book (src/epub.js). With the document open
+ * in the preview, the preview draws its diagrams and its PDF and EPS figures
+ * first, so the book shows them in any e-reader; otherwise the book draws
+ * the diagrams with a script (Apple Books, Thorium, Calibre run it) and
+ * leaves PDF and EPS figures out. preview is the open preview, if any.
+ */
+async function exportEpub(context, converter, uri, out, preview) {
+  const project = await assembleDocument(uri, new Map());
+  if (!project || project.error) {
+    vscode.window.showErrorMessage(project ? project.error : `Could not read ${uri}.`);
+    return null;
+  }
+  const name = path.posix.basename(uri.path);
+  if (!out) out = await vscode.window.showSaveDialog({
+    defaultUri: uri.scheme === 'untitled' ? undefined : vscode.Uri.joinPath(uri, '..', TeXglassEpub.fileName(name)),
+    filters: { EPUB: ['epub'] },
+    saveLabel: 'Export',
+    title: 'Export to EPUB',
+  });
+  if (!out) return null;
+  return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'TeXglass: exporting to EPUB…' }, async () => {
+    const text = project.text;
+    const pv = preview && preview.ready && !preview.disposed && preview.uri.toString() === uri.toString() ? preview : null;
+    let figures = {};
+    try { figures = uri.scheme === 'untitled' ? {} : await findFigureFiles(uri, text, new Map()); } catch (e) { figures = {}; }
+    // Figures by a name the book's builder asks for again: a webview URL for
+    // the preview to fetch, or the file's own URI to read here.
+    const byUrl = new Map();
+    const names = {};
+    for (const [n, f] of Object.entries(figures)) {
+      if (!f) { names[n] = null; continue; }
+      const url = pv ? pv.panel.webview.asWebviewUri(f).toString() : f.toString();
+      byUrl.set(url, f);
+      names[n] = url;
+    }
+    const m = await converter.render({ text, figures: names, plain: true });
+    if (m.error) {
+      vscode.window.showErrorMessage('TeXglass could not convert the document: ' + m.error.split('\n')[0]);
+      return null;
+    }
+    let body = m.result.html;
+    let drawn = false;
+    if (pv) {
+      const ready = await pv.prepareEpub(body);
+      if (ready != null) { body = ready; drawn = true; }
+    }
+    const decode = (b) => new TextDecoder().decode(b);
+    const katexDir = ['node_modules', 'katex', 'dist'];
+    let diagramsJs = '';
+    if (!drawn && /class="tg-diagram/.test(body)) {
+      try { diagramsJs = decode(await readExtensionFile(context, 'shared', 'diagrams.js')); } catch (e) { /* arrows are then missing */ }
+    }
+    const { bytes, warnings } = await TeXglassEpub.build({
+      body,
+      title: m.result.title || name,
+      toc: m.result.toc,
+      katexCss: decode(await readExtensionFile(context, ...katexDir, 'katex.min.css')),
+      readFont: (font) => readExtensionFile(context, ...katexDir, 'fonts', font),
+      readImage: async (src) => {
+        const f = byUrl.get(src);
+        return f ? { data: await vscode.workspace.fs.readFile(f) } : null;
+      },
+      diagramsDrawn: drawn,
+      diagramsJs,
+    });
+    await vscode.workspace.fs.writeFile(out, bytes);
+    const left = warnings.filter((w) => w.startsWith('Left out a figure')).length;
+    const note = left ? ` ${left} figure${left === 1 ? ' was' : 's were'} left out${pv ? '' : ' (open the preview first to include PDF and EPS figures)'}.` : '';
+    vscode.window.showInformationMessage(`Exported ${path.posix.basename(out.path)}.${note}`);
+    return out;
+  });
+}
+
 // --- activation -------------------------------------------------------------------
 
 /**
@@ -1631,6 +1727,26 @@ function activate(context) {
         } catch (e) { /* keep the file itself */ }
       }
       return exportHtml(context, converter, uri, out instanceof vscode.Uri ? out : undefined, print === true, view && typeof view === 'object' ? view : undefined);
+    }),
+    // Export the document as an EPUB e-book, chosen as for Export to HTML.
+    vscode.commands.registerCommand('texglass.exportEpub', async (uri, out) => {
+      if (!(uri instanceof vscode.Uri)) {
+        const ed = vscode.window.activeTextEditor;
+        if (ed && isTex(ed.document)) uri = ed.document.uri;
+        else if (preview) uri = preview.uri;
+        else {
+          vscode.window.showInformationMessage('Open a .tex file to export it to EPUB.');
+          return null;
+        }
+      }
+      if (!(preview && uri.toString() === preview.uri.toString())) {
+        try {
+          const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+          const text = doc ? doc.getText() : isVirtual(uri) ? await readText(uri) : uri.scheme === 'file' ? readSource(uri.fsPath) : null;
+          uri = await rootOf(uri, text || '');
+        } catch (e) { /* keep the file itself */ }
+      }
+      return exportEpub(context, converter, uri, out instanceof vscode.Uri ? out : undefined, preview);
     }),
     // Print the document, or save it as a PDF, laid out like a paper. On the
     // desktop it opens in the browser (webviews cannot print); in vscode.dev and

@@ -9,7 +9,7 @@ TeXglass runs in four places that share one reader:
 | [Web viewer](#web-viewer) | [klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/): open a `.tex` file, an arXiv paper or a GitHub repository in the browser. |
 | [Browser extension](#browser-extension) | Chrome, Edge and Firefox: open arXiv, alphaXiv, HAL and ResearchGate papers in TeXglass, and a live preview beside Overleaf's editor. |
 | [VS Code extension](#vs-code-extension) | A live preview beside your `.tex` file, with jump to source and notes saved beside the file. |
-| [Command line](#command-line) | `npx texglass paper.tex -o paper.html` makes a standalone page; `--reader` adds the reading tools. |
+| [Command line](#command-line) | `npx texglass paper.tex -o paper.html` makes a standalone page; `--reader` adds the reading tools; `--epub` makes an e-book. |
 
 Most features below work in all of them. Where one is missing somewhere, the
 section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
@@ -538,7 +538,8 @@ install; after the first visit it opens and renders offline.
 reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
 standalone page that works offline), **Export with reading tools** (the same
 page with reference previews, notation on hover, the side panel and Navigate;
-see [Command line](#command-line) for what it holds), **Show pinned results…** (see
+see [Command line](#command-line) for what it holds), **Export as EPUB** (an
+e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
 rest** prints as shown), **Save for offline** and **Saved papers…** (see
@@ -622,7 +623,8 @@ any GitHub repository, preview, edit, commit. Prefer a file? Every
 - **Bibliographies** from `.bib`, `.bbl` or amsrefs; **figures** in PNG, JPEG,
   SVG, GIF, WebP, PDF and EPS, with `\graphicspath`.
 - **Export to HTML**: one standalone page that works offline
-  (`texglass.exportEmbedFonts`). **Print / Save as PDF**, laid out like a paper.
+  (`texglass.exportEmbedFonts`). **Export to EPUB**: an e-book (see
+  [E-books (EPUB)](#e-books-epub)). **Print / Save as PDF**, laid out like a paper.
 - Title-bar buttons: Navigate, Contents, Hide/Show proofs, handwriting,
   Settings (gear), light/dark, scroll sync; the `…` menu has the rest.
 
@@ -663,6 +665,7 @@ All in the Command Palette under **TeXglass:**.
 | Show Larger Dependency Map | <kbd>M</kbd> in the preview. |
 | Show Pinned Results… | Show (and print) only the pinned results and equations; with none pinned, tick some first. |
 | Export to HTML | A standalone page. |
+| Export to EPUB | An e-book for e-readers; with the preview open, its diagrams and PDF and EPS figures come along everywhere. |
 | Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (pinned results, or **Hide the rest**). |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
@@ -724,6 +727,33 @@ Cited papers' titles and abstracts show when the page is online. Your own
 highlights and notes, saved papers, cited-theorem previews and the hypothesis
 checker stay in the viewer. The page remembers only the side panel's choices,
 in the browser that opens it.
+
+## E-books (EPUB)
+
+**Export as EPUB** (web viewer, **…** menu), **TeXglass: Export to EPUB** (VS
+Code) and `npx texglass paper.tex --epub` (command line, writes `paper.epub`)
+make an EPUB 3 e-book for Apple Books, Kobo, Thorium, Calibre, Google Play
+Books or a Kindle (send it with Send to Kindle).
+
+- Formulas are MathML, which is text: they grow with the e-reader's font size
+  and stay sharp. Letters in `\mathbb`, `\mathcal`, `\mathbf` and the like
+  become Unicode's maths letters, which every reader has.
+- Each top-level section is a chapter, and the e-reader's contents list the
+  sections. References, citations and footnotes stay links; footnotes open as
+  pop-ups in readers that do that.
+- Figures go inside the book (PNG, JPEG, GIF, SVG and WebP; PDF and EPS ones
+  are drawn as images first, in the web viewer and in VS Code with the preview
+  open).
+- Diagrams (`tikzcd`, `xymatrix`, TikZ) are drawn as in the viewer and scale
+  with the text. The web viewer, and VS Code with the preview open, draw them
+  before they go in, so they show in any reader; the command line and VS Code
+  without the preview leave the drawing to a script, which Apple Books,
+  Thorium and Calibre run.
+- Colours are left to the e-reader, so its day, sepia and night modes work.
+
+MathML shows best in Apple Books, Thorium, Calibre and most EPUB 3 apps.
+E-ink readers (Kobo, Kindle) have weaker MathML support, so formulas may look
+plainer there; try a short paper first.
 
 ## On phones and tablets
 

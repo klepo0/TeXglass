@@ -1,25 +1,30 @@
 #!/usr/bin/env node
-/* Convert a .tex file to a standalone HTML page: texglass paper.tex [-o paper.html] [--reader] [--link-katex] */
+/* Convert a .tex file to a standalone HTML page or an EPUB e-book:
+ * texglass paper.tex [-o paper.html] [--reader] [--link-katex] [--epub] */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const katex = require('katex');
 const TeXglass = require('../src/texglass.js');
 const TeXglassExport = require('../src/export.js');
+const TeXglassEpub = require('../src/epub.js');
 
 const args = process.argv.slice(2);
 if (!args.length || args.includes('-h') || args.includes('--help')) {
-  console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex]\n\n' +
+  console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex] [--epub]\n\n' +
     '  --reader      add the reading tools: reference previews, notation on hover, the side panel\n' +
     '                (contents, map, notation index), Navigate (Ctrl+F, Ctrl+G) and Back\n' +
-    '  --link-katex  load KaTeX\'s stylesheet and fonts from a CDN instead of putting them in the page');
+    '  --link-katex  load KaTeX\'s stylesheet and fonts from a CDN instead of putting them in the page\n' +
+    '  --epub        write an EPUB e-book (out.epub) instead, with the maths as MathML, for e-readers');
   process.exit(args.length ? 0 : 1);
 }
 const input = args[0];
 const o = args.indexOf('-o');
-const output = o >= 0 ? args[o + 1] : input.replace(/\.[^.\/]+$/, '') + '.html';
+const epub = args.includes('--epub');
+const output = o >= 0 ? args[o + 1] : input.replace(/\.[^.\/]+$/, '') + (epub ? '.epub' : '.html');
 
 (async () => {
+  if (epub) return writeEpub();
   const result = TeXglass.render(fs.readFileSync(input, 'utf8'), {
     renderMath: (tex, displayMode, macros) =>
       katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' }),
@@ -57,3 +62,41 @@ const output = o >= 0 ? args[o + 1] : input.replace(/\.[^.\/]+$/, '') + '.html';
   console.error(e.message || e);
   process.exit(1);
 });
+
+/** --epub: the document as an EPUB 3 book (src/epub.js), figures and KaTeX's fonts inside it. */
+async function writeEpub() {
+  const dir = path.dirname(path.resolve(input));
+  // A figure named without its extension, as LaTeX allows: the first file that is there.
+  const findFigure = (p) => {
+    for (const ext of ['', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.eps']) {
+      const f = path.resolve(dir, p + ext);
+      try { if (fs.statSync(f).isFile()) return f; } catch (e) { /* next */ }
+    }
+    return null;
+  };
+  const result = TeXglass.render(fs.readFileSync(input, 'utf8'), {
+    renderMath: (tex, displayMode, macros) =>
+      katex.renderToString(tex, { displayMode, macros, throwOnError: false, strict: 'ignore' }),
+    resolveImage: (p) => {
+      const f = findFigure(p);
+      return f ? path.relative(dir, f).split(path.sep).join('/') : null;
+    },
+  });
+  const dist = path.dirname(require.resolve('katex/dist/katex.min.css'));
+  const { bytes, warnings } = await TeXglassEpub.build({
+    body: result.html,
+    title: result.title || path.basename(input),
+    toc: result.toc,
+    katexCss: fs.readFileSync(path.join(dist, 'katex.min.css'), 'utf8'),
+    readFont: (name) => new Uint8Array(fs.readFileSync(path.join(dist, 'fonts', name))),
+    readImage: (src) => ({ data: new Uint8Array(fs.readFileSync(path.resolve(dir, decodeURIComponent(src)))) }),
+    // The book draws its diagrams in e-readers that run scripts (Apple Books, Thorium, Calibre).
+    diagramsJs: fs.readFileSync(path.join(__dirname, '..', 'src', 'diagrams.js'), 'utf8'),
+  });
+  fs.writeFileSync(output, bytes);
+  for (const w of result.warnings.concat(warnings)) console.error('warning: ' + w);
+  if (/class="tg-diagram/.test(result.html)) {
+    console.error('note: diagrams are drawn by a script, which Apple Books, Thorium and Calibre run; for diagrams that show in every e-reader, export from the web viewer (… → Export as EPUB).');
+  }
+  console.log(`Wrote ${output}`);
+}
