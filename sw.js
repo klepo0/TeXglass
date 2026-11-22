@@ -48,7 +48,7 @@ if (typeof module === 'object' && module.exports) module.exports = { CACHE, PREC
 
 if (typeof self !== 'undefined' && self.registration) {
   self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+    event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
   });
 
   self.addEventListener('activate', (event) => {
@@ -72,8 +72,11 @@ if (typeof self !== 'undefined' && self.registration) {
       return;
     }
 
+    // Ask the server every time (a 304 when nothing changed): GitHub Pages lets the
+    // browser keep files 10 minutes, so right after an update a fresh index.html
+    // could run with a stale app.js (a new menu item that the old code ignores).
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => keep(req, res))
         .catch(() =>
           caches.match(req, { ignoreSearch: req.mode === 'navigate' })
