@@ -44,7 +44,8 @@
     "onLanguage:latex",
     "onLanguage:tex",
     "onWebviewPanel:texglass.preview",
-    "onCommand:texglass.exportHtml"
+    "onCommand:texglass.exportHtml",
+    "onCommand:texglass.exportEpub"
   ],
   "contributes": {
     "commands": [
@@ -207,6 +208,12 @@
         "icon": "$(export)"
       },
       {
+        "command": "texglass.exportEpub",
+        "title": "Export to EPUB",
+        "category": "TeXglass",
+        "icon": "$(book)"
+      },
+      {
         "command": "texglass.print",
         "title": "Print / Save as PDF",
         "category": "TeXglass",
@@ -319,6 +326,11 @@
           "group": "1_texglass"
         },
         {
+          "command": "texglass.exportEpub",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "group": "1_texglass"
+        },
+        {
           "command": "texglass.print",
           "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
           "group": "1_texglass"
@@ -377,6 +389,11 @@
         },
         {
           "command": "texglass.exportHtml",
+          "when": "resourceExtname == .tex",
+          "group": "navigation"
+        },
+        {
+          "command": "texglass.exportEpub",
           "when": "resourceExtname == .tex",
           "group": "navigation"
         },

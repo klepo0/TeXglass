@@ -11,6 +11,7 @@ fs.mkdirSync(out, { recursive: true });
 for (const [from, to] of [
   ['src/texglass.js', 'texglass.js'],
   ['src/export.js', 'export.js'],
+  ['src/epub.js', 'epub.js'],
   ['src/tikz.js', 'tikz.js'],
   ['src/diagrams.js', 'diagrams.js'],
   ['styles.css', 'styles.css'],

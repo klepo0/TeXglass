@@ -55,7 +55,7 @@ function convert(job) {
     renderMath,
     resolveImage: resolverFor(job),
   });
-  if (job.plain) return { html: result.html, title: result.title, warnings: result.warnings };
+  if (job.plain) return { html: result.html, title: result.title, toc: result.toc, warnings: result.warnings };
   delete result.html; // the blocks carry the same HTML
   return result;
 }

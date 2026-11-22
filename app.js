@@ -1472,6 +1472,54 @@
     }
   }
 
+  /**
+   * Download the document as an EPUB e-book (src/epub.js): formulas as MathML,
+   * a chapter per section, the e-reader's contents from the sections, figures
+   * inside, and diagrams drawn here first, so they show in any e-reader.
+   */
+  async function exportEpub() {
+    if (!window.TeXglassEpub || !window.TeXglassExport) return;
+    if (inFrame) {
+      flashStatus('Open TeXglass in a tab of its own to export an e-book');
+      return;
+    }
+    showStatus('Making the e-book…');
+    try {
+      const result = await convert(doc, imageMap);
+      let body = TeXglassExport.joinBlocks(result.blocks);
+      if (/class="tg-diagram/.test(body)) body = await TeXglassEpub.drawDiagrams(body, document);
+      const link = document.querySelector('link[rel="stylesheet"][href*="katex"]');
+      const katexCss = link ? await fetch(link.href).then((r) => (r.ok ? r.text() : null), () => null) : null;
+      const title = result.title || fileName.textContent || 'Document';
+      const { bytes, warnings } = await TeXglassEpub.build({
+        body,
+        title,
+        toc: result.toc,
+        katexCss,
+        diagramsDrawn: true,
+        readFont: async (name) => {
+          const r = await fetch(new URL('fonts/' + name, link.href));
+          return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+        },
+        readImage: async (src) => {
+          const blob = await (await fetch(src)).blob();
+          return { data: new Uint8Array(await blob.arrayBuffer()), type: blob.type };
+        },
+      });
+      const name = TeXglassEpub.fileName(fileName.textContent, result.title);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/epub+zip' }));
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      for (const w of warnings) console.warn('TeXglass EPUB: ' + w);
+      const left = warnings.filter((w) => w.startsWith('Left out a figure')).length;
+      flashStatus(`Exported ${name}${left ? ` (${left} figure${left === 1 ? '' : 's'} left out)` : ''}`);
+    } catch (e) {
+      flashStatus('Could not export: ' + (e.message || e));
+    }
+  }
+
   // Re-render when the file changes on disk (browsers with the File System Access API),
   // unless there are edits made here that would be lost.
   const reshow = (text) => {
@@ -1515,6 +1563,7 @@
   $('save').addEventListener('click', save);
   $('export').addEventListener('click', () => exportHtml(false));
   if ($('export-reader')) $('export-reader').addEventListener('click', () => exportHtml(true));
+  if ($('export-epub')) $('export-epub').addEventListener('click', exportEpub);
 
   // --- the "…" menu: Save, Export, Print ---------------------------------------
   const moreBtn = $('more');
