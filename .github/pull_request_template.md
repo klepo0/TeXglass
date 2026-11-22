@@ -12,5 +12,6 @@
 - [ ] I did not change any version number (versions change only at release).
 - [ ] If this adds, changes or removes a feature, shortcut, command or setting,
       I updated [docs/GUIDE.md](https://github.com/klepo0/TeXglass/blob/main/docs/GUIDE.md).
-- [ ] I have signed the [Contributor License Agreement](https://github.com/klepo0/TeXglass/blob/main/CLA.md)
-      (the CLA bot asks on your first pull request).
+- [ ] Outside contributors only: I have signed the
+      [Contributor License Agreement](https://github.com/klepo0/TeXglass/blob/main/CLA.md)
+      (the CLA bot asks on your first pull request). The maintainer deletes this line.
