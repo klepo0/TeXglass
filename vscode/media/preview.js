@@ -725,10 +725,12 @@
   const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
+  let popoverChip = null; // the "why?" chip that opened it (shared/steps.js)
   function hidePopover() {
     clearTimeout(hideTimer);
     popover.hidden = true;
     popoverLink = null;
+    popoverChip = null;
   }
   function hidePopoverSoon() {
     clearTimeout(hideTimer);
@@ -740,6 +742,9 @@
     if (Features && !featureOn(Features.previewKind(a))) return; // switched off in Settings
     const target = document.getElementById(a.getAttribute('href').slice(1));
     if (!target || target.contains(a)) return;
+    showPopover(a, target);
+  });
+  function showPopover(a, target) {
     clearTimeout(hideTimer);
     if (popoverLink === a && !popover.hidden) return;
     popoverLink = a;
@@ -777,7 +782,7 @@
     popover.replaceChildren(body);
     popover.hidden = false;
     placePopover(a, body);
-  });
+  }
   function placePopover(a, body) {
     let width = Math.min(560, window.innerWidth - 32);
     popover.style.width = width + 'px';
@@ -883,6 +888,7 @@
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         updateToc(m.toc || []);
         if (progress) progress.refresh();
+        if (steps) steps.refresh();
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');
@@ -1174,12 +1180,39 @@
     })
     : null;
 
+  // Stepping through a proof (shared/steps.js): "Step through" by each proof, one
+  // piece at a time, with "why?" by each reference opening its usual preview.
+  var steps = window.TeXglassSteps
+    ? window.TeXglassSteps.attach({
+      root: preview,
+      enabled: featureOn('proofSteps'),
+      reveal,
+      preview: (a, chip) => {
+        const target = document.getElementById(decodeURIComponent((a.getAttribute('href') || '').slice(1)));
+        if (!target) return;
+        if (popoverLink === a && !popover.hidden) { hidePopover(); return; } // a second press closes it
+        showPopover(a, target);
+        popoverChip = chip;
+      },
+      closePreview: () => { if (popoverChip) hidePopover(); },
+      previewOpen: () => !popover.hidden,
+      dismissPreview: hidePopover,
+    })
+    : null;
+  // A preview opened by a "why?" chip stays until a click elsewhere.
+  document.addEventListener('pointerdown', (e) => {
+    if (!popoverChip || popover.hidden) return;
+    if (popover.contains(e.target) || e.target.closest('.tg-why')) return;
+    hidePopover();
+  }, true);
+
   // --- settings: switching reading aids on or off ------------------------------------
   // The panel changes the texglass.* settings; the extension sends them back ('features').
 
   function applyFeatures() {
     if (Features && insight) insight.setFeatures(Features.insightParts(features));
     if (Features && side && side.setTabs) side.setTabs(Features.sideTabs(features));
+    if (steps) steps.setEnabled(featureOn('proofSteps'));
     if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
     if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
   }

@@ -54,6 +54,7 @@
   let opened = { images: null, gh: null, arxiv: null }; // the open document's figures (Blobs) and where it came from, to save it for offline reading
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let progress = null; // reading progress on the results (src/progress.js)
+  let steps = null; // stepping through a proof (src/steps.js)
   let picker = null; // "Show pinned results" (src/pick.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
@@ -231,6 +232,7 @@
     if (insight) insight.invalidate(); // read the page again when next needed
     if (picker) picker.refresh(); // the same selection, on the new page
     if (progress) progress.refresh(); // status markers, once the browser is idle
+    if (steps) steps.refresh(); // "Step through" buttons; a proof being stepped through carries on
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
   }
 
@@ -756,6 +758,7 @@
     if (copier) copier.setEnabled(m !== 'edit' && featureOn('copyMath'));
     updateStudy();
     updateProgress();
+    if (steps) steps.setEnabled(featureOn('proofSteps') && m !== 'edit');
     for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
     store.set('texglass:mode', m);
     if (m !== 'edit') closeEditor(true);
@@ -2552,10 +2555,12 @@
   const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
+  let popoverChip = null; // the "why?" chip that opened it (src/steps.js)
   function hidePopover() {
     clearTimeout(hideTimer);
     popover.hidden = true;
     popoverLink = null;
+    popoverChip = null;
   }
   function hidePopoverSoon() {
     clearTimeout(hideTimer);
@@ -2881,6 +2886,33 @@
   updateProgress();
   if (progress) progress.refresh();
 
+  // --- stepping through a proof -----------------------------------------------------
+  // "Step through" by each proof (src/steps.js): one piece at a time, nested parts
+  // folding once passed, and "why?" by each reference opening its usual preview.
+  steps = window.TeXglassSteps
+    ? TeXglassSteps.attach({
+      root: preview,
+      enabled: featureOn('proofSteps') && mode !== 'edit',
+      reveal,
+      preview: (a, chip) => {
+        const target = document.getElementById(decodeURIComponent((a.getAttribute('href') || '').slice(1)));
+        if (!target) return;
+        if (popoverLink === a && !popover.hidden) { hidePopover(); return; } // a second press closes it
+        showPopover(a, target);
+        popoverChip = chip;
+      },
+      closePreview: () => { if (popoverChip) hidePopover(); },
+      previewOpen: () => !popover.hidden,
+      dismissPreview: hidePopover,
+    })
+    : null;
+  // A preview opened by a "why?" chip stays until a click elsewhere (the pointer never rested on the link).
+  document.addEventListener('pointerdown', (e) => {
+    if (!popoverChip || popover.hidden) return;
+    if (popover.contains(e.target) || e.target.closest('.tg-why')) return;
+    hidePopover();
+  }, true);
+
   // --- settings: switching reading aids on or off ---------------------------------
 
   /** Bring the page in line with the settings. */
@@ -2893,6 +2925,7 @@
     if (sideView && sideView.setTabs && Features) sideView.setTabs(Features.sideTabs(features));
     updateStudy();
     updateProgress();
+    if (steps) steps.setEnabled(featureOn('proofSteps') && mode !== 'edit');
     if (typeof setHandwritten === 'function' && (rootEl.dataset.look === 'notes') !== featureOn('handwriting')) setHandwritten(featureOn('handwriting'), false);
     if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
     if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
