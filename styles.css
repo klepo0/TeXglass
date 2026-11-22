@@ -1347,7 +1347,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .fold-hidden { display: none; }
 
 .proof .fold-toggle { font-size: 0.95em; margin-left: 0; }
-.proof.folded > :not(:first-child) { display: none; }
+.proof.folded > :not(:first-child):not(.tg-pin-btn) { display: none; }
 .proof.folded > p:first-child {
   white-space: nowrap;
   overflow: hidden;
