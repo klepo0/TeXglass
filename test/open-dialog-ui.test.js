@@ -119,9 +119,9 @@ test('Save, Export and Print sit in the "…" menu', { skip: !chromium && 'Playw
     assert.equal(await page.isVisible('#more-menu'), false);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'more');
 
-    // A click outside closes it.
+    // A click outside closes it (below and right of the menu, which reaches about y=540).
     await page.click('#more');
-    await page.mouse.click(500, 500);
+    await page.mouse.click(900, 700);
     assert.equal(await page.isVisible('#more-menu'), false);
 
     // Choosing Export closes the menu and downloads the page.

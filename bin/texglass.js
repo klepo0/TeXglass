@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Convert a .tex file to a standalone HTML page: texglass paper.tex [-o paper.html] [--link-katex] */
+/* Convert a .tex file to a standalone HTML page: texglass paper.tex [-o paper.html] [--reader] [--link-katex] */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -9,7 +9,9 @@ const TeXglassExport = require('../src/export.js');
 
 const args = process.argv.slice(2);
 if (!args.length || args.includes('-h') || args.includes('--help')) {
-  console.log('Usage: texglass <file.tex> [-o out.html] [--link-katex]\n\n' +
+  console.log('Usage: texglass <file.tex> [-o out.html] [--reader] [--link-katex]\n\n' +
+    '  --reader      add the reading tools: reference previews, notation on hover, the side panel\n' +
+    '                (contents, map, notation index), Navigate (Ctrl+F, Ctrl+G) and Back\n' +
     '  --link-katex  load KaTeX\'s stylesheet and fonts from a CDN instead of putting them in the page');
   process.exit(args.length ? 0 : 1);
 }
@@ -39,6 +41,14 @@ const output = o >= 0 ? args[o + 1] : input.replace(/\.[^.\/]+$/, '') + '.html';
     katexCss,
     // draws tikzcd arrows, TikZ pictures and tree symbols once the page is open
     diagramsJs: fs.readFileSync(path.join(__dirname, '..', 'src', 'diagrams.js'), 'utf8'),
+    reader: args.includes('--reader')
+      ? {
+        // KaTeX comes from its npm package; the rest from this one.
+        scripts: TeXglassExport.READER_SCRIPTS.map((f) => fs.readFileSync(
+          f.startsWith('vendor/katex/') ? require.resolve('katex/dist/' + path.basename(f)) : path.join(__dirname, '..', f), 'utf8')),
+        data: { defs: result.defs, toc: result.toc },
+      }
+      : null,
   });
   fs.writeFileSync(output, html);
   for (const w of result.warnings) console.error('warning: ' + w);

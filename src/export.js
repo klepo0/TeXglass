@@ -167,8 +167,15 @@ body { display: block; }
    *   rootAttrs  more attributes for <html>, e.g. { 'data-look': 'notes' }
    *   extraCss   a stylesheet to put after the viewer's (e.g. a look's)
    *   bodyStart  markup to put first in <body> (e.g. SVG filters the look uses)
+   *   reader     the reading tools: { scripts, data }. scripts are the sources
+   *              of READER_SCRIPTS, in that order; data is { defs, toc } from
+   *              render(). The page then looks like the viewer: a toolbar, a
+   *              side panel and a scrolling document (see src/reader.js).
    */
-  function page({ body, title, css, katexCss, theme, diagramsJs, print, view, rootAttrs, extraCss, bodyStart }) {
+  function page({ body, title, css, katexCss, theme, diagramsJs, print, view, rootAttrs, extraCss, bodyStart, reader }) {
+    if (reader && Array.isArray(reader.scripts)) {
+      return readerPage({ body, title, css, katexCss, theme, diagramsJs, rootAttrs, extraCss, bodyStart, reader });
+    }
     const diagrams = diagramsJs && /class="tg-diagram/.test(body || '')
       ? `\n<script>${diagramsJs.replace(/<\/script/gi, '<\\/script')}</script>`
       : '';
@@ -203,6 +210,84 @@ ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
 `;
   }
 
+  // The files a reader page holds, in order (paths from the repository root).
+  // KaTeX and the converter draw the symbols of the notation index.
+  const READER_SCRIPTS = [
+    'vendor/katex/katex.min.js',
+    'src/texglass.js',
+    'src/popover.js',
+    'src/scroll.js',
+    'src/find.js',
+    'src/copytex.js',
+    'src/insight.js',
+    'src/cite.js',
+    'src/reader.js',
+  ];
+
+  // The viewer's layout, minus what an exported page has no use for.
+  const READER_CSS = `
+.tg-reader-bar .tg-reader-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
+.tg-reader-bar .tg-reader-made { font-size: 12px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.tg-reader-bar .tg-reader-made:hover { color: var(--accent); }
+#preview > .src-block { content-visibility: visible; }
+@media (max-width: 760px) { .tg-reader-bar .tg-reader-made { display: none; } }
+@media print { html, body { height: auto; overflow: visible; } body { display: block; } .panes, .pane { display: block; overflow: visible; } }
+`;
+
+  const script = (js) => `<script>${String(js).replace(/<\/script/gi, '<\\/script')}</script>`;
+  // JSON inside <script>: nothing in it may close the element.
+  const jsonScript = (id, value) => `<script type="application/json" id="${id}">${JSON.stringify(value || {}).replace(/</g, '\\u003c')}</script>`;
+
+  const MOON = '<svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+  const SUN = '<svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+  /** page() with the reading tools: the viewer's layout and src/reader.js. */
+  function readerPage({ body, title, css, katexCss, theme, diagramsJs, rootAttrs, extraCss, bodyStart, reader }) {
+    const katex = katexCss
+      ? `<style>${katexCss.replace(/<\/style/gi, '<\\/style')}</style>`
+      : `<link rel="stylesheet" href="${KATEX_CDN}katex.min.css" crossorigin="anonymous">`;
+    const themeAttr = theme === 'light' || theme === 'dark' ? ` data-theme="${theme}"` : '';
+    const moreAttrs = Object.entries(rootAttrs || {})
+      .filter(([k]) => /^data-[a-z-]+$/.test(k))
+      .map(([k, v]) => ` ${k}="${escapeHtml(v)}"`)
+      .join('');
+    const more = extraCss ? `\n<style>${extraCss.replace(/<\/style/gi, '<\\/style')}</style>` : '';
+    const diagrams = diagramsJs && /class="tg-diagram/.test(body || '') ? '\n' + script(diagramsJs) : '';
+    const data = reader.data || {};
+    return `<!doctype html>
+<html lang="en"${themeAttr}${moreAttrs}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="TeXglass">
+<title>${escapeHtml(title || 'Document')}</title>
+${katex}
+<style>${(css || '').replace(/<\/style/gi, '<\\/style')}
+${READER_CSS}</style>${more}
+</head>
+<body>
+${bodyStart ? bodyStart + '\n' : ''}<header class="toolbar tg-reader-bar">
+<span class="tg-reader-title">${escapeHtml(title || '')}</span>
+<a class="tg-reader-made" href="https://github.com/klepo0/TeXglass" target="_blank" rel="noopener">Made with TeXglass</a>
+<button id="toc-toggle" type="button" aria-pressed="false" aria-controls="toc-pane" title="Show or hide the side panel: contents, the map of which results use which, and the notation index" hidden>Contents</button>
+<button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem, equation or section by its number (Ctrl+G)">Navigate</button>
+<button id="theme-toggle" class="icon-button" type="button" title="Switch between light and dark" aria-label="Switch between light and dark">${MOON}${SUN}</button>
+</header>
+<main class="panes">
+<nav class="toc-pane" id="toc-pane" aria-label="Table of contents" hidden><div class="toc-pane-head"><div class="toc-pane-title">Contents</div></div><ol id="toc-list" class="toc-list"></ol></nav>
+<section class="pane preview-pane" id="preview-pane"><article id="preview" class="document">
+${body}
+</article></section>
+</main>
+<div id="ref-popover" class="ref-popover document" role="tooltip" hidden></div>
+${jsonScript('tg-reader-data', { defs: data.defs || null, toc: data.toc || [] })}
+${script(THEME_SCRIPT)}${diagrams}
+${reader.scripts.map(script).join('\n')}
+</body>
+</html>
+`;
+  }
+
   /** A file name for the page: the source's name with .html, or the title's. */
   function fileName(sourceName, title) {
     const base = sourceName
@@ -211,5 +296,5 @@ ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
     return (base || 'document') + '.html';
   }
 
-  return { page, joinBlocks, embedKatexFonts, replaceImages, fileName, applyView, VIEW_BLOCKS, VIEW_OUTSIDE, KATEX_CDN, KATEX_VERSION };
+  return { page, joinBlocks, READER_SCRIPTS, embedKatexFonts, replaceImages, fileName, applyView, VIEW_BLOCKS, VIEW_OUTSIDE, KATEX_CDN, KATEX_VERSION };
 });
