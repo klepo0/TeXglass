@@ -790,6 +790,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'pick.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'progress.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'steps.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'params.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'hypotheses.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
@@ -1051,6 +1052,15 @@ ${INK_FILTERS}
         break;
       case 'render-note':
         this.renderNote(m.id, m.text);
+        break;
+      case 'render-live':
+        // a formula or picture that uses a \tgparam, with the sliders' values (shared/params.js)
+        if (m.piece && typeof m.piece === 'object' && m.values && typeof m.values === 'object') {
+          const piece = { tex: String(m.piece.tex || ''), defs: String(m.piece.defs || ''), display: !!m.piece.display, picture: !!m.piece.picture };
+          this.converter.render({ text: this.project ? this.project.text : '', live: { piece, values: m.values } }).then((r) => {
+            this.post({ type: 'live-html', id: m.id, html: r.result ? r.result.html : null });
+          });
+        }
         break;
       case 'render-tex':
         // Symbols for the notation index, drawn with the document's macros.

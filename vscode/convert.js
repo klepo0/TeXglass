@@ -11,6 +11,8 @@
  * a relative path ('.' for the same folder).
  * job: { snippets: [tex], defs } renders small formulas with a document's
  * macros (render(...).defs) into result.html, one piece per formula.
+ * job: { text, live: { piece, values } } draws one formula or picture that
+ * uses a \tgparam again with new values (TeXglass.renderLive) into result.html.
  */
 'use strict';
 const katex = require('katex');
@@ -50,6 +52,8 @@ const renderMath = (tex, displayMode, macros) =>
 function convert(job) {
   // Small formulas with the document's macros, for the notation index (job.snippets, job.defs).
   if (job.snippets) return { html: TeXglass.renderSnippets(job.defs, job.snippets, { renderMath }) };
+  // A formula or picture drawn again with values from the sliders (shared/params.js).
+  if (job.live) return { html: TeXglass.renderLive(job.text, job.live.piece, job.live.values, { renderMath }) };
   const result = TeXglass.render(job.text, {
     sourceMap: !job.plain,
     renderMath,

@@ -41,6 +41,10 @@ lists every feature, command, setting and shortcut.
 - **Margin notes**: `\marginpar`, `\marginnote` and `\todo` sit in a margin
   column level with their line, as on paper. **N** / **Shift+N** jump from
   note to note.
+- **Live parameters**: with the optional `texglass.sty` (`npx texglass --sty`),
+  `\tgparam[2]{p}{1}{4}` gives the preview a slider for `p`; formulas and TikZ
+  pictures that use `\p` or `\tgvalue{p}` are redrawn as you drag. The PDF
+  shows the start value.
 - **Click a formula** to copy its LaTeX.
 - **Export to HTML** (one standalone page that works offline) and **Print /
   Save as PDF**, laid out like a paper.

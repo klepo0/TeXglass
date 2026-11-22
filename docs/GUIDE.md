@@ -948,10 +948,37 @@ TeXglass reads the commands itself either way.
 | `\tghide{…}`, `\begin{tghide}…\end{tghide}` | Left out. | Shown |
 | `\tgonly{…}`, `\begin{tgonly}…\end{tgonly}` | Shown. | Left out, unread (so it may hold commands LaTeX doesn't know; a `tgonly` can't hold another) |
 | `\iftexglass … \else … \fi` | The first branch. | The `\else` branch |
-| `\tgparam[start]{p}{1}{4}` | Records a parameter readers may vary between 1 and 4. Sliders that redraw formulas and pictures are still to come. | Nothing |
+| `\tgparam[start]{p}{1}{4}`, `\tgvalue{p}` | A parameter readers may vary between 1 and 4 with a slider: see [Live parameters](#live-parameters). | `\p` and `\tgvalue{p}` print the start value |
 
 The package is free to share under the LaTeX Project Public License, so it can
 go into your paper's sources and onto arXiv with them.
+
+### Live parameters
+
+Declare a parameter with `\tgparam[start]{name}{min}{max}`, for example
+`\tgparam[2]{p}{1}{4}`, and TeXglass shows a slider for it by every
+paragraph, formula and TikZ picture that uses it. Dragging it changes the
+value everywhere at once and redraws those formulas and pictures; works in
+the web viewer, the VS Code preview and the Overleaf panel.
+
+- **Using the value**: write `\p` (`\tgparam` defines it as the start value
+  at `\begin{document}` unless you define `\p` yourself), or `\tgvalue{p}`,
+  which always works, also in `\pgfmathsetmacro` and TikZ coordinates.
+  Macros of yours built on them count too: with
+  `\newcommand\norm[1]{\|#1\|_{L^{\p}}}`, every `\norm{f}` follows the slider.
+- **TikZ pictures** that use `\p` are drawn again as you drag, including
+  `\pgfmathsetmacro{\b}{2*\p}`, `plot` functions and node labels. A
+  picture's own `\def\p{1.5}` sets where the slider starts; the slider then
+  overrides it.
+- **Options**: `\tgparam[start=2, step=0.5, label={$p$}]{p}{1}{4}` sets the
+  slider's step (by default about a hundredth of the range) and its label
+  (by default the name, in maths).
+- **Reset** on a row of sliders puts the paper's values back. Moved values
+  stay while you edit the document.
+- **In the PDF** every use shows the start value (the minimum if there is
+  none), the same as TeXglass before you touch a slider. Pick a name LaTeX
+  doesn't already use (not `\a`, `\r`, `\alpha` …), or use `\tgvalue`.
+- Exported HTML pages, EPUB and print show the start values, without sliders.
 
 ## Render dashboard
 

@@ -52,7 +52,7 @@ A PDF-only paragraph.
 
 test('texglass.sty defines the commands TeXglass reads, and nothing it does not', () => {
   const defined = Array.from(STY.matchAll(/\\newcommand\*?\\(tg[A-Za-z]+)/g)).map((m) => m[1]).sort();
-  assert.deepEqual(defined, ['tgdefine', 'tghide', 'tgonly', 'tgparam', 'tgstep', 'tguses']);
+  assert.deepEqual(defined, ['tgdefine', 'tghide', 'tgonly', 'tgparam', 'tgstep', 'tguses', 'tgvalue']);
   assert.match(STY, /\\ProvidesPackage\{texglass\}/);
   assert.match(STY, /\\newif\\iftexglass/);
   // a paper that ships its own copy: TeXglass reads the commands itself, not the copy
@@ -69,7 +69,7 @@ test('the converter reads each hint', () => {
   assert.match(h, /<span class="tg-define" data-tg-sym="\\Lambda_s" data-tg-meaning="the heat flow at time &lt;span class=&quot;math math-inline&quot;[^"]*"><\/span>/);
   assert.doesNotMatch(h, /<p><span class="tg-define"/); // a line of markers alone is no paragraph
   // ... and from the preamble, kept for the whole paper (at the end of the page)
-  assert.match(h, /<span class="tg-define" data-tg-sym="\\mathcal\{W\}" data-tg-meaning="the set of admissible weights" data-tg-scope="document"><\/span>\s*$/);
+  assert.match(h, /<span class="tg-define" data-tg-sym="\\mathcal\{W\}" data-tg-meaning="the set of admissible weights" data-tg-scope="document"><\/span>\s*<div class="tg-params"/);
   // \tguses: an empty link to the result, inside the theorem
   const other = /id="(thm-\d+)"[^>]*data-label="l:other"/.exec(h)[1];
   assert.match(h, new RegExp(`data-label="t:main"><p>.*<a class="ref tg-uses" href="#${other}" data-label="l:other" aria-hidden="true" tabindex="-1"></a></p></div>`));
@@ -82,8 +82,8 @@ test('the converter reads each hint', () => {
   assert.doesNotMatch(h, /Only in the PDF|PDF-only|Read as a PDF/);
   assert.match(h, /<p>A web-only paragraph with <strong>bold<\/strong> words\.<\/p>/);
   assert.match(h, /Read in TeXglass\./);
-  // \tgparam: recorded for live sliders
-  assert.match(h, /<span class="tg-param" data-name="p" data-min="1" data-max="4" data-value="2" hidden><\/span>/);
+  // \tgparam: a mark for the sliders at the end of the page (src/params.js)
+  assert.match(h, /<div class="tg-params" hidden><span class="tg-param" data-name="p" data-min="1" data-max="4" data-value="2" data-step="0.02" data-label="[^"]+"><\/span><\/div>\s*$/);
   assert.deepEqual(r.warnings, []);
   assert.deepEqual(r.unknownCommands, []);
 

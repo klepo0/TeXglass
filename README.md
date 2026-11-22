@@ -97,6 +97,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Scroll sync** both ways and **jump to source** from the preview.
 - **Live preview beside Overleaf's editor** from the browser extension.
 - **Edit in the web viewer** with in-place editing, a split view and LaTeX autocomplete.
+- **Live parameters**: declare `\tgparam{p}{1}{4}` with the optional [`texglass.sty`](latex/README.md) and readers get a slider that redraws the formulas and TikZ pictures using `p`; the PDF shows the start value.
 - **Export** a standalone offline HTML page, with or without the reading tools, or **print** to PDF laid out like a paper.
 
 ## A closer look

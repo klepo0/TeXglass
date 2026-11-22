@@ -1536,7 +1536,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 
   /* Everything but the document. */
   .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float, .text-resizer,
-  .fold-toggle, .find-bar, .drop-overlay, .completion, dialog, .status,
+  .fold-toggle, .tg-sliders, .find-bar, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
   /* The margin column is laid out for the screen: notes float beside the text instead. */
@@ -2521,3 +2521,27 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   .tg-step-bar button { min-height: 40px; padding: 6px 16px; }
   .tg-why, .tg-step-fold { padding: 2px 9px; font-size: 12px; }
 }
+
+/* Live parameters (src/params.js): sliders for texglass.sty's \tgparam */
+.tg-sliders {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+  margin: 0.4em 0 0.6em; padding: 4px 10px;
+  border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--paper); color: var(--muted);
+  font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-style: normal; text-indent: 0; text-align: left;
+  -webkit-user-select: none; user-select: none;
+}
+p > .tg-sliders, li > .tg-sliders, td > .tg-sliders, dd > .tg-sliders { margin-bottom: 0.2em; }
+.tg-slider { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tg-slider-name { color: var(--ink); }
+.tg-slider input[type="range"] { width: 9em; accent-color: var(--accent); margin: 0; }
+.tg-slider output { min-width: 2.5em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.tg-value { font-variant-numeric: tabular-nums; }
+.tg-sliders-reset {
+  margin-left: auto; padding: 0 8px; border: 1px solid var(--rule); border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; cursor: pointer;
+}
+.tg-sliders-reset:hover { color: var(--accent); border-color: var(--accent); }
+.tg-sliders-reset[hidden] { display: none; }
+@media (pointer: coarse) { .tg-slider input[type="range"] { width: 12em; height: 28px; } }
