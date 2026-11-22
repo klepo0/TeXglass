@@ -16,7 +16,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   arXiv paper, on any site, and *View this paper in TeXglass* on arXiv pages.
 - **Links on arxiv.org**: *View in TeXglass* under "Access Paper" on abstract
   pages, a *texglass* link beside pdf/html/other on listing pages, and a
-  floating button on HTML papers.
+  floating button on HTML papers. Papers with more than one version also get
+  *Compare v1 → v2*, which marks what changed since the version before.
 - **Other sites**: a floating *View in TeXglass* button on paper pages of
   - **alphaXiv** (`alphaxiv.org/abs/…`, `/overview/…`), whose addresses carry
     the arXiv id;
@@ -43,6 +44,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   - **follows the editor**: the preview scrolls to what is at the top of the
     editor (turn *Follow* off to read on your own);
   - **marks** the paragraph that holds the cursor;
+  - shows **sliders** for the parameters a paper declares with `texglass.sty`'s
+    `\tgparam`, redrawing the formulas and TikZ pictures that use them;
   - **moves the cursor** to what you click in the preview: a word or the
     start of a paragraph, or a formula with Ctrl/Cmd+click or a double-click;
     text from another file (an `\input` file, with *Files* loaded) opens that

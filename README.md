@@ -83,6 +83,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Step through a proof** one sentence, equation or list item at a time, like a slide reveal.
 - **Notation on hover** and a **notation index** of the paper's macros and defined symbols.
 - **Reading progress** per result and section, with **What should I read next?**
+- **Compare versions**: arXiv v1 against v2 (or any two drafts), with changed, new and removed theorems, proofs, equations and text marked, matched by label rather than by line.
 
 ### Study
 
@@ -101,7 +102,8 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Live preview beside Overleaf's editor** from the browser extension.
 - **Edit in the web viewer** with in-place editing, a split view and LaTeX autocomplete.
 - **Export** a standalone offline HTML page, with or without the reading tools, an **EPUB** e-book, or **print** to PDF laid out like a paper.
-- **[texglass.sty](latex/README.md)**: optional hints for TeXglass (notation, dependency links, proof steps) that LaTeX ignores.
+- **Live parameters**: declare `\tgparam{p}{1}{4}` with the optional [`texglass.sty`](latex/README.md) and readers get a slider that redraws the formulas and TikZ pictures using `p`; the PDF shows the start value.
+- **[texglass.sty](latex/README.md)**: optional hints for TeXglass (notation, dependency links, proof steps, live parameters) that LaTeX ignores.
 
 ## A closer look
 

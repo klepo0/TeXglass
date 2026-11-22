@@ -376,6 +376,49 @@
   }
 
 
+  // --- versions ----------------------------------------------------------------
+
+  /** An id without its version: 2301.00001v2 -> 2301.00001. */
+  const baseId = (id) => String(id || '').replace(/v\d+$/i, '');
+
+  /** The version an id names (2 for 2301.00001v2), or null for the latest. */
+  function versionOf(id) {
+    const m = /v(\d+)$/i.exec(String(id || ''));
+    return m ? Number(m[1]) : null;
+  }
+
+  /**
+   * The versions of a paper on arXiv: [{ v: 1, date: '2021-06-18' }, …], oldest
+   * first. arXiv's own API blocks web pages, so they come from the paper's
+   * DataCite record (10.48550/arXiv.<id>), which dates each version.
+   */
+  async function versions(input, options) {
+    const id = baseId(parseId(input));
+    if (!id) throw new Error('That does not look like an arXiv link or id.');
+    const doFetch = (options && options.fetch) || fetch;
+    const res = await doFetch(`https://api.datacite.org/dois/10.48550/arXiv.${id}`);
+    if (!res.ok) throw new Error(`DataCite answered ${res.status} for ${id}.`);
+    const json = await res.json();
+    return versionsFromDataCite(json);
+  }
+
+  /** The versions in a DataCite record (see versions). */
+  function versionsFromDataCite(json) {
+    const a = (json && json.data && json.data.attributes) || {};
+    const found = new Map();
+    for (const d of a.dates || []) {
+      const m = /^v(\d+)$/i.exec(String(d.dateInformation || '').trim());
+      if (!m) continue;
+      const v = Number(m[1]);
+      const date = String(d.date || '').slice(0, 10);
+      // the submission date, or any date given for that version
+      if (!found.has(v) || /submitted/i.test(d.dateType || '')) found.set(v, date);
+    }
+    const n = Number(a.version);
+    if (n > 0) for (let v = 1; v <= n; v++) if (!found.has(v)) found.set(v, '');
+    return Array.from(found.entries()).sort((x, y) => x[0] - y[0]).map(([v, date]) => ({ v, date }));
+  }
+
   // --- searching arXiv ---------------------------------------------------------
   //
   // arXiv's own search API (export.arxiv.org/api) sends no CORS header, so a web
@@ -525,5 +568,5 @@
     throw lastError || new Error('Search failed.');
   }
 
-  return { parseId, untar, pickMain, flatten, fromFiles, normalize, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex, latin1 };
+  return { parseId, baseId, versionOf, versions, versionsFromDataCite, untar, pickMain, flatten, fromFiles, normalize, bibliographyFor, includeOnly, includeName, importPaper, imageResolver, search, searchUrls, abstractFromIndex, latin1 };
 });

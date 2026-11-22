@@ -52,7 +52,7 @@ A PDF-only paragraph.
 
 test('texglass.sty defines the commands TeXglass reads, and nothing it does not', () => {
   const defined = Array.from(STY.matchAll(/\\newcommand\*?\\(tg[A-Za-z]+)/g)).map((m) => m[1]).sort();
-  assert.deepEqual(defined, ['tgdefine', 'tghide', 'tgonly', 'tgparam', 'tgstep', 'tguses']);
+  assert.deepEqual(defined, ['tgdefine', 'tghide', 'tgonly', 'tgparam', 'tgstep', 'tguses', 'tgvalue']);
   assert.match(STY, /\\ProvidesPackage\{texglass\}/);
   assert.match(STY, /\\newif\\iftexglass/);
   // a paper that ships its own copy: TeXglass reads the commands itself, not the copy
@@ -69,7 +69,7 @@ test('the converter reads each hint', () => {
   assert.match(h, /<span class="tg-define" data-tg-sym="\\Lambda_s" data-tg-meaning="the heat flow at time &lt;span class=&quot;math math-inline&quot;[^"]*"><\/span>/);
   assert.doesNotMatch(h, /<p><span class="tg-define"/); // a line of markers alone is no paragraph
   // ... and from the preamble, kept for the whole paper (at the end of the page)
-  assert.match(h, /<span class="tg-define" data-tg-sym="\\mathcal\{W\}" data-tg-meaning="the set of admissible weights" data-tg-scope="document"><\/span>\s*$/);
+  assert.match(h, /<span class="tg-define" data-tg-sym="\\mathcal\{W\}" data-tg-meaning="the set of admissible weights" data-tg-scope="document"><\/span>\s*<div class="tg-params"/);
   // \tguses: an empty link to the result, inside the theorem
   const other = /id="(thm-\d+)"[^>]*data-label="l:other"/.exec(h)[1];
   assert.match(h, new RegExp(`data-label="t:main"><p>.*<a class="ref tg-uses" href="#${other}" data-label="l:other" aria-hidden="true" tabindex="-1"></a></p></div>`));
@@ -82,8 +82,8 @@ test('the converter reads each hint', () => {
   assert.doesNotMatch(h, /Only in the PDF|PDF-only|Read as a PDF/);
   assert.match(h, /<p>A web-only paragraph with <strong>bold<\/strong> words\.<\/p>/);
   assert.match(h, /Read in TeXglass\./);
-  // \tgparam: recorded for live sliders
-  assert.match(h, /<span class="tg-param" data-name="p" data-min="1" data-max="4" data-value="2" hidden><\/span>/);
+  // \tgparam: a mark for the sliders at the end of the page (src/params.js)
+  assert.match(h, /<div class="tg-params" hidden><span class="tg-param" data-name="p" data-min="1" data-max="4" data-value="2" data-step="0.02" data-label="[^"]+"><\/span><\/div>\s*$/);
   assert.deepEqual(r.warnings, []);
   assert.deepEqual(r.unknownCommands, []);
 
@@ -106,6 +106,43 @@ test('a paper with texglass.sty compiles with pdflatex', { skip: !tex && 'pdflat
     fs.writeFileSync(path.join(dir, 'paper.tex'), DOC);
     execFileSync(tex, ['-interaction=nonstopmode', '-halt-on-error', 'paper.tex'], { cwd: dir, stdio: 'ignore' });
     assert.ok(fs.existsSync(path.join(dir, 'paper.pdf')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the hints leave the PDF byte for byte as without them, after a display too', { skip: !tex && 'pdflatex is not installed' }, () => {
+  // After a displayed equation TeX skips the spaces that start the next line,
+  // so "\tgstep[T] For" there must not leave the space after ] on the page.
+  const withHints = String.raw`\pdftrailerid{}\documentclass{article}
+\usepackage{amsmath}
+\usepackage{texglass}
+\tgdefine{X}{a thing}
+\begin{document}
+Some text with a display
+\begin{align}
+  a &= b
+\end{align}
+	\tgstep[After a display] For the next step, see.\tgstep[After a full stop] Then more,
+and a mark mid-line \tgstep after a space.
+\[ x \]
+\tguses{x} After a display, again.
+\end{document}
+`;
+  const without = withHints.replace(/\\usepackage\{texglass\}\n|\\tgdefine\{X\}\{a thing\}\n/g, '')
+    .replace(/\\tgstep\[After a display\] |\\tgstep\[After a full stop\]|\\tgstep |\\tguses\{x\} /g, '');
+  assert.doesNotMatch(without, /\\tg/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'texglass-sty-'));
+  try {
+    fs.copyFileSync(path.join(ROOT, 'latex/texglass.sty'), path.join(dir, 'texglass.sty'));
+    const pdf = (name, body) => {
+      fs.writeFileSync(path.join(dir, `${name}.tex`), body);
+      execFileSync(tex, ['-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
+        cwd: dir, stdio: 'ignore', env: { ...process.env, SOURCE_DATE_EPOCH: '0', FORCE_SOURCE_DATE: '1' },
+      });
+      return fs.readFileSync(path.join(dir, `${name}.pdf`));
+    };
+    assert.ok(pdf('with', withHints).equals(pdf('without', without)), 'the PDFs differ');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

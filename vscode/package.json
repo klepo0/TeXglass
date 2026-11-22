@@ -160,6 +160,21 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.compareWithHead",
+        "title": "Compare with Last Commit",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.compareWithFile",
+        "title": "Compare with Another Version…",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.stopCompare",
+        "title": "Stop Comparing",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.selectResults",
         "title": "Show Pinned Results…",
         "category": "TeXglass"

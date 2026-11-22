@@ -30,6 +30,8 @@ const PRECACHE = [
   'styles.css',
   // the tour (?tour, Take the tour): a short paper that shows the features
   'examples/tour.tex',
+  // the prompt behind "Copy AI prompt for authors"
+  'latex/AI-PROMPT.md',
   // the handwritten-notes look, shared with the VS Code extension (Kalam is the web viewer's hand)
   'vscode/media/notes.css',
   'vscode/ink.js',
@@ -38,8 +40,8 @@ const PRECACHE = [
   'vendor/katex/katex.min.js',
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
-  ...['arxiv', 'bib', 'cite', 'cited', 'copytex', 'diagrams', 'editor', 'epub', 'eps', 'export', 'features', 'find', 'github', 'hypotheses', 'insight', 'library', 'local', 'openai-math',
-    'margin', 'pick', 'notes-sync', 'pdf', 'popover', 'progress', 'reader', 'steps', 'render-worker', 'scroll', 'share', 'stats', 'texglass', 'textwidth', 'tikz', 'touch', 'zoom'].map((f) => `src/${f}.js`),
+  ...['arxiv', 'bib', 'cite', 'cited', 'copytex', 'diagrams', 'diff', 'editor', 'epub', 'eps', 'export', 'features', 'find', 'github', 'hypotheses', 'insight', 'library', 'local', 'openai-math',
+    'margin', 'pick', 'notes-sync', 'params', 'pdf', 'popover', 'progress', 'reader', 'steps', 'render-worker', 'scroll', 'share', 'stats', 'texglass', 'textwidth', 'tikz', 'touch', 'zoom'].map((f) => `src/${f}.js`),
 ];
 
 if (typeof module === 'object' && module.exports) module.exports = { CACHE, PRECACHE };

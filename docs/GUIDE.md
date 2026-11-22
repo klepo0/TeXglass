@@ -23,6 +23,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
   - [Pins and your own map](#pins-and-your-own-map)
 - [Understanding the logic](#understanding-the-logic)
+- [Comparing versions](#comparing-versions)
 - [Your own highlights and notes](#your-own-highlights-and-notes)
 - [Looks: themes, handwritten notes, zoom](#looks-themes-handwritten-notes-zoom)
 - [Settings: switching features on or off](#settings-switching-features-on-or-off)
@@ -415,6 +416,40 @@ kept per paper with your notes, so it is exported, imported and synced with them
   [Previews on hover](#previews-on-hover).
 - **Reading progress**: see [Reading a paper](#reading-a-paper).
 
+## Comparing versions
+
+See what changed between two versions of a paper, block by block: theorems,
+proofs, equations, headings and paragraphs are matched by their `\label`, their
+heading or their place in the text, not line by line, so a result that moved
+or was renumbered is still the same result.
+
+- **Web viewer**: **… → Compare versions…**. For an arXiv paper, pick two
+  versions (v1, v2, … with their dates); the newer one opens and what changed
+  since the older one is marked. For any document, **choose the earlier
+  file** to compare with a `.tex` file from your computer, such as an earlier
+  draft. A link like `?arxiv=2106.10340v2&compare=v1` opens a comparison
+  straight away.
+- **Browser extension**: *Compare v1 → v2* on arXiv abstract pages of papers
+  with more than one version (the version shown against the one before it).
+- **VS Code**: **TeXglass: Compare with Last Commit** compares the preview
+  with the document (and its `\input` files) as it was in git `HEAD`, and
+  **TeXglass: Compare with Another Version…** with any `.tex` file. The marks
+  follow your edits as you type; **TeXglass: Stop Comparing** ends it.
+
+What you see:
+
+- **Changed** blocks get an amber bar, with the new words and formulas marked
+  in green. The tag on them (*Changed · show v1*) opens the old version
+  underneath, its removed words struck through in red.
+- **New** blocks get a green bar; **removed** ones stay where they were, as a
+  folded red box: click its tag to read it. **Moved** blocks (the same label
+  somewhere else) get a purple bar.
+- The **bar at the bottom** counts the changes; **‹ ›** step through them,
+  the list jumps to one by name (*Theorem 2.3 (changed)*, *Proof of Lemma 4.1
+  (changed)*, *Equation (3.2) (new)*, *Text in §2 (removed)*), **Only
+  changes** hides everything that did not change (headings stay), and **×**
+  stops comparing.
+
 ## Your own highlights and notes
 
 In the web viewer, the browser extension's viewer and VS Code (not the
@@ -614,7 +649,8 @@ see [Command line](#command-line) for what it holds), **Export as EPUB** (an
 e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
-rest** prints as shown), **Save for offline** and **Saved papers…** (see
+rest** prints as shown), **Copy AI prompt for authors** (see
+[Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
 notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Take
 the tour** (see above) and **Support TeXglass ☕**, which opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
@@ -636,8 +672,10 @@ For Chrome, Edge (111 or later) and Firefox (128 or later). Install steps:
 - **Right-click menu**: *Open arXiv paper in TeXglass* on any link to an arXiv
   paper, *View this paper in TeXglass* on arXiv pages, and on the toolbar
   button *Open a .tex file from this computer…*.
-- **On arxiv.org**: *View in TeXglass* on abstract pages, a *texglass* link in
-  listings, and a floating button on HTML papers.
+- **On arxiv.org**: *View in TeXglass* on abstract pages (and *Compare v1 →
+  v2* when the paper has more than one version, see
+  [Comparing versions](#comparing-versions)), a *texglass* link in listings,
+  and a floating button on HTML papers.
 - **alphaXiv, HAL and ResearchGate**: a *View in TeXglass* button on paper
   pages whose paper is also on arXiv (the id in the address or metadata, HAL's
   own record, or an exact title match on arXiv).
@@ -730,6 +768,9 @@ All in the Command Palette under **TeXglass:**.
 | Find Next in Preview | <kbd>F3</kbd>. |
 | Find Previous in Preview | <kbd>Shift+F3</kbd>. |
 | Go to Theorem, Equation or Section… | <kbd>Ctrl+G</kbd>. |
+| Compare with Last Commit | Mark what changed since git `HEAD` (see [Comparing versions](#comparing-versions)). |
+| Compare with Another Version… | Mark what changed since another `.tex` file. |
+| Stop Comparing | Remove the marks. |
 | Go Back in Preview | Back to where the preview was before a jump (<kbd>Alt+Left</kbd>). |
 | Go Forward in Preview | Forward again (<kbd>Alt+Right</kbd>). |
 | Show Notation Index | The Notation tab. |
@@ -784,7 +825,9 @@ Writes the same standalone page as **Export**. `--link-katex` loads KaTeX's
 stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
 `-h` or `--help` prints the usage. `npx texglass --sty` copies
 [`texglass.sty`](#hints-for-texglass-in-your-own-papers) into the current
-folder.
+folder, and `npx texglass --ai-prompt` prints the
+[prompt for an AI chatbot](#let-an-ai-chatbot-suggest-the-hints) that suggests
+its hints.
 
 `--reader` (or **Export with reading tools** in the web viewer's **…** menu)
 adds the reading tools to the page, about 650 KB more, still one file that
@@ -915,7 +958,9 @@ text still works as usual.
 - Your files and the papers you open never leave your browser or editor.
   Citation previews ask DataCite and Crossref about a citation only when you
   hover it; switch **Look up cited papers online** off in
-  [Settings](#settings-switching-features-on-or-off) to stop that. Notes sync goes only to your own GitHub gist.
+  [Settings](#settings-switching-features-on-or-off) to stop that. Notes sync goes only to your own GitHub gist. **Compare
+  versions** asks DataCite for the list of a paper's arXiv versions when you
+  open its dialog.
 - The public website counts visits with [GoatCounter](https://www.goatcounter.com),
   a cookieless counter: one request per visit with the site's path, the
   referring site and the screen width, never a paper, file name or arXiv id.
@@ -987,7 +1032,7 @@ TeXglass reads the commands itself either way.
 | `\tghide{…}`, `\begin{tghide}…\end{tghide}` | Left out. | Shown |
 | `\tgonly{…}`, `\begin{tgonly}…\end{tgonly}` | Shown. | Left out, unread (so it may hold commands LaTeX doesn't know; a `tgonly` can't hold another) |
 | `\iftexglass … \else … \fi` | The first branch. | The `\else` branch |
-| `\tgparam[start]{p}{1}{4}` | Records a parameter readers may vary between 1 and 4. Sliders that redraw formulas and pictures are still to come. | Nothing |
+| `\tgparam[start]{p}{1}{4}`, `\tgvalue{p}` | A parameter readers may vary between 1 and 4 with a slider: see [Live parameters](#live-parameters). | `\p` and `\tgvalue{p}` print the start value |
 
 The package is free to share under the LaTeX Project Public License, so it can
 go into your paper's sources and onto arXiv with them.
@@ -996,6 +1041,45 @@ go into your paper's sources and onto arXiv with them.
 tour**, uses every command above: its **Try it** notes are `tgonly`, its
 pointer to the viewer is `tghide`, and it has `\tgdefine`, `\tguses`,
 `\tgstep` and `\tgparam` in place.
+
+### Live parameters
+
+Declare a parameter with `\tgparam[start]{name}{min}{max}`, for example
+`\tgparam[2]{p}{1}{4}`, and TeXglass shows a slider for it by every
+paragraph, formula and TikZ picture that uses it. Dragging it changes the
+value everywhere at once and redraws those formulas and pictures; works in
+the web viewer, the VS Code preview and the Overleaf panel.
+
+- **Using the value**: write `\p` (`\tgparam` defines it as the start value
+  at `\begin{document}` unless you define `\p` yourself), or `\tgvalue{p}`,
+  which always works, also in `\pgfmathsetmacro` and TikZ coordinates.
+  Macros of yours built on them count too: with
+  `\newcommand\norm[1]{\|#1\|_{L^{\p}}}`, every `\norm{f}` follows the slider.
+- **TikZ pictures** that use `\p` are drawn again as you drag, including
+  `\pgfmathsetmacro{\b}{2*\p}`, `plot` functions and node labels. A
+  picture's own `\def\p{1.5}` sets where the slider starts; the slider then
+  overrides it.
+- **Options**: `\tgparam[start=2, step=0.5, label={$p$}]{p}{1}{4}` sets the
+  slider's step (by default about a hundredth of the range) and its label
+  (by default the name, in maths).
+- **Reset** on a row of sliders puts the paper's values back. Moved values
+  stay while you edit the document.
+- **In the PDF** every use shows the start value (the minimum if there is
+  none), the same as TeXglass before you touch a slider. Pick a name LaTeX
+  doesn't already use (not `\a`, `\r`, `\alpha` …), or use `\tgvalue`.
+- Exported HTML pages, EPUB and print show the start values, without sliders.
+
+### Let an AI chatbot suggest the hints
+
+[`latex/AI-PROMPT.md`](../latex/AI-PROMPT.md) holds a ready-made prompt: paste
+it into an AI chatbot (Claude, ChatGPT, Gemini, …) with your `.tex` file, and
+it answers with a block of `\tgdefine` lines for your preamble and a numbered
+list of `\tguses` and `\tgstep` commands, each with the exact place it goes
+("right after `\label{lem:young}`"). It is told not to touch your maths or
+wording and to leave out anything it would have to guess, so your PDF stays
+the same; read its suggestions before you paste them. Get the prompt from
+**Copy AI prompt for authors** in the web viewer's **…** menu, from that page,
+or with `npx texglass --ai-prompt`.
 
 ## Render dashboard
 

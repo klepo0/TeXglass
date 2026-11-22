@@ -1432,13 +1432,14 @@
   /**
    * A macro the document defined before the picture (\def\edge{(0,0) -- (1,1)}
    * outside the tikzpicture), as [name, body, nargs], when its body is TikZ:
-   * path coordinates or drawing commands. Other document macros stay for KaTeX.
+   * path coordinates or drawing commands, or a number. Other document macros stay for KaTeX.
    */
   TikzParser.prototype.docMacro = function (name) {
     const d = this.cb.macros && Object.prototype.hasOwnProperty.call(this.cb.macros, name) ? this.cb.macros[name] : null;
     if (!d || d.delims || typeof d.body !== 'string') return undefined;
     const b = d.body.trim();
-    if (!/^(\(|\\(draw|fill|filldraw|path|node|coordinate|foreach|clip)\b)/.test(b)) return undefined;
+    // a number, perhaps with a unit (\def\r{1.5}, or a \tgparam's value), also counts
+    if (!/^(\(|\\(draw|fill|filldraw|path|node|coordinate|foreach|clip)\b)/.test(b) && !/^[-+]?(\d+\.?\d*|\.\d+)\s*(cm|mm|pt|in|em|ex|bp)?$/.test(b)) return undefined;
     return [name, d.body, d.nargs || 0];
   };
 
