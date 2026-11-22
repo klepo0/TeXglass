@@ -1431,8 +1431,10 @@
   /**
    * Download the document as one standalone .html page, with the math rendered
    * and the theorems numbered as in the preview, and imported figures inside it.
+   * With `tools`, the page also carries the reading tools (src/reader.js):
+   * reference previews, notation on hover, the side panel, Navigate and Back.
    */
-  async function exportHtml() {
+  async function exportHtml(tools) {
     if (!window.TeXglassExport) return;
     showStatus('Exporting…');
     try {
@@ -1442,7 +1444,16 @@
       const cssLink = document.querySelector('link[rel="stylesheet"][href$="styles.css"]');
       const css = cssLink ? await (await fetch(cssLink.href)).text() : '';
       const diagramsJs = /class="tg-diagram/.test(body) ? await (await fetch('src/diagrams.js')).text().catch(() => '') : '';
-      const html = TeXglassExport.page({ body, title: result.title || fileName.textContent || 'Document', css, katexCss: await katexCssWithFonts(), diagramsJs });
+      let reader = null;
+      if (tools === true) {
+        const scripts = await Promise.all(TeXglassExport.READER_SCRIPTS.map(async (f) => {
+          const res = await fetch(f);
+          if (!res.ok) throw new Error('missing ' + f);
+          return res.text();
+        }));
+        reader = { scripts, data: { defs: result.defs, toc: result.toc } };
+      }
+      const html = TeXglassExport.page({ body, title: result.title || fileName.textContent || 'Document', css, katexCss: await katexCssWithFonts(), diagramsJs, reader });
       const name = TeXglassExport.fileName(fileName.textContent, result.title);
       if (inFrame) {
         // Downloads are blocked in an embedded page; copy the page instead.
@@ -1502,7 +1513,8 @@
   // Open: the Open dialog (arXiv, GitHub, or this computer); Shift+click opens a folder.
   $('open').addEventListener('click', (e) => (e.shiftKey ? openFolder() : showArxivDialog()));
   $('save').addEventListener('click', save);
-  $('export').addEventListener('click', exportHtml);
+  $('export').addEventListener('click', () => exportHtml(false));
+  if ($('export-reader')) $('export-reader').addEventListener('click', () => exportHtml(true));
 
   // --- the "…" menu: Save, Export, Print ---------------------------------------
   const moreBtn = $('more');

@@ -97,7 +97,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Scroll sync** both ways and **jump to source** from the preview.
 - **Live preview beside Overleaf's editor** from the browser extension.
 - **Edit in the web viewer** with in-place editing, a split view and LaTeX autocomplete.
-- **Export** a standalone offline HTML page, or **print** to PDF laid out like a paper.
+- **Export** a standalone offline HTML page, with or without the reading tools, or **print** to PDF laid out like a paper.
 
 ## A closer look
 

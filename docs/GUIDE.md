@@ -9,7 +9,7 @@ TeXglass runs in four places that share one reader:
 | [Web viewer](#web-viewer) | [klepo0.github.io/TeXglass](https://klepo0.github.io/TeXglass/): open a `.tex` file, an arXiv paper or a GitHub repository in the browser. |
 | [Browser extension](#browser-extension) | Chrome, Edge and Firefox: open arXiv, alphaXiv, HAL and ResearchGate papers in TeXglass, and a live preview beside Overleaf's editor. |
 | [VS Code extension](#vs-code-extension) | A live preview beside your `.tex` file, with jump to source and notes saved beside the file. |
-| [Command line](#command-line) | `npx texglass paper.tex -o paper.html` makes a standalone page. |
+| [Command line](#command-line) | `npx texglass paper.tex -o paper.html` makes a standalone page; `--reader` adds the reading tools. |
 
 Most features below work in all of them. Where one is missing somewhere, the
 section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
@@ -486,7 +486,9 @@ install; after the first visit it opens and renders offline.
 
 **The … menu**: **Save** (<kbd>Ctrl+S</kbd>, back to the file, with live
 reload when it changes on disk in Chrome and Edge), **Export as HTML** (one
-standalone page that works offline), **Show selected results…** (see
+standalone page that works offline), **Export with reading tools** (the same
+page with reference previews, notation on hover, the side panel and Navigate;
+see [Command line](#command-line) for what it holds), **Show selected results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so a selection or **Hide the
 rest** prints as shown), **Save for offline** and **Saved papers…** (see
@@ -655,6 +657,23 @@ npx texglass paper.tex -o paper.html
 Writes the same standalone page as **Export**. `--link-katex` loads KaTeX's
 stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
 `-h` or `--help` prints the usage.
+
+`--reader` (or **Export with reading tools** in the web viewer's **…** menu)
+adds the reading tools to the page, about 650 KB more, still one file that
+works offline:
+
+- previews of references, citations and footnotes on hover (a sheet on touch
+  screens), with what each result uses and where it is used;
+- notation on hover and **What does this use?** by each result;
+- the side panel with **Contents**, **Map** and **Notation**;
+- **Navigate**: <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+G</kbd> to go to a
+  number, **Trace**; **Back** and **Forward** after a jump;
+- click a formula to copy its LaTeX; light and dark.
+
+Cited papers' titles and abstracts show when the page is online. Your own
+highlights and notes, saved papers, cited-theorem previews and the hypothesis
+checker stay in the viewer. The page remembers only the side panel's choices,
+in the browser that opens it.
 
 ## On phones and tablets
 
