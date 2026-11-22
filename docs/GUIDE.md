@@ -585,7 +585,8 @@ see [Command line](#command-line) for what it holds), **Export as EPUB** (an
 e-book for e-readers; see [E-books (EPUB)](#e-books-epub)), **Show pinned results…** (see
 [Understanding the logic](#understanding-the-logic)), **Print or save as PDF**
 (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
-rest** prints as shown), **Save for offline** and **Saved papers…** (see
+rest** prints as shown), **Copy AI prompt for authors** (see
+[Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)), **Save for offline** and **Saved papers…** (see
 above), **Highlights and notes**, **Export notes**, **Import notes…**, **Sync
 notes with GitHub…** (**Syncing with GitHub…** once signed in) and **Reading progress**. At the very end, **Support
 TeXglass ☕** opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass)
@@ -755,7 +756,9 @@ Writes the same standalone page as **Export**. `--link-katex` loads KaTeX's
 stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
 `-h` or `--help` prints the usage. `npx texglass --sty` copies
 [`texglass.sty`](#hints-for-texglass-in-your-own-papers) into the current
-folder.
+folder, and `npx texglass --ai-prompt` prints the
+[prompt for an AI chatbot](#let-an-ai-chatbot-suggest-the-hints) that suggests
+its hints.
 
 `--reader` (or **Export with reading tools** in the web viewer's **…** menu)
 adds the reading tools to the page, about 650 KB more, still one file that
@@ -960,6 +963,18 @@ TeXglass reads the commands itself either way.
 
 The package is free to share under the LaTeX Project Public License, so it can
 go into your paper's sources and onto arXiv with them.
+
+### Let an AI chatbot suggest the hints
+
+[`latex/AI-PROMPT.md`](../latex/AI-PROMPT.md) holds a ready-made prompt: paste
+it into an AI chatbot (Claude, ChatGPT, Gemini, …) with your `.tex` file, and
+it answers with a block of `\tgdefine` lines for your preamble and a numbered
+list of `\tguses` and `\tgstep` commands, each with the exact place it goes
+("right after `\label{lem:young}`"). It is told not to touch your maths or
+wording and to leave out anything it would have to guess, so your PDF stays
+the same; read its suggestions before you paste them. Get the prompt from
+**Copy AI prompt for authors** in the web viewer's **…** menu, from that page,
+or with `npx texglass --ai-prompt`.
 
 ## Render dashboard
 
