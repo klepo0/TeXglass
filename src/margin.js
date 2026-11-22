@@ -1702,18 +1702,58 @@
      * The paragraphs (or list items, displays…) holding pinned passages, for
      * "Show only these" (src/pick.js) to keep in view.
      */
+    function blockAt(at) {
+      const r = at && rangeOf(at.start, at.end);
+      if (!r) return null;
+      let n = r.startContainer;
+      if (n.nodeType !== 1) n = n.parentElement;
+      const el = n && (n.closest('p, li, blockquote, pre, .math-display, figure, table, h1, h2, h3, h4, h5, h6, header') || n.closest('.theorem, .proof'));
+      return el && doc.contains(el) ? el : null;
+    }
     function pinnedTextEls() {
       const out = [];
       for (const a of list) {
-        const at = a.pin && placed.get(a.id);
-        const r = at && rangeOf(at.start, at.end);
-        if (!r) continue;
-        let n = r.startContainer;
-        if (n.nodeType !== 1) n = n.parentElement;
-        const el = n && (n.closest('p, li, blockquote, pre, .math-display, figure, table, h1, h2, h3, h4, h5, h6, header') || n.closest('.theorem, .proof'));
-        if (el && doc.contains(el) && !out.includes(el)) out.push(el);
+        const el = a.pin ? blockAt(placed.get(a.id)) : null;
+        if (el && !out.includes(el)) out.push(el);
       }
       return out;
+    }
+
+    // --- pinned text in a shared view (src/share.js) ---
+    const SHARE_QUOTE = 400; // longer passages are shared by their start
+    const SHARE_CONTEXT = 16;
+    /** The pinned passages as short anchors { q, a, b } (quote, text before, text after), to put in a link. */
+    function sharedTexts() {
+      const out = [];
+      for (const a of list) {
+        if (!a.pin || !a.anchor || !a.anchor.quote) continue;
+        out.push({ q: a.anchor.quote.slice(0, SHARE_QUOTE), a: (a.anchor.prefix || '').slice(-SHARE_CONTEXT), b: a.anchor.quote.length > SHARE_QUOTE ? '' : (a.anchor.suffix || '').slice(0, SHARE_CONTEXT) });
+      }
+      return out;
+    }
+    const findShared = (t) => (t && t.q ? locate(getIndex().text, { quote: String(t.q), prefix: String(t.a || ''), suffix: String(t.b || '') }, null) : null);
+    /** The paragraphs (or items, displays…) that hold these shared passages. */
+    function textElsFor(texts) {
+      const out = [];
+      for (const t of texts || []) {
+        const el = blockAt(findShared(t));
+        if (el && !out.includes(el)) out.push(el);
+      }
+      return out;
+    }
+    /** Pin these shared passages here too (those not pinned already): the number pinned. */
+    function pinTexts(texts) {
+      let n = 0;
+      for (const t of texts || []) {
+        const at = findShared(t);
+        if (!at || at.end <= at.start) continue;
+        const same = list.find((a) => { const p = placed.get(a.id); return p && p.start === at.start && p.end === at.end; });
+        if (same) { if (!same.pin) { same.pin = true; n++; } continue; }
+        add(at.start, at.end, { color: 'yellow', pin: true });
+        n++;
+      }
+      if (n) changed();
+      return n;
     }
     /** Unpin a passage (its highlight stays). */
     function unpinText(id) {
@@ -1726,6 +1766,8 @@
     return {
       refresh, setAnnotations, setStudy, layout, notes,
       pinnedTexts, pinnedTextEls, goTo, unpinText,
+      /** Pinned text in a shared view: anchors to put in a link, the blocks they are in, pin them here. */
+      sharedTexts, textElsFor, pinTexts,
       /** The margin's width in px (null: automatic). */
       setWidth: (w) => setUserW(w > 0 ? w : null, false),
       /** Fold the margin away (true) or bring it back. */

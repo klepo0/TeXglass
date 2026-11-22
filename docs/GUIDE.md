@@ -649,6 +649,17 @@ install; after the first visit it opens and renders offline.
   or in the browser extension's own viewer (the link always points at the
   website). A file from this computer has no public link, so the button is
   greyed out.
+- **Share what you see.** When a view is on, the link opens the paper with the
+  same view instead of at a section: **Show only these** with your pinned
+  results, equations, figures and text passages (and the proofs you opened in
+  it), **What does this use?** (or what uses it), with **Hide the rest** or
+  without, or a search by use. The bar of **Show only these** has its own
+  **Share** button too. The view rides along in the link as `&view=…`.
+- Whoever opens such a link sees a **Shared view** bar. Their own pins stay as
+  they are: **Keep these pins** adds the shared ones to theirs, **Dismiss** (or
+  <kbd>Esc</kbd>) goes back to the whole paper. Sharing again from a shared view
+  passes it on unchanged. If the paper has changed so much that nothing in the
+  view is found, the whole paper opens.
 
 **Saving papers for offline reading**
 
@@ -938,7 +949,8 @@ from the home screen it has no browser bars and works offline after the first
 visit, like the web viewer anywhere.
 
 **Sharing.** **Share** in the toolbar opens the phone's share sheet with a link
-that opens the paper in TeXglass, at the section you are reading.
+that opens the paper in TeXglass, at the section you are reading, or with the
+view you have on (**Show only these**, **What does this use?**).
 
 **Papers to read offline.** Before a trip, open each paper and tap the bookmark
 in the toolbar (**Save offline**). The **Open** dialog lists the recent ones and

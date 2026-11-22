@@ -93,7 +93,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Pin** results and equations on an **editable dependency map**, show only the pinned ones, and **print** exactly that view.
 - **Everything pinned in one place**: results, equations, symbols and passages of text you pin (from the map, the Notation tab, any preview or a selection) gather behind the pin in the toolbar.
 - **Save for offline**: keep papers on your device and find them under **Saved papers**.
-- **Share** a link that opens the paper in TeXglass at the section you are reading.
+- **Share** a link that opens the paper in TeXglass at the section you are reading, or with the view you have on (your pins under **Show only these**, **What does this use?**).
 - **Sync** notes automatically through a private GitHub gist (sign in once), your browser's sync or VS Code Settings Sync.
 
 ### Write
