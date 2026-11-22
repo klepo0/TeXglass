@@ -330,10 +330,30 @@
     '\\ensuremath': '#1',
     '\\xspace': '',
     '\\MoveEqLeft': '',
+    // vertical space between the rows of an array: the row gaps are KaTeX's own
+    '\\smallskip': '',
+    '\\medskip': '',
+    '\\bigskip': '',
     '\\intertext': '\\text{#1}',
     // \mbox{…} in a formula is a box of text, which may hold maths of its own
     // ($x = \mbox{$y$ if $z>0$}$); KaTeX has no \mbox, but its \text works the same.
     '\\mbox': '\\text{#1}',
+    // more boxes of text that may hold maths of their own: \parbox[t]{15em}{… $x$ …},
+    // \textsc{$\lambda$-terms} (KaTeX has no small capitals), \rotatebox{-90}{$\to$}
+    // (drawn unturned)
+    '\\parbox': (ctx) => { optBracket(ctx); ctx.consumeArgs(1); return `\\text{${group(ctx)}}`; },
+    '\\textsc': '\\text{#1}',
+    '\\rotatebox': (ctx) => { optBracket(ctx); ctx.consumeArgs(1); return `\\text{${group(ctx)}}`; },
+    // \ooalign{$\preceq$\cr\hidewidth\raise0.2ex\hbox{$\cdot$}\cr}: symbols drawn over each other
+    '\\ooalign': (ctx) => {
+      const rows = group(ctx)
+        .split(/\\cr(?![A-Za-z@])/)
+        .map((r) => r.replace(/\\hidewidth(?![A-Za-z@])/g, '')
+          .replace(/\\(raise|lower)\s*(-?[\d.]+\s*[a-z]{2})\s*\\hbox\s*/g, (_, w, d) => `\\raisebox{${w === 'lower' ? '-' : ''}${d.replace(/\s/g, '')}}`)
+          .trim().replace(/^\$([\s\S]*)\$$/, '$1'))
+        .filter(Boolean);
+      return rows.slice(1).map((r) => `\\mathrlap{${r}}`).join('') + (rows[0] || '');
+    },
     // \boldmath switches the maths inside a box to bold; KaTeX has no such switch.
     '\\boldmath': '',
     '\\unboldmath': '',
@@ -950,6 +970,9 @@
       this.thanksTexts = Object.create(null); // imsart \thankstext / elsarticle \fntext, by key
       this.srcMap = null; // original-source offsets, set when options.sourceMap is on
       this.trackDepth = -1;
+      // \newif flags (and a few that packages set), by their \if… name
+      this.flags = new Map(Object.entries(DEFAULT_FLAGS));
+      this.isCond = (n) => PRIMITIVE_IFS.has(n) || /^if@/.test(n) || this.flags.has(n);
     }
 
     // --- counters ----------------------------------------------------------
@@ -1056,6 +1079,7 @@
     }
 
     renderMath(tex, display) {
+      if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex)), this.triple));
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       try {
@@ -1064,6 +1088,28 @@
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>`;
       }
+    }
+
+    /**
+     * A \footnote inside a formula (often after the last symbol of a display)
+     * goes with the other footnotes; the formula keeps its number.
+     */
+    mathFootnotes(tex) {
+      const notes = this.mathNotes || (this.mathNotes = new Map());
+      let out = '';
+      let last = 0;
+      for (const m of tex.matchAll(/\\footnote(?![A-Za-z@])\s*(?:\[[^\]]*\]\s*)?(?=\{)/g)) {
+        if (m.index < last) continue;
+        const g = readGroup(tex, m.index + m[0].length);
+        // the same formula may be drawn more than once; its note is made once
+        if (!notes.has(g.content)) {
+          this.footnote(g.content);
+          notes.set(g.content, this.footnotes.length);
+        }
+        out += tex.slice(last, m.index) + `{}^{${notes.get(g.content)}}`;
+        last = g.end;
+      }
+      return out + tex.slice(last);
     }
 
     /** \left\llangle, \big\llbracket, …, unless the paper defines these delimiters itself. */
@@ -1076,16 +1122,52 @@
 
     katexMacros(tex) {
       if (!this._katexMacros) {
-        const m = Object.assign({}, MATH_MACROS);
+        const m = Object.assign({}, MATH_MACROS, CONDITIONAL_MACROS);
+        for (const [flag, value] of this.flags) {
+          m['\\' + flag] = value ? '\\iftrue' : '\\iffalse';
+          m['\\' + flag.slice(2) + 'true'] = '';
+          m['\\' + flag.slice(2) + 'false'] = '';
+        }
+        const lowLevel = new Map();
+        const isLowLevel = (name, depth) => {
+          if (lowLevel.has(name)) return lowLevel.get(name);
+          lowLevel.set(name, false);
+          const mac = this.macros[name];
+          let v = !!mac && LOW_LEVEL.test(mac.body);
+          if (mac && !v && depth < 6) {
+            for (const r of mac.body.matchAll(/\\([A-Za-z@]+)/g)) if (r[1] !== name && isLowLevel(r[1], depth + 1)) { v = true; break; }
+          }
+          lowLevel.set(name, v);
+          return v;
+        };
+        const keep = new Set();
+        for (const name in this.macros) {
+          const mac = this.macros[name];
+          const target = mac.let && mac.body.slice(1);
+          if (target && this.macros[target] && !this.macros[target].let) keep.add(target);
+        }
         for (const name in this.macros) {
           // KaTeX's own macros use \char (\neq does), so a paper's \char stays out of formulas
           if (name === 'char') continue;
           let mac = this.macros[name];
+          // a conditional or \else redefined by package code: keep ours
+          if (CONDITIONAL_MACROS['\\' + name] !== undefined) continue;
+          // \let\oldcirc\circ before \renewcommand{\circ}{…\oldcirc…} would loop
+          // in KaTeX, which cannot keep the old meaning apart: both are KaTeX's own \circ
+          if (keep.has(name)) continue;
+          // a test of the paper's own that it never made with \newif: false (not
+          // etoolbox's \ifdef{…}{…}{…} and the like, which have no \fi)
+          if (/\\fi(?![A-Za-z@])/.test(mac.body)) for (const r of mac.body.matchAll(/\\(if[A-Za-z@]*)/g)) {
+            if (!m['\\' + r[1]] && !this.macros[r[1]] && !/^if(f|thenelse)$/.test(r[1]) && !this.flags.has(r[1]) && !PRIMITIVE_IFS.has(r[1])) m['\\' + r[1]] = '\\iffalse';
+          }
           // \newcommand{\bk}[1]{\left\llbracket#1\right\rrbracket}: KaTeX expands the
-          // body itself, so size double brackets and angles in it here
-          const body = this.sizeDoubles(mac.body);
+          // body itself, so size double brackets and angles in it here. KaTeX
+          // also reads a space from the body between a command and its argument
+          // ({…}\n {…} after \mathchoice), which TeX skips.
+          const body = this.sizeDoubles(mac.body).replace(/\}\s+(?=\{)/g, '}');
           if (body !== mac.body) mac = Object.assign({}, mac, { body });
-          m['\\' + name] = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
+          const own = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
+          m['\\' + name] = isLowLevel(name, 0) ? lowLevelMacro('\\' + name, own) : own;
         }
         // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
         if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
@@ -1340,6 +1422,30 @@
         return this.environment(a.content.trim(), src, a.end, inline);
       }
       if (name === 'end') return res('', readArg(src, i).end);
+
+      // TeX conditionals: run the branch the test picks (see skipConditional)
+      if (name === 'fi' && !this.macros.fi) return res('', i);
+      if ((name === 'else' || name === 'or') && !this.macros[name]) {
+        const s = skipConditional(src, i, false, this.isCond);
+        return res('', s ? s.end : i);
+      }
+      if (this.isCond(name)) return res('', this.conditional(name, src, i));
+      if (name === 'newif') {
+        const t = readToken(src, i);
+        if (/^\\if[A-Za-z@]+$/.test(t.tok)) {
+          this.flags.set(t.tok.slice(1), false);
+          this._katexMacros = null;
+        }
+        return res('', t.end);
+      }
+      {
+        const f = /^(.+)(true|false)$/.exec(name);
+        if (f && this.flags.has('if' + f[1]) && !this.macros[name]) {
+          this.flags.set('if' + f[1], f[2] === 'true');
+          this._katexMacros = null;
+          return res('', i);
+        }
+      }
 
       if (name in SECTIONS) return this.section(name, src, i);
 
@@ -1656,8 +1762,13 @@
           const m = /^\s*\\([A-Za-z@]+)\s*=?\s*(\\[A-Za-z@]+|.)/.exec(src.slice(i));
           if (!m) return res('', i);
           // \let\cmd\@undefined (or \undefined) forgets \cmd, as before redefining it
+          const target = m[2].replace(/^\\/, '');
           if (/^\\(@undefined|undefined)$/.test(m[2])) delete this.macros[m[1]];
-          else this.macros[m[1]] = { nargs: 0, def: null, body: m[2] };
+          // \let\ifdone\iftrue: a flag set by hand
+          else if (/^if[A-Za-z@]+$/.test(m[1]) && (target === 'iftrue' || target === 'iffalse')) this.flags.set(m[1], target === 'iftrue');
+          // \let\a\b copies what \b means now, so \renewcommand{\b}{…\a…} does not loop
+          else if (m[2][0] === '\\' && this.macros[target]) this.macros[m[1]] = Object.assign({}, this.macros[target]);
+          else this.macros[m[1]] = { nargs: 0, def: null, body: m[2], let: m[2][0] === '\\' };
           this._katexMacros = null;
           return res('', i + m[0].length);
         }
@@ -1828,7 +1939,14 @@
       if (name.startsWith('the') && this.counters[name.slice(3)]) return res(escapeHtml(this.fmt(name.slice(3))), i);
 
       // User macros used in text.
-      if (this.macros[name]) return this.expandMacro(this.macros[name], src, i, inline);
+      if (this.macros[name]) {
+        const mac = this.macros[name];
+        // another name for a command of ours, as in \newcommand{\newcom}{\newcommand}
+        // or \let\eps\varepsilon: that command, reading its own arguments
+        const alias = !mac.nargs && !mac.delims && /^\s*\\([A-Za-z@]+)\s*$/.exec(mac.body);
+        if (alias && alias[1] !== name && !this.isMathBody(mac.body, 0) && !this.macros[alias[1]] && !this.isCond(alias[1])) return this.command(alias[1], src, i, inline);
+        return this.expandMacro(mac, src, i, inline);
+      }
 
       // Unknown command: drop the name, show its arguments.
       let j = readStar(src, i).end;
@@ -1844,6 +1962,98 @@
       }
       if (!this.known) this.warnings.push(`Unknown command \\${name}.`);
       return res(html, j);
+    }
+
+    /** Run the test of a conditional that starts at i; returns where reading goes on. */
+    conditional(name, src, i) {
+      let value = false;
+      let j = i;
+      switch (name) {
+        case 'iftrue': case 'ifhmode': value = true; break;
+        case 'iffalse': case 'ifmmode': case 'ifinner': case 'ifvmode': break;
+        case 'ifx': {
+          // \expandafter\ifx\csname foo\endcsname\relax: an unknown name made by
+          // \csname means \relax
+          const csname = (from) => {
+            const t = readToken(src, from);
+            if (t.tok !== '\\csname') return { tok: t.tok, mean: this.meaning(t.tok), end: t.end };
+            const e = src.indexOf('\\endcsname', t.end);
+            if (e < 0) return { tok: t.tok, mean: 'csname', end: t.end };
+            const name = src.slice(t.end, e).trim();
+            return { tok: '\\' + name, mean: this.macros[name] ? this.meaning('\\' + name) : 'prim:relax', end: e + '\\endcsname'.length };
+          };
+          const a = csname(j);
+          const b = csname(a.end);
+          j = b.end;
+          value = a.tok === b.tok || a.mean === b.mean;
+          break;
+        }
+        case 'if': case 'ifcat': {
+          const a = readToken(src, j);
+          const b = readToken(src, a.end);
+          j = b.end;
+          value = a.tok === b.tok;
+          break;
+        }
+        case 'ifdefined': {
+          const a = readToken(src, j);
+          j = a.end;
+          value = this.meaning(a.tok) !== 'undefined';
+          break;
+        }
+        case 'ifcsname': {
+          const e = src.indexOf('\\endcsname', j);
+          if (e >= 0) {
+            value = !!this.macros[src.slice(j, e).trim()];
+            j = e + '\\endcsname'.length;
+          }
+          break;
+        }
+        case 'ifnum': case 'ifodd': {
+          const a = readNumber(src, j);
+          if (!a) break;
+          if (name === 'ifodd') { value = a.value % 2 !== 0; j = a.end; break; }
+          const rel = /^\s*([<=>])/.exec(src.slice(a.end, a.end + 8));
+          const b = rel && readNumber(src, a.end + rel[0].length);
+          if (b) {
+            value = rel[1] === '<' ? a.value < b.value : rel[1] === '>' ? a.value > b.value : a.value === b.value;
+            j = b.end;
+          }
+          break;
+        }
+        case 'ifcase': {
+          const a = readNumber(src, j);
+          let n = a ? a.value : 0;
+          j = a ? a.end : j;
+          while (n-- > 0) {
+            const s = skipConditional(src, j, true, this.isCond);
+            if (!s) return j;
+            j = s.end;
+            if (s.at !== 'or') break;
+          }
+          return j;
+        }
+        default:
+          value = !!this.flags.get(name);
+      }
+      if (value) return j;
+      const s = skipConditional(src, j, true, this.isCond);
+      return s ? s.end : j;
+    }
+
+    /** What a token means, for \ifx: equal strings mean the same thing. */
+    meaning(tok) {
+      for (let k = 0; k < 8 && tok[0] === '\\'; k++) {
+        const name = tok.slice(1);
+        if (name === 'undefined' || name === '@undefined') return 'undefined';
+        if (name === 'empty' || name === '@empty') return 'macro:0:';
+        const m = this.macros[name];
+        if (!m) return this.isCond(name) || name in SYMBOLS || NOOPS.has(name) || name in TEXT_STYLES || name in SECTIONS ? 'prim:' + name : 'undefined';
+        // \let\a\b: \a means what \b means
+        if (m.let) { tok = m.body; continue; }
+        return `macro:${m.nargs}:${m.delims ? m.delims.join('#') : ''}:${m.body}`;
+      }
+      return 'char:' + tok;
     }
 
     expandMacro(m, src, i, inline) {
@@ -2564,11 +2774,13 @@
       row = this.expandTagMacros(row);
       let tag = '';
       let num = '';
-      const t = /\\tag(\*?)\s*\{([^}]*)\}/.exec(row);
+      const t = /\\tag(\*?)\s*(?=\{)/.exec(row);
       if (t) {
-        row = row.replace(t[0], '');
-        num = t[2];
-        tag = `\\tag${t[1]}{${t[2]}}`;
+        // the tag may hold braces of its own: \tag*{$\mathsf{R_{ab}}$}
+        const g = readGroup(row, t.index + t[0].length);
+        row = row.slice(0, t.index) + row.slice(g.end);
+        num = g.content;
+        tag = `\\tag${t[1]}{${g.content}}`;
       } else if (numbered) {
         this.step('equation');
         num = this.fmt('equation');
@@ -2600,6 +2812,257 @@
     use.lastIndex = def.index + def[0].length;
     const m = use.exec(src);
     return m ? { at: m.index, length: m[0].length } : null;
+  }
+
+  /**
+   * Macros that stand for half of an environment, as in \def\be{\begin{equation}}
+   * and \def\ee{\end{equation}}, are written out in the source first, so the
+   * environment is seen whole. (Expanded one at a time, \be would make an empty
+   * equation.) Also follows a paper's own name for \newcommand, as in
+   * \newcommand{\newcom}{\newcommand}. `map` (source offsets, as from
+   * stripCommentsMap) is kept in step: written-out text maps to the macro it came from.
+   */
+  function expandEnvShorthands(text, map) {
+    const DEFINERS = ['newcommand', 'renewcommand', 'providecommand', 'def', 'gdef', 'edef', 'xdef'];
+    for (let pass = 0; pass < 3; pass++) {
+      const definers = DEFINERS.slice();
+      const alias = /\\(?:(?:re)?newcommand\*?\s*\{\s*\\([A-Za-z@]+)\s*\}\s*\{\s*|let\s*\\([A-Za-z@]+)\s*=?\s*)\\((?:re)?newcommand|providecommand|[gex]?def)(?![A-Za-z@])\s*\}?/g;
+      for (const m of text.matchAll(alias)) definers.push(m[1] || m[2]);
+      const def = new RegExp(String.raw`\\(?:${definers.join('|')})\*?(?![A-Za-z@])\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?=\{)`, 'g');
+      const defs = Object.create(null); // name -> [{ from, body }] in source order
+      let found = false;
+      for (const m of text.matchAll(def)) {
+        const g = readGroup(text, m.index + m[0].length);
+        const name = m[1] || m[2];
+        const counts = Object.create(null);
+        let first = null;
+        for (const e of g.content.matchAll(/\\(begin|end)\s*\{([^}]*)\}/g)) {
+          if (!first) first = e[1];
+          counts[e[2]] = (counts[e[2]] || 0) + (e[1] === 'begin' ? 1 : -1);
+        }
+        const unbalanced = first === 'end' || Object.values(counts).some((c) => c !== 0);
+        (defs[name] || (defs[name] = [])).push({ from: g.end, body: unbalanced ? g.content : null });
+        if (unbalanced) found = true;
+      }
+      if (!found) break;
+      const out = [];
+      const outMap = map ? [] : null;
+      let last = 0;
+      let changed = false;
+      for (const m of text.matchAll(/\\([A-Za-z@]+)|\\./g)) {
+        const list = m[1] && defs[m[1]];
+        if (!list) continue;
+        let d = null;
+        for (const x of list) if (x.from <= m.index) d = x;
+        if (!d || d.body === null) continue;
+        // the name in a later \renewcommand{\be}… stays as it is
+        if (/\\(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*$|\\(?:[gex]?def|let)\s*$/.test(text.slice(Math.max(0, m.index - 24), m.index))) continue;
+        out.push(text.slice(last, m.index), d.body);
+        if (outMap) {
+          for (let k = last; k < m.index; k++) outMap.push(map[k]);
+          for (let k = 0; k < d.body.length; k++) outMap.push(map[m.index]);
+        }
+        last = m.index + m[0].length;
+        changed = true;
+      }
+      if (!changed) break;
+      out.push(text.slice(last));
+      if (outMap) {
+        for (let k = last; k < text.length; k++) outMap.push(map[k]);
+        map = outMap;
+      }
+      text = out.join('');
+    }
+    return { text, map };
+  }
+
+  // --- TeX conditionals --------------------------------------------------------
+  //
+  // Authors' macros, and the copies of package code that come with some
+  // papers, test things with \ifx, \ifmmode, \ifnum or flags made with \newif,
+  // then pick a branch with \else … \fi. Both in text and inside formulas
+  // (through KaTeX macros) one branch is chosen, as TeX would, where the
+  // test can be worked out; tests about TeX's internals (\ifdim, \ifvoid …)
+  // count as false.
+
+  const PRIMITIVE_IFS = new Set([
+    'if', 'ifcat', 'ifnum', 'ifdim', 'ifodd', 'ifvmode', 'ifhmode', 'ifmmode', 'ifinner', 'ifvoid', 'ifhbox',
+    'ifvbox', 'ifx', 'ifeof', 'iftrue', 'iffalse', 'ifcase', 'ifdefined', 'ifcsname', 'iffontchar', 'ifincsname',
+  ]);
+  // Flags that common packages (ifpdf, ifxetex, ifluatex, …) set, as TeXglass would answer them.
+  const DEFAULT_FLAGS = {
+    ifpdf: true, ifPDFTeX: true, ifpdftex: true, ifxetex: false, ifXeTeX: false, ifluatex: false, ifLuaTeX: false,
+    ifvtex: false, iftutex: false, ifdraft: false,
+  };
+
+  /** Read one token: a control sequence (with the spaces after a word) or a character. */
+  function readToken(src, i) {
+    while (i < src.length && /\s/.test(src[i])) i++;
+    if (src[i] !== '\\') return { tok: src[i] || '', end: Math.min(src.length, i + 1) };
+    let j = i + 1;
+    if (isLetter(src[j])) {
+      while (isLetter(src[j])) j++;
+      return { tok: src.slice(i, j), end: skipInline(src, j) };
+    }
+    return { tok: src.slice(i, j + 1), end: j + 1 };
+  }
+
+  /** A whole number written out, as in \ifnum 3>2 or \ifcase 1: { value, end }, or null. */
+  function readNumber(src, i) {
+    const m = /^\s*([+-]?\s*\d+)\s?/.exec(src.slice(i, i + 40));
+    return m ? { value: parseInt(m[1].replace(/\s/g, ''), 10), end: i + m[0].length } : null;
+  }
+
+  /**
+   * From inside a conditional, skip to its \fi (or, with `stop`, to an \else or
+   * \or at the same level): { end, at } with `at` the word found, or null if
+   * there is none, in which case nothing should be skipped.
+   */
+  function skipConditional(src, i, stop, isCond) {
+    const re = /\\([A-Za-z@]+)|\\./g;
+    re.lastIndex = i;
+    let depth = 0;
+    let m;
+    while ((m = re.exec(src))) {
+      const n = m[1];
+      if (!n) continue;
+      if (isCond(n)) depth++;
+      else if (n === 'fi') {
+        if (depth-- === 0) return { end: m.index + m[0].length, at: 'fi' };
+      } else if (stop && depth === 0 && (n === 'else' || n === 'or')) return { end: m.index + m[0].length, at: n };
+    }
+    return null;
+  }
+
+  /** The same skip inside KaTeX, on its tokens. Returns the word it stopped at. */
+  function katexSkip(ctx, stop) {
+    let depth = 0;
+    for (;;) {
+      const t = ctx.popToken();
+      if (t.text === 'EOF') { ctx.pushToken(t); return null; }
+      if (t.text[0] !== '\\') continue;
+      const n = t.text.slice(1);
+      if (katexIsCond(ctx, n)) depth++;
+      else if (n === 'fi') {
+        if (depth-- === 0) return 'fi';
+      } else if (stop && depth === 0 && (n === 'else' || n === 'or')) return n;
+    }
+  }
+
+  function katexIsCond(ctx, n) {
+    if (PRIMITIVE_IFS.has(n) || /^if@/.test(n)) return true;
+    const m = /^if/.test(n) && ctx.macros.get('\\' + n);
+    return m === '\\iftrue' || m === '\\iffalse';
+  }
+
+  const katexPop = (ctx) => {
+    let t = ctx.popToken();
+    while (t.text === ' ') t = ctx.popToken();
+    return t;
+  };
+
+  /** What a token means, for \ifx: equal strings mean the same thing. */
+  function katexMeaning(ctx, t) {
+    if (t.text[0] !== '\\') return 'char:' + t.text;
+    if (/^\\(@?undefined)$/.test(t.text)) return 'undefined';
+    const m = ctx.macros.get(t.text);
+    if (m === undefined) return ctx.isDefined(t.text) ? 'prim:' + t.text : 'undefined';
+    if (typeof m === 'string') return 'macro:' + m;
+    return m;
+  }
+
+  /** A whole number from KaTeX's tokens (digits, spaces), or null. */
+  function katexNumber(ctx) {
+    let s = '';
+    let t = katexPop(ctx);
+    if (t.text === '-' || t.text === '+') { s = t.text; t = katexPop(ctx); }
+    while (/^\d$/.test(t.text)) { s += t.text; t = ctx.popToken(); }
+    if (t.text !== ' ') ctx.pushToken(t);
+    return /\d/.test(s) ? parseInt(s, 10) : null;
+  }
+
+  const katexBranch = (ctx, value) => {
+    if (!value) katexSkip(ctx, true);
+    return '';
+  };
+
+  const CONDITIONAL_MACROS = {
+    '\\iftrue': '',
+    '\\iffalse': (ctx) => katexBranch(ctx, false),
+    '\\else': (ctx) => { katexSkip(ctx, false); return ''; },
+    '\\or': (ctx) => { katexSkip(ctx, false); return ''; },
+    '\\fi': '',
+    '\\ifmmode': '\\iftrue',
+    '\\ifinner': '\\iffalse',
+    '\\ifvmode': '\\iffalse',
+    '\\ifhmode': '\\iffalse',
+    '\\ifx': (ctx) => {
+      const a = katexPop(ctx);
+      const b = katexPop(ctx);
+      return katexBranch(ctx, a.text === b.text || katexMeaning(ctx, a) === katexMeaning(ctx, b));
+    },
+    '\\if': (ctx) => katexBranch(ctx, katexPop(ctx).text === katexPop(ctx).text),
+    '\\ifcat': (ctx) => katexBranch(ctx, katexPop(ctx).text === katexPop(ctx).text),
+    '\\ifdefined': (ctx) => {
+      const t = katexPop(ctx);
+      return katexBranch(ctx, katexMeaning(ctx, t) !== 'undefined');
+    },
+    '\\ifcsname': (ctx) => {
+      let name = '';
+      for (let t = ctx.popToken(); t.text !== '\\endcsname' && t.text !== 'EOF'; t = ctx.popToken()) name += t.text;
+      return katexBranch(ctx, ctx.isDefined('\\' + name.trim()));
+    },
+    '\\ifnum': (ctx) => {
+      const a = katexNumber(ctx);
+      const rel = a === null ? null : katexPop(ctx).text;
+      const b = rel && /^[<=>]$/.test(rel) ? katexNumber(ctx) : null;
+      return katexBranch(ctx, b !== null && (rel === '<' ? a < b : rel === '>' ? a > b : a === b));
+    },
+    '\\ifodd': (ctx) => {
+      const a = katexNumber(ctx);
+      return katexBranch(ctx, a !== null && a % 2 !== 0);
+    },
+    '\\ifcase': (ctx) => {
+      let n = katexNumber(ctx) || 0;
+      while (n-- > 0) {
+        const at = katexSkip(ctx, true);
+        if (at !== 'or') break;
+      }
+      return '';
+    },
+  };
+  for (const n of ['ifdim', 'ifvoid', 'ifhbox', 'ifvbox', 'ifeof', 'iffontchar', 'ifincsname']) {
+    CONDITIONAL_MACROS['\\' + n] = (ctx) => katexBranch(ctx, false);
+  }
+
+  // Low-level TeX that KaTeX cannot run. A paper that redefines a command
+  // KaTeX already has (tcilatex: \def\alpha{{\Greekmath 010B}}, with
+  // \mathchar inside) with these keeps KaTeX's own.
+  const LOW_LEVEL = /\\(?:mathchar|mathcode|char|count|countdef|setbox|box|wd|ht|dp|advance|multiply|divide|loop|fam|mathgroup|csname|expandafter|futurelet|afterassignment|edef|xdef|aftergroup|uppercase|lowercase|string|number|romannumeral|the|chardef|mathchardef|vbox|vtop)(?![A-Za-z@])/;
+
+  // Scientific WorkPlace's tcilatex builds these integrals with \futurelet; what they draw:
+  const LOW_LEVEL_FALLBACK = {};
+  for (const [k, v] of Object.entries({ int: '\\int', iint: '\\iint', iiint: '\\iiint', oint: '\\oint' })) {
+    LOW_LEVEL_FALLBACK['d' + k] = '\\displaystyle' + v;
+    LOW_LEVEL_FALLBACK['t' + k] = '\\textstyle' + v;
+  }
+
+  /**
+   * A macro built from TeX internals KaTeX cannot run (see LOW_LEVEL). If it
+   * redefines a command KaTeX has, KaTeX's own is used, here and in the rest of
+   * the paper's formulas: the paper's definition is taken out of the shared
+   * table (as a global \let would). Otherwise it is tried as written, since
+   * the internals may sit in a branch a conditional skips.
+   */
+  function lowLevelMacro(key, own) {
+    return (ctx) => {
+      const mine = ctx.macros.get(key);
+      ctx.macros.set(key, undefined, true);
+      if (ctx.isDefined(key)) return key;
+      ctx.macros.set(key, mine, true);
+      if (LOW_LEVEL_FALLBACK[key.slice(1)]) return LOW_LEVEL_FALLBACK[key.slice(1)];
+      return typeof own === 'function' ? own(ctx) : own;
+    };
   }
 
   function attachHead(head, content) {
@@ -2746,7 +3209,8 @@
    */
   function render(source, options) {
     options = options || {};
-    const stripped = stripCommentsMap(String(source).replace(/\r\n?/g, '\n'));
+    const bare = stripCommentsMap(String(source).replace(/\r\n?/g, '\n'));
+    const stripped = expandEnvShorthands(bare.text, bare.map);
     const src = stripped.text;
     const first = new Renderer(options, null);
     first.run(src);

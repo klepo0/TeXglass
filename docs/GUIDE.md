@@ -755,7 +755,14 @@ text still works as usual.
   `\qty`, `\dv`, …) work out of the box.
 - **Macros**: `\newcommand`, `\renewcommand`, `\def` (delimited parameters
   too), `\let`, `\DeclareMathOperator`, in math and text, and those in a
-  paper's own `.sty` files when imported from arXiv.
+  paper's own `.sty` files when imported from arXiv. Shortcuts for half an
+  environment (`\def\be{\begin{equation}}` … `\ee`) work, and TeX
+  conditionals in macros (`\ifx`, `\ifmmode`, `\ifnum`, flags made with
+  `\newif`, `\iffalse … \fi` around text) show only the branch TeX would
+  take. A paper that redefines a standard symbol with low-level TeX keeps the
+  usual symbol.
+- **Text in formulas**: `\mbox`, `\text`, `\parbox`, `\textsc` and
+  `\footnote` inside maths, with `$…$` of their own.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
   enumerate and enumitem labels, figures, tables; `\ref`, `\eqref`, `\cref`,
