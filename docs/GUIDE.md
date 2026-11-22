@@ -357,10 +357,10 @@ kept per paper with your notes, so it is exported, imported and synced with them
     the proof, a paragraph starting "Case 1.", "Step 2:", "Part (ii)." and
     what follows it, a long list item. **▸ 3 more** opens a folded part
     again; **▾ fold** folds it.
-  - Every reference and citation in a piece gets a small **why?** chip: it
-    opens the lemma, equation or bibliography entry in the usual preview (a
-    bottom sheet on a phone) without leaving your place. Click elsewhere or
-    press <kbd>Esc</kbd> to close it.
+  - References and citations show their usual previews while you step
+    (on hover, or a bottom sheet when you tap one on a phone), so you can
+    look up a lemma without leaving your place. <kbd>Esc</kbd> closes an open
+    preview first.
   - **Show all**, <kbd>Esc</kbd>, **Stop** on the heading, or **Done** after
     the last piece ends it and shows the whole proof again. Folding the proof
     ends it too. Proofs with fewer than three pieces have no button.
@@ -843,8 +843,9 @@ it on a computer.
 
 **Previews open on a tap.** On a touch screen, the previews that a mouse shows
 on hover open as a sheet at the bottom of the screen. That covers references,
-citations, footnotes, notation and the map's results, and the **why?** chips
-when you step through a proof (tap the proof to show its next piece).
+citations, footnotes, notation and the map's results. When you step through a
+proof, tap its text to show the next piece; a tap on a reference opens its
+preview instead.
 
 - A tap on a reference or citation shows it, without leaving your place.
   **Go there** in the sheet jumps to it, and the **Back** button at the top

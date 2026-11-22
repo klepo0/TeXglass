@@ -2555,12 +2555,10 @@
   const PREVIEW_LINKS = 'a.ref, .cite a, sup.fn a';
   let hideTimer = null;
   let popoverLink = null;
-  let popoverChip = null; // the "why?" chip that opened it (src/steps.js)
   function hidePopover() {
     clearTimeout(hideTimer);
     popover.hidden = true;
     popoverLink = null;
-    popoverChip = null;
   }
   function hidePopoverSoon() {
     clearTimeout(hideTimer);
@@ -2888,30 +2886,16 @@
 
   // --- stepping through a proof -----------------------------------------------------
   // "Step through" by each proof (src/steps.js): one piece at a time, nested parts
-  // folding once passed, and "why?" by each reference opening its usual preview.
+  // folding once passed. Esc closes a preview before it stops the stepping.
   steps = window.TeXglassSteps
     ? TeXglassSteps.attach({
       root: preview,
       enabled: featureOn('proofSteps') && mode !== 'edit',
       reveal,
-      preview: (a, chip) => {
-        const target = document.getElementById(decodeURIComponent((a.getAttribute('href') || '').slice(1)));
-        if (!target) return;
-        if (popoverLink === a && !popover.hidden) { hidePopover(); return; } // a second press closes it
-        showPopover(a, target);
-        popoverChip = chip;
-      },
-      closePreview: () => { if (popoverChip) hidePopover(); },
       previewOpen: () => !popover.hidden,
       dismissPreview: hidePopover,
     })
     : null;
-  // A preview opened by a "why?" chip stays until a click elsewhere (the pointer never rested on the link).
-  document.addEventListener('pointerdown', (e) => {
-    if (!popoverChip || popover.hidden) return;
-    if (popover.contains(e.target) || e.target.closest('.tg-why')) return;
-    hidePopover();
-  }, true);
 
   // --- settings: switching reading aids on or off ---------------------------------
 

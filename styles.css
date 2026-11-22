@@ -1508,7 +1508,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
-  .tg-step-btn, .tg-step-bar, .tg-why, .tg-step-fold { display: none !important; }
+  .tg-step-btn, .tg-step-bar, .tg-step-fold { display: none !important; }
   #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
   .uses-focus .uses-fade { opacity: 1 !important; }
@@ -2488,15 +2488,14 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .tg-stepping .tg-step-text { transition: background-color 0.25s; }
 .tg-stepping .tg-step-folded:not(.tg-step-now) { color: var(--muted); }
 .tg-stepping .tg-stepmark[data-tg-step]:not([data-tg-step=""])::before { content: attr(data-tg-step) ". "; font-weight: 600; }
-.tg-step-fold, .tg-why {
+.tg-step-fold {
   margin: 0 0.25em; padding: 0 6px;
   border: 1px solid var(--rule); border-radius: 999px;
   background: var(--paper); color: var(--accent);
   font: 500 11px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
   font-style: normal; vertical-align: 0.12em; cursor: pointer; white-space: nowrap;
 }
-.tg-why { color: var(--muted); }
-.tg-why:hover, .tg-step-fold:hover { color: var(--accent); border-color: var(--accent); }
+.tg-step-fold:hover { color: var(--accent); border-color: var(--accent); }
 .tg-step-fold[hidden] { display: none; }
 .tg-step-bar {
   position: sticky; bottom: 10px; z-index: 6;
@@ -2519,5 +2518,5 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 @media (pointer: coarse) {
   .tg-step-bar { bottom: max(12px, env(safe-area-inset-bottom)); gap: 8px; }
   .tg-step-bar button { min-height: 40px; padding: 6px 16px; }
-  .tg-why, .tg-step-fold { padding: 2px 9px; font-size: 12px; }
+  .tg-step-fold { padding: 2px 9px; font-size: 12px; }
 }
