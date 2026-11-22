@@ -67,7 +67,7 @@
       hint: 'A marker by each result to note how far you have read it; progress shows in Contents and on the map.',
       key: 'texglass:progress', yes: '1', no: '0', vscode: 'readingProgress' },
     { id: 'proofSteps', group: 'Study', label: 'Step through proofs',
-      hint: 'A “Step through” button by each proof shows it one sentence, equation or step at a time, with “why?” by each reference.',
+      hint: 'A “Step through” button by each proof shows it one sentence at a time, with “why?” by each reference.',
       vscode: 'stepThroughProofs' },
 
     { id: 'copyMath', group: 'Page', label: 'Click a formula to copy its LaTeX',

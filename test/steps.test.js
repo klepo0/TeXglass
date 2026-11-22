@@ -51,3 +51,13 @@ test('nested-part headers', () => {
   assert.equal(Steps.partHeader('Steps of the argument'), '');
   assert.equal(Steps.partHeader('We split into cases.'), '');
 });
+
+test('a formula ends a sentence only with a full stop of its own', () => {
+  assert.equal(Steps.texTail('x^2 > 0. \\tag{1}'), 'x^2 > 0.');
+  assert.equal(Steps.texTail('a = b, \\label{eq:a}'), 'a = b,');
+  assert.equal(Steps.texTail('\\begin{aligned} a &= b \\\\ &= c. \\end{aligned}'), '\\begin{aligned} a &= b \\\\ &= c.');
+  assert.equal(Steps.texTail('a = b \\text{.}'), 'a = b .');
+  assert.equal(Steps.texTail('a = b\\quad'), 'a = b');
+  // \right. draws nothing: not a full stop
+  assert.ok(!/\.$/.test(Steps.texTail('\\left\\{ x \\right.')));
+});
