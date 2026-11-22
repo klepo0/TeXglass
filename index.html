@@ -39,6 +39,7 @@
   <script defer src="src/margin.js"></script>
   <script defer src="src/notes-sync.js"></script>
   <script defer src="src/library.js"></script>
+  <script defer src="src/share.js"></script>
   <script defer src="src/insight.js"></script>
   <script defer src="src/pick.js"></script>
   <script defer src="src/progress.js"></script>
@@ -96,6 +97,7 @@
     </div>
     <button id="find" type="button" title="Search the document (Ctrl+F) or go to a theorem by its number (Ctrl+G)" aria-label="Navigate"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Navigate</span></button>
     <button id="save-offline" type="button" aria-pressed="false" title="Save this paper on this device, figures and all, to read it with no connection" aria-label="Save for offline"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="save-offline-mark" d="M7 3.5h10a1 1 0 0 1 1 1V20.5l-6-4.2-6 4.2V4.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Save offline</span></button>
+    <button id="share" type="button" disabled title="Share a link that opens this paper in TeXglass, at the section you are reading" aria-label="Share"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="18" cy="18.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span class="tb-label">Share</span></button>
     <button id="fold-proofs" type="button" aria-pressed="false" title="Fold or unfold every proof">Hide proofs</button>
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
@@ -104,7 +106,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="tb-label">Settings</span>
     </button>
     <button id="hand-toggle" class="icon-button" type="button" aria-pressed="false" aria-label="Show as handwritten notes" title="Show as handwritten notes (chalk on a board in the dark theme)">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z M13.8 6.8l3.4 3.4 M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z M13.8 6.8l3.4 3.4 M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg><span class="tb-label">Handwritten notes</span>
     </button>
     <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" title="Switch between light and dark">
       <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>

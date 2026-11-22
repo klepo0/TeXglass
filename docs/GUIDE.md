@@ -440,6 +440,18 @@ install; after the first visit it opens and renders offline.
   `?preprint=<folder>`. A **bookmarklet** in the Open dialog opens the GitHub
   page you are on.
 
+**Sharing a paper**
+
+- **Share** (in the toolbar) gives a link that opens the paper in the
+  [web viewer](https://klepo0.github.io/TeXglass/), at the section you are
+  reading: `?arxiv=2301.00001&goto=§2.3`. On a computer it is copied to the
+  clipboard; on a phone or tablet the system share sheet opens, to send it by
+  message, mail or any app.
+- It works for papers from arXiv and GitHub, also when opened from a saved copy
+  or in the browser extension's own viewer (the link always points at the
+  website). A file from this computer has no public link, so the button is
+  greyed out.
+
 **Saving papers for offline reading**
 
 - **Save offline** (the bookmark in the toolbar, also **Save for offline** in
@@ -654,6 +666,9 @@ Share, then **Add to Home Screen**. On Android, or in Chrome or Edge, choose
 from the home screen it has no browser bars and works offline after the first
 visit, like the web viewer anywhere.
 
+**Sharing.** **Share** in the toolbar opens the phone's share sheet with a link
+that opens the paper in TeXglass, at the section you are reading.
+
 **Papers to read offline.** Before a trip, open each paper and tap the bookmark
 in the toolbar (**Save offline**). The **Open** dialog lists the recent ones and
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
@@ -661,9 +676,9 @@ offline reading](#web-viewer)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Open**, the side panel (the three lines), **Navigate** (the
-magnifier), **Save offline** (the bookmark), the handwritten and theme toggles,
+magnifier), **Save offline** (the bookmark), **Share**, the theme toggle
 and **…**. The mode switch (Preview, Edit, Split), **OAI preprints**, zoom,
-**Hide proofs**, **Edit on GitHub** and **Settings** move to the top of the
+**Hide proofs**, **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is
 wider.
 
