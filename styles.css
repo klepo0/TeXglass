@@ -2116,10 +2116,13 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 #save-offline[aria-pressed="true"] .save-offline-mark { fill: currentColor; }
 #save-offline[aria-pressed="true"] { color: var(--accent); }
 #save-offline[hidden] { display: none; }
-#settings .tb-label { display: none; }
-.toolbar .more-compact #settings { display: inline-flex; gap: 6px; padding: 6px 12px; }
-.more-compact #settings .tb-label { display: inline; }
-.toolbar .more-compact #settings svg { width: 18px; height: 18px; }
+#share { display: inline-flex; align-items: center; gap: 5px; }
+#share .tb-icon { display: block; width: 16px; height: 16px; }
+#share[hidden] { display: none; }
+#settings .tb-label, #hand-toggle .tb-label { display: none; }
+.toolbar .more-compact #settings, .toolbar .more-compact #hand-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
+.more-compact #settings .tb-label, .more-compact #hand-toggle .tb-label { display: inline; }
+.toolbar .more-compact #settings svg, .toolbar .more-compact #hand-toggle svg { width: 18px; height: 18px; }
 .more-compact[hidden] { display: none; }
 .more-compact {
   display: flex;
@@ -2161,9 +2164,9 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
   .toolbar button { min-height: 44px; min-width: 44px; font-size: 15px; padding: 6px 12px; }
   .toolbar .icon-button svg, .tb-icon { width: 22px; height: 22px; }
   .tb-icon { display: block; }
-  #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label { display: none; }
-  #save-offline .tb-icon { width: 22px; height: 22px; }
-  #toc-toggle, #find, #save-offline { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
+  #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label, #share .tb-label { display: none; }
+  #save-offline .tb-icon, #share .tb-icon { width: 22px; height: 22px; }
+  #toc-toggle, #find, #save-offline, #share { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
   .toolbar .more-button { padding: 6px 12px; font-size: 18px; line-height: 1; }
   .more-group { order: 10; }
   .file-name { flex: 1 1 0; font-size: 13px; }

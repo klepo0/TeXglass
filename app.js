@@ -1539,12 +1539,12 @@
 
   // --- phones and tablets ---------------------------------------------------------
   // A narrow window keeps a few large buttons in the toolbar (Open, Contents,
-  // Navigate, Save for offline, the looks, "…"); the others, Settings too, move to the top of the "…" menu and back
+  // Navigate, Save for offline, Share, the theme, "…"); the others, Settings and the handwritten look too, move to the top of the "…" menu and back
   // again when the window widens. The side panel and the margin notes become
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link', '#settings']
+  const COMPACT_MOVES = ['.mode-switch', '#preprints', '.zoom-group', '#fold-proofs', '#gh-link', '#settings', '#hand-toggle']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
@@ -2022,6 +2022,7 @@
   }
 
   function updateLibraryButton() {
+    updateShareButton();
     const btn = $('library-save');
     if (!btn) return;
     const saved = !!(paper && libraryHere.has(paper.key));
@@ -2303,6 +2304,57 @@
   } else {
     for (const id of ['library-save', 'library-open', 'save-offline']) if ($(id)) $(id).hidden = true;
   }
+
+  // --- share -----------------------------------------------------------------------
+  // A link that opens this paper, at the section being read, in the public viewer
+  // (src/share.js): the share sheet on a phone, the clipboard on a computer.
+  // Papers with no public home (a file from this computer) have nothing to share.
+  const Share = window.TeXglassShare || null;
+
+  function shareWhere() {
+    if (!paper) return null;
+    const arxiv = opened.arxiv || (paper.key.startsWith('arxiv:') ? paper.key.slice(6) : null);
+    const gh = !arxiv && opened.gh && opened.gh.links ? opened.gh.links.view : null;
+    return arxiv || gh ? { arxiv, gh } : null;
+  }
+
+  /** The numbered section at the top of the preview, as Go to names it ("§2.3"), or ''. */
+  function sectionHere() {
+    const limit = previewPane.getBoundingClientRect().top + 48;
+    let num = '';
+    for (const t of lastToc) {
+      const h = document.getElementById(t.id);
+      if (!h || !h.offsetParent) continue;
+      if (h.getBoundingClientRect().top > limit) break;
+      num = t.num || '';
+    }
+    return Share.sectionName(String(num).replace(/<[^>]*>/g, ''));
+  }
+
+  function updateShareButton() {
+    const btn = $('share');
+    if (!btn) return;
+    const can = !!(Share && shareWhere());
+    btn.hidden = !Share;
+    btn.disabled = !can;
+    btn.title = can
+      ? 'Share a link that opens this paper in TeXglass, at the section you are reading'
+      : 'Only papers from arXiv or GitHub can be shared as a link';
+  }
+
+  async function sharePaper() {
+    const where = Share && shareWhere();
+    if (!where) return;
+    const goto = sectionHere();
+    const url = Share.link({ ...where, goto });
+    const title = Library ? Library.plainTitle(NotesSync.titleOf(doc)) : '';
+    const how = await Share.share(url, title || (where.arxiv ? 'arXiv:' + where.arxiv : ''));
+    if (how === 'copied') flashStatus(goto ? `Link copied, opens at ${goto}` : 'Link copied');
+    else if (how === 'failed') showStatus('Could not copy the link: ' + url, true);
+  }
+
+  if ($('share')) $('share').addEventListener('click', sharePaper);
+  updateShareButton();
 
   // --- reading progress -------------------------------------------------------------
   // A status by each result (src/progress.js), kept with the paper's notes
