@@ -9,3 +9,6 @@
   shortcut, VS Code command or setting must update `docs/GUIDE.md` in the same
   PR (`test/guide.test.js` checks shortcuts, commands and settings). See
   [CONTRIBUTING.md](CONTRIBUTING.md#keep-the-guide-up-to-date).
+- Pull requests opened from the owner's account (`klepo0`), including yours,
+  don't need the CLA: delete the "Outside contributors only" CLA line from the
+  pull request template instead of ticking it.
