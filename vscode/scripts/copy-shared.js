@@ -26,6 +26,7 @@ for (const [from, to] of [
   ['src/pick.js', 'pick.js'],
   ['src/progress.js', 'progress.js'],
   ['src/steps.js', 'steps.js'],
+  ['src/params.js', 'params.js'],
   ['src/hypotheses.js', 'hypotheses.js'],
   ['src/cite.js', 'cite.js'],
   ['src/features.js', 'features.js'],

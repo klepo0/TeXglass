@@ -15,8 +15,19 @@ exactly as without the package.
 \tgstep[Reduce to balls]        % a step of a proof, for step-through mode
 \tghide{PDF only} \tgonly{web only}
 \begin{tgonly} ... \end{tgonly} % also: tghide environment, \iftexglass ... \else ... \fi
-\tgparam[2]{p}{1}{4}            % a parameter for live sliders (to come)
+\tgparam[2]{p}{1}{4}            % a parameter readers vary with a slider
+\tgvalue{p}                     % its value; \p holds it too, unless you define \p
 ```
+
+With `\tgparam`, TeXglass shows a slider by every formula and TikZ picture
+that uses `\p`, `\tgvalue{p}` or a macro of yours built on them, and redraws
+them as the reader drags. `\tgparam[start=2, step=0.5, label={$p$}]{p}{1}{4}`
+sets the step and the slider's label too. LaTeX prints the start value (the
+minimum if there is none), so the PDF shows what TeXglass starts at. If you
+define `\p` yourself (`\def\p{2}` or `\pgfmathsetmacro`, also inside a
+picture), that definition counts, and the slider overrides it. Pick a name
+LaTeX doesn't already use (not `\a`, `\r`, `\alpha` …), or use `\tgvalue`.
+The package loads `keyval`, which every LaTeX installation has.
 
 To have an AI chatbot suggest these hints for a whole paper, give it the
 prompt in [AI-PROMPT.md](AI-PROMPT.md) with your `.tex` file

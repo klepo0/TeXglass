@@ -170,7 +170,7 @@
   // ---------------------------------------------------------------------------
 
   // Not searched: math (KaTeX glyph soup), our own buttons and editors.
-  const SKIP = '.katex, .math-src, .fold-toggle, button, textarea, input, select, script, style, .find-bar';
+  const SKIP = '.katex, .math-src, .fold-toggle, .tg-sliders, button, textarea, input, select, script, style, .find-bar';
   const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|SECTION|ARTICLE|FIGURE|TABLE|TR|TD|TH|BLOCKQUOTE|PRE|DT|DD|NAV)$/;
   const SEP = '￼'; // stands in for a formula, so words on either side don't run together
 

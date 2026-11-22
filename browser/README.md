@@ -44,6 +44,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   - **follows the editor**: the preview scrolls to what is at the top of the
     editor (turn *Follow* off to read on your own);
   - **marks** the paragraph that holds the cursor;
+  - shows **sliders** for the parameters a paper declares with `texglass.sty`'s
+    `\tgparam`, redrawing the formulas and TikZ pictures that use them;
   - **moves the cursor** to what you click in the preview: a word or the
     start of a paragraph, or a formula with Ctrl/Cmd+click or a double-click;
     text from another file (an `\input` file, with *Files* loaded) opens that

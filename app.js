@@ -55,6 +55,7 @@
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
   let progress = null; // reading progress on the results (src/progress.js)
   let steps = null; // stepping through a proof (src/steps.js)
+  let params = null; // sliders for texglass.sty's \tgparam (src/params.js)
   let picker = null; // "Show pinned results" (src/pick.js)
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
@@ -235,6 +236,7 @@
     if (picker) picker.refresh(); // the same selection, on the new page
     if (progress) progress.refresh(); // status markers, once the browser is idle
     if (steps) steps.refresh(); // "Step through" buttons; a proof being stepped through carries on
+    if (params) params.refresh(); // sliders by what uses a \tgparam; moved values stay
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
     if (comparing) markChanges(blocks, source); // comparing two versions: what changed since the older one
   }
@@ -2923,6 +2925,15 @@
       reveal,
       previewOpen: () => !popover.hidden,
       dismissPreview: hidePopover,
+    })
+    : null;
+  // --- live parameters ---------------------------------------------------------------
+  // Sliders for the parameters a paper declares with \tgparam (src/params.js): each
+  // formula or picture that uses one is drawn again, with the paper's own macros.
+  params = window.TeXglassParams
+    ? TeXglassParams.attach({
+      root: preview,
+      render: (piece, values) => Promise.resolve(TeXglass.renderLive(renderedDoc || doc, piece, values)),
     })
     : null;
 

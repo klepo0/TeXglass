@@ -69,6 +69,70 @@
     return typeof self !== 'undefined' && self.TeXglassTikz ? self.TeXglassTikz : null;
   }
 
+
+  // --- live parameters (texglass.sty \tgparam, \tgvalue; src/params.js) ---------
+
+  const NUMBER_RE = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
+  // Commands LaTeX already has, which \tgparam leaves alone (\@ifundefined in texglass.sty)
+  const LATEX_HAS = /^(a|b|c|d|H|i|j|k|l|L|o|O|P|r|S|t|u|v|aa|AA|ae|AE|oe|OE|ss|dh|DH|dj|DJ|ng|NG|th|TH|arg|cos|cot|coth|csc|deg|det|dim|exp|gcd|hom|inf|ker|lg|lim|ln|log|max|min|Pr|sec|sin|sinh|sup|tan|tanh|to|top|wp|ell|hbar|Re|Im|aleph|beth|mho|bot|vee|wedge|cap|cup|div|mid|ne|neq|le|leq|ge|geq|ll|gg|in|ni|pm|mp|cdot|times|star|ast|circ|bullet|prime|forall|exists|emptyset|nabla|partial|infty|sum|prod|int|oint|sqrt|frac|over|left|right|big|Big|line|par|item|label|ref|cite|text|mbox|hat|bar|vec|dot|ddot|tilde|check|breve|acute|grave|alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/;
+  const GREEK = /^(alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/;
+
+  /** A step of about a hundredth of the range, rounded to 1, 2 or 5 times a power of ten. */
+  function niceStep(range) {
+    if (!(range > 0)) return 1;
+    const raw = range / 100;
+    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / pow;
+    return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * pow;
+  }
+
+  /**
+   * \tgparam[start]{name}{min}{max} or \tgparam[start=2, step=0.5, label={$p$}]{name}{min}{max}
+   * at src[i] (just after the command name): { param, end }, param null if it makes no sense.
+   */
+  function readParam(src, i) {
+    const o = readOpt(src, i);
+    const n = readArg(src, o ? o.end : i);
+    const lo = readArg(src, n.end);
+    const hi = readArg(src, lo.end);
+    const name = n.content.trim().replace(/^\\/, '');
+    const min = lo.content.trim();
+    const max = hi.content.trim();
+    if (!/^[A-Za-z]+$/.test(name) || !NUMBER_RE.test(min) || !NUMBER_RE.test(max) || +min >= +max) return { param: null, end: hi.end };
+    const p = { name, min, max, start: null, step: null, label: null };
+    const opt = o ? o.content.trim() : '';
+    if (opt.includes('=')) {
+      for (const part of splitTop(opt, (s, k) => (s[k] === ',' ? 1 : 0))) {
+        const m = /^\s*(start|step|label)\s*=\s*([\s\S]*?)\s*$/.exec(part);
+        if (m) p[m[1]] = m[2].replace(/^\{([\s\S]*)\}$/, '$1').trim();
+      }
+    } else if (opt) p.start = opt;
+    if (p.start !== null && !NUMBER_RE.test(p.start)) p.start = null;
+    if (p.step !== null && !(NUMBER_RE.test(p.step) && +p.step > 0)) p.step = null;
+    if (p.start !== null) p.start = String(Math.min(+max, Math.max(+min, +p.start)));
+    return { param: p, end: hi.end };
+  }
+
+  /** Every \tgparam of the document, by name (the first one of each name counts). */
+  function scanParams(src) {
+    const out = new Map();
+    for (const m of src.matchAll(/\\tgparam(?![A-Za-z@])/g)) {
+      const r = readParam(src, m.index + m[0].length);
+      if (r.param && !out.has(r.param.name)) out.set(r.param.name, r.param);
+    }
+    return out;
+  }
+
+  /** Set the definitions of \name in TeX code (\def, \newcommand, \pgfmathsetmacro …) to value. */
+  function setDefinitions(tex, name, value) {
+    const cs = '\\\\' + name + '(?![A-Za-z@])';
+    return tex
+      .replace(new RegExp('(\\\\(?:[egx]?def)\\s*' + cs + '\\s*)\\{(?:[^{}]|\\{[^{}]*\\})*\\}', 'g'), (_, a) => `${a}{${value}}`)
+      .replace(new RegExp('(\\\\(?:newcommand|renewcommand|providecommand)\\*?\\s*(?:\\{\\s*' + cs + '\\s*\\}|' + cs + ')\\s*)\\{(?:[^{}]|\\{[^{}]*\\})*\\}', 'g'), (_, a) => `${a}{${value}}`)
+      .replace(new RegExp('(\\\\pgfmath(set|truncate)macro\\s*(?:\\{\\s*' + cs + '\\s*\\}|' + cs + ')\\s*)\\{(?:[^{}]|\\{[^{}]*\\})*\\}', 'g'),
+        (_, a, kind) => `${a}{${kind === 'truncate' ? Math.trunc(+value) : value}}`);
+  }
+
   const DIAGRAM_RE = /\\begin\s*\{(tikzcd|tikzpicture)\}|\\xymatrix(?![A-Za-z])/;
 
   /** Where the diagram starting at match m of DIAGRAM_RE in s ends. */
@@ -863,7 +927,7 @@
   ]);
 
   /** Commands texglass.sty defines: TeXglass reads them itself, so a copy of the package never redefines them. */
-  const TG_COMMANDS = new Set(['tgdefine', 'tguses', 'tgparam', 'tgstep', 'tghide', 'tgonly']);
+  const TG_COMMANDS = new Set(['tgdefine', 'tguses', 'tgparam', 'tgvalue', 'tgstep', 'tghide', 'tgonly']);
   const TG_ENVS = new Set(['tghide', 'tgonly']);
   /** HTML of only the empty markers they leave. */
   const TG_MARKERS = /^(?:<span class="tg-(?:define|param|stepmark)"[^>]*><\/span>\s*)+$/;
@@ -1028,6 +1092,9 @@
       this.footnotes = [];
       this.warnings = [];
       this.macros = Object.create(null); // name (without backslash) -> {nargs, def, body}
+      this.params = new Map(); // \tgparam by name (scanParams); values set by sliders in options.params
+      this.liveValues = options.params || null;
+      this.inPicture = 0; // inside a TikZ picture, whose maths goes with the picture
       this.paired = Object.create(null); // \DeclarePairedDelimiter definitions
       this.triple = DEFAULT_TRIPLE.slice(); // delimiters drawn as three bars (\vvvert)
       this.envs = Object.create(null); // \newenvironment definitions
@@ -1166,13 +1233,24 @@
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex)), this.triple));
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
+      // a formula that uses a \tgparam: a mark with its TeX, to draw it again when a slider moves
+      const live = this.params.size && !this.inPicture ? this.liveMark(tex, display ? ' data-tg-display=""' : '') : '';
+      if (this.params.size) tex = this.putValues(tex);
       tex = plainTexMath(tex, display);
       try {
         const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
-        return this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
+        return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + live;
       } catch (e) {
-        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>`;
+        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + live;
       }
+    }
+
+    /** A hidden mark for a formula or picture (tex) that uses parameters, read by src/params.js. */
+    liveMark(tex, extra) {
+      const u = this.paramUses(tex);
+      if (!u.params.length || this.liveOnly) return '';
+      const defs = this.liveDefs(u.macros);
+      return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 
     /**
@@ -1288,6 +1366,7 @@
         if (end) body = body.slice(0, end.at);
       }
       this.preamble = pre;
+      this.startParams(src);
       this.ulemEmph = /\\usepackage\s*(?:\[(?![^\]]*\bnormalem\b)[^\]]*\])?\s*\{[^}]*\bulem\b[^}]*\}/.test(pre);
       if (/\\chapter\b/.test(src)) {
         this.topLevel = 'chapter';
@@ -1296,6 +1375,7 @@
       this.inPreamble = true;
       this.flow(pre, false); // preamble: definitions only, output discarded
       this.inPreamble = false;
+      this.defineParams();
       this.trackDepth = this.depth + 1;
       this.trackBase = bodyStart;
       this.trackText = src;
@@ -1316,7 +1396,125 @@
         html += '\n' + marks;
         if (this.blocks) this.blocks.push(marks);
       }
+      const params = this.paramMarks();
+      if (params) {
+        html += '\n' + params;
+        if (this.blocks) this.blocks.push(params);
+      }
       return html;
+    }
+
+    // --- live parameters (texglass.sty \tgparam; sliders in src/params.js) --
+
+    /** Read every \tgparam first, so that uses before the declaration count too. */
+    startParams(src) {
+      this.params = /\\tgparam(?![A-Za-z@])/.test(src) ? scanParams(src) : new Map();
+      this.locked = new Set(); // params set by a slider (options.params)
+      this.ownParamDefs = new Set(); // params the paper defines as macros itself
+      this.paramCs = new Set(); // params whose macro \name is the parameter
+      if (!this.liveValues) return;
+      for (const [name, v] of Object.entries(this.liveValues)) {
+        if (this.params.has(name) && NUMBER_RE.test(String(v))) this.locked.add(name);
+      }
+    }
+
+    /** A definition of \key that a slider's value overrides (true: leave it out). */
+    lockedDef(key) {
+      if (!this.params.size || !this.params.has(key)) return false;
+      this.ownParamDefs.add(key);
+      return this.locked.has(key);
+    }
+
+    /**
+     * As texglass.sty does at \begin{document}: \name holds the start value
+     * unless the paper defines \name itself (or LaTeX has it). A slider's value
+     * wins over both.
+     */
+    defineParams() {
+      for (const [name, p] of this.params) {
+        const own = this.ownParamDefs.has(name) || !!this.macros[name];
+        if (!own && LATEX_HAS.test(name)) continue; // \name stays LaTeX's: only \tgvalue{name} is the parameter
+        this.paramCs.add(name);
+        if (this.locked.has(name)) this.macros[name] = { nargs: 0, def: null, body: String(this.liveValues[name]) };
+        else if (!this.macros[name]) this.macros[name] = { nargs: 0, def: null, body: p.start !== null ? p.start : p.min };
+        else continue;
+        this._katexMacros = null;
+      }
+    }
+
+    /** The value \tgvalue{name} prints: the slider's, else the start value (else the minimum). */
+    paramValue(name) {
+      const p = this.params.get(name);
+      if (!p) return null;
+      if (this.locked.has(name)) return String(this.liveValues[name]);
+      return p.start !== null ? p.start : p.min;
+    }
+
+    /** \tgvalue{name} in TeX code, replaced by the value. */
+    putValues(tex) {
+      if (!this.params.size || !/\\tgvalue/.test(tex)) return tex;
+      return tex.replace(/\\tgvalue\s*\{\s*([A-Za-z]+)\s*\}/g, (all, n) => {
+        const v = this.paramValue(n);
+        return v === null ? '??' : v;
+      });
+    }
+
+    /**
+     * The parameters TeX code depends on: \tgvalue{name}, \name, or a macro
+     * of the paper that uses one; and the paper's macros it reaches (for liveDefs).
+     */
+    paramUses(tex) {
+      const params = new Set();
+      const macros = [];
+      if (!this.params.size) return { params: [], macros };
+      const seen = new Set();
+      const visit = (t, depth) => {
+        if (depth > 20) return;
+        for (const m of t.matchAll(/\\([A-Za-z]+)(?:\s*\{\s*([A-Za-z]+)\s*\})?/g)) {
+          const cs = m[1];
+          if (cs === 'tgvalue') { if (m[2] && this.params.has(m[2])) params.add(m[2]); continue; }
+          if (this.paramCs.has(cs)) { params.add(cs); continue; }
+          if (seen.has(cs) || !this.macros[cs] || typeof this.macros[cs].body !== 'string') continue;
+          seen.add(cs);
+          visit(this.macros[cs].body, depth + 1);
+          macros.push(cs);
+        }
+      };
+      visit(tex, 0);
+      return { params: Array.from(params), macros };
+    }
+
+    /** The paper's definitions of the macros a live piece uses, as TeX, to render it again on its own. */
+    liveDefs(names) {
+      return names.map((n) => {
+        const m = this.macros[n];
+        if (!m || m.delims || m.let) return '';
+        return `\\renewcommand{\\${n}}${m.nargs ? `[${m.nargs}]` : ''}${m.nargs && m.def !== null ? `[${m.def}]` : ''}{${m.body}}`;
+      }).filter(Boolean).join('\n');
+    }
+
+    /** The parameters, for the sliders: hidden marks at the end of the page. */
+    paramMarks() {
+      if (!this.params.size || this.liveOnly) return '';
+      const attr = (k, v) => (v === null || v === undefined ? '' : ` data-${k}="${escapeHtml(String(v))}"`);
+      const label = (p) => {
+        this.inPicture++; // no live marks in a label
+        try {
+          if (p.label) return this.flow(p.label, true).trim();
+          const tex = p.name.length === 1 ? p.name : GREEK.test(p.name) ? '\\' + p.name : `\\mathrm{${p.name}}`;
+          return this.renderMath(tex, false);
+        } finally {
+          this.inPicture--;
+        }
+      };
+      const marks = Array.from(this.params.values()).map((p) => {
+        // where the slider starts: the start value, else what the paper's \name holds, else the minimum
+        const body = this.paramCs.has(p.name) && this.macros[p.name] ? String(this.macros[p.name].body).trim() : '';
+        const value = p.start !== null ? p.start : p.seen || (NUMBER_RE.test(body) ? body : p.min);
+        const step = p.step || String(+niceStep(+p.max - +p.min).toPrecision(1));
+        return `<span class="tg-param"${attr('name', p.name)}${attr('min', p.min)}${attr('max', p.max)}${attr('value', value)}${attr('step', step)}${attr('label', label(p))}></span>`;
+      });
+      return `<div class="tg-params" hidden>${marks.join('')}</div>`;
     }
 
     // --- the main loop -----------------------------------------------------
@@ -1637,13 +1835,41 @@
           return res(links.join(''), a.end);
         }
         case 'tgparam': {
-          // \tgparam[start]{name}{min}{max}: a parameter for live sliders (recorded; sliders to come)
-          const o = readOpt(src, i);
-          const n = readArg(src, o ? o.end : i);
-          const lo = readArg(src, n.end);
-          const hi = readArg(src, lo.end);
-          const attr = (k, v) => ` data-${k}="${escapeHtml(v.trim())}"`;
-          return res(`<span class="tg-param"${attr('name', n.content)}${attr('min', lo.content)}${attr('max', hi.content)}${o ? attr('value', o.content) : ''} hidden></span>`, hi.end);
+          // \tgparam[start]{name}{min}{max}: a parameter readers may vary with a slider.
+          // All of them were read first (startParams); their marks go at the end of the page.
+          const r = readParam(src, i);
+          if (!r.param && this.known) this.warnings.push('A \\tgparam needs a name of letters and numbers min < max.');
+          return res('', r.end);
+        }
+        case 'tgvalue': {
+          // \tgvalue{name}: the parameter's value, which a slider changes (src/params.js)
+          const a = readArg(src, i);
+          const n = a.content.trim();
+          const v = this.paramValue(n);
+          if (v === null) {
+            if (this.known) this.warnings.push(`Unknown parameter "${n}" in \\tgvalue.`);
+            return res('??', a.end);
+          }
+          return res(this.inPicture ? v : `<span class="tg-value" data-tg-param="${escapeHtml(n)}">${escapeHtml(v)}</span>`, a.end);
+        }
+        case 'pgfmathsetmacro': case 'pgfmathtruncatemacro': {
+          // \pgfmathsetmacro{\r}{2*\a} outside a picture: \r holds the number
+          const nm = readArg(src, i);
+          const val = readArg(src, nm.end);
+          const key = nm.content.trim().replace(/^\\/, '');
+          if (!/^[A-Za-z@]+$/.test(key) || this.lockedDef(key)) return res('', val.end);
+          let body = this.putValues(val.content);
+          const T = tikz();
+          if (T && T._ && T._.evaluate) {
+            try {
+              const sub = body.replace(/\\([A-Za-z@]+)/g, (all, cs) => (this.macros[cs] && !this.macros[cs].nargs && NUMBER_RE.test(this.macros[cs].body.trim()) ? `(${this.macros[cs].body.trim()})` : all));
+              const v = T._.evaluate(sub).v;
+              if (typeof v === 'number' && isFinite(v)) body = String(name === 'pgfmathtruncatemacro' ? Math.trunc(v) : +v.toFixed(5));
+            } catch (e) { /* keep the text */ }
+          }
+          this.macros[key] = { nargs: 0, def: null, body };
+          this._katexMacros = null;
+          return res('', val.end);
         }
         case 'tgstep': {
           // \tgstep[title]: an author's step break in a proof, for stepping through it (src/steps.js)
@@ -1880,7 +2106,7 @@
           if (def) j = def.end;
           const body = readArg(src, j);
           const key = nm.content.trim().replace(/^\\/, '');
-          if (TG_COMMANDS.has(key)) return res('', body.end);
+          if (TG_COMMANDS.has(key) || this.lockedDef(key)) return res('', body.end);
           if (name !== 'providecommand' || !this.macros[key]) {
             this.macros[key] = { nargs: nargs ? parseInt(nargs.content, 10) || 0 : 0, def: def ? def.content : null, body: body.content };
             this._katexMacros = null;
@@ -1911,7 +2137,7 @@
           // KaTeX has no \csname, so \<b0> goes through \texglassTree, which
           // draws the symbol (see treeMarker).
           if (nm.content === '\\<' && /\\csname/.test(mac.body)) mac.body = '\\texglassTree{#1}';
-          if (TG_COMMANDS.has(nm.content.replace(/^\\/, ''))) return res('', body.end);
+          if (TG_COMMANDS.has(nm.content.replace(/^\\/, '')) || this.lockedDef(nm.content.replace(/^\\/, ''))) return res('', body.end);
           this.macros[nm.content.replace(/^\\/, '')] = mac;
           this._katexMacros = null;
           return res('', body.end);
@@ -2096,6 +2322,11 @@
       }
 
       if (name.startsWith('the') && this.counters[name.slice(3)]) return res(escapeHtml(this.fmt(name.slice(3))), i);
+
+      // A parameter's macro in text: its value, which a slider changes
+      if (this.paramCs && this.paramCs.has(name) && !this.inPicture && this.macros[name] && !this.macros[name].nargs) {
+        return res(`<span class="tg-value" data-tg-param="${escapeHtml(name)}">${this.flow(this.macros[name].body, true)}</span>`, i);
+      }
 
       // User macros used in text.
       if (this.macros[name]) {
@@ -2904,13 +3135,33 @@
     tikzpicture(body) {
       const T = tikz();
       if (T && T.tikzpicture) {
-        return T.tikzpicture(body, {
-          math: (t, display) => this.renderMath(t, display),
-          text: (t) => this.flow(t, true),
-          styles: this.tikzStyles || '',
-          colors: this.tikzColors || null,
-          macros: this.macros,
-        });
+        let live = '';
+        if (this.params.size && !this.inPicture) {
+          // a picture that uses a \tgparam is drawn again when a slider moves (src/params.js)
+          live = this.liveMark(body, ' data-tg-picture=""');
+          for (const name of this.paramCs) {
+            const p = this.params.get(name);
+            const own = new RegExp('\\\\(?:[egx]?def|pgfmathsetmacro|(?:re)?newcommand)\\s*\\{?\\s*\\\\' + name + '(?![A-Za-z@])\\s*\\}?\\s*\\{\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))\\s*\\}').exec(body);
+            if (own && p.seen === undefined) p.seen = own[1];
+            if (this.locked.has(name)) body = setDefinitions(body, name, this.paramValue(name));
+          }
+          body = this.putValues(body);
+        }
+        this.inPicture++;
+        let html;
+        try {
+          html = T.tikzpicture(body, {
+            math: (t, display) => this.renderMath(t, display),
+            text: (t) => this.flow(t, true),
+            styles: this.tikzStyles || '',
+            colors: this.tikzColors || null,
+            macros: this.macros,
+          });
+        } finally {
+          this.inPicture--;
+        }
+        // the mark goes inside the picture's element, which src/params.js replaces
+        return live ? html.replace(/^(<(?:span|div) class="tg-diagram[^"]*">)/, (m) => m + live) : html;
       }
       return `<span class="graphic-placeholder">[tikzpicture diagram]</span>`;
     }
@@ -3427,5 +3678,30 @@
     return texs.map((t) => r.renderMath(String(t), false));
   }
 
-  return { render, renderSnippets, stripComments, escapeHtml };
+  /**
+   * Draw one formula or picture again with parameter values from the sliders
+   * (src/params.js). source is the whole document (its preamble gives the
+   * macros); piece is what a .tg-live mark holds: { tex, defs, display, picture };
+   * values maps parameter names to numbers. Returns its HTML.
+   */
+  function renderLive(source, piece, values, options) {
+    const opts = Object.assign({}, options || {}, { params: values || {} });
+    const bare = stripCommentsMap(String(source).replace(/\r\n?/g, '\n'));
+    const src = expandEnvShorthands(bare.text, bare.map).text;
+    const r = new Renderer(opts, { labels: Object.create(null), toc: [], cites: Object.create(null) });
+    r.liveOnly = true;
+    const begin = documentMark(src, 'begin');
+    r.preamble = begin ? src.slice(0, begin.at) : '';
+    r.startParams(src);
+    r.inPreamble = true;
+    r.flow(r.preamble, false);
+    if (piece.defs) r.flow(String(piece.defs), false);
+    r.inPreamble = false;
+    r.defineParams();
+    const tex = String(piece.tex || '');
+    if (piece.picture) return r.tikzpicture(tex);
+    return r.renderMath(tex, !!piece.display);
+  }
+
+  return { render, renderSnippets, renderLive, stripComments, escapeHtml };
 });

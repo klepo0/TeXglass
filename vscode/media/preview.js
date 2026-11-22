@@ -914,6 +914,7 @@
         updateToc(m.toc || []);
         if (progress) progress.refresh();
         if (steps) steps.refresh();
+        if (params) params.refresh();
         showChanges(m.compare || null);
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
@@ -1084,6 +1085,12 @@
         if (done) done(m.html);
         break;
       }
+      case 'live-html': {
+        const done = noteWaiting.get(m.id);
+        noteWaiting.delete(m.id);
+        if (done) done(m.html);
+        break;
+      }
       case 'scroll-to':
         scrollToLine(m.line, m.file);
         break;
@@ -1216,6 +1223,18 @@
       reveal,
       previewOpen: () => !popover.hidden,
       dismissPreview: hidePopover,
+    })
+    : null;
+  // Live parameters (shared/params.js): sliders for a paper's \tgparam. The
+  // extension draws each formula or picture again with the new values.
+  var params = window.TeXglassParams
+    ? window.TeXglassParams.attach({
+      root: preview,
+      render: (piece, values) => new Promise((resolve) => {
+        const id = ++noteSeq;
+        noteWaiting.set(id, resolve);
+        vscode.postMessage({ type: 'render-live', id, piece, values });
+      }),
     })
     : null;
 

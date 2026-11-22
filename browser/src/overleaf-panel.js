@@ -65,6 +65,7 @@
   let lastToc = [];
   let cursor = -1;
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
+  let params = null; // sliders for \tgparam (src/params.js)
   let cites = null; // citation previews (src/cite.js)
 
   function post(msg) {
@@ -164,6 +165,7 @@
         lastToc = result.toc || [];
         updateToc();
         if (insight) insight.invalidate(); // read the page again when next needed
+        if (params) params.refresh(); // sliders for \tgparam; moved values stay
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         explain(c);
       }, (e) => {
@@ -777,6 +779,15 @@
   cites = window.TeXglassCite
     ? window.TeXglassCite.create({
       openArxiv: (id) => window.open(new URL('index.html?arxiv=' + encodeURIComponent(id), location.href).href, '_blank', 'noopener'),
+    })
+    : null;
+
+  // Sliders for the parameters the paper declares with \tgparam (src/params.js):
+  // formulas and pictures that use one are drawn again as a slider moves.
+  params = window.TeXglassParams
+    ? window.TeXglassParams.attach({
+      root: preview,
+      render: (piece, values) => Promise.resolve(composed ? TeXglass.renderLive(composed.text, piece, values) : null),
     })
     : null;
 
