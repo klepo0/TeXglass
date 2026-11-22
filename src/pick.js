@@ -11,6 +11,8 @@
  *     proofsOf(el),       // the proofs of a result (else: the proofs right after it)
  *     print(),            // print what is shown
  *     onStart(),          // a selection starts: end other views (What does this use?)
+ *     share(),            // optional: a Share button on the bar (a link to this view)
+ *     canShare(),         // optional: whether there is anything to share (else no button)
  *     // optional: the host keeps the pins (TeXglassInsight does, with the map):
  *     items(),            // the elements to show (pins, with what they bring along)
  *     isOn(el),           // whether a result or equation is pinned
@@ -22,6 +24,8 @@
  *   pick.pinsChanged();   // the host's pins changed: show (or tick) them again
  *   pick.stop();          // the whole document again
  *   pick.refresh();       // after a new render: the same selection again
+ *   pick.showShared({ items, keep, onEnd }); // a view from a link (src/share.js),
+ *                         //   shown without touching the reader's pins: Keep / Dismiss
  *
  * TeXglassPick.snapshot(root) tells which blocks are showing now (in any view,
  * "What does this use?" with "Hide the rest" too), so that a page rendered
@@ -102,10 +106,13 @@
     let picked = []; // ids, in the order they were ticked
     let marked = [];
     let bar = null;
+    let shared = null; // a view someone shared: { items(), keep(), name } while it shows
 
     const pickables = () => blocksOf(doc).filter((el) => (el.classList.contains('theorem') && el.id) || (isNumberedDisplay(el) && el.id));
     const pickedEls = () => {
-      const els = opts.items
+      const els = shared
+        ? Array.from(new Set(shared.items() || [])).filter((el) => el && doc.contains(el))
+        : opts.items
         ? Array.from(new Set(opts.items() || [])).filter((el) => el && doc.contains(el))
         : picked.map((id) => document_.getElementById(id)).filter((el) => el && doc.contains(el));
       return els.sort((a, b) => (a === b ? 0 : a.compareDocumentPosition(b) & 4 ? -1 : 1));
@@ -155,6 +162,7 @@
     }
 
     function start() {
+      shared = null;
       if (opts.onStart) opts.onStart();
       clearMarks();
       mode = 'pick';
@@ -231,8 +239,11 @@
 
     function stop() {
       if (!mode) return;
+      const was = shared;
+      shared = null;
       clearMarks();
       mode = null;
+      if (was && was.onEnd) was.onEnd();
       if (bar) bar.hidden = true;
     }
 
@@ -263,7 +274,9 @@
           const b = e.target.closest('button');
           if (!b) return;
           const act = b.dataset.act;
-          if (act === 'show') show();
+          if (act === 'show') { shared = null; show(); }
+          else if (act === 'keep') keepShared();
+          else if (act === 'share') { if (opts.share) opts.share(); }
           else if (act === 'clear') { if (opts.clear) opts.clear(); else picked = []; drawBoxes(); showBar(); }
           else if (act === 'edit') start();
           else if (act === 'print') { if (opts.print) opts.print(); }
@@ -282,14 +295,45 @@
           `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the pinned results and equations">Show pinned</button>` +
           (n ? '<button type="button" data-act="clear" title="Take every pin away">Unpin all</button>' : '') +
           '<button type="button" data-act="done" title="Back to the whole document (Esc)">Done</button>';
+      } else if (shared) {
+        bar.innerHTML =
+          `<span class="uses-what"><strong>Shared view: ${what(n)}</strong> <span class="insight-muted">your own pins stay as they are; proofs fold: click one to open it</span></span>` +
+          (shared.keep ? '<button type="button" data-act="keep" title="Add these to your own pins, keeping the ones you have">Keep these pins</button>' : '') +
+          (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF; folded proofs are left out">Print</button>' : '') +
+          '<button type="button" data-act="done" class="uses-done" title="Leave the shared view: back to the whole document and your own pins (Esc)">Dismiss</button>';
       } else {
         bar.innerHTML =
           `<span class="uses-what"><strong>Showing ${what(n)} pinned</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
           '<button type="button" data-act="edit" title="Pin or unpin results and equations">Change</button>' +
           (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF; folded proofs are left out">Print</button>' : '') +
+          (opts.share && (!opts.canShare || opts.canShare()) ? '<button type="button" data-act="share" title="Share a link that opens the paper with this view">Share</button>' : '') +
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
       }
       bar.hidden = false;
+    }
+
+    // --- a view someone shared ---------------------------------------------------
+
+    /**
+     * Show a view that came in a link, leaving the reader's own pins alone.
+     * view: { items() (the elements to show), keep() (add them to the reader's
+     * pins), onEnd() (the view was left) }. False if nothing in it is here.
+     */
+    function showShared(view) {
+      shared = view;
+      if (!pickedEls().length) { shared = null; return false; }
+      show();
+      return true;
+    }
+
+    function keepShared() {
+      const v = shared;
+      if (!v || !v.keep) return;
+      shared = null;
+      v.keep();
+      // now the reader's own pins, with these among them
+      if (pickedEls().length) show(true);
+      else stop();
     }
 
     // --- clicks and keys -------------------------------------------------------
@@ -326,13 +370,18 @@
 
     return {
       start,
-      show: () => show(),
+      show: () => { shared = null; show(); },
       stop,
       refresh: () => refresh(),
       toggle,
       pinsChanged,
       /** null, 'pick' or 'view' */
       mode: () => mode,
+      showShared,
+      /** Whether the view showing is one that came in a link. */
+      isShared: () => !!shared,
+      /** The proofs a click opened (in the view of pinned items). */
+      openProofs: () => marked.filter((el) => el.classList.contains('pick-proof') && el.classList.contains('pick-open')),
       picked: () => picked.slice(),
       /** Tick these (ids or elements) and show them. */
       select(list) {

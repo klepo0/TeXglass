@@ -2697,10 +2697,10 @@
      * pinned with what it uses (or is used in), those results too, with the
      * equations, figures… it and their statements refer to, as "What does this use?" does.
      */
-    function pinnedEls() {
+    function pinnedEls(entries) {
       const g = getGraph();
       const out = new Set();
-      for (const [k, d] of pinMap()) {
+      for (const [k, d] of entries ? new Map(entries.filter((e) => e && e[0] && e[1])) : pinMap()) {
         const x = k.startsWith('eq:') ? { el: eqEls().get(k) } : k.startsWith('fig:') ? { el: figEls().get(k) } : k.startsWith('proof:') ? { el: proofOfKey(k) } : g.byKey.get(k);
         if (!x || !x.el || !doc.contains(x.el) || x.cite) continue;
         out.add(x.el);
@@ -2922,6 +2922,18 @@
       const had = (edits.pin[key] && edits.pin[key].d) || '';
       if (had === (d || '')) return;
       setEdit('pin', key, { d: d || '' });
+    }
+    /** Add pins (from a shared view): [[key, d]], leaving the ones already pinned as they are. The number added. */
+    function addPins(entries) {
+      const have = pinMap();
+      let n = 0;
+      for (const [k, d] of entries || []) {
+        if (!k || !d || have.has(k) || !elOfKey(k)) continue;
+        setEdit('pin', k, { d }, true);
+        n++;
+      }
+      if (n) editsChanged('pin');
+      return n;
     }
     function unpinAll() {
       for (const k of pinMap().keys()) setEdit('pin', k, { d: '' }, true);
@@ -4388,7 +4400,7 @@
       showUses: (q, o) => !!showUses(q, o && o.at, !!(o && o.scroll), !!(o && o.collapse)),
       unfocus,
       repaint,
-      focused: () => (focusState ? { id: focusState.id, dir: focusState.dir, search: focusState.set ? Object.assign({ text: focusState.text }, focusState.set) : null } : null),
+      focused: () => (focusState ? { id: focusState.id, key: focusState.key || null, dir: focusState.dir, collapse: collapseRest, search: focusState.set ? Object.assign({ text: focusState.text }, focusState.set) : null } : null),
       graph: getGraph,
       index: getIndex,
       notesFor,
@@ -4409,6 +4421,13 @@
       pinnedEls,
       /** How many results and equations are pinned (on the map). */
       pinCount: () => pinMap().size,
+      /** The map's pins as [[key, d]] (d: 'self', 'uses', 'usedBy' or 'both'), to share. */
+      pinEntries: () => Array.from(pinMap()),
+      /** Add pins from a shared view, keeping the reader's own: the number added. */
+      addPins,
+      /** The element a key (from pinEntries or focused) names, or null. */
+      elOfKey: (k) => { const el = k ? elOfKey(k) : null; return el && doc.contains(el) ? el : null; },
+      keyOfEl: (el) => keyOfEl(el),
       /** Everything pinned: map pins and Notation rows (see pinnedList above). */
       pinnedList,
       /** How many things are pinned anywhere: map pins and Notation rows. */

@@ -2442,14 +2442,81 @@
       : 'Only papers from arXiv or GitHub can be shared as a link';
   }
 
+  // The view on screen goes in the link too (src/share.js): Show only these with
+  // the pins, What does this use? (with Hide the rest or not), a search by use.
+  let sharedView = null; // the view that came in a link, while it shows
+
+  /** The view showing now, as Share.encodeView takes it, or null for the whole paper. */
+  function viewHere() {
+    if (picker && picker.mode() === 'view' && insight) {
+      if (picker.isShared() && sharedView) return sharedView;
+      const owner = new Map();
+      try { for (const n of insight.graph().byEl.values()) for (const p of n.proofs || []) owner.set(p, n.key); } catch (e) { /* no graph: no open proofs */ }
+      return {
+        m: 'p',
+        p: insight.pinEntries(),
+        t: margin && margin.sharedTexts ? margin.sharedTexts() : [],
+        o: picker.openProofs().map((p) => owner.get(p)).filter(Boolean),
+      };
+    }
+    const f = insight && insight.focused();
+    if (!f) return null;
+    const h = preview.classList.contains('uses-collapse') ? 1 : 0;
+    if (f.search) return { m: 's', s: { inc: f.search.inc, exc: f.search.exc, any: f.search.any, direct: f.search.direct }, h };
+    return f.key && f.dir !== 'set' ? { m: 'u', f: f.key, d: f.dir, h } : null;
+  }
+
+  /** What a key in a view is called here: "Lemma 2", "(3.4)". */
+  function viewName(k) {
+    const el = insight && insight.elOfKey(k);
+    return el && window.TeXglassPick ? TeXglassPick.nameOf(el) : String(k).replace(/^(label|name|eq|fig|proof):/, '');
+  }
+
+  /** Show the view a link carried, over the paper just opened; the reader's own pins stay as they are. */
+  async function showSharedView(code) {
+    const v = Share && insight ? await Share.decodeView(code) : null;
+    if (!v) { flashStatus('Could not read the view in this link; showing the whole paper'); return false; }
+    let ok = false;
+    if (v.m === 'p' && picker) {
+      ok = picker.showShared({
+        items: () => insight.pinnedEls(v.p).concat(margin && margin.textElsFor ? margin.textElsFor(v.t) : []),
+        keep: () => {
+          const n = insight.addPins(v.p) + (margin && margin.pinTexts ? margin.pinTexts(v.t) : 0);
+          sharedView = null;
+          flashStatus(n ? `Kept ${n} pin${n === 1 ? '' : 's'} with your own` : 'You had these pinned already');
+        },
+        onEnd: () => { sharedView = null; },
+      });
+      if (ok) {
+        sharedView = v;
+        const g = insight.graph();
+        for (const k of v.o || []) {
+          const n = g.byKey.get(k);
+          for (const p of (n && n.proofs) || []) if (p.classList.contains('pick-proof')) p.classList.add('pick-open');
+        }
+      }
+    } else if (v.m === 'u') {
+      const el = insight.elOfKey(v.f);
+      if (el) { insight.focus(el, v.d, { scroll: true, collapse: !!v.h }); ok = !!insight.focused(); }
+    } else if (v.m === 's') {
+      ok = insight.showUses(v.s, { scroll: true, collapse: !!v.h });
+    }
+    flashStatus(ok ? `Showing the view that was shared: ${Share.describeView(v, viewName)}` : 'The shared view is not in this version of the paper; showing the whole paper');
+    return ok;
+  }
+
   async function sharePaper() {
     const where = Share && shareWhere();
     if (!where) return;
-    const goto = sectionHere();
-    const url = Share.link({ ...where, goto });
+    let view = null;
+    const v = viewHere();
+    try { view = v ? await Share.encodeView(v) : null; } catch (e) { view = null; }
+    // with a view, the link opens at the view; without, at the section being read
+    const goto = view ? '' : sectionHere();
+    const url = Share.link({ ...where, goto, view });
     const title = Library ? Library.plainTitle(NotesSync.titleOf(doc)) : '';
     const how = await Share.share(url, title || (where.arxiv ? 'arXiv:' + where.arxiv : ''));
-    if (how === 'copied') flashStatus(goto ? `Link copied, opens at ${goto}` : 'Link copied');
+    if (how === 'copied') flashStatus(view ? `Link copied, opens with this view: ${Share.describeView(v, viewName)}` : goto ? `Link copied, opens at ${goto}` : 'Link copied');
     else if (how === 'failed') showStatus('Could not copy the link: ' + url, true);
   }
 
@@ -2873,6 +2940,8 @@
         return n ? n.proofs : null;
       },
       print: () => window.print(),
+      share: () => sharePaper(),
+      canShare: () => !!(Share && shareWhere()),
       onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
     })
     : null;
@@ -3915,7 +3984,9 @@
       // &compare=v1: mark what changed since that version (src/diff.js)
       const older = params.get('compare');
       if (older && Diff) return compareArxiv(arxiv, older);
-      return importArxiv(arxiv).then((ok) => (ok && goto ? render().then(() => goToNamed(goto)) : ok));
+      // &view=…: the view the sharer had on screen (Show only these, What does this use?…)
+      const view = params.get('view');
+      return importArxiv(arxiv).then((ok) => (ok && (goto || view) ? render().then(() => (view ? showSharedView(view) : goToNamed(goto))) : ok));
     }
     // A bare ?arxiv (the browser extension's toolbar button away from a paper)
     // opens the arXiv dialog over the last document.
@@ -3926,7 +3997,8 @@
     }
     if (gh && window.TeXglassGitHub) {
       if (last) loadLast();
-      return importGitHub(gh);
+      const view = params.get('view');
+      return importGitHub(gh).then((ok) => (ok && view ? render().then(() => showSharedView(view)) : ok));
     }
     const preprint = params.get('preprint');
     if (preprint && window.TeXglassOpenAIMath) {
