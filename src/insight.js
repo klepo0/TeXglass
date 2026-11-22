@@ -979,20 +979,29 @@
         if (s) defs.push({ tex: s, key: texTokens(s).join(' '), el, pat: patternOf(s), scope: scopeOf(el, s, heads), text: false });
       }
     }
+    // what the author says a symbol means, with texglass.sty's \tgdefine
+    for (const el of doc.querySelectorAll('.tg-define[data-tg-sym]')) {
+      if (el.closest(INSIDE_POPOVER)) continue;
+      const d = authorDefinition(el);
+      if (d) defs.push(d);
+    }
     let inText = [];
     if (!(o && o.words === false)) {
       try { inText = textDefinitions(doc); } catch (e) { /* never let a reading aid break the page */ }
     }
-    if (inText.length) {
+    if (inText.length || defs.some((d) => d.author)) {
       defs.push(...inText);
       defs.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1));
     }
     const symbols = [];
     const seen = new Set();
+    // the author's word on a symbol comes before what the text seems to say
+    const said = new Map();
+    for (const d of defs) if (d.author && !d.scope.within && !said.has(d.key)) said.set(d.key, d);
     for (const d of defs) {
       if (d.scope.within || seen.has(d.key)) continue;
       seen.add(d.key);
-      symbols.push(d);
+      symbols.push(said.get(d.key) || d);
     }
     // in the order a reader meets them
     return { macros: Array.from(byName.values()), symbols, defs, byName };
@@ -1000,6 +1009,7 @@
 
   /** Whether definition d holds at formula el (which comes after it). */
   function holdsAt(d, el) {
+    if (d.everywhere) return true; // \tgdefine in the preamble
     if (d.el === el || !(d.el.compareDocumentPosition(el) & 4)) return false;
     if (d.scope.within && !d.scope.within.contains(el)) return false;
     if (d.scope.until && !(el.compareDocumentPosition(d.scope.until) & 4)) return false;
@@ -1019,7 +1029,8 @@
     for (const d of defs) {
       if (d.key === ownKey || !holdsAt(d, el)) continue;
       const spans = occurrences(f, d.pat);
-      if (spans.length) best.set(d.key, { d, spans });
+      const had = best.get(d.key);
+      if (spans.length && !(had && had.d.author && !d.author)) best.set(d.key, { d, spans });
     }
     const found = Array.from(best.values());
     return found
@@ -1168,8 +1179,41 @@
     return c;
   }
 
+  /**
+   * A definition the author gave with texglass.sty's \tgdefine{symbol}{meaning}:
+   * the converter leaves <span class="tg-define" data-tg-sym data-tg-meaning>
+   * (meaning as HTML), with data-tg-scope="document" when it came from the preamble.
+   */
+  function authorDefinition(el) {
+    const tex = cleanSymbol(el.dataset.tgSym || '') || String(el.dataset.tgSym || '').trim();
+    if (!tex) return null;
+    const meaning = el.dataset.tgMeaning || '';
+    const everywhere = el.dataset.tgScope === 'document';
+    const proof = el.closest('.proof');
+    return {
+      tex, key: texTokens(tex).join(' '), el, pat: patternOf(tex), text: false, author: true, everywhere, meaning,
+      words: meaningText(el.ownerDocument, meaning),
+      scope: { within: !everywhere && proof ? proof : null, until: null },
+    };
+  }
+
+  /** The plain words of a meaning given as HTML. */
+  function meaningText(doc, html) {
+    const box = doc.createElement('div');
+    box.innerHTML = html;
+    box.querySelectorAll('.katex-mathml').forEach((x) => x.remove());
+    box.querySelectorAll('.math[data-tex]').forEach((x) => { x.textContent = x.dataset.tex; });
+    return box.textContent.replace(/\s+/g, ' ').trim();
+  }
+
   /** What shows a definition: the sentence that introduces the symbol, or the formula with :=. */
   function shownOf(d, marks) {
+    if (d.author) {
+      const box = d.el.ownerDocument.createElement('span');
+      box.className = 'insight-author-def';
+      box.innerHTML = d.meaning;
+      return box;
+    }
     if (d.text) {
       const box = sentenceOf(d, marks);
       if (box) return box;
@@ -1673,6 +1717,11 @@
     }
 
     function noteHtml(n, el) {
+      if (n.kind === 'symbol' && n.s.author) {
+        const sym = `<span class="insight-sym" data-sym="${esc(n.s.tex)}"><code>${esc(n.s.tex)}</code></span>`;
+        return `<div class="insight-note"><div class="insight-note-what">${sym}: </div>` +
+          `<div class="insight-note-where">The author's description${n.s.everywhere ? '' : `, in <a href="#" data-go="s">${esc(where(n.s.el))}</a>`}</div></div>`;
+      }
       if (n.kind === 'symbol') {
         return `<div class="insight-note"><div class="insight-note-what"></div>` +
           `<div class="insight-note-where">${n.s.text ? `${n.group.map((d) => `<span class="insight-sym" data-sym="${esc(d.tex)}"><code>${esc(d.tex)}</code></span>`).join(', ')} introduced in` : 'Defined in'} <a href="#" data-go="s">${esc(where(n.s.el))}</a></div></div>`;
@@ -2120,25 +2169,25 @@
       if (idx.entries) return idx.entries;
       const secs = topSections();
       const byKey = new Map();
-      for (const s of idx.symbols) if (s.text && !byKey.has(s.key)) byKey.set(s.key, s);
+      for (const s of idx.symbols) if ((s.text || s.author) && !byKey.has(s.key)) byKey.set(s.key, s);
       const out = [];
       idx.macros.forEach((e, k) => {
         const said = byKey.get(texTokens('\\' + e.name).join(' '));
         const body = String(e.mac.body);
         out.push({
           id: 'm' + k, type: 'm', it: e, first: e.first, pin: 'm:' + e.name,
-          text: (e.name + ' ' + body + (said ? ' ' + sentenceText(said) : '')).toLowerCase(),
+          text: (e.name + ' ' + body + (said ? ' ' + (said.author ? said.words : sentenceText(said)) : '')).toLowerCase(),
           section: sectionOf(secs, e.first),
-          kind: kindOfSymbol('\\' + e.name, wordsNear(said), body, e.mac.nargs || 0, ''),
+          kind: kindOfSymbol('\\' + e.name, said && said.author ? [said.words, ''] : wordsNear(said), body, e.mac.nargs || 0, ''),
           alpha: ((a) => (a.group === 'Other' ? alphaOf('\\' + e.name) : a))(alphaOf(body)),
         });
       });
       idx.symbols.forEach((s, k) => {
         out.push({
           id: 's' + k, type: 's', it: s, first: s.el, pin: 's:' + s.key,
-          text: (s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase(),
+          text: (s.author ? s.tex + ' ' + s.words : s.text ? s.tex + ' ' + sentenceText(s) : s.el.dataset.tex).toLowerCase(),
           section: sectionOf(secs, s.el),
-          kind: kindOfSymbol(s.tex, wordsNear(s), '', 0, s.text ? '' : s.el.dataset.tex),
+          kind: kindOfSymbol(s.tex, s.author ? [s.words, ''] : wordsNear(s), '', 0, s.text || s.author ? '' : s.el.dataset.tex),
           alpha: alphaOf(s.tex.replace(/^\\([A-Za-z]+)(?![A-Za-z])/, (m, n) => (idx.byName.has(n) && !idx.byName.get(n).mac.nargs ? String(idx.byName.get(n).mac.body) : m))),
         });
       });
@@ -2311,7 +2360,7 @@
       const open = !(view.closedGroups && view.closedGroups.has('used'));
       const chip = (e) => {
         const tex = e.type === 'm' ? sampleOf(e.it) : e.it.tex;
-        const hint = e.type === 'm' ? `\\${e.it.name} → ${e.it.mac.body}` : e.it.text ? sentenceText(e.it) : e.it.el.dataset.tex;
+        const hint = e.type === 'm' ? `\\${e.it.name} → ${e.it.mac.body}` : e.it.author ? e.it.words : e.it.text ? sentenceText(e.it) : e.it.el.dataset.tex;
         const label = e.type === 'm' ? '\\' + e.it.name : e.it.tex;
         return `<button type="button" class="insight-chip" data-chip="${e.id}" title="${esc(hint.length > 160 ? hint.slice(0, 158) + '…' : hint)}" aria-label="${esc(label)}">` +
           (tex ? `<span class="insight-sym" data-sym="${esc(tex)}"><code>${esc(label)}</code></span>` : `<code>${esc(label)}</code>`) + '</button>';

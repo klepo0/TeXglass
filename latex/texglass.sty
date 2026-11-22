@@ -1,0 +1,76 @@
+%% texglass.sty
+%% Hints for TeXglass (https://klepo0.github.io/TeXglass/) that ordinary
+%% LaTeX ignores: the PDF comes out exactly as without the package.
+%%
+%% TeXglass shows LaTeX papers as interactive web pages. It works on any paper
+%% as it is; these commands only let an author tell it a little more.
+%%
+%%   \tgdefine{symbol}{meaning}   what a symbol means (notation hovers, notation index)
+%%   \tguses{label,label,...}     results this one uses that the text doesn't cite
+%%                                (dependency map)
+%%   \tgparam[start]{name}{min}{max}
+%%                                a parameter readers may vary (for live sliders;
+%%                                TeXglass records it, sliders are still to come)
+%%   \tgstep[title]               start a new step of a proof (step-through mode)
+%%   \tghide{text}, tghide env.   in the PDF only; TeXglass leaves it out
+%%   \tgonly{text}, tgonly env.   in TeXglass only; LaTeX leaves it out
+%%   \iftexglass ... \else ... \fi
+%%                                false in LaTeX, true in TeXglass
+%%
+%% Full guide: https://github.com/klepo0/TeXglass/blob/main/docs/GUIDE.md
+%%
+%% Copyright (c) 2026 Khoa Le.
+%% This file may be distributed and/or modified under the conditions of the
+%% LaTeX Project Public License, either version 1.3c of this license or (at
+%% your option) any later version. The latest version of this license is in
+%%   https://www.latex-project.org/lppl.txt
+%% This work has the LPPL maintenance status `maintained'.
+%% The Current Maintainer of this work is Khoa Le.
+%% This work consists of the files texglass.sty and README.md.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{texglass}[2026/11/22 Hints for TeXglass, ignored by LaTeX]
+
+% Hints that leave nothing on the page. \@bsphack/\@esphack keep the spacing
+% as if the command were not there, as \label and \index do.
+\newcommand*\tgdefine[2]{\@bsphack\@esphack}
+\newcommand*\tguses[1]{\@bsphack\@esphack}
+\newcommand*\tgparam[4][]{\@bsphack\@esphack}
+\newcommand*\tgstep[1][]{\@bsphack\@esphack}
+
+% PDF-only and web-only text, as commands and as environments. \begin{foo}
+% runs \foo, so each command looks at \@currenvir to see which it is.
+\def\tg@hide@name{tghide}
+\def\tg@only@name{tgonly}
+\newcommand\tghide{%
+  \ifx\@currenvir\tg@hide@name
+    \expandafter\relax
+  \else
+    \expandafter\@firstofone
+  \fi}
+\newcommand\tgonly{%
+  \ifx\@currenvir\tg@only@name
+    \expandafter\tg@skip
+  \else
+    \expandafter\tg@gobble
+  \fi}
+\long\def\tg@gobble#1{\@bsphack\@esphack}
+\let\endtghide\relax
+\let\endtgonly\relax
+% In a tgonly environment everything up to \end{tgonly} is skipped unread, so
+% it may hold commands LaTeX doesn't know (it can't hold another tgonly).
+\long\def\tg@skip#1\end{\tg@skip@end}
+\def\tg@skip@end#1{%
+  \def\tg@name{#1}%
+  \ifx\tg@name\tg@only@name
+    \expandafter\tg@skip@done
+  \else
+    \expandafter\tg@skip
+  \fi}
+% the line end after \end{tgonly} is no space: the environment leaves none
+\def\tg@skip@done{\end{tgonly}\ignorespaces}
+
+% \iftexglass: false here; TeXglass takes it as true.
+\newif\iftexglass
+\texglassfalse
+
+\endinput

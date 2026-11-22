@@ -33,6 +33,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [On phones and tablets](#on-phones-and-tablets)
 - [Offline and privacy](#offline-and-privacy)
 - [What LaTeX it understands](#what-latex-it-understands)
+- [Hints for TeXglass in your own papers](#hints-for-texglass-in-your-own-papers)
 - [Render dashboard](#render-dashboard)
 
 ## Keyboard shortcuts
@@ -709,7 +710,9 @@ npx texglass paper.tex -o paper.html
 
 Writes the same standalone page as **Export**. `--link-katex` loads KaTeX's
 stylesheet and fonts from a CDN instead of embedding them (about 350 KB).
-`-h` or `--help` prints the usage.
+`-h` or `--help` prints the usage. `npx texglass --sty` copies
+[`texglass.sty`](#hints-for-texglass-in-your-own-papers) into the current
+folder.
 
 `--reader` (or **Export with reading tools** in the web viewer's **…** menu)
 adds the reading tools to the page, about 650 KB more, still one file that
@@ -884,6 +887,31 @@ text still works as usual.
 
 Anything unknown is skipped gracefully. There is no TeX install and no compile
 step, and long papers stay fast.
+
+## Hints for TeXglass in your own papers
+
+TeXglass reads any paper as it is. If you write papers, lecture notes or
+notes for a reading group, the optional package `texglass.sty` lets you tell
+it a little more. Ordinary LaTeX (pdfLaTeX, LuaLaTeX, XeLaTeX) ignores every
+command in it, so your PDF comes out exactly as without the package.
+
+To use it, put [`texglass.sty`](../latex/texglass.sty) next to your `.tex` file
+(`npx texglass --sty` copies it into the current folder) and add
+`\usepackage{texglass}`. When you post to arXiv, upload it with the paper;
+TeXglass reads the commands itself either way.
+
+| Command | In TeXglass | In LaTeX |
+| --- | --- | --- |
+| `\tgdefine{L^p}{the space of $p$-integrable functions}` | What a symbol means: notation on hover shows it (as **The author's description**) and the **Notation** tab lists it, searchable by its words. It comes before what TeXglass reads from the text. In the preamble it holds for the whole paper; in the text, from that point on (inside a proof, for that proof). The symbol is TeX, with or without `$…$`. | Nothing |
+| `\tguses{lem:key}` or `\tguses{lem:a,thm:b}` | Links on the **Map** that the text doesn't state: put it in a result's statement or proof, and that result uses the labelled ones. | Nothing |
+| `\tgstep` or `\tgstep[title]` | Marks where a new step of a proof starts, with an optional title, for stepping through the proof: a proof with these marks is split at them (and at displayed equations, list items and claims) rather than at sentences. | Nothing |
+| `\tghide{…}`, `\begin{tghide}…\end{tghide}` | Left out. | Shown |
+| `\tgonly{…}`, `\begin{tgonly}…\end{tgonly}` | Shown. | Left out, unread (so it may hold commands LaTeX doesn't know; a `tgonly` can't hold another) |
+| `\iftexglass … \else … \fi` | The first branch. | The `\else` branch |
+| `\tgparam[start]{p}{1}{4}` | Records a parameter readers may vary between 1 and 4. Sliders that redraw formulas and pictures are still to come. | Nothing |
+
+The package is free to share under the LaTeX Project Public License, so it can
+go into your paper's sources and onto arXiv with them.
 
 ## Render dashboard
 
