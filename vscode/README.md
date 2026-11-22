@@ -42,8 +42,8 @@ lists every feature, command, setting and shortcut.
   column level with their line, as on paper. **N** / **Shift+N** jump from
   note to note.
 - **Click a formula** to copy its LaTeX.
-- **Export to HTML** (one standalone page that works offline) and **Print /
-  Save as PDF**, laid out like a paper.
+- **Export to HTML** (one standalone page that works offline), **Export to
+  EPUB** (an e-book) and **Print / Save as PDF**, laid out like a paper.
 - **Fast on long documents**: a 350-page paper converts in a few seconds, in
   a background thread, so typing is never held up.
 
@@ -72,7 +72,12 @@ lists every feature, command, setting and shortcut.
 - **Pin** theorems and equations (or a result with everything it uses) and
   show and print only those; drag, hide and add your own links on the
   dependency map.
-- **Fold** sections and proofs, or hide every proof at once.
+- **Fold** sections and proofs, or hide every proof at once, and **step
+  through a proof** one piece at a time.
+- **Compare versions**: **TeXglass: Compare with Last Commit** marks what
+  changed since git `HEAD` as you edit (theorems, proofs, equations and text,
+  matched by label), and **Compare with Another Version…** against any `.tex`
+  file; step through the changes from the bar at the bottom.
 
 ![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)
 

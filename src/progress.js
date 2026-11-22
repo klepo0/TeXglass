@@ -42,7 +42,7 @@
 
   const STATUSES = ['unread', 'skimmed', 'read', 'understood'];
   const LABELS = { unread: 'Unread', skimmed: 'Skimmed', read: 'Read', understood: 'Understood' };
-  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .cited-box, .tg-margin';
+  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .cited-box, .tg-margin, .diff-old';
 
   const esc = (s) =>
     String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

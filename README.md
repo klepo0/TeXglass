@@ -77,9 +77,11 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 
 - **Dependency map** of which results each theorem uses, read from the paper's own references; double-click a result to jump to it.
 - **What does this use?** lights up everything a result rests on, or everything that uses it.
+- **Step through a proof** one piece at a time, with "why?" links to each result it uses.
 - **Hypothesis checker**: a cited lemma's hypotheses split out, each with a box to tick.
 - **Notation on hover** and a **notation index** of the paper's macros and defined symbols.
 - **Reading progress** per result and section, with **What should I read next?**
+- **Compare versions**: arXiv v1 against v2 (or any two drafts), with changed, new and removed theorems, proofs, equations and text marked, matched by label rather than by line.
 
 ### Study
 
@@ -97,7 +99,8 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Scroll sync** both ways and **jump to source** from the preview.
 - **Live preview beside Overleaf's editor** from the browser extension.
 - **Edit in the web viewer** with in-place editing, a split view and LaTeX autocomplete.
-- **Export** a standalone offline HTML page, with or without the reading tools, or **print** to PDF laid out like a paper.
+- **Export** a standalone offline HTML page, with or without the reading tools, an **EPUB** e-book, or **print** to PDF laid out like a paper.
+- **Hints for TeXglass** in your own papers with the optional [`texglass.sty`](latex/README.md), which LaTeX ignores.
 
 ## A closer look
 
