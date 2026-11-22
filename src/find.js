@@ -309,10 +309,15 @@
    * Add the find bar to a preview.
    * options: { root: the rendered document, scroller: the element that scrolls it,
    *   reveal(el): unfold whatever hides el, onJump(el): optional, after going to a target,
-   *   onFocus(el): optional; adds a Trace tab to pick a theorem, lemma, definition…
-   *     and show only what it uses and what uses it (TeXglassInsight focus),
-   *   related(el): optional, { uses, usedBy } counts shown in that list,
-   *   uses(q): optional; adds a Uses tab, search by use: q is { inc: [element],
+   *   The Uses tab (with onFocus or uses): pick or type a result to see two
+   *   lists, what it uses and what uses it; "and", "or" or "but not" between
+   *   names searches by use instead.
+   *   onFocus(el, o): optional; light up el with what it uses and what uses it
+   *     (o.dir 'uses' or 'usedBy' for one side), starting at o.at if given
+   *     (TeXglassInsight focus),
+   *   related(el, { direct }): optional, { uses, usedBy } counts and the lists
+   *     { usesEls, usedByEls } (TeXglassInsight related),
+   *   uses(q): optional; search by use: q is { inc: [element],
    *     exc: [element], any, direct } (results and displayed equations), and it
    *     returns { results: [result elements], text } (TeXglassInsight searchUses),
    *   onUses(q, el): picking one of those results: light them all up, at el }
@@ -325,6 +330,7 @@
     const win = doc.defaultView;
     const reveal = options.reveal || (() => {});
     const hasHighlights = !!(win.CSS && win.CSS.highlights && win.Highlight);
+    const hasUses = !!(options.onFocus || options.uses);
 
     const bar = doc.createElement('div');
     bar.className = 'find-bar';
@@ -335,8 +341,7 @@
       '<div class="find-modes" role="tablist" aria-label="Search or go to">' +
       '<button type="button" role="tab" data-mode="find" title="Search the text (Ctrl+F)">Find</button>' +
       '<button type="button" role="tab" data-mode="goto" title="Go to a theorem, equation or section by its number (Ctrl+G)">Go to</button>' +
-      (options.onFocus ? '<button type="button" role="tab" data-mode="trace" title="Pick a theorem, lemma or definition and show only what it uses and what uses it">Trace</button>' : '') +
-      (options.uses ? '<button type="button" role="tab" data-mode="uses" title="Search by use: every result that uses a lemma, an assumption or an equation, and not another">Uses</button>' : '') +
+      (hasUses ? '<button type="button" role="tab" data-mode="uses" title="Pick a result to see what it uses and what uses it, or search by use: Lemma 2 but not Assumption A">Uses</button>' : '') +
       '</div>' +
       '<input class="find-input" type="text" spellcheck="false" autocomplete="off" aria-label="Search">' +
       '<span class="find-count" aria-live="polite"></span>' +
@@ -358,9 +363,11 @@
     let capped = false;
     let results = []; // Go to: targets shown in the list
     let selected = 0;
-    let queries = { find: '', goto: '', trace: '', uses: '' };
+    let queries = { find: '', goto: '', uses: '' };
     let usesDirect = false; // the Directly button in the Uses tab
     let usesQuery = null; // the search the Uses list shows: { inc, exc, any, direct }
+    let kinds = []; // Uses tab: what picking results[k] does ('self', 'uses', 'usedBy', 'pick', 'found')
+    let subject = null; // Uses tab: the result whose two lists are shown
     let searchTimer = 0;
     let stale = false;
     let lastQuery = '';
@@ -497,7 +504,10 @@
     function escapeHtml(s) {
       return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     }
-    /** "uses 3 · used in 5" for the Trace list, or '' when unknown. */
+    function related(el) {
+      try { return options.related ? options.related(el, { direct: usesDirect }) : null; } catch (e) { return null; }
+    }
+    /** "uses 3 · used in 5" for a result in the Uses list, or '' when unknown. */
     function relatedNote(t) {
       let c = null;
       try { c = options.related ? options.related(t.el) : null; } catch (e) { c = null; }
@@ -507,72 +517,125 @@
       if (c.usedBy) parts.push(`used in ${c.usedBy}`);
       return `<span class="goto-rel">${parts.length ? parts.join(' · ') : 'stands alone'}</span>`;
     }
-    /** The Uses tab: read the search, find what it names, list the results. */
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    /** One row of the Uses list; picking it does what kind says. */
+    function row(t, kind, note) {
+      const k = results.length;
+      results.push(t);
+      kinds.push(kind);
+      return `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}${kind === 'self' ? ' uses-self' : ''}"${k === 0 ? ' aria-selected="true"' : ''}>` +
+        `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
+        (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
+        (note || '') + '</li>';
+    }
+    const directBtn = (direct, locked) =>
+      `<button type="button" class="uses-direct" aria-pressed="${direct}"${locked ? ' disabled' : ''} title="Count only links written in a result itself, not what it uses through other results">Directly</button>`;
+    /** What the Uses tab can pick: results with an id, and displayed equations when it can search by them. */
+    function usesTargets(withEquations) {
+      return collectTargets(rootEl).filter((t) => (t.type === 'theorem' && t.el.id) || (withEquations && options.uses && t.type === 'equation'));
+    }
+    /** The Uses tab: one result's two lists, or a search by use when the text combines names. */
     function showUses() {
       const p = parseUses(input.value);
       const q = input.value.trim();
       results = [];
+      kinds = [];
       selected = 0;
       usesQuery = null;
-      let html = '';
-      if (!p.inc.length && !p.exc.length) {
-        html = '<li class="goto-empty uses-help">Type what the results should use: <b>Lemma 2</b>, <b>(3.1)</b>, ' +
-          '<b>Lemma 2, Assumption A</b> (both), <b>Lemma 2 or Lemma 3</b> (either), <b>Theorem 1 but not Assumption A</b>, or <b>not Assumption A</b> alone.</li>';
-      } else {
-        const targets = collectTargets(rootEl).filter((t) => (t.type === 'theorem' && t.el.id) || t.type === 'equation');
-        const pick = (term) => {
-          const t = rankTargets(targets, term, 1)[0];
-          return t ? (t.type === 'equation' ? t.block : t.el) : null;
-        };
-        const inc = p.inc.map(pick);
-        const exc = p.exc.map(pick);
-        const missing = p.inc.concat(p.exc).filter((term, k) => !(k < p.inc.length ? inc[k] : exc[k - p.inc.length]));
-        const direct = p.direct || usesDirect;
-        let res = null;
-        if (!missing.length) {
-          usesQuery = { inc, exc, any: p.any, direct };
-          try { res = options.uses(usesQuery); } catch (e) { res = null; }
-        }
-        if (!res) {
-          usesQuery = null;
-          html = `<li class="goto-empty">${missing.length ? 'No theorem, lemma or equation matches “' + escapeHtml(missing[0]) + '”' : 'Nothing to search by.'}</li>`;
-        } else {
-          const byEl = new Map(targets.map((t) => [t.el, t]));
-          results = res.results.map((el) => byEl.get(el) || { el, block: el, type: 'theorem', label: (el.querySelector('.thm-name') || el).textContent.trim(), num: '', title: '' });
-          const n = results.length;
-          html = `<li class="uses-head"><span class="uses-sum"><strong>${n ? n + ' result' + (n > 1 ? 's' : '') : 'No result'}</strong> ${escapeHtml(res.text)}</span>` +
-            `<button type="button" class="uses-direct" aria-pressed="${direct}"${p.direct ? ' disabled' : ''} title="Count only links written in a result itself, not what it uses through other results">Directly</button></li>` +
-            results.map((t, k) =>
-              `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}"${k === 0 ? ' aria-selected="true"' : ''}>` +
-              `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
-              (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
-              '</li>').join('');
-        }
-      }
+      subject = null;
+      let html;
+      if (p.inc.length + p.exc.length > 1 || p.exc.length) html = options.uses ? usesSearchHtml(p) : '<li class="goto-empty">Searching by several results isn\'t available here.</li>';
+      else html = usesOneHtml(p);
       list.innerHTML = html;
       list.hidden = false;
       count.textContent = '';
       bar.classList.toggle('no-match', !!q && !results.length);
       input.setAttribute('aria-activedescendant', results.length ? 'goto-0' : '');
     }
+    /** No text yet: every result, to pick one. One name: that result, what it uses and what uses it. */
+    function usesOneHtml(p) {
+      const term = p.inc[0] || '';
+      if (!term) {
+        const all = usesTargets(false);
+        return '<li class="goto-empty uses-help">Pick or type a result to see what it uses and what uses it. ' +
+          'Combine names to search by use: <b>Lemma 2, (3.1)</b> (both), <b>Lemma 2 or Lemma 3</b>, <b>Theorem 1 but not Assumption A</b>, <b>not Assumption A</b>.</li>' +
+          (all.length ? all.map((t) => row(t, 'pick', relatedNote(t))).join('') : '<li class="goto-empty">This document has no numbered theorems, lemmas or definitions.</li>');
+      }
+      const ranked = rankTargets(usesTargets(true), term, 40);
+      if (!ranked.length) return `<li class="goto-empty">No theorem, lemma or equation matches “${escapeHtml(term)}”</li>`;
+      const t = ranked[0];
+      subject = t;
+      const direct = p.direct || usesDirect;
+      const eq = t.type === 'equation';
+      let usesEls = null;
+      let usedByEls = null;
+      if (!eq) {
+        const c = related(t.el);
+        if (c && c.usesEls) { usesEls = c.usesEls; usedByEls = c.usedByEls; }
+      }
+      if (!usedByEls && options.uses) {
+        let res = null;
+        try { res = options.uses({ inc: [eq ? t.block : t.el], exc: [], any: false, direct }); } catch (e) { res = null; }
+        if (res) usedByEls = res.results;
+      }
+      const byEl = new Map(usesTargets(false).map((x) => [x.el, x]));
+      const asTarget = (el) => byEl.get(el) || { el, block: el, type: 'theorem', label: (el.querySelector('.thm-name') || el).textContent.trim(), num: '', title: '' };
+      const name = escapeHtml(displayName(t));
+      const sum = [];
+      if (usesEls) sum.push(usesEls.length ? `uses ${plural(usesEls.length, 'result')}` : 'uses no result');
+      if (usedByEls) sum.push(usedByEls.length ? `is used in ${plural(usedByEls.length, 'result')}` : 'is used in no result');
+      let html = `<li class="uses-head"><span class="uses-sum"><strong>${name}</strong> ${sum.join(', ') || ''}${direct ? ' directly' : ''}</span>${directBtn(direct, p.direct)}</li>`;
+      html += row(t, 'self', `<span class="goto-rel">${eq ? 'light up what uses it' : 'light up both ways'}</span>`);
+      const group = (title, els, kind) => {
+        let h = `<li class="uses-group" role="presentation">${title}</li>`;
+        h += els.length ? els.map((el) => row(asTarget(el), kind)).join('') : '<li class="goto-empty uses-none">Nothing</li>';
+        return h;
+      };
+      if (usesEls) html += group('Uses', usesEls, 'uses');
+      if (usedByEls) html += group('Used by', usedByEls, 'usedBy');
+      const others = ranked.slice(1, 9);
+      if (others.length) html += '<li class="uses-group" role="presentation">Other matches</li>' + others.map((x) => row(x, 'pick', x.type === 'theorem' ? relatedNote(x) : '')).join('');
+      return html;
+    }
+    /** Several names: every result that uses all of them (or any one), and none of those after "but not". */
+    function usesSearchHtml(p) {
+      const targets = usesTargets(true);
+      const pick = (term) => {
+        const t = rankTargets(targets, term, 1)[0];
+        return t ? (t.type === 'equation' ? t.block : t.el) : null;
+      };
+      const inc = p.inc.map(pick);
+      const exc = p.exc.map(pick);
+      const missing = p.inc.concat(p.exc).filter((term, k) => !(k < p.inc.length ? inc[k] : exc[k - p.inc.length]));
+      const direct = p.direct || usesDirect;
+      let res = null;
+      if (!missing.length) {
+        usesQuery = { inc, exc, any: p.any, direct };
+        try { res = options.uses(usesQuery); } catch (e) { res = null; }
+      }
+      if (!res) {
+        usesQuery = null;
+        return `<li class="goto-empty">${missing.length ? 'No theorem, lemma or equation matches “' + escapeHtml(missing[0]) + '”' : 'Nothing to search by.'}</li>`;
+      }
+      const byEl = new Map(targets.map((t) => [t.el, t]));
+      const found = res.results.map((el) => byEl.get(el) || { el, block: el, type: 'theorem', label: (el.querySelector('.thm-name') || el).textContent.trim(), num: '', title: '' });
+      const n = found.length;
+      return `<li class="uses-head"><span class="uses-sum"><strong>${n ? plural(n, 'result') : 'No result'}</strong> ${escapeHtml(res.text)}</span>${directBtn(direct, p.direct)}</li>` +
+        found.map((t) => row(t, 'found')).join('');
+    }
 
     function showGoto() {
       if (mode === 'uses') return showUses();
-      const related = mode === 'trace';
-      let targets = collectTargets(rootEl);
-      if (related) targets = targets.filter((t) => t.type === 'theorem' && t.el.id);
-      results = rankTargets(targets, input.value, 200);
+      results = rankTargets(collectTargets(rootEl), input.value, 200);
+      kinds = [];
       selected = 0;
       const q = input.value.trim();
-      const empty = related
-        ? (q ? 'No theorem, lemma or definition matches “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, lemmas or definitions.')
-        : (q ? 'Nothing numbered or named “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, equations or sections.');
+      const empty = q ? 'Nothing numbered or named “' + escapeHtml(q) + '”' : 'This document has no numbered theorems, equations or sections.';
       list.innerHTML = results.length
         ? results.map((t, k) =>
           `<li role="option" id="goto-${k}" data-k="${k}" class="goto-${t.type}"${k === 0 ? ' aria-selected="true"' : ''}>` +
           `<span class="goto-name">${escapeHtml(displayName(t))}</span>` +
           (t.title ? `<span class="goto-title">${escapeHtml(t.title)}</span>` : '') +
-          (related ? relatedNote(t) : '') +
           '</li>').join('')
         : `<li class="goto-empty">${empty}</li>`;
       list.hidden = false;
@@ -594,20 +657,16 @@
     function go(k) {
       const t = results[k];
       if (!t || !t.el.isConnected) return;
+      if (mode === 'uses' && kinds[k] === 'pick') {
+        // another result: show its two lists
+        input.value = queries.uses = displayName(t);
+        showUses();
+        input.focus();
+        return;
+      }
+      if (mode === 'uses' && goUses(t, kinds[k])) return;
       close();
       reveal(t.el);
-      if (mode === 'uses') {
-        // light up every result found, starting at this one
-        if (options.onUses && usesQuery) options.onUses(usesQuery, t.el);
-        if (options.onJump) options.onJump(t.el);
-        return;
-      }
-      if (mode === 'trace') {
-        // light up what it uses and what uses it, and hide the rest
-        options.onFocus(t.el);
-        if (options.onJump) options.onJump(t.el);
-        return;
-      }
       // Glide only when it is close; a long smooth scroll sweeps the whole page.
       const r = t.el.getBoundingClientRect();
       const view = scroller.getBoundingClientRect();
@@ -621,6 +680,38 @@
       if (options.onJump) options.onJump(t.el);
     }
 
+    /** Picking in the Uses tab: light up what it found, starting at t. */
+    function goUses(t, kind) {
+      const s = subject;
+      const one = s && (s.type === 'equation' ? s.block : s.el);
+      const byUse = (inc, at) => {
+        if (!options.onUses) return false;
+        options.onUses({ inc: [inc], exc: [], any: false, direct: usesDirect || parseUses(input.value).direct }, at);
+        return true;
+      };
+      let done = false;
+      close();
+      reveal(t.el);
+      if (kind === 'found') {
+        // every result the search found, starting at this one
+        if (options.onUses && usesQuery) { options.onUses(usesQuery, t.el); done = true; }
+      } else if (kind === 'self') {
+        if (t.type === 'equation') done = byUse(t.block, null);
+        else if (options.onFocus) { options.onFocus(t.el, { dir: 'both' }); done = true; }
+        else done = byUse(t.el, null);
+      } else if (kind === 'usedBy' && one) {
+        // what uses it, as a search by use, so the bar steps through them
+        done = byUse(one, t.el);
+        if (!done && options.onFocus && s.type !== 'equation') { options.onFocus(s.el, { dir: 'usedBy', at: t.el }); done = true; }
+      } else if (kind === 'uses' && one && options.onFocus) {
+        options.onFocus(s.el, { dir: 'uses', at: t.el });
+        done = true;
+      }
+      if (!done) return false;
+      if (options.onJump) options.onJump(t.el);
+      return true;
+    }
+
     // --- modes, opening and closing ---
     function setMode(m) {
       // (same mode: open() may have just put new text in queries[m])
@@ -629,10 +720,10 @@
       bar.dataset.mode = m;
       bar.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
       input.value = queries[m];
-      input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : m === 'uses' ? 'Lemma 2, (3.1) but not Assumption A' : 'Pick a result: Lemma 4.1, or a name';
-      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : m === 'uses' ? 'Search by use: what the results should use, and not' : 'Pick a result to show what it uses and what uses it');
+      input.placeholder = m === 'find' ? 'Find in document' : m === 'goto' ? 'Lemma 4.1, (3.2), §2, or a name' : 'Lemma 2, or Lemma 2 but not Assumption A';
+      input.setAttribute('aria-label', m === 'find' ? 'Find in document' : m === 'goto' ? 'Go to a theorem, equation or section' : 'A result, to see what it uses and what uses it, or a search by use');
       input.setAttribute('role', m === 'find' ? 'searchbox' : 'combobox');
-      list.setAttribute('aria-label', m === 'trace' || m === 'uses' ? 'Results' : 'Places to go to');
+      list.setAttribute('aria-label', m === 'uses' ? 'Results' : 'Places to go to');
       if (m !== 'find') input.setAttribute('aria-expanded', 'true');
       else input.removeAttribute('aria-expanded');
       prevBtn.hidden = nextBtn.hidden = m !== 'find';
@@ -648,8 +739,8 @@
     }
 
     function open(m, text) {
-      if (m === 'trace' && !options.onFocus) m = 'goto';
-      if (m === 'uses' && !options.uses) m = 'goto';
+      if (m === 'trace') m = 'uses'; // the old Trace tab is part of Uses now
+      if (m === 'uses' && !hasUses) m = 'goto';
       const wasOpen = !bar.hidden;
       if (!wasOpen) searchMoved = false;
       bar.hidden = false;

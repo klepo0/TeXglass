@@ -1,6 +1,7 @@
 'use strict';
-// The find bar's Trace tab: pick a result and see only what it uses and
-// what uses it (src/find.js + src/insight.js). Runs in a real browser and is
+// The find bar's Uses tab, picking one result: its two lists (what it uses,
+// what uses it), and lighting up all of it or one side (src/find.js +
+// src/insight.js). The search by use in the same tab: uses-ui.test.js. Runs in a real browser and is
 // skipped where Playwright and a browser are not installed.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -35,7 +36,7 @@ A paragraph of text.
 \begin{proof} From Theorem~\ref{t:main}. \end{proof}
 \end{document}`;
 
-test('the Trace tab picks a result and hides all but what it uses and what uses it', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('the Uses tab picks a result, lists what it uses and what uses it, and hides the rest', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -53,13 +54,19 @@ test('the Trace tab picks a result and hides all but what it uses and what uses 
       window.finder = TeXglassFind.attach({
         root,
         scroller: document.getElementById('pane'),
-        onFocus: (el) => insight.focus(el, 'both', { scroll: true, collapse: true }),
-        related: (el) => insight.related(el),
+        onFocus: (el, o) => insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }),
+        related: (el, o) => insight.related(el, o),
+        uses: (q) => insight.searchUses(q),
+        onUses: (q, el) => insight.showUses(q, { at: el, scroll: true, collapse: true }),
       });
-      window.finder.open('trace');
+      window.finder.open('trace'); // the old Trace tab's name opens Uses
     });
-    // Only results are listed, with how many they use and are used in.
-    const items = () => p.evaluate(() => Array.from(document.querySelectorAll('.goto-list li')).map((li) => li.textContent));
+    assert.equal(await p.evaluate(() => window.finder.state().mode), 'uses');
+    assert.deepEqual(await p.evaluate(() => Array.from(document.querySelectorAll('.find-modes button')).map((b) => b.textContent)), ['Find', 'Go to', 'Uses']);
+    // With nothing typed, every result, with how many they use and are used in.
+    const items = () => p.evaluate(() => Array.from(document.querySelectorAll('.goto-list li[data-k]')).map((li) => li.textContent));
+    const rows = () => p.evaluate(() => Array.from(document.querySelectorAll('.goto-list li:not(.uses-help)')).map((li) => (li.matches('.uses-group') ? '# ' : '') + (li.querySelector('.goto-name, .uses-sum') || li).textContent));
+    assert.match(await p.evaluate(() => document.querySelector('.goto-list li').textContent), /Pick or type a result/);
     assert.deepEqual(await items(), [
       'Lemma 1.1used in 3',
       'Lemma 1.2Second bounduses 1 · used in 2',
@@ -67,9 +74,28 @@ test('the Trace tab picks a result and hides all but what it uses and what uses 
       'Theorem 2.1uses 2 · used in 1',
       'Corollary 2.2uses 3',
     ]);
-    await p.keyboard.type('second');
-    assert.deepEqual(await items(), ['Lemma 1.2Second bounduses 1 · used in 2']);
+    // Picking one shows its two lists.
+    await p.keyboard.press('ArrowDown');
+    await p.keyboard.press('ArrowDown');
     await p.keyboard.press('Enter');
+    assert.equal(await p.evaluate(() => window.finder.state().query), 'Lemma 1.3');
+    assert.deepEqual(await rows(), ['Lemma 1.3 uses no result, is used in no result', 'Lemma 1.3', '# Uses', 'Nothing', '# Used by', 'Nothing']);
+    // Typing a name does the same.
+    await p.fill('.find-input', '');
+    await p.keyboard.type('second');
+    assert.deepEqual(await rows(), [
+      'Lemma 1.2 uses 1 result, is used in 2 results',
+      'Lemma 1.2', '# Uses', 'Lemma 1.1', '# Used by', 'Theorem 2.1', 'Corollary 2.2',
+    ]);
+    // Directly: only links written in the result itself.
+    await p.click('.uses-direct');
+    assert.deepEqual(await rows(), [
+      'Lemma 1.2 uses 1 result, is used in 1 result directly',
+      'Lemma 1.2', '# Uses', 'Lemma 1.1', '# Used by', 'Theorem 2.1',
+    ]);
+    await p.click('.uses-direct');
+    await p.locator('.find-input').focus();
+    await p.keyboard.press('Enter'); // the result itself: all of it
     assert.equal(await p.evaluate(() => window.finder.isOpen()), false);
     const state = () => p.evaluate(() => ({
       shown: Array.from(document.querySelectorAll('#preview .theorem')).filter((el) => el.offsetParent).map((el) => el.querySelector('.thm-name').textContent),
@@ -116,6 +142,17 @@ test('the Trace tab picks a result and hides all but what it uses and what uses 
     await p.click('.uses-bar [data-dir="both"]');
     s = await state();
     assert.deepEqual(s.shown, ['Lemma 1.1', 'Lemma 1.2', 'Theorem 2.1', 'Corollary 2.2']);
+    // Picking from a list lights up that side and starts at the one picked.
+    await p.evaluate(() => window.finder.open('uses', 'Theorem 2.1'));
+    await p.click('.goto-list li[data-k] >> text=Lemma 1.1');
+    s = await state();
+    assert.deepEqual(s.shown, ['Lemma 1.1', 'Lemma 1.2', 'Theorem 2.1']);
+    assert.equal(await p.evaluate(() => document.querySelector('.uses-bar [data-dir="uses"]').getAttribute('aria-pressed')), 'true');
+    assert.equal(await p.evaluate(() => document.querySelector('.uses-bar .uses-step').textContent), '2/3'); // Theorem 2.1, then Lemma 1.1
+    await p.evaluate(() => window.finder.open('uses', 'Lemma 1.1'));
+    await p.click('.goto-list li[data-k] >> text=Theorem 2.1');
+    assert.equal(await p.evaluate(() => document.querySelector('.uses-bar .uses-what').textContent), '3 results use Lemma 1.1');
+    assert.equal(await p.evaluate(() => document.querySelector('.uses-bar .uses-step').textContent), '2/3');
     // A result on its own.
     await p.evaluate(() => window.finder.open('trace', 'lemma 1.3'));
     await p.keyboard.press('Enter');
@@ -131,7 +168,7 @@ test('the Trace tab picks a result and hides all but what it uses and what uses 
   }
 });
 
-test('without onFocus there is no Trace tab', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('without onFocus or uses there is no Uses tab', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {

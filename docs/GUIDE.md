@@ -19,7 +19,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Reading a paper](#reading-a-paper)
 - [Previews on hover](#previews-on-hover)
-- [Finding your way: Navigate, Go to, Trace, Uses](#finding-your-way-navigate-go-to-trace-uses)
+- [Finding your way: Navigate, Go to, Uses](#finding-your-way-navigate-go-to-uses)
 - [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
   - [Pins and your own map](#pins-and-your-own-map)
 - [Understanding the logic](#understanding-the-logic)
@@ -51,7 +51,7 @@ letters are ignored while you type in a text field.
 | <kbd>Ctrl+G</kbd> | Go to a theorem, equation, section, figure or table by number (**Navigate** on **Go to**). |
 | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> | Next / previous match while the bar is open. In the Find box, <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> do the same. |
 | <kbd>Alt+Left</kbd> / <kbd>Alt+Right</kbd> | [Back](#back-to-where-you-were) to where you were before a jump, and forward again (<kbd>Option</kbd> on a Mac). Not while you type in a text field. |
-| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to**, **Trace** and **Uses**: move through the list and pick. |
+| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> | In **Go to** and **Uses**: move through the list and pick. |
 | <kbd>Esc</kbd> | Close the Navigate bar, a hover preview, "What does this use?", stepping through a proof, or the contents drawer on a narrow window. |
 | <kbd>M</kbd> | Open or close the larger dependency map. |
 | <kbd>Alt</kbd> + arrow keys | On the map: move the focused result (unless the map is locked). |
@@ -183,33 +183,39 @@ scroll it. It stays inside the window and closes with <kbd>Esc</kbd>.
 - **Map nodes**: resting on a result in the map (small or large) previews its
   statement.
 
-## Finding your way: Navigate, Go to, Trace, Uses
+## Finding your way: Navigate, Go to, Uses
 
 The **Navigate** button (<kbd>Ctrl+F</kbd> / <kbd>Ctrl+G</kbd>) opens a bar
-with four tabs:
+with three tabs:
 
 - **Find**: search the text. Matches are highlighted; <kbd>Enter</kbd>,
   <kbd>F3</kbd> next, <kbd>Shift+Enter</kbd>, <kbd>Shift+F3</kbd> previous. A
   short selection is used as the search when you open it.
 - **Go to**: type `Lemma 4.1`, `(3.2)`, `§2`, `Fig. 3` or part of a name and
   pick from the list.
-- **Trace**: pick a theorem, lemma or definition (the list shows "uses 3 ·
-  used in 5") to see only what it uses and what uses it. It starts
-  [What does this use?](#understanding-the-logic) on that result.
-- **Uses**: search by structure. Type what the results should use and get
-  every result that does, directly or through other results:
-  - `Lemma 2` (every result that rests on Lemma 2), `(3.1)` (on an equation),
-    `Assumption A`, a definition, or a number alone;
-  - several, separated by commas or `and`, for results that use all of them;
-    `Lemma 2 or Lemma 3` for either;
-  - `but not`, `not`, `without` or `except` leaves out every result that uses
-    what follows: `Theorem 1 but not Assumption A`. A single term can be left
-    out as `-Lemma 3`, and `not Assumption A` alone lists every result that
-    doesn't need the assumption;
+- **Uses**: what a result uses and what uses it, or a search by structure.
+  - With nothing typed it lists every theorem, lemma and definition ("uses 3 ·
+    used in 5"). Pick one, or type its number or part of its name (`Lemma 2`,
+    `(3.1)` for an equation), and you get two lists: **Uses** (what it rests
+    on, directly or through other results) and **Used by** (everything that
+    rests on it). Other results that match what you typed are listed below;
+    pick one to see its lists instead.
+  - Picking the result itself starts
+    [What does this use?](#understanding-the-logic) on it, both ways. Picking
+    one from **Uses** lights up what the result uses, starting at the one you
+    picked; picking one from **Used by** lights up everything that uses it,
+    starting there.
+  - Combine names to search by structure, for every result that uses them:
+    several, separated by commas or `and`, for results that use all of them;
+    `Lemma 2 or Lemma 3` for either; `but not`, `not`, `without` or `except`
+    leaves out every result that uses what follows:
+    `Theorem 1 but not Assumption A`. A single term can be left out as
+    `-Lemma 3`, and `not Assumption A` alone lists every result that doesn't
+    need the assumption.
   - **Directly** (or typing `directly`) counts only the links written in a
     result itself, not what it uses through other results.
 
-  The list counts what it found ("3 results use Lemma 2 but not Assumption
+  A search counts what it found ("3 results use Lemma 2 but not Assumption
   A"). Picking one lights them all up in the text, with **Hide the rest** on,
   starting at the one you picked; the bar steps through them, **Change**
   reopens the search, **Done** or <kbd>Esc</kbd> ends it. A map on show
@@ -224,7 +230,7 @@ Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
 Every jump remembers where you were reading: clicking a reference or a
 citation, an entry in **Contents**, a result on the **Map** (double-click, or
 **Go there**) or in the notation
-index, **Go to**, **Trace**, **Uses**, the first match of **Find**, **Go there** in a
+index, **Go to**, **Uses**, the first match of **Find**, **Go there** in a
 preview, and the next or previous margin note. A jump to something already on
 screen doesn't count.
 
@@ -341,7 +347,7 @@ kept per paper with your notes, so it is exported, imported and synced with them
 - **Your own links**: pick a result, then **+ It uses…** or **+ Used in…** and
   pick the other result on the map (every result shows while you do, linked or
   not). Your links are drawn in a dashed accent line and count everywhere a
-  link counts: "What does this use?", Trace, previews and pins. **Remove…**
+  link counts: "What does this use?", **Uses**, previews and pins. **Remove…**
   puts a **×** by each link to take it away (the paper's links come back with
   **Restore**).
 - **Lock** (checkbox above the map) stops dragging, hiding and link changes
@@ -363,10 +369,10 @@ kept per paper with your notes, so it is exported, imported and synced with them
   - **Done** or <kbd>Esc</kbd> ends it.
   - **Print** on the bar prints what is shown: with **Hide the rest** on, only
     the lit results, and of their proofs only the ones you opened.
-- **Trace**: the same, chosen by name from the Navigate bar.
-- **Uses**: the other way round, every result that uses a given lemma,
-  assumption or equation, and not another; see
-  [Uses](#finding-your-way-navigate-go-to-trace-uses).
+- **Uses** in the Navigate bar: the same, chosen by name, with what a result
+  uses and what uses it as two lists; or every result that uses a given
+  lemma, assumption or equation, and not another; see
+  [Uses](#finding-your-way-navigate-go-to-uses).
 - **Step through a proof.** The **Step through** button by a proof's heading
   shows the proof one sentence at a time, like a slide reveal (a list item
   is a piece of its own too). Works on any paper; the author changes
@@ -838,7 +844,7 @@ works offline:
 - notation on hover and **What does this use?** by each result;
 - the side panel with **Contents**, **Map** and **Notation**;
 - **Navigate**: <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+G</kbd> to go to a
-  number, **Trace**, **Uses** (search by what results use); **Back** and **Forward** after a jump;
+  number, **Uses** (what a result uses and what uses it, or search by what results use); **Back** and **Forward** after a jump;
 - click a formula to copy its LaTeX; light and dark.
 
 Cited papers' titles and abstracts show when the page is online. Your own

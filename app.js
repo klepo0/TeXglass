@@ -2726,10 +2726,10 @@
       scroller: previewPane,
       reveal,
       onJump: hidePopover,
-      // Trace: pick a result, see only what it uses and what uses it
-      onFocus: (el) => { if (insight) insight.focus(el, 'both', { scroll: true, collapse: true }); },
-      related: (el) => (insight ? insight.related(el) : null),
-      // Uses: search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      // Uses tab: pick a result, see what it uses and what uses it, or light up one side
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      related: (el, o) => (insight ? insight.related(el, o) : null),
+      // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),
       onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
     });
