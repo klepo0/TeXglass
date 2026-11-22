@@ -152,6 +152,34 @@ test('the dependency map can be edited, pinned and locked', { skip: !chromium &&
     assert.equal(await page.locator('.insight-dialog .dep-pinned').count(), 0);
     await page.click('.insight-dialog [data-view="Main proof"]');
     assert.ok(await node('Theorem 1').evaluate((g) => g.classList.contains('dep-pinned')));
+    assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'true', 'the saved map in use is marked');
+
+    // Pin one more: "Update" keeps the new pins under the same name.
+    await pickNode('Lemma 2');
+    await page.click('.insight-dialog [data-mpin="self"]');
+    assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'false');
+    await page.click('.insight-dialog [data-view-update="Main proof"]');
+    assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'true');
+    assert.equal(await page.locator('.insight-dialog [data-view-update]').count(), 0);
+
+    // Undo takes the last step back (here: the update), Redo does it again.
+    await page.click('.insight-dialog .dep-history [data-undo]');
+    assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'false');
+    await page.click('.insight-dialog .dep-history [data-redo]');
+    assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'true');
+
+    // Reset map: back to the paper's map, after a confirmation; saved maps stay.
+    await page.click('.insight-dialog [data-reset-map]');
+    await page.click('.insight-dialog [data-reset-yes]');
+    assert.equal(await page.locator('.insight-dialog .dep-pinned, .insight-dialog .dep-edge.dep-mine').count(), 0);
+    assert.equal(await page.locator('.insight-dialog [data-reset-layout], .insight-dialog [data-reset-map]').count(), 0, 'nothing left to reset');
+    assert.ok(await page.locator('.insight-dialog [data-view="Main proof"]').count(), 'the saved map stays');
+    assert.match(await page.locator('.insight-dialog .dep-note').innerText(), /Reset the map/);
+    // Ctrl+Z brings it all back.
+    await node('Lemma 1').focus();
+    await page.keyboard.press('Control+z');
+    assert.ok(await node('Theorem 1').evaluate((g) => g.classList.contains('dep-pinned')));
+    assert.ok(await page.locator('.insight-dialog .dep-edge.dep-mine').count());
 
     // After a reload, opening the paper again brings it all back.
     await page.reload();

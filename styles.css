@@ -1142,6 +1142,22 @@ body.text-resizing #preview { transition: none; }
 .dep-unlink, .dep-relink { font: inherit; font-size: 11px; line-height: 1.2; padding: 0 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); color: var(--muted); cursor: pointer; }
 .dep-unlink:hover { color: var(--warn); border-color: var(--warn); }
 .dep-tag-mine { color: var(--accent); border-color: var(--accent); }
+.dep-map:not(.dep-locked):not(.dep-linking) .dep-node { cursor: grab; }
+.dep-history { display: inline-flex; }
+.dep-opts .dep-history button { padding: 0 8px; font-size: 14px; line-height: 1.4; }
+.dep-opts .dep-history button:first-child { border-radius: 5px 0 0 5px; }
+.dep-opts .dep-history button:last-child { border-left: 0; border-radius: 0 5px 5px 0; }
+.dep-opts button:disabled { opacity: 0.4; cursor: default; border-color: var(--rule); color: var(--muted); }
+.dep-note { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 2px 4px 2px 10px; border-radius: 6px; background: var(--accent-soft); color: var(--ink); font-size: 12.5px; }
+.dep-note button { font: inherit; font-size: 12px; font-weight: 600; padding: 1px 8px; border: 0; border-radius: 4px; background: none; color: var(--accent); cursor: pointer; }
+.dep-note button:hover { text-decoration: underline; }
+.dep-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 6px; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 6px; font-size: 12.5px; }
+.dep-confirm span { flex: 1 1 260px; }
+.dep-confirm button { font: inherit; font-size: 12px; padding: 1px 9px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); color: var(--ink); cursor: pointer; }
+.dep-confirm .dep-confirm-yes { background: var(--warn); border-color: var(--warn); color: var(--paper); }
+.dep-view-on button { border-color: var(--accent); }
+.dep-view-on button:first-child { background: var(--accent); color: var(--paper); }
+.dep-pins .dep-view-update { border-color: var(--accent); color: var(--accent); }
 .dep-opts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
 .dep-opts label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .dep-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 6px 2px 0; font-size: 12px; color: var(--muted); }

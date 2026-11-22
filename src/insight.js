@@ -2052,6 +2052,8 @@
           return;
         }
         if (e.key === 'Escape' && view.linking) { e.preventDefault(); e.stopPropagation(); view.linking = null; fillDeps(view); }
+        if (e.key === 'Escape' && view.confirmReset) { e.preventDefault(); e.stopPropagation(); view.confirmReset = false; fillDeps(view); }
+        if (mapUndoKey(e)) e.stopPropagation();
       });
       wirePreviews(view);
       wireMapMoves(view);
@@ -2548,13 +2550,135 @@
     function saveEdits() {
       try { if (opts.edits) opts.edits.set(edits); } catch (e) { /* keep them for this visit */ }
     }
-    function editsChanged(part) {
+    // Undo and redo: each change the reader makes is one step (a drag, a pin, a
+    // reset…), kept for this visit. Undoing writes the old values again, with new
+    // stamps, so that the undo wins when copies merge on another device.
+    let committed = edits; // the changes as of the last step
+    const undoStack = []; // [{ edits, label }]
+    const redoStack = [];
+    let note = null; // { text, kind: 'undo' | 'redo' }: what just happened, shown for a moment
+    let noteTimer = null;
+    /** One entry's meaning, without its stamp: null when it changes nothing. */
+    const meaning = (part, e) => {
+      if (!e) return null;
+      if (part === 'pos') return Number.isFinite(e.x) && Number.isFinite(e.y) ? e.x + ',' + e.y : null;
+      if (part === 'pin') return e.d || null;
+      if (part === 'hide') return e.h ? '1' : null;
+      if (part === 'link') return e.s || null;
+      return e.p && Object.keys(e.p).length ? JSON.stringify(Object.entries(e.p).sort()) : null;
+    };
+    /** The entries two copies of the changes differ in: [[part, key]]. */
+    function diff(a, b) {
+      const out = [];
+      for (const p of EDIT_PARTS) {
+        for (const k of new Set([...Object.keys(a[p] || {}), ...Object.keys(b[p] || {})])) {
+          if (meaning(p, (a[p] || {})[k]) !== meaning(p, (b[p] || {})[k])) out.push([p, k]);
+        }
+      }
+      return out;
+    }
+    /** What a key is called: "Lemma 2", "equation (3.1)". */
+    function nameOfKey(k) {
+      if (k.startsWith('eq:')) return 'equation ' + k.slice(3);
+      const x = getGraph().byKey.get(k);
+      if (x) return x.cite ? `${x.label} ${x.who}`.trim() : x.name;
+      return k.replace(/^(label|name|cite):/, '');
+    }
+    const WITH = { uses: ' with what it uses', usedBy: ' with what uses it', both: ' with what it uses and what uses it' };
+    /** "Hid Lemma 2": a step in words, from the copies before and after it. */
+    function describe(a, b) {
+      const ch = diff(a, b);
+      if (!ch.length) return '';
+      const parts = new Set(ch.map(([p]) => p));
+      if (parts.size > 1) return 'Changed the map';
+      const [p, k] = ch[0];
+      const n = ch.length;
+      const v = (b[p] || {})[k] || {};
+      if (p === 'pos') return n > 1 ? (Number.isFinite(v.x) ? `Moved ${n} results` : 'Put the results back') : (Number.isFinite(v.x) ? `Moved ${nameOfKey(k)}` : `Put ${nameOfKey(k)} back`);
+      if (p === 'pin') {
+        if (n > 1) return ch.every(([, kk]) => !meaning('pin', b.pin[kk])) ? `Unpinned ${n}` : `Changed ${n} pins`;
+        return v.d ? `Pinned ${nameOfKey(k)}${WITH[v.d] || ''}` : `Unpinned ${nameOfKey(k)}`;
+      }
+      if (p === 'hide') return n > 1 ? `Changed ${n} hidden results` : v.h ? `Hid ${nameOfKey(k)}` : `Showed ${nameOfKey(k)} again`;
+      if (p === 'link') {
+        if (n > 1) return `Changed ${n} links`;
+        const [x, y] = k.split(' > ');
+        const what = `${nameOfKey(y)} uses ${nameOfKey(x)}`;
+        return v.s === 'add' ? `Linked: ${what}` : v.s === 'del' ? `Took away: ${what}` : `Back as the paper has it: ${what}`;
+      }
+      return v.p ? `Saved the map “${k}”` : `Deleted the map “${k}”`;
+    }
+    function showNote(text, kind) {
+      note = text ? { text, kind } : null;
+      clearTimeout(noteTimer);
+      if (note) noteTimer = setTimeout(() => { note = null; document_.querySelectorAll('.dep-note').forEach((x) => x.remove()); }, 8000);
+    }
+
+    function editsChanged(part, o) {
+      o = o || {};
+      if (!o.history) {
+        const label = o.label || describe(committed, edits);
+        if (label) {
+          undoStack.push({ edits: committed, label });
+          if (undoStack.length > 50) undoStack.shift();
+          redoStack.length = 0;
+          showNote(label, 'undo');
+        }
+      }
+      committed = edits;
       saveEdits();
-      if (part === 'link' && graph) applyLinks(graph, edits.link);
+      const all = part === 'all';
+      if ((all || part === 'link') && graph) applyLinks(graph, edits.link);
       for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
       markPins();
-      if (part === 'link' && focusState) refocus();
-      if ((part === 'pin' || part === 'link' || part === 'view') && opts.onPinsChange) opts.onPinsChange();
+      if ((all || part === 'link') && focusState) refocus();
+      if ((all || part === 'pin' || part === 'link' || part === 'view') && opts.onPinsChange) opts.onPinsChange();
+    }
+
+    /** Write the values of `target` wherever the changes differ from it. */
+    function moveTo(target) {
+      const EMPTY = { pos: {}, pin: { d: '' }, hide: { h: false }, link: { s: '' }, view: { p: null } };
+      for (const [p, k] of diff(edits, target)) {
+        const v = (target[p] || {})[k];
+        const clean = v && meaning(p, v) != null ? Object.assign({}, v) : Object.assign({}, EMPTY[p]);
+        delete clean.t;
+        setEdit(p, k, clean, true);
+      }
+    }
+    function undo() {
+      const step = undoStack.pop();
+      if (!step) return false;
+      redoStack.push({ edits: committed, label: step.label });
+      moveTo(step.edits);
+      showNote('Undone: ' + step.label, 'redo');
+      editsChanged('all', { history: true });
+      return true;
+    }
+    function redo() {
+      const step = redoStack.pop();
+      if (!step) return false;
+      undoStack.push({ edits: committed, label: step.label });
+      moveTo(step.edits);
+      showNote(step.label, 'undo');
+      editsChanged('all', { history: true });
+      return true;
+    }
+
+    /** Whether the map differs from the paper's: moved, pinned, hidden or relinked anything. */
+    const changedFromPaper = () => ['pos', 'pin', 'hide', 'link'].some((p) => Object.values(edits[p]).some((e) => meaning(p, e) != null));
+    /**
+     * The map as the paper has it: TeXglass's layout, nothing hidden, no links of
+     * the reader's own or taken away, no pins. Saved maps stay as they are.
+     */
+    function resetMap() {
+      if (locked) return;
+      for (const p of ['pos', 'pin', 'hide', 'link']) {
+        for (const [k, e] of Object.entries(edits[p])) {
+          if (meaning(p, e) == null) continue;
+          setEdit(p, k, p === 'pos' ? {} : p === 'pin' ? { d: '' } : p === 'hide' ? { h: false } : { s: '' }, true);
+        }
+      }
+      editsChanged('all', { label: 'Reset the map to the paper’s' });
     }
 
     /** Pin a result, cited work or equation (by key): d 'self' | 'uses' | 'usedBy' | 'both', or '' to unpin. */
@@ -2574,6 +2698,7 @@
       name = String(name || '').trim().slice(0, 80);
       const pins = pinMap();
       if (!name || !pins.size) return false;
+      activeView = name;
       setEdit('view', name, { p: Object.fromEntries(pins) });
       return true;
     }
@@ -2584,11 +2709,31 @@
       const want = new Map(Object.entries(v.p));
       for (const k of pinMap().keys()) if (!want.has(k)) setEdit('pin', k, { d: '' }, true);
       for (const [k, d] of want) if (((edits.pin[k] && edits.pin[k].d) || '') !== d) setEdit('pin', k, { d }, true);
-      editsChanged('pin');
+      activeView = name;
+      editsChanged('pin', { label: `Opened the map “${name}”` });
       return true;
     }
     function deleteView(name) {
+      if (activeView === name) activeView = null;
       if (edits.view[name]) setEdit('view', name, { p: null });
+    }
+    // the saved map last opened or saved, to offer "Update" once its pins change
+    let activeView = null;
+    /** Whether the pins now are exactly a saved map's. */
+    const pinsAre = (p) => {
+      const pins = pinMap();
+      const want = Object.entries(p || {});
+      return want.length === pins.size && want.every(([k, d]) => pins.get(k) === d);
+    };
+    /** A name to suggest for the pins now: "Theorem 2 with what it uses", or "Map 3". */
+    function suggestName() {
+      const pins = Array.from(pinMap());
+      if (activeView && edits.view[activeView] && edits.view[activeView].p) return activeView;
+      if (pins.length === 1) return (nameOfKey(pins[0][0]) + (WITH[pins[0][1]] || '')).replace(/^equation /, 'Equation ');
+      const used = new Set(Object.keys(edits.view));
+      let i = savedViews().length + 1;
+      while (used.has('Map ' + i)) i++;
+      return 'Map ' + i;
     }
 
     function setHidden(key, on) {
@@ -2805,15 +2950,18 @@
         parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
         if (opts.showPinned) parts.push('<button type="button" data-show-pinned title="Show only the pinned results and equations in the text, the rest hidden">Show pinned</button>');
         parts.push(view.naming
-          ? '<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this map" aria-label="Name for the saved map" maxlength="80"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>'
-          : '<button type="button" data-save-view title="Keep these pins under a name, to bring them back later (saved with your notes)">Save…</button>');
+          ? `<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this map" aria-label="Name for the saved map" maxlength="80" value="${esc(suggestName())}"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>`
+          : '<button type="button" data-save-view title="Keep these pins under a name, to bring them back later (saved with your notes)">Save as…</button>');
+        // the saved map in use, changed since: one click keeps the new pins under its name
+        const act = activeView && edits.view[activeView] && edits.view[activeView].p ? activeView : null;
+        if (act && !view.naming && !pinsAre(edits.view[act].p)) parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}" title="${esc(`Keep the pins now under “${act}”, instead of what it held`)}">Update “${esc(act)}”</button>`);
         parts.push('<button type="button" data-unpin-all title="Take every pin away">Unpin all</button>');
       } else {
-        parts.push('<span class="insight-muted">Pin a result (pick it below, or the pin by its heading in the text) or an equation (the pin by its number) to show only those later.</span>');
+        parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text, to show only those later.</span>');
       }
       if (saved.length) {
         parts.push('<span class="dep-views"><span class="insight-usedby-k">Saved</span> ' + saved.map(([name, e]) =>
-          `<span class="dep-view"><button type="button" data-view="${esc(name)}" title="${esc(`Pin these ${Object.keys(e.p).length} again, instead of the pins now`)}">${esc(name)}</button>` +
+          `<span class="dep-view${pinsAre(e.p) ? ' dep-view-on' : ''}"><button type="button" data-view="${esc(name)}" aria-pressed="${pinsAre(e.p)}" title="${esc(pinsAre(e.p) ? `Pinned now: the ${Object.keys(e.p).length} of “${name}”` : `Pin these ${Object.keys(e.p).length} again, instead of the pins now`)}">${esc(name)}</button>` +
           `<button type="button" class="dep-view-del" data-view-del="${esc(name)}" aria-label="${esc('Delete the saved map ' + name)}" title="Delete">×</button></span>`).join('') + '</span>');
       }
       return `<div class="dep-pins">${parts.join('')}</div>`;
@@ -2884,7 +3032,13 @@
       if (foldGroups(g).size) opts_.push(box('fold', 'Fold lemmas', fold, 'Fold chains of lemmas that serve only one result into that result'));
       if (hidden.size) opts_.push(box('showHidden', `Hidden (${hidden.size})`, !!mapOpts.showHidden, 'Draw the results you hid, faded, so you can bring them back'));
       opts_.push(`<label title="Lock the map: no dragging, hiding or changing links (pins still work)"><input type="checkbox" data-lock${locked ? ' checked' : ''}> Lock</label>`);
-      if (lay.moved && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-layout title="Put every result back where TeXglass placed it">Reset layout</button>');
+      const lastU = undoStack[undoStack.length - 1];
+      const lastR = redoStack[redoStack.length - 1];
+      opts_.push('<span class="dep-history" role="group" aria-label="Undo and redo">' +
+        `<button type="button" data-undo${lastU ? '' : ' disabled'} title="${esc(lastU ? `Undo: ${lastU.label} (Ctrl+Z)` : 'Nothing to undo')}" aria-label="Undo">↶</button>` +
+        `<button type="button" data-redo${lastR ? '' : ' disabled'} title="${esc(lastR ? `Redo: ${lastR.label} (Ctrl+Shift+Z)` : 'Nothing to redo')}" aria-label="Redo">↷</button></span>`);
+      if (lay.moved && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-layout title="Put every result back where TeXglass placed it (pins, hidden results and links stay)">Reset layout</button>');
+      if (changedFromPaper() && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-map title="Back to the map as the paper has it: TeXglass’s layout, nothing hidden or pinned, only the paper’s links. Saved maps stay.">Reset map…</button>');
       // the larger map zooms: buttons, Ctrl + wheel or a pinch, and + − 0 F keys
       const zoomBar = view.zoomable
         ? '<span class="dep-zoom" role="group" aria-label="Zoom the map">' +
@@ -2893,7 +3047,12 @@
           '<button type="button" data-zoom="1" title="Zoom in (+)" aria-label="Zoom in">+</button>' +
           '<button type="button" data-zoom="fit" title="Fit the whole map in view (F)">Fit</button></span>'
         : '';
-      const controls = `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` + pinsRowHtml(view);
+      const noteHtml = note ? `<span class="dep-note" role="status">${esc(note.text)} <button type="button" data-${note.kind}>${note.kind === 'undo' ? 'Undo' : 'Redo'}</button></span>` : '';
+      const confirmHtml = view.confirmReset && !locked
+        ? '<div class="dep-confirm" role="alertdialog" aria-label="Reset the map"><span>Put the map back as the paper has it? Your layout, hidden results, own links and pins go; <strong>saved maps stay</strong>, and Undo brings it all back.</span>' +
+          '<button type="button" class="dep-confirm-yes" data-reset-yes>Reset map</button><button type="button" data-reset-no>Cancel</button></div>'
+        : '';
+      const controls = `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` + confirmHtml + pinsRowHtml(view) + noteHtml;
       const oldWrap = body.querySelector('.dep-wrap');
       const kept = oldWrap ? { l: oldWrap.scrollLeft, t: oldWrap.scrollTop } : null;
       body.innerHTML = view.side
@@ -2909,7 +3068,8 @@
       const wrap = body.querySelector('.dep-wrap');
       if (kept && wrap) { wrap.scrollLeft = kept.l; wrap.scrollTop = kept.t; } // redrawn: stay where it was
       body.querySelector('.dep-map').classList.toggle('dep-linking', !!view.linking);
-      if (view.naming) { const inp = body.querySelector('.dep-view-name'); if (inp) inp.focus(); }
+      body.querySelector('.dep-map').classList.toggle('dep-locked', locked);
+      if (view.naming) { const inp = body.querySelector('.dep-view-name'); if (inp) { inp.focus(); inp.select(); } }
       if (focusState && !view.linking && syncMap(view)) return;
       if (view.selected != null && g.nodes[view.selected]) select(view, view.selected);
       else if (view.selectedCite != null && g.cites[view.selectedCite]) selectCite(view, view.selectedCite);
@@ -3304,10 +3464,22 @@
       }
     }
 
+    /** Ctrl+Z (undo), Ctrl+Shift+Z or Ctrl+Y (redo) on a map. True if it did something. */
+    function mapUndoKey(e) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || typing(e.target)) return false;
+      const k = e.key.toLowerCase();
+      let done = false;
+      if (k === 'z' && !e.shiftKey) done = undo();
+      else if ((k === 'z' && e.shiftKey) || k === 'y') done = redo();
+      if (done) e.preventDefault();
+      return done;
+    }
+
     /** Clicks on the map's editing controls (pins, hiding, links, saved maps). True if handled. */
     function mapClick(view, e) {
       const t = e.target.closest('[data-mpin], [data-mhide], [data-link], [data-link-cancel], [data-link-edit], [data-unlink], [data-relink], ' +
-        '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout]');
+        '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout], ' +
+        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update]');
       if (!t) return false;
       e.preventDefault();
       const cur = () => {
@@ -3337,6 +3509,12 @@
       else if (d.view != null) loadView(d.view);
       else if (d.viewDel != null) deleteView(d.viewDel);
       else if (d.resetLayout != null) resetLayout();
+      else if (d.undo != null) undo();
+      else if (d.redo != null) redo();
+      else if (d.resetMap != null) { view.confirmReset = true; fillDeps(view); const y = view.body.querySelector('[data-reset-yes]'); if (y) y.focus(); }
+      else if (d.resetNo != null) { view.confirmReset = false; fillDeps(view); }
+      else if (d.resetYes != null) { view.confirmReset = false; resetMap(); }
+      else if (d.viewUpdate != null) saveView(d.viewUpdate);
       return true;
     }
 
@@ -3451,6 +3629,7 @@
       // an option redraws the map.
       document_.addEventListener('keydown', (e) => {
         if (!dialog.open || e.altKey || typing(e.target)) return;
+        if (dialogView.tab === 'deps' && !dialogView.body.contains(e.target) && mapUndoKey(e)) return;
         const key = e.key;
         let dir = null;
         if (key === '+' || key === '=') dir = 1;
@@ -3818,6 +3997,9 @@
       /** The host's copy changed (another device, an import): read it again and redraw. */
       refreshEdits() {
         edits = readEdits();
+        committed = edits;
+        undoStack.length = 0;
+        redoStack.length = 0;
         if (graph) applyLinks(graph, edits.link);
         for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
         markPins();
@@ -3834,6 +4016,9 @@
       /** Pin or unpin it (just it). */
       togglePin: (el) => { const k = keyOfEl(el); if (k) setPin(k, pinMap().has(k) ? '' : 'self'); },
       unpinAll,
+      undo,
+      redo,
+      resetMap,
       saveView,
       loadView,
       deleteView,
