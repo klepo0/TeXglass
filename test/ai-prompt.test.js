@@ -3,8 +3,8 @@
 // file to get texglass.sty hints. These tests keep it in step with the
 // package and the converter: it names only commands texglass.sty defines,
 // its own examples convert cleanly, and an answer in the format it asks for
-// can be applied to a paper and is read by the converter. The paper is
-// examples/sample.tex; the answer is made up.
+// can be applied to a paper and is read by the converter. The paper and the
+// answer are made up (kept here, so the test doesn't depend on examples/).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -90,7 +90,38 @@ Part B
 Part C
 - Left out $X$ and $\\mu$: single letters reused elsewhere.
 `;
-  const original = fs.readFileSync(path.join(ROOT, 'examples/sample.tex'), 'utf8');
+  const original = String.raw`\documentclass{article}
+\usepackage{amsmath,amsthm}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\begin{document}
+\section{Norms}
+For $1 \le p < \infty$ let $\norm{f}_p = (\int_X |f|^p \, d\mu)^{1/p}$ and let
+$L^p$ be the functions with $\norm{f}_p < \infty$.
+\begin{lemma}\label{lem:young}
+If $a, b \ge 0$ and $\frac1p + \frac1q = 1$, then $ab \le \frac{a^p}{p} + \frac{b^q}{q}$.
+\end{lemma}
+\begin{proof}
+The logarithm is concave, so
+\begin{equation}\label{eq:concave}
+  \log(ab) \le \log\Bigl( \frac{a^p}{p} + \frac{b^q}{q} \Bigr).
+\end{equation}
+Exponentiating \eqref{eq:concave} gives the claim.
+\end{proof}
+\begin{theorem}\label{thm:main}
+$\int_X |fg| \, d\mu \le \norm{f}_p \norm{g}_q$.
+\end{theorem}
+\begin{proof}
+Apply Lemma~\ref{lem:young} pointwise and integrate.
+\end{proof}
+\begin{proposition}\label{prop:list}
+$\norm{f + g}_p \le \norm{f}_p + \norm{g}_p$.
+\end{proposition}
+This follows from the inequality above.
+\end{document}
+`;
   const hinted = applyAnswer(original, answer);
   // taking the hints out gives back the paper, character for character
   const stripped = hinted.replace(/\\usepackage\{texglass\}\n/, '').replace(/^\\tgdefine\{.*\}\n/gm, '')
