@@ -49,7 +49,7 @@
   // Reading the page
   // ---------------------------------------------------------------------------
 
-  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog';
+  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .diff-old';
 
   /** The formulas of the page, in document order (not the copies inside popovers). */
   function formulas(doc) {

@@ -22,7 +22,7 @@
 
   const WEB_VIEWER = 'https://klepo0.github.io/TeXglass/';
 
-  const webUrl = (id) => `${WEB_VIEWER}?arxiv=${encodeURIComponent(id)}`;
+  const webUrl = (id, compare) => `${WEB_VIEWER}?arxiv=${encodeURIComponent(id)}` + (compare ? `&compare=${encodeURIComponent(compare)}` : '');
 
   /** Whether this script can still talk to the extension (not after an update or reload). */
   const connected = () => {
@@ -34,31 +34,31 @@
   };
 
   /** Asks the background script to open paper `id`; false when the extension can't be reached. */
-  function open(id) {
+  function open(id, compare) {
     if (!connected()) return false;
     try {
-      const p = api.runtime.sendMessage({ type: 'texglass-open', id });
+      const p = api.runtime.sendMessage(compare ? { type: 'texglass-open', id, compare } : { type: 'texglass-open', id });
       // Lost on the way (the extension went away just now): use the web viewer.
-      if (p && p.catch) p.catch(() => window.open(webUrl(id), '_blank', 'noopener'));
+      if (p && p.catch) p.catch(() => window.open(webUrl(id, compare), '_blank', 'noopener'));
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  function link(id, text, className) {
+  function link(id, text, className, compare) {
     const a = document.createElement('a');
-    a.href = webUrl(id);
+    a.href = webUrl(id, compare);
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = text;
-    a.title = TITLE;
+    a.title = compare ? `Show what changed in this paper since ${compare}, in TeXglass` : TITLE;
     a.className = className;
     a.dataset.arxivId = id;
     const go = (e) => {
       if (e.type === 'auxclick' && e.button !== 1) return;
       // Without the extension the link itself opens the paper in the web viewer.
-      if (open(id)) e.preventDefault();
+      if (open(id, compare)) e.preventDefault();
     };
     a.addEventListener('click', go);
     a.addEventListener('auxclick', go);
@@ -70,6 +70,18 @@
     return m ? m[1] : null;
   };
 
+  /** The version this abstract page shows: from its address, or else the latest in the submission history. */
+  function versionShown(id) {
+    const m = /v(\d+)$/.exec(id);
+    if (m) return Number(m[1]);
+    let n = 0;
+    for (const el of document.querySelectorAll('.submission-history a, .submission-history strong')) {
+      const v = /^\[v(\d+)\]$/.exec(el.textContent.trim());
+      if (v) n = Math.max(n, Number(v[1]));
+    }
+    return n;
+  }
+
   const page = location.pathname.split('/')[1];
 
   if (page === 'abs') {
@@ -79,6 +91,13 @@
       const li = document.createElement('li');
       li.appendChild(link(id, 'View in TeXglass', 'abs-button texglass-abs'));
       list.appendChild(li);
+      // More than one version: compare the one shown with the one before it.
+      const shown = versionShown(id);
+      if (shown > 1) {
+        const cmp = document.createElement('li');
+        cmp.appendChild(link(id.replace(/v\d+$/, '') + 'v' + shown, `Compare v${shown - 1} → v${shown}`, 'abs-button texglass-abs texglass-compare', 'v' + (shown - 1)));
+        list.appendChild(cmp);
+      }
     }
   } else if (page === 'list' || page === 'catchup') {
     for (const other of document.querySelectorAll('dt a[title="Other formats"]')) {

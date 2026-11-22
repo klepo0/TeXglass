@@ -59,6 +59,7 @@
   let cites = null; // citation previews (src/cite.js)
   let hypotheses = null; // the hypothesis checker in previews of cited results (src/hypotheses.js)
   let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
+  let comparing = null; // comparing with an older version: { source, blocks, urls, labels, view } (src/diff.js)
 
   // Syntax colouring and completion for both source editors.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
@@ -223,6 +224,7 @@
 
   function showBlocks(blocks, source) {
     renderedDoc = source;
+    if (comparing) comparing.view.clear(); // marks come off before the blocks change, and go back on below
     patchPreview(blocks);
     swapPdfFigures(); // a render that started before a PDF figure was drawn
     applyFolds();
@@ -234,6 +236,7 @@
     if (progress) progress.refresh(); // status markers, once the browser is idle
     if (steps) steps.refresh(); // "Step through" buttons; a proof being stepped through carries on
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
+    if (comparing) markChanges(blocks, source); // comparing two versions: what changed since the older one
   }
 
   const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
@@ -569,6 +572,7 @@
   }
 
   function load(text, name, images, gh) {
+    stopCompare();
     closeEditor(false);
     watcher = null;
     showFolderHint(null);
@@ -658,6 +662,7 @@
     // Section headings: a toggle on each, and hide what follows a folded one.
     let hideAt = 0;
     for (const block of Array.from(preview.children)) {
+      if (block.classList.contains('diff-old')) continue; // an older version's block, shown while comparing
       const lvl = levelOf(block);
       if (hideAt && lvl && lvl <= hideAt) hideAt = 0;
       const isEditor = editing && block === editing.el;
@@ -676,6 +681,7 @@
     }
     // Proofs: fold down to their first line.
     for (const proof of preview.querySelectorAll('.proof')) {
+      if (proof.closest('.diff-old')) continue;
       let btn = proof.querySelector(':scope > p:first-child > .fold-toggle');
       if (!btn) {
         const first = proof.firstElementChild;
@@ -3135,6 +3141,197 @@
     }
   }
 
+  // --- comparing versions (src/diff.js) ------------------------------------------
+
+  // The open document is the newer version; the older one is rendered once,
+  // and every render of the newer one is compared with it block by block:
+  // changed blocks get a bar and their new words marked (the old version opens
+  // under them), new blocks a green bar, removed ones a folded box where they
+  // were. A bar at the bottom steps through the changes.
+
+  const Diff = window.TeXglassDiff || null;
+  const compareDialog = $('compare-dialog');
+  const compareOld = $('compare-old');
+  const compareNew = $('compare-new');
+  const compareMessage = $('compare-message');
+  let compareVersions = null; // [{ v, date }] for the open arXiv paper
+
+  function compareSay(text, warn) {
+    compareMessage.textContent = text || '';
+    compareMessage.classList.toggle('warn', !!warn);
+  }
+
+  function stopCompare() {
+    if (!comparing) return;
+    const c = comparing;
+    comparing = null;
+    c.view.destroy();
+    c.urls.forEach((u) => URL.revokeObjectURL(u));
+    document.documentElement.classList.remove('comparing');
+  }
+
+  /** Mark what changed in the blocks just shown, against the older version. */
+  function markChanges(blocks, source) {
+    if (!comparing) return;
+    const result = Diff.compareRenders(comparing.blocks, comparing.source, blocks, source);
+    comparing.view.apply(result);
+  }
+
+  /**
+   * Compare the open document with an older version: its source, figures
+   * ({ path: Blob }) and labels ({ old: 'v1', new: 'v2' }).
+   */
+  async function startCompare(oldSource, oldImages, labels) {
+    stopCompare();
+    if (!Diff) return false;
+    const source = String(oldSource).replace(/\r\n?/g, '\n');
+    const urls = [];
+    let map = null;
+    if (oldImages && Object.keys(oldImages).length) {
+      map = {};
+      for (const [path, blob] of Object.entries(oldImages)) urls.push((map[path] = URL.createObjectURL(blob)));
+    }
+    showStatus(`Rendering ${labels.old}…`);
+    let old;
+    try {
+      old = await convert(source, map);
+    } catch (e) {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      flashStatus(`Could not render ${labels.old}: ${e.message}`);
+      return false;
+    }
+    await render(); // the newer version on screen before marking it
+    const view = Diff.view({
+      root: preview,
+      labels,
+      onExit: stopCompare,
+      jump: (el) => {
+        reveal(el);
+        TeXglassScroll.to(previewPane, el, { align: 'center' });
+      },
+    });
+    comparing = { source, blocks: old.blocks, urls, labels, view };
+    document.documentElement.classList.add('comparing');
+    markChanges(shownBlocks(), renderedDoc);
+    const c = view.counts;
+    const n = c.changed + c.added + c.removed + c.moved;
+    flashStatus(n ? `${labels.old} → ${labels.new}: ${n} change${n > 1 ? 's' : ''}` : `No changes between ${labels.old} and ${labels.new}`);
+    return true;
+  }
+
+  /** The HTML of the blocks on screen, as the last render gave them. */
+  function shownBlocks() {
+    return shown.map((e) => e.html).concat(editing && editing.inside ? editing.inside.map((e) => e.html) : []);
+  }
+
+  /** The arXiv id (no version) and version (null: the latest) of the open paper, or null. */
+  function openArxivPaper() {
+    if (!opened.arxiv || !window.TeXglassArxiv) return null;
+    return { base: TeXglassArxiv.baseId(opened.arxiv), v: TeXglassArxiv.versionOf(opened.arxiv) };
+  }
+
+  /**
+   * Compare two arXiv versions of a paper: `id` (with its version, or the
+   * latest) is opened, and `older` ('v1' or 1) is compared with it.
+   */
+  async function compareArxiv(id, older) {
+    const base = TeXglassArxiv.baseId(TeXglassArxiv.parseId(id) || '');
+    const oldV = Number(String(older).replace(/^v/i, ''));
+    if (!base || !(oldV > 0)) return false;
+    const newV = TeXglassArxiv.versionOf(id);
+    const cur = openArxivPaper();
+    if (!cur || cur.base !== base || cur.v !== newV) {
+      if (!(await importArxiv(id))) return false;
+    }
+    showStatus(`Downloading ${base}v${oldV}…`);
+    let paper;
+    try {
+      paper = await TeXglassArxiv.importPaper(`${base}v${oldV}`);
+    } catch (e) {
+      flashStatus(e.message);
+      return false;
+    }
+    let newLabel = newV ? `v${newV}` : 'latest';
+    if (!newV && compareVersions && compareVersions.length && compareVersions.base === base) newLabel = `v${compareVersions[compareVersions.length - 1].v}`;
+    return startCompare(paper.source, paper.images, { old: `v${oldV}`, new: newLabel });
+  }
+
+  function fillVersions(list, cur) {
+    const opt = (v, label) => `<option value="${v}">${label}</option>`;
+    const latest = list.length ? list[list.length - 1].v : null;
+    const name = (x) => `v${x.v}${x.date ? ` (${x.date})` : ''}`;
+    compareOld.innerHTML = list.map((x) => opt(x.v, name(x))).join('');
+    compareNew.innerHTML = list.map((x) => opt(x.v, name(x) + (x.v === latest ? ', latest' : ''))).join('');
+    const shownV = cur.v || latest;
+    compareNew.value = String(shownV);
+    compareOld.value = String(Math.max(1, shownV - 1));
+    $('compare-go').disabled = list.length < 2;
+    if (list.length < 2) compareSay('arXiv has only one version of this paper. You can still compare it with a file.');
+  }
+
+  async function openCompareDialog() {
+    if (!Diff) return;
+    const cur = openArxivPaper();
+    compareSay('');
+    $('compare-arxiv').hidden = !cur;
+    $('compare-go').hidden = !cur;
+    $('compare-go').disabled = !cur;
+    if (cur) {
+      $('compare-paper').textContent = cur.base;
+      compareOld.innerHTML = compareNew.innerHTML = '';
+      if (compareVersions && compareVersions.base === cur.base) fillVersions(compareVersions, cur);
+      else {
+        compareSay('Looking up the versions…');
+        TeXglassArxiv.versions(cur.base).then((list) => {
+          list.base = cur.base;
+          compareVersions = list;
+          compareSay('');
+          fillVersions(list, cur);
+        }, () => {
+          // No list (offline, or DataCite is down): offer v1 up to the version shown, or a few.
+          const n = Math.max(cur.v || 0, 2);
+          const list = Array.from({ length: n }, (_, k) => ({ v: k + 1, date: '' }));
+          fillVersions(list, cur);
+          compareSay('Could not look up the versions; pick them by number.', true);
+        });
+      }
+    }
+    if (!compareDialog.open) {
+      if (compareDialog.showModal) compareDialog.showModal();
+      else compareDialog.setAttribute('open', '');
+    }
+  }
+
+  if (compareDialog && Diff) {
+    $('compare-open').addEventListener('click', openCompareDialog);
+    $('compare-cancel').addEventListener('click', () => compareDialog.close());
+    $('compare-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cur = openArxivPaper();
+      if (!cur) return;
+      const a = Number(compareOld.value);
+      const b = Number(compareNew.value);
+      if (!a || !b || a === b) {
+        compareSay('Pick two different versions.', true);
+        return;
+      }
+      compareDialog.close();
+      const [older, newer] = a < b ? [a, b] : [b, a];
+      const latest = compareVersions && compareVersions.length ? compareVersions[compareVersions.length - 1].v : null;
+      await compareArxiv(newer === latest && !cur.v ? cur.base : `${cur.base}v${newer}`, older);
+    });
+    $('compare-file').addEventListener('click', () => $('compare-file-input').click());
+    $('compare-file-input').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      compareDialog.close();
+      const text = await file.text();
+      const here = fileName.textContent || 'this document';
+      await startCompare(text, null, { old: file.name === here ? `${file.name} (other)` : file.name, new: here });
+    });
+  } else if ($('compare-open')) $('compare-open').hidden = true;
+
   function openArxivDialog(value) {
     if (value != null) arxivInput.value = value;
     if (Library && NotesSync) renderRecentSaved();
@@ -3662,6 +3859,9 @@
       if (last) loadLast();
       // &goto=Theorem 4.1 (from a cited result's preview): show that result once the paper is in
       const goto = params.get('goto');
+      // &compare=v1: mark what changed since that version (src/diff.js)
+      const older = params.get('compare');
+      if (older && Diff) return compareArxiv(arxiv, older);
       return importArxiv(arxiv).then((ok) => (ok && goto ? render().then(() => goToNamed(goto)) : ok));
     }
     // A bare ?arxiv (the browser extension's toolbar button away from a paper)

@@ -16,7 +16,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   arXiv paper, on any site, and *View this paper in TeXglass* on arXiv pages.
 - **Links on arxiv.org**: *View in TeXglass* under "Access Paper" on abstract
   pages, a *texglass* link beside pdf/html/other on listing pages, and a
-  floating button on HTML papers.
+  floating button on HTML papers. Papers with more than one version also get
+  *Compare v1 → v2*, which marks what changed since the version before.
 - **Other sites**: a floating *View in TeXglass* button on paper pages of
   - **alphaXiv** (`alphaxiv.org/abs/…`, `/overview/…`), whose addresses carry
     the arXiv id;

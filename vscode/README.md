@@ -78,6 +78,10 @@ lists every feature, command, setting and shortcut.
   dependency map.
 - **Step through a proof** one piece at a time, like a slide reveal.
 - **Fold** sections and proofs, or hide every proof at once.
+- **Compare versions**: **TeXglass: Compare with Last Commit** marks what
+  changed since git `HEAD` as you edit (theorems, proofs, equations and text,
+  matched by label), and **Compare with Another Version…** against any `.tex`
+  file; step through the changes from the bar at the bottom.
 
 ![Hovering a reference previews the lemma it points to](https://raw.githubusercontent.com/klepo0/TeXglass/main/docs/images/hover.png)
 

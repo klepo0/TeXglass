@@ -38,7 +38,7 @@ const PRECACHE = [
   'vendor/katex/katex.min.js',
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
-  ...['arxiv', 'bib', 'cite', 'cited', 'copytex', 'diagrams', 'editor', 'epub', 'eps', 'export', 'features', 'find', 'github', 'hypotheses', 'insight', 'library', 'local', 'openai-math',
+  ...['arxiv', 'bib', 'cite', 'cited', 'copytex', 'diagrams', 'diff', 'editor', 'epub', 'eps', 'export', 'features', 'find', 'github', 'hypotheses', 'insight', 'library', 'local', 'openai-math',
     'margin', 'pick', 'notes-sync', 'pdf', 'popover', 'progress', 'reader', 'steps', 'render-worker', 'scroll', 'share', 'stats', 'texglass', 'textwidth', 'tikz', 'touch', 'zoom'].map((f) => `src/${f}.js`),
 ];
 

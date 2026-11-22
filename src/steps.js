@@ -109,7 +109,7 @@
   const HEADISH = '.proof-head, .thm-head, .item-label, .fold-toggle, .rp-marks, .uses-btn, .tg-step-btn, .thm-name';
   const NOT_TEXT = '.katex-mathml, script, style';
   const INTERACTIVE = 'a, button, input, textarea, select, label, summary, .math, .katex, .tg-margin, .marginnote, .tg-step-bar, [contenteditable]';
-  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .cited-box, .tg-margin, .uses-bar, .pick-bar';
+  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .cited-box, .tg-margin, .uses-bar, .pick-bar, .diff-old';
   const MIN_STEPS = 3; // fewer pieces than this: no button
   const FOLD_MIN = 3; // a nested part folds when it has at least this many pieces
 
