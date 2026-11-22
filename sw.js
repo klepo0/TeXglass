@@ -28,6 +28,8 @@ const PRECACHE = [
   ...['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'].map((f) => `icons/${f}`),
   'app.js',
   'styles.css',
+  // the prompt behind "Copy AI prompt for authors"
+  'latex/AI-PROMPT.md',
   // the handwritten-notes look, shared with the VS Code extension (Kalam is the web viewer's hand)
   'vscode/media/notes.css',
   'vscode/ink.js',

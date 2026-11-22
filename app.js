@@ -1567,6 +1567,24 @@
   $('export').addEventListener('click', () => exportHtml(false));
   if ($('export-reader')) $('export-reader').addEventListener('click', () => exportHtml(true));
   if ($('export-epub')) $('export-epub').addEventListener('click', exportEpub);
+  if ($('ai-prompt')) $('ai-prompt').addEventListener('click', copyAiPrompt);
+
+  /**
+   * "Copy AI prompt for authors": the prompt in latex/AI-PROMPT.md, which asks
+   * a chatbot for texglass.sty hints for the author's .tex file. If it can't
+   * be read or copied, the page with the prompt opens instead.
+   */
+  async function copyAiPrompt() {
+    try {
+      const md = await (await fetch('latex/AI-PROMPT.md')).text();
+      const m = /<!-- ai-prompt:start -->\s*````text\n([\s\S]*?)\n````/.exec(md);
+      if (!m) throw new Error('no prompt in latex/AI-PROMPT.md');
+      await navigator.clipboard.writeText(m[1] + '\n');
+      flashStatus('AI prompt copied: paste it into a chatbot, with your .tex file');
+    } catch (e) {
+      window.open('https://github.com/klepo0/TeXglass/blob/main/latex/AI-PROMPT.md#the-prompt', '_blank', 'noopener');
+    }
+  }
 
   // --- the "…" menu: Save, Export, Print ---------------------------------------
   const moreBtn = $('more');
