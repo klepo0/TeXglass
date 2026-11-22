@@ -73,11 +73,15 @@ async function route(context, id, src) {
   });
 }
 
-// Counts DOM changes, so the run can wait until the page has settled.
+// Counts changes to the rendered paper, so the run can wait until it has settled.
+// Only the preview counts: status messages and toolbar buttons that change on
+// timers would otherwise add their delays to the paper's load time.
 const SETTLE = () => {
   window.__changed = performance.now();
-  new MutationObserver(() => { window.__changed = performance.now(); })
-    .observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  const watch = new MutationObserver((records) => {
+    if (records.some((r) => r.target.closest && r.target.closest('#preview') || (r.target.parentElement && r.target.parentElement.closest('#preview')))) window.__changed = performance.now();
+  });
+  watch.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
 };
 
 async function renderOne(browser, paper, src, timeoutMs, shots) {

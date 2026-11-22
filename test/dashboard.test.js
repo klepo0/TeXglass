@@ -73,6 +73,9 @@ test('a run lists what got worse, what got better, and the macros behind the mos
   assert.equal(by.a.change, 'worse');
   assert.deepEqual(by.a.fresh.sort(), ['\\bar', '\\foo']);
   assert.equal(by.b.change, 'better');
+  const slowerButFixed = report.changes([{ id: 'x', status: 'ok', ms: 9000, counts: {}, problems: {} }],
+    { papers: [{ id: 'x', status: 'issues', ms: 1000, counts: { math: 3 }, problems: { math: { '\\foo': 3 } } }] });
+  assert.equal(slowerButFixed[0].change, 'better');
   assert.equal(by.c.change, 'worse');
   assert.equal(by.c.to, 'broken');
   assert.equal(night2.changes[night2.changes.length - 1].id, 'b', 'worse news first');
