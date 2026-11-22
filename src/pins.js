@@ -47,7 +47,7 @@
         'Select some text to pin it too. Pinned things gather here.</p>' +
         (o.pinMore ? '<div class="tg-pins-actions"><button type="button" data-pins-act="more">Pin results…</button></div>' : '');
     }
-    const maps = items.filter((x) => x.kind === 'result' || x.kind === 'equation').length;
+    const maps = items.filter((x) => x.kind !== 'notation').length;
     let html = `<div class="tg-pins-head"><strong>Pinned</strong> <span class="tg-pins-count">${items.length}</span></div><div class="tg-pins-list">`;
     for (const [kind, title] of GROUPS) {
       const rows = items.filter((x) => x.kind === kind);
@@ -69,7 +69,7 @@
     }
     html += '</div>';
     if (maps && o.showPinned) {
-      html += '<div class="tg-pins-actions"><button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations, their proofs folded (and print them)">Show only these</button></div>';
+      html += '<div class="tg-pins-actions"><button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text; print them too">Show only these</button></div>';
     }
     return html;
   }

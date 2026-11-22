@@ -1698,6 +1698,23 @@
       pulse(t);
       return true;
     }
+    /**
+     * The paragraphs (or list items, displays…) holding pinned passages, for
+     * "Show only these" (src/pick.js) to keep in view.
+     */
+    function pinnedTextEls() {
+      const out = [];
+      for (const a of list) {
+        const at = a.pin && placed.get(a.id);
+        const r = at && rangeOf(at.start, at.end);
+        if (!r) continue;
+        let n = r.startContainer;
+        if (n.nodeType !== 1) n = n.parentElement;
+        const el = n && (n.closest('p, li, blockquote, pre, .math-display, figure, table, h1, h2, h3, h4, h5, h6, header') || n.closest('.theorem, .proof'));
+        if (el && doc.contains(el) && !out.includes(el)) out.push(el);
+      }
+      return out;
+    }
     /** Unpin a passage (its highlight stays). */
     function unpinText(id) {
       const a = byId(id);
@@ -1708,7 +1725,7 @@
 
     return {
       refresh, setAnnotations, setStudy, layout, notes,
-      pinnedTexts, goTo, unpinText,
+      pinnedTexts, pinnedTextEls, goTo, unpinText,
       /** The margin's width in px (null: automatic). */
       setWidth: (w) => setUserW(w > 0 ? w : null, false),
       /** Fold the margin away (true) or bring it back. */

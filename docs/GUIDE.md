@@ -372,7 +372,8 @@ pinned) shows how many things are pinned, and a click lists them all, grouped:
   select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
 
 Click an item to jump to it, **×** to unpin it. **Show only these** shows only
-the pinned results and equations (as **Show pinned** does). With nothing pinned
+the pinned results and equations (as **Show pinned** does) and the paragraphs
+holding pinned text, and prints just that. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
 it opens as a sheet at the bottom, from **Pinned** in the **…** menu. Pins are
 kept with your notes, so they sync with them (in the Overleaf panel they stay in

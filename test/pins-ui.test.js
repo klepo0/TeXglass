@@ -120,6 +120,15 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     await page.click('.tg-pins-row:has-text("Lemma 1.1") .tg-pins-x');
     assert.equal(await badge(), '3');
     assert.doesNotMatch(await page.textContent('.tg-pins-menu'), /Lemma 1\.1/, 'the list follows');
+    // Show only these keeps the paragraph holding the pinned text in view
+    await page.keyboard.press('Escape');
+    await page.click('#pins');
+    await page.click('.tg-pins-actions [data-pins-act="show"]');
+    await page.waitForSelector('#preview.pick-view');
+    assert.equal(await page.isVisible('#preview p:has-text("Middle words")'), true, 'the pinned text\'s paragraph shows');
+    assert.equal(await page.isVisible('#preview .math-display:has-text("(2)")'), true, 'the pinned equation shows');
+    assert.equal(await page.isVisible('#preview .theorem:has-text("Second")'), false, 'the rest is hidden');
+    await page.keyboard.press('Escape');
     // the text pin is a highlight marked pin, kept with the notes
     const pinned = await page.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join('\n'));
     assert.match(pinned, /"quote":"Middle words\."[^}]*\}[^}]*"pin":true/);
