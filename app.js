@@ -3625,9 +3625,24 @@
         'Press \\textbf{Open} above (Ctrl+K) to search arXiv, type \\texttt{github} and words to search GitHub, ' +
         'paste an arXiv id or a GitHub link, or open a \\texttt{.tex} file from this computer. You can also drop one on this page, ' +
         'or browse \\textbf{OAI preprints}, OpenAI\'s mathematical preprints, and read one here.\n\n' +
-        'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.',
+        'Math such as $\\int_0^1 x^2\\,dx = \\tfrac13$ is rendered with KaTeX.\n\n' +
+        'New here? \\href{?tour}{\\textbf{Take the tour}}: a short paper with notes on what to try, from previews on hover ' +
+        'to the dependency map and stepping through a proof.',
       'welcome.tex'
     );
+  }
+
+  // The tour (examples/tour.tex): a short paper that shows the features, with
+  // notes on what to try. Opened by ?tour, the welcome page and the … menu.
+  function loadTour() {
+    fileHandle = null;
+    return fetch('examples/tour.tex')
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.statusText))))
+      .then((text) => load(text, 'tour.tex'))
+      .catch(() => {
+        showStatus('The tour could not be loaded.', true);
+        return loadWelcome();
+      });
   }
 
   function start() {
@@ -3642,6 +3657,7 @@
     const params = new URLSearchParams(location.search);
     // ?file=<file:// address>: a .tex file on this computer (the browser extension, allowed to read file URLs);
     // a bare ?open shows the dialog for choosing a file or folder from this computer.
+    if (params.has('tour')) return loadTour();
     const fileUrl = params.get('file');
     if (fileUrl && Local) return openFileUrl(fileUrl);
     if (params.has('open')) {

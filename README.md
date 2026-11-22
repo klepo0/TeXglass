@@ -24,7 +24,8 @@
 </p>
 
 <p align="center">
-  <a href="https://klepo0.github.io/TeXglass/?arxiv=2106.10340"><b>▶ Try it now</b></a>: <i>Rough stochastic differential equations</i> from arXiv, opened in the web viewer.
+  <a href="https://klepo0.github.io/TeXglass/?arxiv=2106.10340"><b>▶ Try it now</b></a>: <i>Rough stochastic differential equations</i> from arXiv, opened in the web viewer.<br>
+  <a href="https://klepo0.github.io/TeXglass/?tour"><b>▶ Take the tour</b></a>: a short paper with notes on what to try, from hover previews to the dependency map.
 </p>
 
 <p align="center">

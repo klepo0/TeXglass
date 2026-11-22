@@ -181,6 +181,8 @@ function build(target) {
     if (fs.existsSync(path.join(ROOT, f))) copy(path.join(ROOT, f), path.join(out, f));
   }
   copyDir(path.join(ROOT, 'src'), path.join(out, 'src'), (name) => name.endsWith('.js') && name !== 'stats.js');
+  // The tour (Take the tour, ?tour).
+  copy(path.join(ROOT, 'examples/tour.tex'), path.join(out, 'examples/tour.tex'));
   // The handwritten-notes look, shared with the VS Code extension; the viewer writes in Kalam.
   copy(path.join(ROOT, 'vscode/media/notes.css'), path.join(out, 'vscode/media/notes.css'));
   copy(path.join(ROOT, 'vscode/ink.js'), path.join(out, 'vscode/ink.js'));

@@ -265,8 +265,8 @@ test('figures and tables get numbered captions', () => {
   assert.match(t, /1\/1/);
 });
 
-test('the sample document renders with KaTeX without warnings', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'sample.tex'), 'utf8');
+test('the tour renders with KaTeX without warnings', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'examples', 'tour.tex'), 'utf8');
   const errors = [];
   const r = TeXglass.render(src, {
     renderMath: (tex, displayMode, macros) => {
@@ -280,8 +280,35 @@ test('the sample document renders with KaTeX without warnings', () => {
   });
   assert.deepEqual(errors, []);
   assert.deepEqual(r.warnings, []);
-  assert.match(text(r.html), /Theorem 2\.1 \(Hölder\)/);
-  assert.match(text(r.html), /\(2\.1\)/);
+  const t = text(r.html);
+  assert.match(t, /Theorem 2\.3 \(Stability\)/);
+  assert.match(t, /\(2\.1\)/);
+  // cleveref's [capitalise]: \cref says "Lemma 2.2", as LaTeX does
+  assert.match(t, /inequality \(Lemma 2\.2\)/);
+  // the "Try it" notes (tgonly) show; the PDF-only pointer (tghide) does not
+  assert.match(t, /Try it\./);
+  assert.doesNotMatch(t, /to see notes on what to try/);
+  // the texglass.sty hints the tour shows off
+  assert.match(r.html, /tg-define/);
+  assert.match(r.html, /tg-stepmark/);
+  assert.match(r.html, /tg-uses/);
+  assert.match(r.html, /tg-param/);
+});
+
+test('amsart: an abstract before \\maketitle goes under the title', () => {
+  const doc = (cls) => text(plain(String.raw`\documentclass{${cls}}\title{The Title}
+\begin{document}\begin{abstract}The abstract.\end{abstract}\maketitle\section{One}x\end{document}`).html);
+  assert.match(doc('amsart'), /The Title[\s\S]*The abstract[\s\S]*One/);
+  assert.match(doc('article'), /The abstract[\s\S]*The Title/);
+});
+
+test('cleveref with [capitalise] capitalises \\cref', () => {
+  const doc = (opt) => text(plain(String.raw`\usepackage${opt}{cleveref}
+\newtheorem{lemma}{Lemma}
+\begin{document}\begin{lemma}\label{a}x\end{lemma}See \cref{a}.\end{document}`).html);
+  assert.match(doc('[capitalise]'), /See Lemma 1\./);
+  assert.match(doc('[nameinlink,capitalize]'), /See Lemma 1\./);
+  assert.match(doc(''), /See lemma 1\./);
 });
 
 test('sourceMap marks each top-level block with its range in the original source', () => {

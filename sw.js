@@ -28,6 +28,8 @@ const PRECACHE = [
   ...['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'].map((f) => `icons/${f}`),
   'app.js',
   'styles.css',
+  // the tour (?tour, Take the tour): a short paper that shows the features
+  'examples/tour.tex',
   // the handwritten-notes look, shared with the VS Code extension (Kalam is the web viewer's hand)
   'vscode/media/notes.css',
   'vscode/ink.js',
