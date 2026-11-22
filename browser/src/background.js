@@ -340,7 +340,10 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'texglass-open' && typeof msg.id === 'string') {
     const id = TeXglassArxiv.parseId(msg.id);
-    if (id) openViewer(id, sender.tab);
+    // compare: 'v1', to mark what changed since that version
+    const compare = typeof msg.compare === 'string' && /^v\d+$/.test(msg.compare) ? msg.compare : null;
+    if (id && compare) viewerWith(`?arxiv=${encodeURIComponent(id)}&compare=${compare}`).then((url) => openViewer(id, sender.tab, url));
+    else if (id) openViewer(id, sender.tab);
   } else if (msg && msg.type === 'texglass-open-file' && sender.tab && sender.tab.id != null && isLocalTex(sender.url || msg.url)) {
     // A .tex file opened in the browser: show it in TeXglass in the same tab (unless turned off in the options).
     settings().then((s) => {

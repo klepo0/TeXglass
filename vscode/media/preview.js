@@ -154,7 +154,7 @@
       if (isFolded && !hideAt) hideAt = lvl;
     }
     // Proofs: fold down to their first line.
-    const proofs = preview.querySelectorAll('.proof');
+    const proofs = Array.from(preview.querySelectorAll('.proof')).filter((p) => !p.closest('.diff-old')); // not an older version's, while comparing
     let n = 0;
     for (const proof of proofs) {
       let btn = proof.querySelector(':scope > p:first-child > .fold-toggle');
@@ -708,6 +708,29 @@
     }
   }
 
+  // Comparing with an older version (TeXglass: Compare with Last Commit / Another
+  // Version…): the extension sends what changed with each render (src/diff.js).
+  let diffView = null;
+  let diffLabels = '';
+  function showChanges(c) {
+    const labels = c ? JSON.stringify(c.labels) : '';
+    if (diffView && (!c || labels !== diffLabels)) {
+      diffView.destroy();
+      diffView = null;
+    }
+    if (!c || !window.TeXglassDiff) return;
+    if (!diffView) {
+      diffLabels = labels;
+      diffView = TeXglassDiff.view({
+        root: preview,
+        labels: c.labels,
+        onExit: () => vscode.postMessage({ type: 'compare-stop' }),
+        jump: (el) => TeXglassScroll.to(pane, el, { align: 'center' }),
+      });
+    }
+    diffView.apply(c);
+  }
+
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || (m.type !== 'json' && m.type !== 'cited-paper') || !pendingJson.has(m.id)) return;
@@ -882,6 +905,7 @@
       case 'render': {
         sourceFiles = m.files || [];
         if (insight && m.defs !== undefined) insight.setDefinitions(m.defs);
+        if (diffView) diffView.clear(); // marks come off before the blocks change
         show(m.blocks, m.lines);
         drawFigures();
         if (insight) insight.invalidate();
@@ -891,6 +915,7 @@
         if (progress) progress.refresh();
         if (steps) steps.refresh();
         if (params) params.refresh();
+        showChanges(m.compare || null);
         const n = m.warnings.length;
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');

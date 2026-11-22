@@ -1554,7 +1554,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 
   /* Everything but the document. */
   .toolbar, .source-pane, .splitter, .toc-pane, .ref-popover, .bib-open, .add-block-row, .zoom-float, .text-resizer,
-  .fold-toggle, .tg-sliders, .find-bar, .drop-overlay, .completion, dialog, .status,
+  .fold-toggle, .tg-sliders, .find-bar, .diff-bar, .diff-tag, .drop-overlay, .completion, dialog, .status,
   .texglass-status, .copy-toast, .theme-toggle, .inline-hint, .fn-back, .no-print { display: none !important; }
 
   /* The margin column is laid out for the screen: notes float beside the text instead. */
@@ -2188,6 +2188,66 @@ body.tg-margin-resizing { cursor: col-resize; user-select: none; }
 .uses-bar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .uses-step { color: var(--muted); font-variant-numeric: tabular-nums; }
 .uses-done { font-weight: 600; }
+
+/* --- comparing versions (src/diff.js) -------------------------------------------
+   Changed blocks get an amber bar and their new words underlined in green; the
+   old version (its removed words struck through in red) opens under them. New
+   blocks get a green bar, removed ones a folded red box where they were. */
+:root {
+  --diff-changed: #c58a12; --diff-added: #2e8b57; --diff-removed: #c0392b; --diff-moved: #6b5bd2;
+  --diff-ins-bg: rgba(46, 139, 87, 0.16); --diff-del-bg: rgba(192, 57, 43, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --diff-changed: #e0a83a; --diff-added: #5cc28a; --diff-removed: #ef7a6c; --diff-moved: #a99cf5; --diff-ins-bg: rgba(92, 194, 138, 0.2); --diff-del-bg: rgba(239, 122, 108, 0.18); }
+}
+:root[data-theme="dark"] { --diff-changed: #e0a83a; --diff-added: #5cc28a; --diff-removed: #ef7a6c; --diff-moved: #a99cf5; --diff-ins-bg: rgba(92, 194, 138, 0.2); --diff-del-bg: rgba(239, 122, 108, 0.18); }
+.diff-changed, .diff-added, .diff-moved, .diff-old { position: relative; box-shadow: -10px 0 0 -7px var(--diff-changed); }
+.diff-added { box-shadow: -10px 0 0 -7px var(--diff-added); }
+.diff-moved { box-shadow: -10px 0 0 -7px var(--diff-moved); }
+.diff-old { box-shadow: -10px 0 0 -7px var(--diff-removed); margin: 0.4em 0 0.8em; padding: 0.3em 0.7em; border: 1px dashed var(--diff-removed); border-radius: 6px; }
+.diff-old-changed { border-color: var(--diff-changed); box-shadow: -10px 0 0 -7px var(--diff-changed); }
+.diff-old-body { opacity: 0.78; }
+.diff-old-removed .diff-old-body { display: none; }
+.diff-old-removed.diff-open .diff-old-body { display: block; }
+.diff-old[hidden] { display: none; }
+.diff-tag {
+  display: inline-block; margin: 0 0 0.3em; padding: 1px 7px; border: 1px solid currentColor; border-radius: 999px;
+  font: 12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: none; color: var(--diff-changed);
+}
+button.diff-tag { cursor: pointer; }
+button.diff-tag:hover { background: var(--accent-soft); }
+.diff-added > .diff-tag { color: var(--diff-added); }
+.diff-moved > .diff-tag { color: var(--diff-moved); }
+.diff-old-removed > .diff-tag { color: var(--diff-removed); margin: 0; }
+.diff-old-removed.diff-open > .diff-tag { margin-bottom: 0.3em; }
+ins.diff-ins { text-decoration: none; background: var(--diff-ins-bg); border-bottom: 2px solid var(--diff-added); }
+del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; text-decoration-color: var(--diff-removed); }
+.diff-math-ins { background: var(--diff-ins-bg); box-shadow: 0 2px 0 var(--diff-added); border-radius: 2px; }
+.diff-math-del { background: var(--diff-del-bg); box-shadow: 0 2px 0 var(--diff-removed); border-radius: 2px; }
+.diff-current { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+/* "Only changes": what changed, and the section headings around it */
+.diff-only-changes > .src-block:not(.diff-changed):not(.diff-added):not(.diff-moved):not(:has(h1, h2, h3, h4, h5, h6)) { display: none; }
+.diff-bar {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 12;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; max-width: calc(100vw - 32px);
+  padding: 7px 10px 7px 14px; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px;
+}
+.diff-bar button, .diff-bar select {
+  font: inherit; padding: 2px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); color: inherit; cursor: pointer;
+}
+.diff-bar select { max-width: 16em; }
+.diff-bar button:hover:not(:disabled) { border-color: var(--accent); }
+.diff-bar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.diff-step-group { display: inline-flex; align-items: center; gap: 4px; }
+.diff-step { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
+.diff-n-changed { color: var(--diff-changed); }
+.diff-n-added { color: var(--diff-added); }
+.diff-n-removed { color: var(--diff-removed); }
+.diff-n-moved { color: var(--diff-moved); }
+.compare-pick { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0.6em 0; }
+.compare-pick select { font: inherit; margin-left: 6px; }
 
 /* --- phones and tablets ---------------------------------------------------------
    Narrow windows (a phone, or a tablet in a split view) get a compact toolbar of a

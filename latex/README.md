@@ -29,6 +29,10 @@ picture), that definition counts, and the slider overrides it. Pick a name
 LaTeX doesn't already use (not `\a`, `\r`, `\alpha` …), or use `\tgvalue`.
 The package loads `keyval`, which every LaTeX installation has.
 
+To have an AI chatbot suggest these hints for a whole paper, give it the
+prompt in [AI-PROMPT.md](AI-PROMPT.md) with your `.tex` file
+(`npx texglass --ai-prompt` prints it).
+
 The full description is in the
 [TeXglass guide](https://github.com/klepo0/TeXglass/blob/main/docs/GUIDE.md#hints-for-texglass-in-your-own-papers).
 

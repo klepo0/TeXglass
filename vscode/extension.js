@@ -26,6 +26,7 @@ const { imageResolver, figureNames } = require('./images.js');
 const TeXglassExport = require('./shared/export.js');
 const TeXglassEpub = require('./shared/epub.js');
 const TeXglassFeatures = require('./shared/features.js');
+const TeXglassDiff = require('./shared/diff.js');
 const NotesSync = require('./shared/notes-sync.js');
 
 /** Hosts the citation previews may ask (see shared/cite.js). */
@@ -483,6 +484,23 @@ async function assembleDocument(uri, cache) {
 }
 
 /**
+ * A file as it was in the last commit (git HEAD), or null: read with git in the
+ * file's folder, so it works for any repository on this computer.
+ */
+function readAtHead(file) {
+  if (WEB) return null;
+  try {
+    const cp = require('child_process');
+    const dir = path.dirname(file);
+    const top = cp.execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const rel = path.relative(top, file).split(path.sep).join('/');
+    return cp.execFileSync('git', ['show', `HEAD:${rel}`], { cwd: top, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Figures of a document on a virtual file system: { \\includegraphics name:
  * the file's Uri, or null }. Files are looked up with stat, in parallel, and
  * remembered in `cache`.
@@ -796,6 +814,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'features.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'textwidth.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'diff.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
@@ -862,7 +881,8 @@ ${INK_FILTERS}
         const defs = defsJson !== this.defsJson ? r.defs || null : undefined;
         this.defsJson = defsJson;
         this.defs = r.defs || null;
-        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs, files });
+        const compare = this.compareWith(r.blocks, text);
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs, files, compare });
         this.flushLine();
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
@@ -874,6 +894,42 @@ ${INK_FILTERS}
         this.render();
       }
     }
+  }
+
+  /**
+   * Compare the document, as you edit it, with an older version: `older` is an
+   * assembled project (see assembleDocument), labels { old, new } name both.
+   */
+  async startCompare(older, labels) {
+    const isFile = !isVirtual(this.uri) && this.uri.scheme === 'file';
+    const dir = isFile ? path.dirname(this.uri.fsPath) : null;
+    const base = isFile ? this.panel.webview.asWebviewUri(vscode.Uri.file(dir)).toString() : null;
+    const m = await this.converter.render(isFile ? { text: older.text, dir, base } : { text: older.text });
+    if (this.disposed) return;
+    if (m.error) {
+      vscode.window.showWarningMessage(`TeXglass could not render ${labels.old}: ${m.error}`);
+      return;
+    }
+    this.compareBase = { text: older.text, blocks: m.result.blocks, labels };
+    this.renderedText = null; // render again, with the changes marked
+    this.render();
+  }
+
+  stopCompare() {
+    if (!this.compareBase) return;
+    this.compareBase = null;
+    this.renderedText = null;
+    this.render();
+  }
+
+  /** What changed since the older version (src/diff.js), as the preview needs it, or null when not comparing. */
+  compareWith(blocks, text) {
+    const c = this.compareBase;
+    if (!c) return null;
+    const r = TeXglassDiff.compareRenders(c.blocks, c.text, blocks, text);
+    const olds = {};
+    for (const it of r.items) if (it.a != null && it.status !== 'same') olds[it.a] = { html: r.olds[it.a].html };
+    return { labels: c.labels, items: r.items, olds, news: r.news.map((u) => ({ s: u.s })) };
   }
 
   /** The document with its \\input files and bibliography (see assembleDocument). */
@@ -948,6 +1004,9 @@ ${INK_FILTERS}
 
   onMessage(m) {
     switch (m.type) {
+      case 'compare-stop': // the × on the bar of changes
+        this.stopCompare();
+        break;
       case 'epub-prepared': {
         const done = this.epubWaiting && this.epubWaiting.get(m.id);
         if (done) { this.epubWaiting.delete(m.id); done(typeof m.html === 'string' ? m.html : null); }
@@ -1598,6 +1657,39 @@ function activate(context) {
       if (preview) preview.post({ type: 'pick' });
       else vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
     }),
+    vscode.commands.registerCommand('texglass.compareWithHead', async () => {
+      if (!preview) return vscode.window.showInformationMessage('Open the TeXglass preview first.');
+      const uri = preview.uri;
+      if (WEB || uri.scheme !== 'file') return vscode.window.showInformationMessage('Comparing with the last commit needs a file on this computer in a git repository.');
+      const read = (p) => {
+        const t = readAtHead(p);
+        return t == null ? null : t.replace(/\r\n?/g, '\n');
+      };
+      const older = assemble(uri.fsPath, read);
+      if (!older) return vscode.window.showWarningMessage(`${path.basename(uri.fsPath)} is not in the last commit (git HEAD) of a repository.`);
+      await preview.startCompare(older, { old: 'last commit', new: 'now' });
+    }),
+    vscode.commands.registerCommand('texglass.compareWithFile', async () => {
+      if (!preview) return vscode.window.showInformationMessage('Open the TeXglass preview first.');
+      const picked = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Compare',
+        title: 'Compare the preview with an earlier version of the document',
+        filters: { LaTeX: ['tex', 'ltx', 'latex'] },
+        defaultUri: preview.uri.scheme === 'file' ? vscode.Uri.file(path.dirname(preview.uri.fsPath)) : undefined,
+      });
+      if (!picked || !picked.length) return;
+      const other = picked[0];
+      let older;
+      if (other.scheme === 'file' && !WEB) older = assemble(other.fsPath, readSource);
+      else {
+        const text = await readText(other);
+        older = text == null ? null : { text: text.replace(/\r\n?/g, '\n') };
+      }
+      if (!older) return vscode.window.showWarningMessage(`TeXglass could not read ${other.path}.`);
+      await preview.startCompare(older, { old: path.posix.basename(other.path), new: path.posix.basename(preview.uri.path) });
+    }),
+    vscode.commands.registerCommand('texglass.stopCompare', () => preview && preview.stopCompare()),
     vscode.commands.registerCommand('texglass.goTo', () => preview && preview.post({ type: 'find', mode: 'goto' })),
     // Back to where the preview was before a jump, and forward again (Alt+Left / Alt+Right).
     vscode.commands.registerCommand('texglass.back', () => preview && preview.post({ type: 'history', dir: -1 })),

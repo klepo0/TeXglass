@@ -36,34 +36,41 @@
 \RequirePackage{keyval}
 
 % Hints that leave nothing on the page. \@bsphack/\@esphack keep the spacing
-% as if the command were not there, as \label and \index do.
-\newcommand*\tgdefine[2]{\@bsphack\@esphack}
-\newcommand*\tguses[1]{\@bsphack\@esphack}
-\newcommand*\tgstep[1][]{\@bsphack\@esphack}
+% as if the command were not there, as \label and \index do. A hint that
+% starts the text after a displayed equation (where TeX skips the spaces at
+% the start of the line) also skips the space after it: nothing is on the
+% line yet, which e-TeX's \lastnodetype tells (-1).
+\newcommand*\tgdefine[2]{\@bsphack\@esphack\tg@start}
+\newcommand*\tguses[1]{\@bsphack\@esphack\tg@start}
+\newcommand*\tgstep[1][]{\@bsphack\@esphack\tg@start}
+\def\tg@start{%
+  \ifhmode\ifnum\lastnodetype<\z@
+    \expandafter\expandafter\expandafter\ignorespaces
+  \fi\fi}
 
 % Parameters. \tgparam[start]{p}{1}{4} keeps the start value (by default the
 % minimum) for \tgvalue{p}, and makes \p that value at \begin{document} (at
 % once in the document) unless \p is defined by then: the PDF shows the value
 % TeXglass starts its slider at. The option is the start value, or keys.
-\define@key{tg@param}{start}{\def\tg@start{#1}}
+\define@key{tg@param}{start}{\def\tg@startval{#1}}
 \define@key{tg@param}{step}{}
 \define@key{tg@param}{label}{}
 \newcommand*\tgparam[4][]{%
   \@bsphack
-  \def\tg@start{#3}%
+  \def\tg@startval{#3}%
   \in@{=}{#1}%
   \ifin@
     \setkeys{tg@param}{#1}%
   \else
-    \if\relax\detokenize{#1}\relax\else\def\tg@start{#1}\fi
+    \if\relax\detokenize{#1}\relax\else\def\tg@startval{#1}\fi
   \fi
-  \expandafter\global\expandafter\let\csname tg@param@#2\endcsname\tg@start
+  \expandafter\global\expandafter\let\csname tg@param@#2\endcsname\tg@startval
   \ifx\@nodocument\relax
     \tg@define{#2}%
   \else
     \AtBeginDocument{\tg@define{#2}}%
   \fi
-  \@esphack}
+  \@esphack\tg@start}
 \def\tg@define#1{%
   \@ifundefined{#1}%
     {\expandafter\xdef\csname #1\endcsname{\csname tg@param@#1\endcsname}}{}}
