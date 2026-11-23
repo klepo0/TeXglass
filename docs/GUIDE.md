@@ -958,9 +958,10 @@ in the toolbar (**Save offline**). The **Open** dialog lists the recent ones and
 offline reading](#web-viewer)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
-large buttons: **Open**, the side panel (the three lines), **Navigate** (the
-magnifier), **Save offline** (the bookmark), **Share**, the theme toggle
-and **…**. The mode switch (Preview, Edit, Split), zoom, **Hide proofs**,
+large buttons: **Open**, **Navigate** (the magnifier), **Save offline** (the
+bookmark), **Share**, the theme toggle and **…**. The mode switch (Preview,
+Edit, Split), zoom, **Contents** (the side panel; a swipe in from the edge opens
+it too), **Hide proofs**,
 **Pinned**, **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is
 wider.
@@ -970,7 +971,7 @@ are drawers over the text, so the text keeps the whole width (a text width set
 on a computer does not apply on a phone):
 
 - Swipe in from the left edge to open the side panel (from the right edge if you
-  moved it to the right). Its button opens it too.
+  moved it to the right). **Contents** in the **…** menu opens it too.
 - Swipe in from the right edge to open the margin. Its small arrow button, or a
   tap on a note's dot at the right edge of the text, opens it too.
 - Swipe a drawer back toward its edge, tap outside it, or press <kbd>Esc</kbd>

@@ -1636,13 +1636,13 @@
   });
 
   // --- phones and tablets ---------------------------------------------------------
-  // A narrow window keeps a few large buttons in the toolbar (Open, Contents,
+  // A narrow window keeps a few large buttons in the toolbar (Open,
   // Navigate, Save for offline, Share, the theme, "…"); the others, Settings and the handwritten look too, move to the top of the "…" menu and back
   // again when the window widens. The side panel and the margin notes become
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#fold-proofs', '#pins', '#gh-link', '#settings', '#hand-toggle']
+  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#pins', '#gh-link', '#settings', '#hand-toggle']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
