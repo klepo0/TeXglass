@@ -284,6 +284,109 @@
     return new Set(list.filter(isCheck).map((a) => a.id));
   }
 
+  // --- clearing --------------------------------------------------------------------------------
+
+  /** What can be cleared: the margin's notes, the reader's pins and map, their progress. */
+  const CLEAR_PARTS = ['notes', 'pins', 'progress'];
+
+  /** Whether a key names a paper (the gist also keeps the saved-papers list, "library"). */
+  const isPaperKey = (k) => /^(arxiv|github|tex):/.test(String(k || ''));
+
+  /** A map entry put back as if the reader had never touched it. */
+  const NEUTRAL = {
+    pos: () => ({}),
+    pin: () => ({ d: '' }),
+    hide: () => ({ h: false }),
+    link: () => ({ s: '' }),
+    view: () => ({ p: null }),
+    note: () => ({ n: '', o: null }),
+  };
+
+  /**
+   * The record with what the reader made cleared (Settings → Clear notes):
+   *   parts.notes     highlights, notes, handwritten notes and pinned passages
+   *   parts.pins      pins, pin sets, the reading order and pin notes, and every
+   *                   other change to the dependency map (pinned passages are
+   *                   unpinned, their highlight stays unless notes go too)
+   *   parts.progress  reading progress and ticked hypotheses
+   * (all three when parts is left out). Nothing is simply dropped: notes are
+   * remembered as deleted and map and progress entries are set back to "as the
+   * paper has it", stamped now, so the clearing wins every merge and reaches every
+   * device through sync, also ones on an older TeXglass. Anything changed after
+   * `now` (it came from another device meanwhile) is left alone.
+   */
+  function clear(record, parts, now) {
+    const want = (p) => !parts || !!parts[p];
+    const d = now || new Date();
+    const t = d.toISOString();
+    const at = d.getTime();
+    const r = Object.assign(empty(), record || {});
+    const newer = (e) => (Date.parse((e && e.t) || '') || 0) > at;
+    const deleted = Object.assign({}, r.deleted || {});
+    const notes = [];
+    for (const a of (r.notes || []).filter(isNote)) {
+      const gone = isCheck(a) ? want('progress') : want('notes');
+      if (when(a) > at) notes.push(a);
+      else if (gone) deleted[a.id] = t;
+      else if (a.pin && want('pins')) {
+        const b = Object.assign({}, a, { updated: t });
+        delete b.pin;
+        notes.push(b);
+      } else notes.push(a);
+    }
+    let progress = cleanProgress(r.progress);
+    if (want('progress')) {
+      const out = {};
+      for (const [k, m] of Object.entries(progress)) out[k] = newer(m) ? m : { s: 'unread', t };
+      progress = out;
+    }
+    let map = cleanMap(r.map);
+    if (want('pins')) {
+      const out = {};
+      for (const [part, entries] of Object.entries(map)) {
+        out[part] = {};
+        for (const [k, e] of Object.entries(entries)) out[part][k] = newer(e) ? e : Object.assign(NEUTRAL[part](), { t });
+      }
+      map = out;
+    }
+    return Object.assign(r, { notes, deleted, progress, map });
+  }
+
+  /**
+   * How much the reader made on a paper, to say what clearing takes away:
+   * { notes, pins, sets, progress, checks, map } (map: results moved, hidden or linked on the map).
+   */
+  function counts(record) {
+    const r = record || {};
+    const list = (r.notes || []).filter(isNote);
+    const map = cleanMap(r.map);
+    const textPins = list.filter((a) => a.pin && !isCheck(a)).length;
+    return {
+      notes: list.filter((a) => !isCheck(a)).length,
+      pins: Object.values(map.pin || {}).filter((e) => e.d).length + textPins,
+      sets: Object.values(map.view || {}).filter((e) => e.p).length,
+      progress: Object.values(cleanProgress(r.progress)).filter((m) => m.s !== 'unread' || m.q).length,
+      checks: list.filter(isCheck).length,
+      map: ['pos', 'hide', 'link'].reduce((n, part) => n + Object.values(map[part] || {}).filter((e) => !neutral(part, e)).length, 0),
+    };
+  }
+
+  /** Whether a map entry is "as the paper has it". */
+  const neutral = (part, e) => JSON.stringify(Object.assign({}, e, { t: undefined })) === JSON.stringify(NEUTRAL[part]());
+
+  /**
+   * Whether a record holds nothing the reader would see: no notes, and its map
+   * and progress only "as the paper has it" (left by clearing). Its deletions
+   * still matter to sync, but a file of it is not worth keeping.
+   */
+  function isBlank(r) {
+    if (!r || (r.notes || []).some(isNote)) return false;
+    const c = counts(r);
+    if (c.progress) return false;
+    const map = cleanMap(r.map);
+    return Object.entries(map).every(([part, entries]) => Object.values(entries).every((e) => neutral(part, e)));
+  }
+
   /** Forget deletions older than KEEP_DELETED_DAYS. */
   function prune(deleted, now) {
     const limit = (now ? now.getTime() : Date.now()) - KEEP_DELETED_DAYS * 864e5;
@@ -518,5 +621,5 @@
     return { find, read, write, sync, id: () => id };
   }
 
-  return { VERSION, GIST_FILE, STATUSES, paperKey, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, mergeMap, cleanMap, isEmpty, equal, toFile, parseFile, toStore, gist };
+  return { VERSION, GIST_FILE, STATUSES, CLEAR_PARTS, paperKey, isPaperKey, clear, counts, isBlank, titleOf, hash, empty, track, setCheck, checks, isCheck, merge, mergeProgress, cleanProgress, mergeMap, cleanMap, isEmpty, equal, toFile, parseFile, toStore, gist };
 });

@@ -1072,6 +1072,14 @@
       case 'study':
         if (margin) margin.setStudy(m.on);
         break;
+      case 'notes-summary':
+      case 'notes-cleared': {
+        // answers to the Settings panel's "Your notes" section (askHost)
+        const done = hostAnswers.get(m.id);
+        hostAnswers.delete(m.id);
+        if (done) done(m);
+        break;
+      }
       case 'progress':
         if (progress) progress.setMap(m.map);
         break;
@@ -1292,8 +1300,26 @@
     if (popoverLink && !popover.hidden && Features && !featureOn(Features.previewKind(popoverLink))) hidePopover();
     if (settingsPanel && settingsPanel.isOpen()) settingsPanel.refresh();
   }
+  // Asking the extension and waiting for its answer (it posts back the same id).
+  const hostAnswers = new Map();
+  let hostAsked = 0;
+  function askHost(msg) {
+    const id = ++hostAsked;
+    return new Promise((resolve) => {
+      hostAnswers.set(id, resolve);
+      vscode.postMessage(Object.assign({}, msg, { id }));
+    });
+  }
   const settingsPanel = Features
     ? Features.panel({
+      // clearing the reader's notes: the extension keeps them, so it does the work
+      notes: {
+        summary: (scope) => askHost({ type: 'notes-summary', scope }).then((a) => a.text || ''),
+        clear: (scope, parts) => askHost({ type: 'clear-notes', scope, parts }).then((a) => {
+          if (a.error) throw new Error(a.error);
+          return a.text;
+        }),
+      },
       get: () => features,
       set: (id, on) => {
         features = Object.assign({}, features, { [id]: on });

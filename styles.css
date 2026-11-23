@@ -2790,3 +2790,21 @@ p > .tg-sliders, li > .tg-sliders, td > .tg-sliders, dd > .tg-sliders { margin-b
 .tg-sliders-reset:hover { color: var(--accent); border-color: var(--accent); }
 .tg-sliders-reset[hidden] { display: none; }
 @media (pointer: coarse) { .tg-slider input[type="range"] { width: 12em; height: 28px; } }
+/* Settings: clearing the reader's notes (src/features.js) */
+.features-clear .clear-intro { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+.features-clear .clear-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.features-clear [hidden] { display: none !important; }
+.features-clear button {
+  font: inherit; font-size: 13.5px; padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer;
+}
+.features-clear button:disabled { opacity: 0.55; cursor: default; }
+.features-clear .clear-confirm { border: 1px solid var(--warn); border-radius: 8px; padding: 10px 12px; }
+.features-clear .clear-title { margin: 0; font-weight: 600; }
+.features-clear .clear-summary { margin: 2px 0 6px; font-size: 13px; color: var(--muted); }
+.features-clear .clear-summary:empty { display: none; }
+.features-clear .clear-confirm .feature { margin: 0 -4px; padding: 4px; }
+.features-clear .clear-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.features-clear button.danger { background: var(--warn); border-color: var(--warn); color: var(--paper); font-weight: 600; }
+.features-clear .clear-done { margin: 6px 0 0; font-size: 13px; }
+.features-clear .clear-done:empty { display: none; }

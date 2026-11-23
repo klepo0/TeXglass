@@ -622,6 +622,20 @@ Overleaf panel).
 - Changes on two devices are merged note by note: the later edit wins, and a
   deleted note stays deleted. Reading progress and hypothesis ticks travel
   with the notes.
+- **Clearing**: Settings (gear) has **Clear notes in this paper…** and **Clear
+  all TeXglass notes…** under *Your notes*. Each asks first, says what there is,
+  and has a box for each kind of thing to clear, all ticked: **Highlights and
+  notes** (with handwritten notes and pinned passages), **Pins and the map**
+  (pins, pin sets, the reading order and pin notes, and what you moved, hid or
+  linked on the dependency map) and **Reading progress** (with hypothesis
+  ticks). Clearing reaches your other devices through every kind of sync, the
+  same way a deleted note does, and cannot be undone, so export first to keep a
+  copy. **Clear all** also clears papers kept only in your GitHub gist; when you
+  are signed in to GitHub and it cannot be reached, it clears nothing. Your list
+  of saved papers and your settings stay. VS Code: the same in the preview's
+  Settings panel, or **TeXglass: Clear Notes in This Paper…** and **Clear All
+  TeXglass Notes…** (which clear everything); a `paper.texglass.json` next to a
+  .tex file that is not open is emptied when you next open it.
 
 ## Looks: themes, handwritten notes, zoom
 
@@ -648,7 +662,9 @@ Overleaf panel).
 
 The **gear** button (on a phone, **Settings** in the **…** menu) opens Settings, a list of TeXglass's reading aids with a
 switch for each. Turn off what you don't use; **Turn everything back on**
-restores them. Choices apply to every paper at once.
+restores them. Choices apply to every paper at once. Under the switches, *Your
+notes* has **Clear notes in this paper…** and **Clear all TeXglass notes…** (see
+[Your own highlights and notes](#your-own-highlights-and-notes)).
 
 | Group | Switch | What it covers |
 | --- | --- | --- |
@@ -908,6 +924,8 @@ All in the Command Palette under **TeXglass:**.
 | Import Highlights and Notes… | Add them from a file. |
 | Sync Highlights and Notes with GitHub | Private gist sync. |
 | Stop Syncing Highlights and Notes with GitHub | End it. |
+| Clear Notes in This Paper… | Clear your highlights, notes, pins and progress in this paper, everywhere it syncs (asks first). |
+| Clear All TeXglass Notes… | The same for every paper. |
 | Find in Preview | <kbd>Ctrl+F</kbd>. |
 | Find Next in Preview | <kbd>F3</kbd>. |
 | Find Previous in Preview | <kbd>Shift+F3</kbd>. |

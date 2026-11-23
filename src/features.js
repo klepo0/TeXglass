@@ -14,6 +14,11 @@
  *     set: (id, on) => { ... },                          // the reader changed one
  *     ids: [...],                                        // optional: only these (default: all)
  *     footer: element,                                   // optional: added under the list
+ *     notes: {                                           // optional: the "Your notes" section, to clear them
+ *       canClearPaper: () => true,                       //   a paper with notes is open
+ *       summary: (scope) => '…',                         //   'paper' | 'all': what there is (or a promise of it)
+ *       clear: (scope, parts) => promise of a message,   //   parts { notes, pins, progress }
+ *     },
  *   });
  *   panel.open(); panel.refresh(); panel.close();
  *
@@ -159,6 +164,7 @@
         `<span class="feature-hint">${esc(f.hint)}</span></span></label>`;
     }
     if (group !== null) html += '</fieldset>';
+    if (o.notes) html += CLEAR_HTML;
     html += '</div><div class="features-foot"><button type="button" class="features-reset">Turn everything back on</button>' +
       '<button type="button" class="features-done primary">Done</button></div>';
     dialog.innerHTML = html;
@@ -166,6 +172,7 @@
     (o.container || doc.body).appendChild(dialog);
 
     function refresh() {
+      if (clearing) clearing.refresh();
       const prefs = o.get() || {};
       dialog.querySelectorAll('input[data-id]').forEach((box) => {
         const f = BY_ID.get(box.dataset.id);
@@ -193,6 +200,7 @@
       refresh();
     });
     dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); }); // the backdrop
+    const clearing = o.notes ? clearSection(dialog, o.notes) : null;
 
     return {
       element: dialog,
@@ -210,9 +218,121 @@
     };
   }
 
+  // --- clearing the reader's notes ---------------------------------------------------------
+  // Two buttons under the switches. Each asks first, in place (no browser
+  // confirm(), which VS Code's webview does not show), with a box for each kind
+  // of thing to clear, all ticked. The host does the clearing (see
+  // TeXglassNotesSync.clear, which makes it reach every synced device).
+
+  const CLEAR_KINDS = [
+    { part: 'notes', label: 'Highlights and notes', hint: 'Also handwritten notes and pinned passages.' },
+    { part: 'pins', label: 'Pins and the map', hint: 'Pins, pin sets, the reading order and pin notes, and what you moved, hid or linked on the dependency map.' },
+    { part: 'progress', label: 'Reading progress', hint: 'Also the boxes ticked in the hypothesis checker.' },
+  ];
+  const CLEAR_HTML = '<fieldset class="features-clear"><legend>Your notes</legend>' +
+    '<p class="clear-intro">Clearing also takes them off the other devices you sync with, and cannot be undone. Export them first to keep a copy.</p>' +
+    '<div class="clear-buttons"><button type="button" data-scope="paper">Clear notes in this paper…</button>' +
+    '<button type="button" data-scope="all">Clear all TeXglass notes…</button></div>' +
+    '<div class="clear-confirm" role="group" aria-labelledby="clear-title" hidden>' +
+    '<p class="clear-title" id="clear-title"></p><p class="clear-summary"></p>' +
+    CLEAR_KINDS.map((k) => `<label class="feature"><input type="checkbox" data-part="${k.part}" checked>` +
+      `<span class="feature-text"><span class="feature-label">${esc(k.label)}</span><span class="feature-hint">${esc(k.hint)}</span></span></label>`).join('') +
+    '<div class="clear-actions"><button type="button" class="clear-cancel">Cancel</button>' +
+    '<button type="button" class="clear-go danger">Clear</button></div></div>' +
+    '<p class="clear-done" role="status" aria-live="polite"></p></fieldset>';
+
+  /** Wire the "Your notes" section of the Settings dialog. */
+  function clearSection(dialog, notes) {
+    const box = dialog.querySelector('.features-clear');
+    const buttons = box.querySelector('.clear-buttons');
+    const confirm = box.querySelector('.clear-confirm');
+    const title = box.querySelector('.clear-title');
+    const summary = box.querySelector('.clear-summary');
+    const go = box.querySelector('.clear-go');
+    const done = box.querySelector('.clear-done');
+    const paperBtn = buttons.querySelector('[data-scope="paper"]');
+    let scope = null;
+    let asked = 0;
+
+    function hide() {
+      scope = null;
+      confirm.hidden = true;
+      buttons.hidden = false;
+    }
+    function refresh() {
+      const can = !notes.canClearPaper || !!notes.canClearPaper();
+      paperBtn.disabled = !can;
+      paperBtn.title = can ? '' : 'Open a paper first';
+      if (scope === 'paper' && !can) hide();
+    }
+    function parts() {
+      const out = {};
+      confirm.querySelectorAll('input[data-part]').forEach((b) => { out[b.dataset.part] = b.checked; });
+      return out;
+    }
+    function updateGo() {
+      const p = parts();
+      go.disabled = !Object.values(p).some(Boolean);
+    }
+    buttons.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-scope]');
+      if (!b || b.disabled) return;
+      scope = b.dataset.scope;
+      done.textContent = '';
+      title.textContent = scope === 'paper'
+        ? 'Clear what you made in this paper?'
+        : 'Clear what you made in every paper?';
+      go.textContent = scope === 'paper' ? 'Clear this paper' : 'Clear everything';
+      summary.textContent = '';
+      const n = ++asked;
+      Promise.resolve(notes.summary ? notes.summary(scope) : '').then((text) => {
+        if (n === asked) summary.textContent = text || '';
+      }, () => {});
+      confirm.querySelectorAll('input[data-part]').forEach((x) => { x.checked = true; }); // all ticked each time
+      buttons.hidden = true;
+      confirm.hidden = false;
+      updateGo();
+      go.focus();
+    });
+    confirm.addEventListener('change', updateGo);
+    box.querySelector('.clear-cancel').addEventListener('click', () => { hide(); paperBtn.focus(); });
+    go.addEventListener('click', async () => {
+      if (!scope || go.disabled) return;
+      const what = scope;
+      go.disabled = true;
+      done.textContent = 'Clearing…';
+      let msg;
+      try {
+        msg = await notes.clear(what, parts());
+      } catch (err) {
+        msg = 'Nothing was cleared: ' + ((err && err.message) || err);
+      }
+      hide();
+      done.textContent = msg || 'Cleared.';
+      refresh();
+    });
+    return { refresh, hide };
+  }
+
+  /** "3 highlights and notes, 2 pins, …" from TeXglassNotesSync.counts (papers: how many). */
+  function describeNotes(c, papers) {
+    const n = (k, one, many) => (k ? `${k} ${k === 1 ? one : many}` : '');
+    const bits = [
+      n(c.notes, 'highlight or note', 'highlights and notes'),
+      n(c.pins, 'pin', 'pins'),
+      n(c.sets, 'pin set', 'pin sets'),
+      n(c.progress, 'result with reading progress', 'results with reading progress'),
+      n(c.checks, 'ticked hypothesis', 'ticked hypotheses'),
+      n(c.map, 'change to the map', 'changes to the map'),
+    ].filter(Boolean);
+    if (!bits.length) return papers === undefined ? 'You have made nothing on this paper yet.' : 'Nothing on this device yet.';
+    const list = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0];
+    return papers === undefined ? `This paper has ${list}.` : `${list} in ${papers} paper${papers === 1 ? '' : 's'}.`.replace(/^./, (ch) => ch.toUpperCase());
+  }
+
   // The gear for a toolbar button.
   const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
     '<path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 
-  return { LIST, read, write, on, previewKind, insightParts, sideTabs, panel, keyOf, ICON };
+  return { LIST, read, write, on, previewKind, insightParts, sideTabs, panel, keyOf, describeNotes, ICON };
 });

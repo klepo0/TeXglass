@@ -225,3 +225,71 @@ test('pin sets, the reading order and notes on pins ride along too', () => {
   assert.deepEqual(m.view.Talk.o, ['text:n1', 'label:main']);
   assert.deepEqual(N.cleanMap({ note: { k: { n: 'a\nb' } } }).note.k, { n: 'a b', o: null });
 });
+
+test('clearing a paper wins every merge, so it reaches every synced device', () => {
+  const T = '2026-01-01T00:00:00.000Z';
+  const rec = {
+    paper: 'arxiv:2601.00001',
+    notes: [note('a'), note('b', { pin: true }), note('c', { kind: 'check' })],
+    deleted: {},
+    progress: { 'label:thm': { s: 'read', t: T } },
+    map: {
+      pin: { 'label:thm': { d: 'self', t: T }, 'm:R': { d: 'self', t: T } },
+      pos: { 'label:thm': { x: 1, y: 2, t: T } },
+      hide: { 'label:lem': { h: true, t: T } },
+      link: { 'a > b': { s: 'add', t: T } },
+      view: { Talk: { p: { 'label:thm': 'self' }, t: T } },
+      note: { 'label:thm': { n: 'start here', o: 0, t: T } },
+    },
+  };
+  assert.deepEqual(S.counts(rec), { notes: 2, pins: 3, sets: 1, progress: 1, checks: 1, map: 3 });
+  const now = at('2026-02-01T00:00:00Z');
+  const c = S.clear(rec, null, now);
+  assert.deepEqual(c.notes, []);
+  assert.deepEqual(Object.keys(c.deleted).sort(), ['a', 'b', 'c']);
+  assert.ok(S.isBlank(c), 'nothing left to see');
+  assert.ok(!S.isEmpty(c), 'but the tombstones are kept for sync');
+  assert.deepEqual(S.counts(c), { notes: 0, pins: 0, sets: 0, progress: 0, checks: 0, map: 0 });
+  // Another device still has the old copy: merging either way keeps it cleared.
+  for (const m of [S.merge(rec, c), S.merge(c, rec)]) {
+    assert.ok(S.isBlank(m));
+    assert.deepEqual(S.counts(m), S.counts(c));
+  }
+  // ... and through the gist's file
+  const back = S.parseFile(S.toStore({ [rec.paper]: c }))[rec.paper];
+  assert.ok(S.isBlank(S.merge(rec, back)));
+  // A note made after the clearing (on another device) stays.
+  const later = note('d', { created: '2026-03-01T00:00:00.000Z' });
+  const m2 = S.merge(c, Object.assign({}, rec, { notes: rec.notes.concat(later) }));
+  assert.deepEqual(m2.notes.map((n) => n.id), ['d']);
+});
+
+test('clearing only some parts leaves the rest', () => {
+  const T = '2026-01-01T00:00:00.000Z';
+  const rec = {
+    notes: [note('a'), note('b', { pin: true }), note('c', { kind: 'check' })],
+    progress: { 'label:thm': { s: 'read', t: T } },
+    map: { pin: { 'label:thm': { d: 'self', t: T } } },
+  };
+  const now = at('2026-02-01T00:00:00Z');
+  const pins = S.clear(rec, { pins: true }, now);
+  assert.deepEqual(pins.notes.map((n) => n.id), ['a', 'b', 'c'], 'notes stay');
+  assert.ok(!pins.notes[1].pin, 'a pinned passage is unpinned, its highlight stays');
+  assert.equal(pins.notes[1].updated, now.toISOString());
+  assert.equal(pins.map.pin['label:thm'].d, '');
+  assert.equal(pins.progress['label:thm'].s, 'read');
+  const notes = S.clear(rec, { notes: true }, now);
+  assert.deepEqual(notes.notes.map((n) => n.id), ['c'], 'ticks belong to progress');
+  assert.equal(notes.map.pin['label:thm'].d, 'self');
+  const prog = S.clear(rec, { progress: true }, now);
+  assert.deepEqual(prog.notes.map((n) => n.id), ['a', 'b']);
+  assert.equal(prog.progress['label:thm'].s, 'unread');
+  // Something changed after the moment of clearing is left alone.
+  const newer = { notes: [note('x', { updated: '2026-03-01T00:00:00.000Z' })], map: { pin: { k: { d: 'self', t: '2026-03-01T00:00:00.000Z' } } } };
+  const kept = S.clear(newer, null, now);
+  assert.deepEqual(kept.notes.map((n) => n.id), ['x']);
+  assert.equal(kept.map.pin.k.d, 'self');
+  // The saved-papers list shares the gist but is not a paper.
+  assert.ok(S.isPaperKey('arxiv:1') && S.isPaperKey('tex:a.tex#1') && S.isPaperKey('github:o/r/p.tex'));
+  assert.ok(!S.isPaperKey('library'));
+});

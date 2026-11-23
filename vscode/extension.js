@@ -28,6 +28,7 @@ const TeXglassEpub = require('./shared/epub.js');
 const TeXglassFeatures = require('./shared/features.js');
 const TeXglassDiff = require('./shared/diff.js');
 const NotesSync = require('./shared/notes-sync.js');
+const Features = require('./shared/features.js');
 
 /** Hosts the citation previews may ask (see shared/cite.js). */
 const LOOKUP_HOSTS = new Set(['api.datacite.org', 'api.crossref.org']);
@@ -309,6 +310,70 @@ async function recordSync(context, err) {
   await context.globalState.update('texglass.gistError', err || '');
   if (!err) await context.globalState.update('texglass.gistSynced', new Date().toISOString());
   updateSyncItem(context);
+}
+
+// --- clearing the reader's notes (Settings in the preview, or the commands) ----------------
+// NotesSync.clear leaves tombstones stamped now, so clearing wins when copies are
+// merged and reaches Settings Sync and the gist like any other change.
+
+/** What the reader made, in words: on one preview's paper, or (open null) in every paper. */
+async function notesSummary(context, open) {
+  if (open) return Features.describeNotes(NotesSync.counts(open.notesRecord || NotesSync.empty(await open.paperKey())));
+  const total = { notes: 0, pins: 0, sets: 0, progress: 0, checks: 0, map: 0 };
+  let papers = 0;
+  for (const [k, r] of Object.entries(notesStore(context))) {
+    if (!NotesSync.isPaperKey(k)) continue;
+    const c = NotesSync.counts(r);
+    if (!Object.values(c).some(Boolean)) continue;
+    papers++;
+    for (const f of Object.keys(total)) total[f] += c[f];
+  }
+  return Features.describeNotes(total, papers) +
+    (context.globalState.get('texglass.gistSync', false) ? ' Papers kept only in your GitHub gist are cleared too.' : '') +
+    ' Files of notes next to .tex files you do not have open are emptied when you next open them.';
+}
+
+/**
+ * Clear what the reader made in every paper: in global state (so Settings Sync
+ * carries it) and in the gist, papers this machine has never opened too. The
+ * open preview's paper is cleared in place. When GitHub sync is on and the gist
+ * cannot be read, nothing is cleared: papers kept only there would come back.
+ */
+async function clearAllNotes(context, parts, open) {
+  const now = new Date();
+  const local = notesStore(context);
+  const g = await notesGist(context, false);
+  const remote = g ? await g.read() : {};
+  const openKey = open ? await open.paperKey() : null;
+  if (open && open.notesRecord) local[openKey] = open.notesRecord;
+  const cleared = {};
+  let papers = 0;
+  for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    if (!NotesSync.isPaperKey(k)) continue;
+    const merged = NotesSync.merge(local[k] && Object.assign({}, local[k], { paper: k }), remote[k] && Object.assign({}, remote[k], { paper: k }));
+    if (Object.values(NotesSync.counts(merged)).some(Boolean)) papers++;
+    cleared[k] = Object.assign(NotesSync.clear(merged, parts, now), { paper: k });
+  }
+  const all = notesStore(context);
+  for (const [k, r] of Object.entries(cleared)) {
+    all[k] = { title: r.title || undefined, notes: r.notes, deleted: r.deleted || {}, progress: r.progress || {}, map: r.map || {} };
+  }
+  await context.globalState.update(NOTES_STATE, all);
+  if (open) {
+    if (open.gistTimer) clearTimeout(open.gistTimer);
+    await open.showRecord(cleared[openKey] || NotesSync.clear(open.notesRecord || NotesSync.empty(openKey), parts, now));
+  }
+  const done = `Cleared ${papers} paper${papers === 1 ? '' : 's'}`;
+  if (!g) return done + '.';
+  try {
+    await g.sync(null, cleared);
+    if (g.id()) await context.globalState.update('texglass.gistId', g.id());
+    await recordSync(context, '');
+    return done + ', here and on GitHub.';
+  } catch (e) {
+    await recordSync(context, String(e.message || e));
+    return `${done} here, but GitHub failed (${e.message || e}). Clear everything again when it works, or notes kept only there come back.`;
+  }
 }
 
 function notationHover() {
@@ -699,6 +764,27 @@ class Preview {
     return merged.notes.length - before.notes.length;
   }
 
+  /** Put a record on this paper that replaced its notes (cleared), in the preview and on disk. */
+  async showRecord(record) {
+    const key = await this.paperKey();
+    this.notesRecord = Object.assign({}, record, { paper: key });
+    this.post({ type: 'annotations', list: this.notesRecord.notes });
+    this.post({ type: 'progress', map: this.notesRecord.progress || {} });
+    this.post({ type: 'map-edits', map: this.notesRecord.map || {} });
+    await this.writeNotes(this.notesRecord);
+    await keepNotes(this.context, key, this.notesRecord);
+  }
+
+  /** Clear what the reader made on this paper (parts: see NotesSync.clear), here and through sync. */
+  async clearNotes(parts) {
+    const key = await this.paperKey();
+    clearTimeout(this.gistTimer);
+    await this.showRecord(NotesSync.clear(this.notesRecord || NotesSync.empty(key), parts));
+    await this.syncGist();
+    const err = this.context.globalState.get('texglass.gistSync', false) ? this.context.globalState.get('texglass.gistError', '') : '';
+    return err ? `Cleared here. GitHub sync failed (${err}); it clears there on the next sync.` : 'Cleared this paper.';
+  }
+
   /** Sync this paper's notes with the gist, if that is on. Quiet unless asked. */
   syncGist(loud) {
     const run = async () => {
@@ -725,8 +811,9 @@ class Preview {
   async writeNotes(record) {
     const file = notesUri(this.uri);
     try {
-      if (NotesSync.isEmpty(Object.assign({}, record, { deleted: {} }))) {
-        // No notes or reading progress left: no file either (if there was one).
+      if (NotesSync.isEmpty(Object.assign({}, record, { deleted: {} })) || NotesSync.isBlank(record)) {
+        // No notes or reading progress left (or all cleared): no file either (if there was one).
+        // The global state keeps what sync needs to know.
         if (this.notesText) await vscode.workspace.fs.delete(file);
         this.notesText = '';
         return;
@@ -1156,6 +1243,20 @@ ${INK_FILTERS}
       case 'set-notation-hover':
         setConfig('notationHover', !!m.on);
         break;
+      case 'notes-summary':
+        // the preview's Settings panel, before clearing: what there is
+        notesSummary(this.context, m.scope === 'paper' ? this : null)
+          .then((text) => this.post({ type: 'notes-summary', id: m.id, text }), () => this.post({ type: 'notes-summary', id: m.id, text: '' }));
+        break;
+      case 'clear-notes': {
+        // the preview's Settings panel asked and the reader said yes
+        const parts = {};
+        for (const p of NotesSync.CLEAR_PARTS) parts[p] = !!(m.parts && m.parts[p]);
+        (m.scope === 'paper' ? this.clearNotes(parts) : clearAllNotes(this.context, parts, this))
+          .then((text) => this.post({ type: 'notes-cleared', id: m.id, text }),
+            (e) => this.post({ type: 'notes-cleared', id: m.id, error: String((e && e.message) || e) }));
+        break;
+      }
       case 'set-feature':
         // a switch in the preview's Settings panel
         if (typeof m.id === 'string') setFeatureSetting(m.id, !!m.on);
@@ -1844,6 +1945,34 @@ function activate(context) {
       vscode.window.showInformationMessage(keys.length > 1
         ? `Imported notes for ${keys.length} papers, ${added} new in this one.`
         : `Imported ${added} new note${added === 1 ? '' : 's'}.`);
+    }),
+    // Clear the reader's notes (also from the preview's Settings panel).
+    vscode.commands.registerCommand('texglass.clearPaperNotes', async () => {
+      if (!preview) return vscode.window.showInformationMessage('Open a TeXglass preview first (Ctrl+K V in a .tex file).');
+      const summary = await notesSummary(context, preview);
+      const yes = await vscode.window.showWarningMessage('Clear your highlights, notes, pins and reading progress in this paper?', {
+        modal: true,
+        detail: summary + ' This also clears them on your other devices that sync, and cannot be undone. Export them first to keep a copy. (The Settings panel in the preview lets you clear only some of them.)',
+      }, 'Clear This Paper');
+      if (yes !== 'Clear This Paper') return;
+      try {
+        vscode.window.showInformationMessage('TeXglass: ' + await preview.clearNotes(null));
+      } catch (e) {
+        vscode.window.showWarningMessage(`TeXglass could not clear the notes: ${e.message || e}`);
+      }
+    }),
+    vscode.commands.registerCommand('texglass.clearAllNotes', async () => {
+      const summary = await notesSummary(context, null);
+      const yes = await vscode.window.showWarningMessage('Clear all your TeXglass highlights, notes, pins and reading progress, in every paper?', {
+        modal: true,
+        detail: summary + ' This also clears them on your other devices that sync, and cannot be undone.',
+      }, 'Clear Everything');
+      if (yes !== 'Clear Everything') return;
+      try {
+        vscode.window.showInformationMessage('TeXglass: ' + await clearAllNotes(context, null, preview));
+      } catch (e) {
+        vscode.window.showWarningMessage(`TeXglass cleared nothing: ${e.message || e}`);
+      }
     }),
     vscode.commands.registerCommand('texglass.syncNotes', async () => {
       const g = await notesGist(context, true);

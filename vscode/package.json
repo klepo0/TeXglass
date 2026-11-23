@@ -149,6 +149,16 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.clearPaperNotes",
+        "title": "Clear Notes in This Paper…",
+        "category": "TeXglass"
+      },
+      {
+        "command": "texglass.clearAllNotes",
+        "title": "Clear All TeXglass Notes…",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.find",
         "title": "Find in Preview",
         "category": "TeXglass",
