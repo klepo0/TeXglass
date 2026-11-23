@@ -408,7 +408,13 @@
       const used = [];
       const covered = (el) => used.some((u) => u === el || u.contains(el));
       const items = [];
-      for (const r of rows) if (!covered(r.el)) { used.push(r.el); items.push({ el: r.el, name: r.name || nameOf(r.el), note: r.note || '', pin: true }); }
+      for (const r of rows) {
+        if (covered(r.el)) continue;
+        // a passage over several paragraphs brings them all
+        const more = (r.more || []).filter((m) => m && doc.contains(m) && !covered(m) && !r.el.contains(m));
+        used.push(r.el, ...more);
+        items.push({ el: r.el, more, name: r.name || nameOf(r.el), note: r.note || '', pin: true });
+      }
       const extra = [];
       for (const el of els) if (!covered(el)) { used.push(el); extra.push({ el, name: el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : '', note: '' }); }
       // no study sheet (VS Code without one, a plain list): everything in the document's order
@@ -450,6 +456,7 @@
           item.appendChild(p);
         }
         item.appendChild(copyBlock(x.el, o));
+        for (const m of x.more || []) item.appendChild(copyBlock(m, o));
         if (x.el.classList.contains('theorem')) for (const p of proofsOf(x.el)) if (openProofs.has(p)) item.appendChild(copyBlock(p, o));
         const c = x.el.classList.contains('theorem') || isNumberedDisplay(x.el) ? contextOf(x.el) : null;
         if (c) {

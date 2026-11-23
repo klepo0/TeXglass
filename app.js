@@ -2495,7 +2495,7 @@
         items: () => insight.pinnedEls(v.p).concat(margin && margin.textElsFor ? margin.textElsFor(v.t) : []),
         sheet: () => (window.TeXglassPins ? TeXglassPins.sharedSheet(v, {
           elOf: (k) => insight.elOfKey(k),
-          textEl: (t) => (margin && margin.textElsFor ? margin.textElsFor([t])[0] : null),
+          textEls: (t) => (margin && margin.textElsFor ? margin.textElsFor([t]) : []),
           nameOf: viewName,
         }) : []),
         hasOrder: () => !!(v.r && v.r.length),
@@ -3032,6 +3032,11 @@
       store,
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
+      // the Pins tab: the pin sets, and the one chosen in its reading order (src/pins.js)
+      pinsTab: window.TeXglassPins && insight ? (body) => TeXglassPins.panel({
+        body, insight, margin, jump: (el) => jumpTo(el),
+        onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
+      }) : undefined,
     });
   }
   // Reading progress: markers by the results, progress in Contents, colours on the map.

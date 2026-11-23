@@ -239,8 +239,10 @@ test('Share keeps the reading order and the notes: the recipient sees the study 
     }
     await page.click('#pins');
     await page.click('[data-pins-view="order"]');
-    await page.focus('[data-pins-drag="label:thm:main"]');
+    // the paper's order already puts the lemma first; down and up again makes it the reader's own
+    await page.focus('[data-pins-drag="label:lem:a"]');
     await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowUp');
     await page.click('.tg-pins-row[data-key="label:lem:a"] .tg-pins-pen');
     await page.fill('.tg-pins-memo-in', 'the tool behind it');
     await page.keyboard.press('Enter');

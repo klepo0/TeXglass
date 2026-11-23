@@ -220,7 +220,7 @@
           btn.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 2.2v7.6L9.4 6z" fill="currentColor"/></svg><span>Step through</span>';
           // after the heading and the markers the other tools put there
           let at = head;
-          while (at.nextSibling && at.nextSibling.nodeType === 1 && at.nextSibling.matches('.rp-marks, .uses-btn')) at = at.nextSibling;
+          while (at.nextSibling && at.nextSibling.nodeType === 1 && at.nextSibling.matches('.rp-marks, .uses-btn, .tg-pin-btn')) at = at.nextSibling;
           at.after(btn);
         }
       }

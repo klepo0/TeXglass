@@ -514,9 +514,11 @@ body.toc-right .toc-pane > .toc-pane-head { margin: -20px -16px 8px -10px; paddi
   font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
   padding: 3px 5px; white-space: nowrap; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer;
 }
+/* four tabs (with Pins): a little tighter, so they still fit one row at the default width */
+.side-tabs:has(> button:nth-child(4):not([hidden])) button { padding: 3px 3px; letter-spacing: 0.01em; font-size: 11.5px; }
 .side-tabs button:hover { color: var(--ink); }
 .side-tabs button[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
-.toc-list[hidden], .side-insight[hidden] { display: none; }
+.toc-list[hidden], .side-insight[hidden], .side-pins[hidden] { display: none; }
 .side-insight { padding: 0 2px 0 8px; font-size: 13px; }
 /* The divider that resizes it: drag, arrow keys, double-click to reset. */
 .side-resizer { flex: 0 0 7px; margin: 0 -4px 0 -3px; position: relative; z-index: 3; cursor: col-resize; touch-action: none; }
@@ -2175,8 +2177,9 @@ figure.float.tg-pinned, figure.float:has(> .tg-pin-btn) { position: relative; }
 .tg-pin-btn.tg-pin-fig { position: absolute; right: 0; top: 0; font-size: 15px; }
 figure.float:hover > .tg-pin-btn { opacity: 1; }
 .proof.tg-pinned, .proof:has(> .tg-pin-btn) { position: relative; }
-.tg-pin-btn.tg-pin-proof { position: absolute; right: 0; top: 0; font-size: 15px; }
-.proof:hover > .tg-pin-btn { opacity: 1; }
+/* by the proof's title, like a result's pin by its heading (absolute only when a proof has no title) */
+.proof > .tg-pin-btn.tg-pin-proof { position: absolute; right: 0; top: 0; font-size: 15px; }
+.proof:hover > .tg-pin-btn, .proof:hover > * > .tg-pin-btn.tg-pin-proof { opacity: 1; }
 /* a preview is a copy of the text: the copied in-text pin would do nothing there (the preview has its own) */
 .ref-popover .tg-pin-btn, .insight-popover .tg-pin-btn, .insight-dialog .dep-preview .tg-pin-btn { display: none !important; }
 @media (hover: none) { .tg-pin-btn { opacity: 0.6; } }
@@ -2329,6 +2332,32 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 }
 .tg-pins-badge[hidden] { display: none; }
 .more-compact .tg-pins-badge { position: static; margin-left: 2px; }
+/* The side panel's Pins tab (src/pins.js panel): the pin sets fixed at the top,
+   the one chosen below in its reading order, drawn like the contents. */
+.side-pins { font-size: 13px; }
+.tg-sets-stuck { position: sticky; top: calc(var(--side-head-h, 40px) - 34px); z-index: 1; background: var(--bg); padding: 0 2px 6px 8px; border-bottom: 1px solid var(--rule); max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
+.tg-sets-title { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 2px 0 4px; }
+.tg-sets-list { display: flex; flex-direction: column; gap: 1px; }
+.tg-sets-set {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; color: var(--ink);
+  padding: 4px 8px; border: 0; border-left: 2px solid transparent; border-radius: 5px; background: none; cursor: pointer;
+}
+.tg-sets-set:hover { background: var(--accent-soft); }
+.tg-sets-set[aria-selected="true"] { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.tg-sets-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tg-sets-size { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.tg-sets-now, .tg-sets-on { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; font-weight: 500; }
+.tg-sets-order { padding-top: 8px; }
+.tg-sets-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 2px 4px 8px; }
+.tg-sets-head .tg-sets-title { margin: 0; }
+.tg-sets-pin { font: inherit; font-size: 12px; padding: 2px 9px; border: 1px solid var(--rule); border-radius: 6px; background: none; color: var(--ink); cursor: pointer; }
+.tg-sets-pin:hover { border-color: var(--accent); color: var(--accent); }
+.tg-sets-steps .toc-title { display: block; }
+.tg-sets-steps .tg-sets-memo { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; font-weight: 400; font-style: italic; }
+.tg-sets-steps .tg-pins-along { font-size: 11.5px; }
+.tg-sets-steps a.tg-sets-gone { opacity: 0.5; cursor: default; }
+.tg-sets-steps a.tg-sets-gone:hover { background: none; }
+.tg-sets-empty { color: var(--muted); margin: 8px 6px 0 8px; line-height: 1.45; }
 .tg-pins-menu {
   position: fixed; z-index: 60; width: min(340px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; overscroll-behavior: contain;
   box-sizing: border-box; padding: 6px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink);

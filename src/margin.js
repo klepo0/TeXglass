@@ -1710,11 +1710,37 @@
       const el = n && (n.closest('p, li, blockquote, pre, .math-display, figure, table, h1, h2, h3, h4, h5, h6, header') || n.closest('.theorem, .proof'));
       return el && doc.contains(el) ? el : null;
     }
+    const BLOCKS = 'p, li, blockquote, pre, .math-display, figure, table, h1, h2, h3, h4, h5, h6, header';
+    /**
+     * Every block a passage runs through, in order: one paragraph, or all of
+     * them when the selection spanned several (the outermost blocks, so an item
+     * comes whole, not paragraph by paragraph inside it).
+     */
+    function blocksAt(at) {
+      const first = blockAt(at);
+      const r = at && rangeOf(at.start, at.end);
+      if (!r) return first ? [first] : [];
+      let c = r.commonAncestorContainer;
+      if (c && c.nodeType !== 1) c = c.parentElement;
+      if (!c || (first && (first === c || first.contains(c)))) return first ? [first] : [];
+      const ends = (el) => {
+        // a selection that stops right at the start of a block does not take it
+        if (!el.contains(r.endContainer)) return false;
+        const pre = page.createRange();
+        pre.setStart(el, 0);
+        pre.setEnd(r.endContainer, r.endOffset);
+        return !pre.toString().trim();
+      };
+      let els = Array.from(c.querySelectorAll(BLOCKS)).filter((el) => r.intersectsNode(el) && !el.closest(SKIP) && !ends(el));
+      els = els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
+      if (first && !els.some((el) => el === first || el.contains(first))) els.unshift(first);
+      return els.filter((el) => doc.contains(el));
+    }
     function pinnedTextEls() {
       const out = [];
       for (const a of list) {
-        const el = a.pin ? blockAt(placed.get(a.id)) : null;
-        if (el && !out.includes(el)) out.push(el);
+        if (!a.pin) continue;
+        for (const el of blocksAt(placed.get(a.id))) if (!out.includes(el)) out.push(el);
       }
       return out;
     }
@@ -1736,8 +1762,7 @@
     function textElsFor(texts) {
       const out = [];
       for (const t of texts || []) {
-        const el = blockAt(findShared(t));
-        if (el && !out.includes(el)) out.push(el);
+        for (const el of blocksAt(findShared(t))) if (!out.includes(el)) out.push(el);
       }
       return out;
     }
@@ -1790,6 +1815,10 @@
       pinnedTextIds: () => list.filter((a) => a.pin && a.anchor && a.anchor.quote).map((a) => a.id),
       /** The paragraph (or item, display…) holding one passage, by its id. */
       textElOf: (id) => blockAt(placed.get(id)),
+      /** Every block a passage runs through (several when it spans paragraphs), by its id. */
+      textElsOf: (id) => blocksAt(placed.get(id)),
+      /** A passage by its id, pinned or not: { id, quote, placed } (null: none with a quote). */
+      textOf: (id) => { const a = byId(id); return a && a.anchor && a.anchor.quote ? { id, quote: a.anchor.quote, placed: placed.has(id) } : null; },
       /** Pinned text in a shared view: anchors to put in a link, the blocks they are in, pin them here. */
       sharedTexts, textElsFor, pinTexts,
       /** The margin's width in px (null: automatic). */

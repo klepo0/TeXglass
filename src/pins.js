@@ -21,6 +21,9 @@
  *   });
  *   pins.open(); pins.close(); pins.toggle(); pins.refresh();
  *
+ * The side panel's Pins tab lists the pin sets (fixed at the top) and the one
+ * chosen in its reading order, like the table of contents: TeXglassPins.panel().
+ *
  * Works in the browser (window.TeXglassPins) and in Node (require), for tests.
  */
 (function (root, factory) {
@@ -164,7 +167,7 @@
     const has = (f) => typeof insight[f] === 'function';
     // pin sets carry the pinned passages too
     if (margin && margin.pinnedTextIds && margin.setPinnedTexts && has('setTextPins')) {
-      insight.setTextPins({ get: () => margin.pinnedTextIds(), set: (ids) => margin.setPinnedTexts(ids) });
+      insight.setTextPins({ get: () => margin.pinnedTextIds(), set: (ids) => margin.setPinnedTexts(ids), el: (id) => (margin.textElOf ? margin.textElOf(id) : null) });
     }
     /** Everything pinned, in the reading order (by kind where there is none), each with its note. */
     function allItems() {
@@ -402,6 +405,118 @@
     return { open, close, toggle, refresh, isOpen: () => !menu.hidden, menu };
   }
 
+  // --- the Pins tab of the side panel: the pin sets, and one in its reading order ----
+
+  /**
+   * The Pins tab's HTML. sets: insight.pinSets(); chosen: the name of the set shown;
+   * items: its things in the reading order (insight.setItems, passages named).
+   */
+  function panelHtml(sets, chosen, items) {
+    if (!sets.length) {
+      return '<div class="tg-sets-stuck"><div class="tg-sets-title">Saved sets</div></div>' +
+        '<p class="tg-sets-empty">No pin sets yet. Pin results, equations, symbols or text, put them in order in the <b>Pinned</b> list ' +
+        '(the pin in the toolbar), and choose <b>Save as set…</b> there. Your sets gather here, each with its reading order.</p>';
+    }
+    let html = '<div class="tg-sets-stuck"><div class="tg-sets-title">Saved sets</div>' +
+      '<div class="tg-sets-list" role="listbox" aria-label="Saved pin sets">' +
+      sets.map((x) => `<button type="button" role="option" class="tg-sets-set" data-sets-pick="${esc(x.name)}" aria-selected="${x.name === chosen}">` +
+        `<span class="tg-sets-name">${esc(x.name)}</span>` +
+        (x.on ? '<span class="tg-sets-now" title="These are the pins now">pinned</span>' : '') +
+        `<span class="tg-sets-size" aria-label="${x.size} ${x.size === 1 ? 'thing' : 'things'}">${x.size}</span></button>`).join('') +
+      '</div></div>';
+    const set = sets.find((x) => x.name === chosen);
+    if (!set) return html;
+    html += '<div class="tg-sets-order"><div class="tg-sets-head"><span class="tg-sets-title">Reading order</span>' +
+      (set.on
+        ? '<span class="tg-sets-on">Pinned now</span>'
+        : `<button type="button" class="tg-sets-pin" data-sets-act="pin" title="${esc(`Pin the ${set.size} of “${set.name}” instead of the pins now`)}">Pin these</button>`) +
+      '</div>';
+    if (!items || !items.length) return html + '<p class="tg-sets-empty">Nothing of this set is in this version of the document.</p></div>';
+    html += `<ol class="toc-list tg-sets-steps" aria-label="${esc(`Reading order of “${set.name}”`)}">` + items.map((x, i) => {
+      const there = !!(x.el || x.placed);
+      return `<li><a href="#" class="tg-sets-step${there ? '' : ' tg-sets-gone'}" data-sets-go="${i}"${there ? '' : ' aria-disabled="true" title="Not in this version of the document"'}>` +
+        `<span class="toc-num">${i + 1}</span><span class="toc-title">${labelHtml(x)}` +
+        (x.memo ? `<span class="tg-sets-memo">${esc(x.memo)}</span>` : '') + '</span></a></li>';
+    }).join('') + '</ol></div>';
+    return html;
+  }
+
+  /**
+   * Fill the side panel's Pins tab (TeXglassInsight.sidePanel's pinsTab).
+   *   TeXglassPins.panel({ body, insight, margin, jump(el), onJump() }) → { show(), hide(), refresh() }
+   */
+  function panel(opts) {
+    const body = opts.body;
+    const insight = opts.insight;
+    if (!body || !insight || !insight.pinSets || !insight.setItems) return null;
+    const margin = opts.margin || null;
+    let shown = false;
+    let chosen = null; // the set shown (the one opened or saved last, at first)
+    let items = [];
+
+    function nameText(x) {
+      if (x.kind !== 'text') return x;
+      const t = margin && margin.textOf ? margin.textOf(x.id) : null;
+      return Object.assign(x, { name: t ? t.quote.replace(/\s+/g, ' ').trim() : 'A passage no longer in your notes', placed: !!(t && t.placed) });
+    }
+    function fill() {
+      if (!shown) return;
+      let sets = [];
+      try { sets = insight.pinSets(); } catch (e) { sets = []; }
+      if (!sets.some((x) => x.name === chosen)) {
+        const act = sets.find((x) => x.active) || sets.find((x) => x.on) || sets[0];
+        chosen = act ? act.name : null;
+      }
+      try { items = chosen ? (insight.setItems(chosen) || []).map(nameText) : []; } catch (e) { items = []; }
+      const top = body.closest('.toc-pane') || body;
+      const keep = top.scrollTop;
+      body.innerHTML = panelHtml(sets, chosen, items);
+      top.scrollTop = keep;
+      if (insight.renderSymbols) insight.renderSymbols(body);
+    }
+
+    body.addEventListener('click', (e) => {
+      const pick = e.target.closest('[data-sets-pick]');
+      if (pick) {
+        chosen = pick.dataset.setsPick;
+        fill();
+        const again = body.querySelector(`[data-sets-pick="${chosen.replace(/["\\]/g, '\\$&')}"]`);
+        if (again) again.focus({ preventScroll: true });
+        return;
+      }
+      const go = e.target.closest('[data-sets-go]');
+      if (go) {
+        e.preventDefault();
+        const x = items[Number(go.dataset.setsGo)];
+        if (!x) return;
+        if (x.kind === 'text') { if (!margin || !margin.goTo || !margin.goTo(x.id)) return; } else if (x.el) opts.jump(x.el); else return;
+        body.querySelectorAll('.tg-sets-step.active').forEach((a) => a.classList.remove('active'));
+        go.classList.add('active');
+        if (opts.onJump) opts.onJump();
+        return;
+      }
+      const act = e.target.closest('[data-sets-act="pin"]');
+      if (act && chosen) { insight.loadView(chosen); fill(); }
+    });
+    // ↑ ↓ move between the sets (a listbox)
+    body.addEventListener('keydown', (e) => {
+      const b = e.target.closest && e.target.closest('[data-sets-pick]');
+      if (!b || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+      const all = Array.from(body.querySelectorAll('[data-sets-pick]'));
+      const next = all[all.indexOf(b) + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (!next) return;
+      e.preventDefault();
+      next.click();
+    });
+    if (insight.onPins) insight.onPins(fill);
+
+    return {
+      show() { shown = true; fill(); },
+      hide() { shown = false; },
+      refresh: fill,
+    };
+  }
+
   // --- the study sheet (Show only these) and Share links ---------------------------
 
   /** The pins as Show only these lists them: [{ el, name, note }] in the reading order (not Notation rows). */
@@ -410,10 +525,14 @@
     let items = [];
     try { items = insight.pinnedList().filter((x) => x.kind !== 'notation'); } catch (e) { items = []; }
     const texts = margin && margin.pinnedTexts ? margin.pinnedTexts() : [];
-    for (const t of texts) items.push({ key: 'text:' + t.id, kind: 'text', name: '“' + clip(t.quote) + '”', el: margin.textElOf ? margin.textElOf(t.id) : null });
+    for (const t of texts) {
+      // a passage over several paragraphs: the first is where it goes, the rest come with it
+      const els = margin.textElsOf ? margin.textElsOf(t.id) : [margin.textElOf ? margin.textElOf(t.id) : null];
+      items.push({ key: 'text:' + t.id, kind: 'text', name: '“' + clip(t.quote) + '”', el: els[0] || null, more: els.slice(1) });
+    }
     const byKey = new Map(items.map((x) => [x.key, x]));
     const keys = insight.inReadingOrder ? insight.inReadingOrder(items.map((x) => x.key)) : items.map((x) => x.key);
-    return keys.map((k) => byKey.get(k)).filter((x) => x && x.el).map((x) => ({ el: x.el, name: x.name, note: insight.pinNote ? insight.pinNote(x.key) : '', key: x.key }));
+    return keys.map((k) => byKey.get(k)).filter((x) => x && x.el).map((x) => ({ el: x.el, more: x.more || [], name: x.name, note: insight.pinNote ? insight.pinNote(x.key) : '', key: x.key }));
   }
   const clip = (q) => { const t = String(q).replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 68) + '…' : t; };
 
@@ -435,7 +554,7 @@
 
   /**
    * The study sheet of a view that came in a link: [{ el, name, note }].
-   * how: { elOf(key), textEl(t), nameOf(key) }.
+   * how: { elOf(key), textEl(t) or textEls(t) (every block it runs through), nameOf(key) }.
    */
   function sharedSheet(v, how) {
     const refs = v.p.map((e) => e[0]).concat(v.t.map((t, i) => 't' + i));
@@ -444,11 +563,12 @@
     for (const r of order) {
       const m = /^t(\d+)$/.exec(r);
       const t = m ? v.t[+m[1]] : null;
-      const el = t ? how.textEl(t) : how.elOf(r);
-      if (el) out.push({ el, name: t ? '“' + clip(t.q) + '”' : how.nameOf(r), note: (v.n || {})[r] || '' });
+      const els = t ? (how.textEls ? how.textEls(t) : [how.textEl(t)]) : [how.elOf(r)];
+      const el = els[0];
+      if (el) out.push({ el, more: els.slice(1).filter(Boolean), name: t ? '“' + clip(t.q) + '”' : how.nameOf(r), note: (v.n || {})[r] || '' });
     }
     return out;
   }
 
-  return { attach, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
+  return { attach, panel, panelHtml, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
 });
