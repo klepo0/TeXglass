@@ -15,6 +15,12 @@ let playwright = null;
 try { playwright = require('playwright'); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 
 test('a view goes in a link and comes back, squeezed or not', async () => {
@@ -166,7 +172,7 @@ test('Share with Show only these: the recipient sees the same pins, and keeps th
     await page.waitForFunction(() => document.querySelector('#pins .tg-pins-badge').textContent === '2');
 
     // Show only these, then Share
-    await page.click('#pins');
+    await openPins(page);
     await page.click('[data-pins-act="show"]');
     await page.waitForFunction(() => document.getElementById('preview').classList.contains('pick-view'));
     const before = await shown(page);
@@ -178,8 +184,12 @@ test('Share with Show only these: the recipient sees the same pins, and keeps th
     const link = (await page.evaluate(() => window.__copied))[0];
     assert.match(link, /^https:\/\/klepo0\.github\.io\/TeXglass\/\?arxiv=2301\.00001&view=[12][\w-]+$/);
     assert.match(await page.textContent('#status'), /opens with this view: \d pinned item/);
-    // the bar has a Share button too
+    // the bar has Share too, with Print and EPUB under one button
+    await page.click('.pick-bar [data-act="out"]');
     assert.equal(await page.isVisible('.pick-bar [data-act="share"]'), true);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.isVisible('.pick-bar [data-act="share"]'), false, 'Escape closes the menu first');
+    assert.equal(await page.isVisible('.pick-bar'), true, '… and leaves the view showing');
 
     // someone else opens it, with a pin of their own (Lemma 2 = lem:b)
     const ctx2 = await context(browser);
@@ -237,7 +247,7 @@ test('Share keeps the reading order and the notes: the recipient sees the study 
       await page.waitForSelector(`#preview .theorem[data-label="${label}"] .tg-pin-btn`, { state: 'attached' });
       await page.evaluate((l) => document.querySelector(`#preview .theorem[data-label="${l}"] .tg-pin-btn`).click(), label);
     }
-    await page.click('#pins');
+    await openPins(page);
     await page.click('[data-pins-view="order"]');
     // the paper's order already puts the lemma first; down and up again makes it the reader's own
     await page.focus('[data-pins-drag="label:lem:a"]');
@@ -266,8 +276,8 @@ test('Share keeps the reading order and the notes: the recipient sees the study 
     assert.match(sheet[1], /Theorem/);
     await other.click('.pick-bar [data-act="keep"]');
     await other.waitForFunction(() => document.querySelector('#pins .tg-pins-badge').textContent === '2');
-    await other.click('#pins');
-    assert.deepEqual(await other.$$eval('.tg-pins-menu .tg-pins-row', (r) => r.map((x) => x.dataset.key)), ['label:lem:a', 'label:thm:main'], 'the order came along');
+    await openPins(other);
+    assert.deepEqual(await other.$$eval('.side-pins .tg-pins-row', (r) => r.map((x) => x.dataset.key)), ['label:lem:a', 'label:thm:main'], 'the order came along');
     assert.equal(await other.textContent('.tg-pins-row[data-key="label:lem:a"] .tg-pins-memo'), 'the tool behind it');
     assert.deepEqual(errors, []);
     await ctx.close();

@@ -442,7 +442,13 @@
     }
     const toggle = () => (menu.hidden ? open() : close());
 
-    button.addEventListener('click', (e) => { e.preventDefault(); toggle(); });
+    // With a side panel, the pin opens its Pins tab (the same list, with the pin sets);
+    // the list under the button is for hosts without one, or when the panel cannot show.
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (opts.openTab && menu.hidden && opts.openTab()) return;
+      toggle();
+    });
     doc.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !menu.hidden) { e.stopPropagation(); close(true); }
     }, true);
@@ -607,7 +613,7 @@
    * Fill the side panel's Pins tab (TeXglassInsight.sidePanel's pinsTab): the
    * saved sets fixed at the top, and under them the pin list as the toolbar's pin
    * shows it (By kind / In order, notes, unpin, Show only these, Clear all).
-   *   TeXglassPins.panel({ body, insight, margin, jump(el), showPinned(), onJump(), collections }) → { show(), hide(), refresh() }
+   *   TeXglassPins.panel({ body, insight, margin, jump(el), showPinned(), pinMore(), onJump(), collections }) → { show(), hide(), refresh() }
    * collections (optional, the web viewer): pins gathered from several papers, see fillColl.
    */
   function panel(opts) {
@@ -621,7 +627,7 @@
     const collEl = body.children[2];
     let shown = false;
     const list = controller(listEl, {
-      insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, noSets: true,
+      insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore, noSets: true,
       done: () => { if (opts.onJump) opts.onJump(); },
     });
 
@@ -749,6 +755,37 @@
     };
   }
 
+  /**
+   * What the toolbar's pin does where there is a side panel: a click shows the
+   * Pins tab (opening the panel if it is closed), a second click goes back to
+   * the tab that was showing, or closes the panel if the pin opened it.
+   *   TeXglassPins.tabOpener({ side (TeXglassInsight.sidePanel), shown() (the panel is
+   *     showing), setShown(on) (show or hide it; false when it cannot show) }) → openTab()
+   */
+  function tabOpener(o) {
+    let back = null; // { tab, closed }: where the pin came from
+    return function openTab() {
+      const side = o.side;
+      if (!side || !side.show || !side.tab) return false;
+      if (o.shown() && side.tab() === 'pins') {
+        if (back && !back.closed && back.tab !== 'pins') side.show(back.tab);
+        else o.setShown(false);
+        back = null;
+        return true;
+      }
+      const closed = !o.shown();
+      const tab = side.tab();
+      if (closed && o.setShown(true) === false) return false;
+      side.show('pins');
+      if (side.tab() !== 'pins' || !o.shown()) {
+        if (closed) o.setShown(false);
+        return false;
+      }
+      back = { tab, closed };
+      return true;
+    };
+  }
+
   // --- the study sheet (Show only these) and Share links ---------------------------
 
   /** The pins as Show only these lists them: [{ el, name, note }] in the reading order (not Notation rows). */
@@ -802,5 +839,5 @@
     return out;
   }
 
-  return { attach, panel, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
+  return { attach, panel, tabOpener, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
 });

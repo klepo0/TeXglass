@@ -1537,6 +1537,8 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 .uses-pinset:disabled { cursor: default; opacity: 0.8; }
 .uses-direct:disabled { cursor: default; }
 .uses-help b { color: var(--ink); font-weight: 600; }
+/* a sentence, not a row of name and count: the list's flex would set each bold name in a column */
+.goto-list li.uses-help { display: block; line-height: 1.5; }
 .goto-list li.uses-group { cursor: default; padding-top: 6px; font-size: 0.82em; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
 .goto-list li.uses-none { padding-left: 16px; }
 .goto-list li.uses-group ~ li[role="option"] { padding-left: 16px; }
@@ -2232,6 +2234,17 @@ figure.float:hover > .tg-pin-btn { opacity: 1; }
 .uses-dir button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
 .uses-bar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .uses-step { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pick-step { display: inline-flex; align-items: center; gap: 4px; }
+/* Print or share: one button on the Show only these bar, its menu opening upwards */
+.pick-out { position: relative; display: inline-flex; }
+.pick-out-menu {
+  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 13;
+  display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 4px;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.pick-out-menu[hidden] { display: none; }
+.uses-bar .pick-out-menu button { border: none; text-align: left; padding: 6px 10px; white-space: nowrap; }
+.uses-bar .pick-out-menu button:hover, .uses-bar .pick-out-menu button:focus-visible { background: var(--accent-soft); }
 .uses-done { font-weight: 600; }
 
 /* --- comparing versions (src/diff.js) -------------------------------------------
@@ -2503,10 +2516,11 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
   .toolbar .icon-button svg, .tb-icon { width: 22px; height: 22px; }
   .tb-icon { display: block; }
   #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label, #share .tb-label { display: none; }
-  .more-compact #toc-toggle .tb-label { display: inline; }
+  .more-compact #toc-toggle .tb-label, .more-compact #save-offline .tb-label { display: inline; }
   .toolbar .tb-iconic .tb-icon { width: 22px; height: 22px; }
   .toolbar .more-compact .tb-iconic .tb-icon { width: 18px; height: 18px; }
   #save-offline .tb-icon, #share .tb-icon { width: 22px; height: 22px; }
+  .toolbar .more-compact #save-offline .tb-icon { width: 18px; height: 18px; }
   #toc-toggle, #find, #save-offline, #share { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
   .toolbar .more-button { padding: 6px 12px; font-size: 18px; line-height: 1; }
   .more-group { order: 10; }

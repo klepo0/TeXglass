@@ -13,6 +13,12 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 test('kinds, A–Z places and Greek searches', () => {
@@ -163,10 +169,10 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     await page.mouse.up();
     await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 'm:Var');
     // pins of the Notation tab are pins like the others now: the order is the reading order of the Pinned list
-    await page.click('#pins');
-    assert.deepEqual(await page.$$eval('.tg-pins-menu [data-pins-view="order"]', (b) => b.map((x) => x.getAttribute('aria-pressed'))), ['true'], 'an order shows the list in order');
-    assert.deepEqual(await page.$$eval('.tg-pins-menu .tg-pins-row', (rows) => rows.map((r) => r.dataset.key)), ['m:Var', 's:\\Gamma']);
-    await page.keyboard.press('Escape');
+    await openPins(page);
+    assert.deepEqual(await page.$$eval('.side-pins [data-pins-view="order"]', (b) => b.map((x) => x.getAttribute('aria-pressed'))), ['true'], 'an order shows the list in order');
+    assert.deepEqual(await page.$$eval('.side-pins .tg-pins-row', (rows) => rows.map((r) => r.dataset.key)), ['m:Var', 's:\\Gamma']);
+    await page.click('[data-side-tab="notation"]'); // back from the Pins tab
     await page.locator('.side-insight .insight-pin-item').first().locator('.insight-drag').focus();
     await page.keyboard.press('ArrowDown');
     await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 's:\\Gamma');

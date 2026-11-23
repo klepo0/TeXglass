@@ -14,6 +14,12 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Handouts}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n' +
@@ -72,9 +78,9 @@ test('Show only these: what a pin rests on, folded; a handout to print or read a
     await pinThm('first');
 
     // a reading order (the theorem first) and a note on the theorem
-    await page.click('#pins');
+    await openPins(page);
     await page.click('[data-pins-view="order"]');
-    const rows = () => page.$$eval('.tg-pins-menu .tg-pins-row', (rs) => rs.map((r) => r.dataset.key));
+    const rows = () => page.$$eval('.side-pins .tg-pins-row', (rs) => rs.map((r) => r.dataset.key));
     // (a move makes the order the reader's own)
     await page.focus('[data-pins-drag="label:first"]');
     await page.keyboard.press((await rows())[0] === 'label:first' ? 'ArrowDown' : 'ArrowUp');
@@ -125,6 +131,7 @@ test('Show only these: what a pin rests on, folded; a handout to print or read a
         };
       };
     });
+    await page.click('.pick-bar [data-act="out"]'); // Print, EPUB and Share share one button
     await page.click('.pick-bar [data-act="print"]');
     await page.waitForFunction(() => window.__printed !== null);
     const h = await page.evaluate(() => window.__printed);
@@ -147,7 +154,7 @@ test('Show only these: what a pin rests on, folded; a handout to print or read a
     assert.equal(await page.locator('#preview > .pick-handout').count(), 0);
 
     // EPUB downloads the handout as a short e-book
-    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.pick-bar [data-act="epub"]')]);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.pick-bar [data-act="out"]').then(() => page.click('.pick-bar [data-act="epub"]'))]);
     assert.match(dl.suggestedFilename(), /^notes-handout\.epub$/);
     const files = unzip(fs.readFileSync(await dl.path()));
     const text = Object.entries(files).filter(([n]) => /\.xhtml$/.test(n) && !/nav/.test(n)).map(([, v]) => v).join('\n');

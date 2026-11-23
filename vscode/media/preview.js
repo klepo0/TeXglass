@@ -345,7 +345,7 @@
   pane.addEventListener('scrollend', () => { tocJump = 0; spyToc(); });
   // On a narrow preview the contents open as a drawer; a click elsewhere closes it.
   document.addEventListener('pointerdown', (e) => {
-    if (narrow.matches && tocWanted && !tocPane.contains(e.target)) {
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !e.target.closest('#pins-float')) {
       tocWanted = false;
       showToc();
       vscode.postMessage({ type: 'toc', on: false });
@@ -1217,6 +1217,12 @@
       showPinned: picker ? () => picker.show() : undefined,
       hideWhenEmpty: true,
       onOpen: () => hidePopover(),
+      // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
+      openTab: window.TeXglassPins.tabOpener ? window.TeXglassPins.tabOpener({
+        get side() { return side; },
+        shown: () => !tocPane.hidden,
+        setShown: (on) => { tocWanted = on; showToc(); return !tocPane.hidden === on; },
+      }) : undefined,
     })
     : null;
 
@@ -1258,6 +1264,7 @@
       pinsTab: window.TeXglassPins && insight ? (body) => window.TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
         showPinned: picker ? () => picker.show() : undefined,
+        pinMore: picker ? () => picker.start() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       }) : undefined,
     })

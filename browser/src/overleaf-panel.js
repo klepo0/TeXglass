@@ -754,7 +754,7 @@
   });
   // When the panel is narrow the contents are a drawer: a click elsewhere or Escape closes it.
   document.addEventListener('pointerdown', (e) => {
-    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target)) { tocWanted = false; showToc(); }
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target) && !e.target.closest('#pins')) { tocWanted = false; showToc(); }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && narrow.matches && tocWanted) { tocWanted = false; showToc(); }
@@ -818,7 +818,15 @@
     : null;
   // The pin in the toolbar: how many things are pinned on the map, and a list to jump to.
   const pinsButton = window.TeXglassPins && insight
-    ? TeXglassPins.attach({ button: $('pins'), insight, root: preview, toc: tocList, jump: (el) => jumpTo(el), onOpen: () => hidePopover() })
+    ? TeXglassPins.attach({
+      button: $('pins'), insight, root: preview, toc: tocList, jump: (el) => jumpTo(el), onOpen: () => hidePopover(),
+      // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
+      openTab: TeXglassPins.tabOpener ? TeXglassPins.tabOpener({
+        get side() { return sideView; },
+        shown: () => !tocPane.hidden,
+        setShown: (on) => { tocWanted = on; showToc(); spyToc(); return !tocPane.hidden === on; },
+      }) : undefined,
+    })
     : null;
   if (!pinsButton) $('pins').hidden = true;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and

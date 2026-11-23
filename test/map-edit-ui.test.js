@@ -118,8 +118,9 @@ test('the dependency map can be edited, pinned and locked', { skip: !chromium &&
     assert.ok(await eq.evaluate((el) => el.classList.contains('tg-pinned')));
 
     // Show pinned: Theorem 1, the lemmas it uses (mine too), (1) through Lemma 1's statement, and (2).
-    await page.click('#more-menu-btn, #more').catch(() => {});
-    await page.evaluate(() => document.getElementById('pick-results').click());
+    // the pin opens the side panel's Pins tab, which has Show only these
+    await page.click('#pins');
+    await page.click('.side-pins [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view, .pick-view');
     const shown = await page.evaluate(() => {
       const vis = (el) => el.getClientRects().length > 0;

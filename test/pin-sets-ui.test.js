@@ -13,6 +13,12 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Sets}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -51,7 +57,7 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
       await page.waitForSelector(`#preview .theorem[data-label="${label}"] .tg-pin-btn`, { state: 'attached' });
       await page.evaluate((l) => document.querySelector(`#preview .theorem[data-label="${l}"] .tg-pin-btn`).click(), label);
     };
-    const rows = () => page.$$eval('.tg-pins-menu .tg-pins-row', (rs) => rs.map((r) => r.dataset.key));
+    const rows = () => page.$$eval('.side-pins .tg-pins-row', (rs) => rs.map((r) => r.dataset.key));
 
     // pin two results and the equation
     await pinThm('main');
@@ -62,7 +68,7 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     assert.equal(await badge(), '3');
 
     // the list: by kind first; In order gives one list with handles
-    await page.click('#pins');
+    await openPins(page);
     assert.equal(await page.getAttribute('[data-pins-view="kind"]', 'aria-pressed'), 'true');
     assert.equal(await page.locator('.tg-pins-drag').count(), 0);
     await page.click('[data-pins-view="order"]');
@@ -89,7 +95,7 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     await page.fill('.tg-pins-memo-in', 'start the talk here');
     await page.keyboard.press('Enter');
     assert.equal(await page.textContent('.tg-pins-row[data-key="label:main"] .tg-pins-memo'), 'start the talk here');
-    assert.equal(await page.isVisible('.tg-pins-menu'), true, 'Enter keeps the list open');
+    assert.equal(await page.isVisible('.side-pins'), true, 'Enter keeps the list open');
 
     // save as a set; change the pins; Update and switching back
     await page.click('[data-pins-act="save"]');
@@ -110,7 +116,7 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     await page.keyboard.press('Escape');
 
     // Show only these: the study sheet, in order, with the note
-    await page.click('#pins');
+    await openPins(page);
     await page.click('[data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view .pick-sheet');
     assert.match(await page.textContent('.pick-sheet'), /Reading order/);
@@ -125,7 +131,7 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     // kept with the notes: open the paper again
     await open();
     assert.equal(await badge(), '3');
-    await page.click('#pins');
+    await openPins(page);
     assert.equal(await page.getAttribute('[data-pins-view="order"]', 'aria-pressed'), 'true', 'with an order, the list opens in order');
     assert.deepEqual(await rows(), ['label:first', 'label:main', 'eq:(1)']);
     assert.equal(await page.textContent('.tg-pins-row[data-key="label:main"] .tg-pins-memo'), 'start the talk here');

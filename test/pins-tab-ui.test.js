@@ -13,6 +13,12 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Tab}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -64,7 +70,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     };
     await pinThm('main');
     await pinThm('first');
-    await page.click('#pins');
+    await openPins(page);
     await page.click('[data-pins-view="order"]');
     await page.focus('[data-pins-drag="label:first"]');
     await page.keyboard.press('ArrowDown');
@@ -129,9 +135,9 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     // and in the toolbar's list too
     await page.click(P + '[data-pins-set="Talk"]');
     assert.equal(await badge(), '2');
-    await page.click('#pins');
-    await page.click('.tg-pins-menu [data-pins-act="clear"]');
-    await page.click('.tg-pins-menu [data-pins-act="clear-ok"]');
+    await openPins(page);
+    await page.click('.side-pins [data-pins-act="clear"]');
+    await page.click('.side-pins [data-pins-act="clear-ok"]');
     assert.equal(await badge(), '');
     await page.keyboard.press('Escape');
     await page.click(P + '[data-pins-set="Talk"]');
@@ -153,8 +159,8 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.waitForSelector('.tg-hlbar:not([hidden])');
     await page.click('.tg-hlbar-pin');
     assert.equal(await badge(), '3');
-    await page.click('#pins');
-    await page.click('.tg-pins-menu [data-pins-act="show"]');
+    await openPins(page);
+    await page.click('.side-pins [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     const seen = async (txt) => page.locator('#preview p', { hasText: txt }).first().isVisible();
     assert.equal(await seen('Alpha words'), true);
@@ -169,9 +175,9 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.waitForSelector('#preview .math-display:not(:has(.tag)) .tg-pin-btn', { state: 'attached' });
     await page.evaluate(() => document.querySelector('#preview .math-display:not(:has(.tag)) .tg-pin-btn').click());
     assert.equal(await badge(), '4');
-    await page.click('#pins');
-    assert.match(await page.textContent('.tg-pins-menu'), /Unnumbered equation \(x\^2 \+ y\^2 = r\^2\)/);
-    await page.click('.tg-pins-menu [data-pins-act="show"]');
+    await openPins(page);
+    assert.match(await page.textContent('.side-pins'), /Unnumbered equation \(x\^2 \+ y\^2 = r\^2\)/);
+    await page.click('.side-pins [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     assert.equal(await page.locator('#preview .math-display:not(:has(.tag))').first().isVisible(), true, 'shown under Show only these');
     await page.keyboard.press('Escape');

@@ -31,6 +31,7 @@
  *   pick.start();         // pin: click results and equations to pin them
  *   pick.show();          // show only the pinned ones
  *   pick.pinsChanged();   // the host's pins changed: show (or tick) them again
+ *   pick.step(1 | -1);    // in the view: go to the next or previous pin (‹ › on the bar, J / K)
  *   pick.stop();          // the whole document again
  *   pick.refresh();       // after a new render: the same selection again
  *   pick.showShared({ items, keep, onEnd, sheet, hasOrder }); // a view from a link (src/share.js),
@@ -120,6 +121,8 @@
     let marked = [];
     let bar = null;
     let shared = null; // a view someone shared: { items(), keep(), name } while it shows
+    let stops = []; // the pins to step through in the view (‹ › on the bar, J / K), in the reading order
+    let at = -1; // the one stepped to last
 
     const pickables = () => blocksOf(doc).filter((el) => (el.classList.contains('theorem') && el.id) || (isNumberedDisplay(el) && el.id));
     const pickedEls = () => {
@@ -249,8 +252,32 @@
       const sheet = drawSheet();
       drawContexts(els, keep);
       doc.classList.add('pick-view');
+      const was = at >= 0 ? stops[at] : null;
+      stops = stepOrder(els);
+      at = stay ? stops.indexOf(was) : sheet ? -1 : 0;
       showBar();
       if (opts.jump && !stay) opts.jump(sheet || els[0]);
+    }
+
+    /** The pins to step through: in the reader's order when there is one, else the paper's. */
+    function stepOrder(els) {
+      const src = shared || opts;
+      let rows = [];
+      try { rows = src.hasOrder && src.hasOrder() && src.sheet ? (src.sheet() || []) : []; } catch (e) { rows = []; }
+      const out = [];
+      for (const r of rows) if (r && r.el && els.includes(r.el) && !out.includes(r.el)) out.push(r.el);
+      for (const el of els) if (!out.includes(el)) out.push(el);
+      return out;
+    }
+
+    /** Go to the next (by 1) or the previous (by -1) pin in the view. */
+    function step(by) {
+      if (mode !== 'view' || !stops.length) return false;
+      const k = stops.length;
+      at = at < 0 ? (by > 0 ? 0 : k - 1) : (at + by + k) % k;
+      if (opts.jump) opts.jump(stops[at]);
+      showBar();
+      return true;
     }
 
     // --- the study sheet: the pins in the reader's order, with their notes ---------
@@ -536,6 +563,8 @@
       shared = null;
       clearMarks();
       mode = null;
+      stops = [];
+      at = -1;
       if (was && was.onEnd) was.onEnd();
       if (bar) bar.hidden = true;
     }
@@ -567,6 +596,12 @@
           const b = e.target.closest('button');
           if (!b) return;
           const act = b.dataset.act;
+          const out = bar.querySelector('.pick-out-menu');
+          if (act === 'out') {
+            if (out) { out.hidden = !out.hidden; b.setAttribute('aria-expanded', String(!out.hidden)); if (!out.hidden) { const f = out.querySelector('button'); if (f) f.focus(); } }
+            return;
+          }
+          if (out && !out.hidden) { out.hidden = true; const ob = bar.querySelector('[data-act="out"]'); if (ob) ob.setAttribute('aria-expanded', 'false'); }
           if (act === 'show') { shared = null; show(); }
           else if (act === 'keep') keepShared();
           else if (act === 'share') { if (opts.share) opts.share(); }
@@ -574,35 +609,66 @@
           else if (act === 'edit') start();
           else if (act === 'print') { if (opts.print) opts.print(); }
           else if (act === 'epub') { if (opts.epub) opts.epub(); }
+          else if (act === 'next') step(1);
+          else if (act === 'prev') step(-1);
           else if (act === 'done') stop();
         });
         document_.body.appendChild(bar);
+        // the Print or share menu closes on a click elsewhere, or Escape (before Escape leaves the view)
+        const closeOut = () => {
+          const out = bar.querySelector('.pick-out-menu');
+          if (!out || out.hidden) return false;
+          out.hidden = true;
+          const ob = bar.querySelector('[data-act="out"]');
+          if (ob) { ob.setAttribute('aria-expanded', 'false'); ob.focus(); }
+          return true;
+        };
+        document_.addEventListener('pointerdown', (e) => { if (!bar.contains(e.target)) closeOut(); });
+        document_.addEventListener('keydown', (e) => { if (e.key === 'Escape' && closeOut()) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
       }
       const n = pickedEls().length;
       const what = (k) => `${k} item${k === 1 ? '' : 's'}`;
+      // Print, EPUB and Share in one button, with a small menu (Escape or a click elsewhere closes it)
+      const outMenu = (share) => {
+        const items = [
+          opts.print ? '<button type="button" role="menuitem" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in your reading order with their notes, open proofs, and the definitions and notation they rest on">Print or save as PDF</button>' : '',
+          opts.epub ? '<button type="button" role="menuitem" data-act="epub" title="Download a handout of this view as an EPUB e-book, for an e-reader or a tablet">EPUB e-book</button>' : '',
+          share && opts.share && (!opts.canShare || opts.canShare()) ? '<button type="button" role="menuitem" data-act="share" title="Share a link that opens the paper with this view">Share a link</button>' : '',
+        ].filter(Boolean);
+        if (!items.length) return '';
+        return '<span class="pick-out">' +
+          `<button type="button" data-act="out" aria-haspopup="menu" aria-expanded="false" title="${share ? 'Print this view, download it as an EPUB, or share a link to it' : 'Print this view, or download it as an EPUB'}">${share ? 'Print or share' : 'Print'} ▾</button>` +
+          `<span class="pick-out-menu" role="menu" hidden>${items.join('')}</span></span>`;
+      };
+      // ‹ 2/5 ›: step through the pins shown (J / K too), as the "What does this use?" bar does
+      const stepper = stops.length > 1
+        ? '<span class="pick-step" role="group" aria-label="Go through the pins">' +
+          '<button type="button" data-act="prev" aria-label="Previous pinned item" title="Previous pinned item (K)">‹</button>' +
+          `<span class="uses-step">${at < 0 ? '–' : at + 1}/${stops.length}</span>` +
+          '<button type="button" data-act="next" aria-label="Next pinned item" title="Next pinned item (J)">›</button></span>'
+        : '';
       const blockName = (el) => (el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : null);
       if (mode === 'pick') {
         const names = pickedEls().map(blockName).filter(Boolean);
         const list = names.length ? ` <span class="pick-names" title="${esc(names.join(', '))}">${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ', …' : ''}</span>` : '';
         bar.innerHTML =
           `<span class="uses-what">${n ? `<strong>${what(n)} pinned</strong>${list}` : 'Click the results and numbered equations to pin'}</span>` +
-          `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the pinned results and equations">Show pinned</button>` +
-          (n ? '<button type="button" data-act="clear" title="Take every pin away">Unpin all</button>' : '') +
+          `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the pinned results and equations">Show only these</button>` +
+          (n ? '<button type="button" data-act="clear" title="Take every pin away">Clear all</button>' : '') +
           '<button type="button" data-act="done" title="Back to the whole document (Esc)">Done</button>';
       } else if (shared) {
         bar.innerHTML =
           `<span class="uses-what"><strong>Shared view: ${what(n)}</strong> <span class="insight-muted">your own pins stay as they are; proofs fold: click one to open it</span></span>` +
+          stepper +
           (shared.keep ? '<button type="button" data-act="keep" title="Add these to your own pins, keeping the ones you have">Keep these pins</button>' : '') +
-          (opts.print ? '<button type="button" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in order with their notes, open proofs, and the definitions and notation they rest on">Print</button>' : '') +
-          (opts.epub ? '<button type="button" data-act="epub" title="Download a handout of this view as an EPUB e-book">EPUB</button>' : '') +
+          outMenu(false) +
           '<button type="button" data-act="done" class="uses-done" title="Leave the shared view: back to the whole document and your own pins (Esc)">Dismiss</button>';
       } else {
         bar.innerHTML =
           `<span class="uses-what"><strong>Showing ${what(n)} pinned</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
+          stepper +
           '<button type="button" data-act="edit" title="Pin or unpin results and equations">Change</button>' +
-          (opts.print ? '<button type="button" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in your reading order with their notes, open proofs, and the definitions and notation they rest on">Print</button>' : '') +
-          (opts.epub ? '<button type="button" data-act="epub" title="Download a handout of this view as an EPUB e-book, for an e-reader or a tablet">EPUB</button>' : '') +
-          (opts.share && (!opts.canShare || opts.canShare()) ? '<button type="button" data-act="share" title="Share a link that opens the paper with this view">Share</button>' : '') +
+          outMenu(true) +
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
       }
       bar.hidden = false;
@@ -663,6 +729,16 @@
     document_.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && mode && !e.defaultPrevented && !document_.querySelector('dialog[open]')) stop();
     });
+    // J / K in the view step through what it shows (before the pin's own J / K, src/pins.js)
+    document_.addEventListener('keydown', (e) => {
+      if (mode !== 'view' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'j' && k !== 'k') return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document_.querySelector('dialog[open]')) return;
+      if (step(k === 'j' ? 1 : -1)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
 
     return {
       start,
@@ -670,6 +746,7 @@
       stop,
       refresh: () => refresh(),
       toggle,
+      step,
       pinsChanged,
       /** null, 'pick' or 'view' */
       mode: () => mode,
