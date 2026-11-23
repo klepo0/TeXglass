@@ -1017,6 +1017,12 @@ ${INK_FILTERS}
       case 'print-request': // Print on the bar of a selection or of "What does this use?"
         vscode.commands.executeCommand('texglass.print');
         break;
+      case 'handout': // Print or EPUB on the bar of Show only these: the view as a handout
+        if (typeof m.html !== 'string') break;
+        if (m.as === 'epub') exportHandoutEpub(this.context, this.uri, m.html, m.title);
+        else if (WEB) this.post({ type: 'print-handout' });
+        else printHandout(this.context, this.uri, m.html, m.title);
+        break;
       case 'print': // what shows in the preview, after 'print-view'
         if (WEB) break;
         vscode.commands.executeCommand('texglass.exportHtml', this.uri, undefined, true,
@@ -1453,6 +1459,76 @@ async function exportHtml(context, converter, uri, out, print, view) {
     });
     return out;
   });
+}
+
+/**
+ * Print the handout of Show only these (src/pick.js handout, made in the
+ * preview with its figures inside and its diagrams drawn): a page in the
+ * browser that prints itself, as Print does for the whole document.
+ */
+async function printHandout(context, uri, body, title) {
+  try {
+    const name = path.posix.basename(uri.path).replace(/\.[^.]+$/, '') || 'document';
+    const dir = path.join(os.tmpdir(), 'texglass-print');
+    fs.mkdirSync(dir, { recursive: true });
+    const out = vscode.Uri.file(path.join(dir, name + '-handout.html'));
+    const decode = (b) => new TextDecoder().decode(b);
+    const css = decode(await readExtensionFile(context, 'shared', 'styles.css'));
+    let katexCss = null;
+    try {
+      katexCss = await TeXglassExport.embedKatexFonts(
+        decode(await readExtensionFile(context, 'node_modules', 'katex', 'dist', 'katex.min.css')),
+        async (font) => base64(await readExtensionFile(context, 'node_modules', 'katex', 'dist', 'fonts', font))
+      );
+    } catch (e) {
+      katexCss = null;
+    }
+    const notes = await notesForExport(context, true);
+    const html = TeXglassExport.page({
+      body, title: (title || name) + ' (handout)', css, katexCss, print: true,
+      ...(notes || {}),
+      theme: notes ? 'light' : undefined,
+    });
+    await vscode.workspace.fs.writeFile(out, new TextEncoder().encode(html));
+    if (!(await vscode.env.openExternal(out))) vscode.window.showErrorMessage(`TeXglass could not open ${out.fsPath} in a browser.`);
+  } catch (e) {
+    vscode.window.showErrorMessage('TeXglass could not print the handout: ' + (e.message || e));
+  }
+}
+
+/**
+ * Save the handout of Show only these as an EPUB e-book: what the view shows,
+ * in the reading order with the notes, and the definitions and notation used.
+ */
+async function exportHandoutEpub(context, uri, body, title) {
+  const name = path.posix.basename(uri.path).replace(/\.[^.]+$/, '') || 'document';
+  const out = await vscode.window.showSaveDialog({
+    defaultUri: uri.scheme === 'untitled' ? undefined : vscode.Uri.joinPath(uri, '..', name + '-handout.epub'),
+    filters: { EPUB: ['epub'] },
+    saveLabel: 'Export',
+    title: 'Export the handout to EPUB',
+  });
+  if (!out) return null;
+  try {
+    const decode = (b) => new TextDecoder().decode(b);
+    const katexDir = ['node_modules', 'katex', 'dist'];
+    const { bytes, warnings } = await TeXglassEpub.build({
+      body,
+      title: (title || name) + ' (handout)',
+      toc: [],
+      katexCss: decode(await readExtensionFile(context, ...katexDir, 'katex.min.css')),
+      readFont: (font) => readExtensionFile(context, ...katexDir, 'fonts', font),
+      readImage: async () => null, // figures come inside, as data: URLs
+      diagramsDrawn: true,
+    });
+    await vscode.workspace.fs.writeFile(out, bytes);
+    const left = warnings.filter((w) => w.startsWith('Left out a figure')).length;
+    vscode.window.showInformationMessage(`Exported ${path.posix.basename(out.path)}.${left ? ` ${left} figure${left === 1 ? ' was' : 's were'} left out.` : ''}`);
+    return out;
+  } catch (e) {
+    vscode.window.showErrorMessage('TeXglass could not export the handout: ' + (e.message || e));
+    return null;
+  }
 }
 
 /**

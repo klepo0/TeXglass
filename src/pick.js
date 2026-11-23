@@ -22,6 +22,11 @@
  *                         //   their notes: [{ el, name, note }]; shown at the top of the
  *                         //   view (and each note above its pin) once there is an order or a note
  *     hasOrder(),         // optional: whether the reader put the pins in an order
+ *     context(el),        // optional: what a pinned result rests on, folded under it:
+ *                         //   { defs: [{ el, name }], symbols: [{ tex, el, where, shown() }] }
+ *                         //   (TeXglassInsight's contextOf), or null
+ *     renderSymbols(box), // optional: draw the [data-sym] symbols in box (a promise)
+ *     epub(),             // optional: an EPUB button on the bar: the host makes the handout an e-book
  *   });
  *   pick.start();         // pin: click results and equations to pin them
  *   pick.show();          // show only the pinned ones
@@ -30,6 +35,10 @@
  *   pick.refresh();       // after a new render: the same selection again
  *   pick.showShared({ items, keep, onEnd, sheet, hasOrder }); // a view from a link (src/share.js),
  *                         //   shown without touching the reader's pins: Keep / Dismiss
+ *   await pick.handout({ ids });  // the view as a handout: { title, html } with the pins in the
+ *                         //   reading order, each with its note, the proofs opened, and at the end
+ *                         //   the definitions and notation they rest on (ids: keep the ids, for an e-book)
+ *   pick.printHandout(print); // print the handout instead of the page: print() is window.print
  *
  * TeXglassPick.snapshot(root) tells which blocks are showing now (in any view,
  * "What does this use?" with "Hide the rest" too), so that a page rendered
@@ -47,7 +56,7 @@
   /** Blocks a view is made of; TeXglassExport counts the same ones (VIEW_BLOCKS there). */
   const BLOCKS = 'h1, h2, h3, h4, h5, h6, header, .theorem, .proof, .math-display, figure, table, li, p, blockquote, pre';
   /** Not part of the document: popovers, margin notes, the margin column. */
-  const OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar, .pick-sheet, .pick-memo';
+  const OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar, .pick-sheet, .pick-memo, .pick-context, .pick-handout';
   const HEADING = /^H([1-6])$/;
   const CLASSES = ['pick-on', 'pick-hide', 'pick-proof', 'pick-open', 'pick-head'];
 
@@ -140,7 +149,8 @@
     function clearMarks() {
       for (const el of marked) el.classList.remove(...CLASSES);
       marked = [];
-      for (const b of doc.querySelectorAll('.pick-box, .pick-sheet, .pick-memo')) b.remove();
+      for (const b of doc.querySelectorAll('.pick-box, .pick-sheet, .pick-memo, .pick-context, .pick-handout')) b.remove();
+      doc.classList.remove('pick-printing');
       for (const el of doc.querySelectorAll('.pick-able')) el.classList.remove('pick-able', 'pick-on');
       doc.classList.remove('pick-mode', 'pick-view');
     }
@@ -237,6 +247,7 @@
       };
       walk(doc);
       const sheet = drawSheet();
+      drawContexts(els, keep);
       doc.classList.add('pick-view');
       showBar();
       if (opts.jump && !stay) opts.jump(sheet || els[0]);
@@ -278,6 +289,238 @@
         if (r.el.parentNode) r.el.parentNode.insertBefore(memo, r.el);
       });
       return sheet;
+    }
+
+    // --- what a pinned result rests on: definitions and notation, folded under it ---
+
+    const contextOf = (el) => {
+      const src = shared || opts;
+      if (!(src.context || opts.context)) return null;
+      try { return (src.context || opts.context)(el); } catch (e) { return null; }
+    };
+    const symHtml = (s) => `<span class="pick-ctx-sym" data-sym="${esc(s.tex)}"><code>${esc(s.tex)}</code></span>`;
+    /** "Definition 2.1, Definition 3 · 𝓕, μ_t" (the first few symbols). */
+    function contextSummary(c) {
+      const parts = [];
+      if (c.defs.length) parts.push(c.defs.map((d) => esc(d.name)).join(', '));
+      if (c.symbols.length) {
+        const few = c.symbols.slice(0, 6).map(symHtml).join(', ');
+        parts.push(`<span class="pick-ctx-k2">notation</span> ${few}${c.symbols.length > 6 ? `, <span class="insight-muted">+${c.symbols.length - 6}</span>` : ''}`);
+      }
+      return parts.join(' · ');
+    }
+
+    /** A copy of a block to show elsewhere: no ids (o.ids keeps them), none of the viewer's buttons and marks. */
+    function copyBlock(el, o) {
+      const c = el.cloneNode(true);
+      const strip = (x) => {
+        x.classList.remove(...CLASSES, 'pick-able', 'folded', 'tg-pinned', 'uses-lit', 'uses-dim', 'uses-self');
+        if (!(o && o.ids)) x.removeAttribute('id');
+      };
+      strip(c);
+      for (const x of c.querySelectorAll('*')) strip(x);
+      for (const x of c.querySelectorAll('.pick-box, .pick-memo, .pick-context, button, .fold-toggle, .uses-btn, .rp-marks, .tg-pin-btn, ' + OUTSIDE)) x.remove();
+      return c;
+    }
+
+    function drawContexts(els, keep) {
+      if (!opts.context) return;
+      for (const el of els) {
+        if (!el.classList.contains('theorem') && !isNumberedDisplay(el)) continue;
+        const c = contextOf(el);
+        if (!c) continue;
+        const box = document_.createElement('details');
+        box.className = 'pick-context';
+        box.innerHTML = `<summary title="What ${esc(nameOf(el))} rests on: the definitions it refers to and the notation its formulas use. Click to see them"><span class="pick-ctx-k">Rests on</span> ${contextSummary(c)}</summary><div class="pick-ctx-body"></div>`;
+        box.addEventListener('toggle', () => { if (box.open && !box._filled) fillContext(box, c, keep); });
+        box.addEventListener('click', (e) => {
+          const go = e.target.closest('[data-ctx-go]');
+          if (!go) return;
+          e.preventDefault();
+          const k = go.dataset.ctxGo.split(':');
+          const target = k[0] === 'd' ? c.defs[+k[1]].el : c.symbols[+k[1]].el;
+          if (target && opts.jump) opts.jump(target);
+        });
+        // after the result (before its proof); after the equation
+        el.parentNode.insertBefore(box, el.nextSibling);
+        if (opts.renderSymbols) opts.renderSymbols(box);
+      }
+    }
+
+    function fillContext(box, c, keep) {
+      box._filled = true;
+      const body = box.querySelector('.pick-ctx-body');
+      c.defs.forEach((d, i) => {
+        const shown = keep && keep.has(d.el);
+        const item = document_.createElement('div');
+        item.className = 'pick-ctx-def';
+        item.innerHTML = `<div class="pick-ctx-src"><a href="#" data-ctx-go="d:${i}">${esc(d.name)}</a>${shown ? ' <span class="insight-muted">pinned: shown in this view</span>' : ''}</div>`;
+        if (!shown) item.appendChild(copyBlock(d.el));
+        body.appendChild(item);
+      });
+      if (c.symbols.length) {
+        const ul = document_.createElement('ul');
+        ul.className = 'pick-ctx-syms';
+        c.symbols.forEach((s, i) => {
+          const li = document_.createElement('li');
+          li.innerHTML = `<span class="pick-ctx-what">${symHtml(s)}</span> <span class="pick-ctx-shown"></span>` +
+            (s.where ? ` <a href="#" class="pick-ctx-where" data-ctx-go="s:${i}">${esc(s.where)}</a>` : '');
+          let shown = null;
+          try { shown = s.shown ? s.shown() : null; } catch (e) { shown = null; }
+          if (shown) li.querySelector('.pick-ctx-shown').appendChild(shown);
+          ul.appendChild(li);
+        });
+        body.appendChild(ul);
+      }
+      if (opts.renderSymbols) opts.renderSymbols(body);
+    }
+
+    // --- the handout: the view in the reading order, to print or read as an e-book ---
+
+    /** The heading of the section el is in: "2 Preliminaries", or ''. */
+    function sectionOf(el) {
+      let found = null;
+      for (const h of doc.querySelectorAll('h1, h2, h3, h4')) {
+        if (h.closest(OUTSIDE) || h.closest('.title-block, .theorem, .proof')) continue;
+        if (h.compareDocumentPosition(el) & 4) found = h; else break;
+      }
+      if (!found) return '';
+      const t = found.textContent.replace(/\s+/g, ' ').trim();
+      const num = found.querySelector('.secnum');
+      const n = num ? num.textContent.trim() : '';
+      return n && t.startsWith(n) ? `§${n} ${t.slice(n.length).trim()}` : t;
+    }
+
+    /**
+     * The view as a handout: { title, html }. The pins come in the reading
+     * order (else in the document's), each with its number and note, the
+     * section it is from, and its proofs that are open; then what the view
+     * brought along; then, once, the definitions and notation they rest on.
+     * o.ids keeps the blocks' ids, so that links work in an e-book.
+     */
+    async function handout(o) {
+      o = o || {};
+      const els = pickedEls();
+      const src = shared || opts;
+      let rows = [];
+      try { rows = src.sheet ? (src.sheet() || []).filter((r) => r && r.el && doc.contains(r.el)) : []; } catch (e) { rows = []; }
+      const ordered = !!(src.hasOrder && src.hasOrder());
+      const used = [];
+      const covered = (el) => used.some((u) => u === el || u.contains(el));
+      const items = [];
+      for (const r of rows) if (!covered(r.el)) { used.push(r.el); items.push({ el: r.el, name: r.name || nameOf(r.el), note: r.note || '', pin: true }); }
+      const extra = [];
+      for (const el of els) if (!covered(el)) { used.push(el); extra.push({ el, name: el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : '', note: '' }); }
+      // no study sheet (VS Code without one, a plain list): everything in the document's order
+      if (!items.length) { items.push(...extra.map((x) => Object.assign(x, { pin: true }))); extra.length = 0; }
+      const openProofs = new Set(marked.filter((m) => m.classList.contains('pick-proof') && m.classList.contains('pick-open')));
+      const box = document_.createElement('div');
+      const titleEl = doc.querySelector('.title-block');
+      const title = (titleEl && (titleEl.querySelector('.title, h1') || titleEl).textContent.replace(/\s+/g, ' ').trim()) || '';
+      if (titleEl) {
+        const t = copyBlock(titleEl, o);
+        for (const x of t.querySelectorAll('.abstract, .keywords, .msc, .date')) x.remove();
+        box.appendChild(t);
+      }
+      const showOrder = ordered || items.some((x) => x.note);
+      const idOf = (el) => (o.ids && el.id ? el.id : '');
+      if (showOrder) {
+        const nav = document_.createElement('section');
+        nav.className = 'pick-handout-order';
+        nav.innerHTML = `<h2>${ordered ? 'Reading order' : 'Contents'}</h2><ol>` + items.map((x) =>
+          `<li>${idOf(x.el) ? `<a href="#${esc(idOf(x.el))}">${esc(x.name || 'Passage')}</a>` : esc(x.name || 'Passage')}${x.note ? ` <span class="pick-sheet-note">${esc(x.note)}</span>` : ''}</li>`).join('') + '</ol>';
+        box.appendChild(nav);
+      }
+      const ctxDefs = new Map(); // el → name
+      const ctxSyms = new Map(); // key → symbol
+      const put = (x, i, parent) => {
+        const item = document_.createElement('section');
+        item.className = 'pick-handout-item';
+        if (x.pin && (ordered || x.note)) {
+          const memo = document_.createElement('div');
+          memo.className = 'pick-memo';
+          memo.innerHTML = (ordered ? `<span class="pick-memo-n">${i + 1}</span>` : '') + (x.note ? `<span class="pick-memo-t">${esc(x.note)}</span>` : '');
+          item.appendChild(memo);
+        }
+        const from = sectionOf(x.el);
+        if (from) {
+          const p = document_.createElement('p');
+          p.className = 'pick-handout-from';
+          p.textContent = 'From ' + from;
+          item.appendChild(p);
+        }
+        item.appendChild(copyBlock(x.el, o));
+        if (x.el.classList.contains('theorem')) for (const p of proofsOf(x.el)) if (openProofs.has(p)) item.appendChild(copyBlock(p, o));
+        const c = x.el.classList.contains('theorem') || isNumberedDisplay(x.el) ? contextOf(x.el) : null;
+        if (c) {
+          const line = document_.createElement('p');
+          line.className = 'pick-handout-rests';
+          line.innerHTML = `<span class="pick-ctx-k">Rests on</span> ${contextSummary(c)}`;
+          item.appendChild(line);
+          for (const d of c.defs) if (!used.includes(d.el) && !used.some((u) => u.contains(d.el))) ctxDefs.set(d.el, d.name);
+          for (const s of c.symbols) if (!ctxSyms.has(s.key)) ctxSyms.set(s.key, s);
+        }
+        parent.appendChild(item);
+      };
+      items.forEach((x, i) => put(x, i, box));
+      if (extra.length) {
+        const sec = document_.createElement('section');
+        sec.className = 'pick-handout-extra';
+        sec.innerHTML = '<h2>Also in this view</h2>';
+        extra.sort((a, b) => (a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1)).forEach((x, i) => put(x, i, sec));
+        box.appendChild(sec);
+      }
+      if (ctxDefs.size || ctxSyms.size) {
+        const sec = document_.createElement('section');
+        sec.className = 'pick-handout-context';
+        sec.innerHTML = '<h2>Definitions and notation used</h2>';
+        const defEls = Array.from(ctxDefs.keys()).sort((a, b) => (a.compareDocumentPosition(b) & 4 ? -1 : 1));
+        for (const d of defEls) {
+          const item = document_.createElement('section');
+          item.className = 'pick-handout-item';
+          const from = sectionOf(d);
+          if (from) item.innerHTML = `<p class="pick-handout-from">From ${esc(from)}</p>`;
+          item.appendChild(copyBlock(d, o));
+          sec.appendChild(item);
+        }
+        if (ctxSyms.size) {
+          const ul = document_.createElement('ul');
+          ul.className = 'pick-ctx-syms';
+          for (const s of ctxSyms.values()) {
+            const li = document_.createElement('li');
+            li.innerHTML = `<span class="pick-ctx-what">${symHtml(s)}</span> <span class="pick-ctx-shown"></span>${s.where ? ` <span class="pick-ctx-where">(${esc(s.where)})</span>` : ''}`;
+            let shown = null;
+            try { shown = s.shown ? s.shown() : null; } catch (e) { shown = null; }
+            if (shown) {
+              const c = copyBlock(shown, o);
+              c.querySelectorAll('[id]').forEach((x) => { if (!o.ids || document_.getElementById(x.id) !== x) x.removeAttribute('id'); });
+              li.querySelector('.pick-ctx-shown').appendChild(c);
+            }
+            ul.appendChild(li);
+          }
+          sec.appendChild(ul);
+        }
+        box.appendChild(sec);
+      }
+      if (opts.renderSymbols) { try { await opts.renderSymbols(box); } catch (e) { /* the TeX stays */ } }
+      // symbols that could not be drawn keep their TeX
+      for (const x of box.querySelectorAll('[data-sym]')) x.removeAttribute('data-sym');
+      return { title, html: box.innerHTML };
+    }
+
+    /** Print the handout instead of the page: it goes into the page, alone on paper, until printing ends. */
+    async function printHandout(print) {
+      const h = await handout({});
+      for (const b of doc.querySelectorAll('.pick-handout')) b.remove();
+      const box = document_.createElement('div');
+      box.className = 'pick-handout';
+      box.innerHTML = h.html;
+      doc.appendChild(box);
+      doc.classList.add('pick-printing');
+      const win = document_.defaultView;
+      const done = () => { box.remove(); doc.classList.remove('pick-printing'); };
+      if (win) win.addEventListener('afterprint', done, { once: true });
+      (print || (() => win && win.print()))();
     }
 
     function stop() {
@@ -323,6 +566,7 @@
           else if (act === 'clear') { if (opts.clear) opts.clear(); else picked = []; drawBoxes(); showBar(); }
           else if (act === 'edit') start();
           else if (act === 'print') { if (opts.print) opts.print(); }
+          else if (act === 'epub') { if (opts.epub) opts.epub(); }
           else if (act === 'done') stop();
         });
         document_.body.appendChild(bar);
@@ -342,13 +586,15 @@
         bar.innerHTML =
           `<span class="uses-what"><strong>Shared view: ${what(n)}</strong> <span class="insight-muted">your own pins stay as they are; proofs fold: click one to open it</span></span>` +
           (shared.keep ? '<button type="button" data-act="keep" title="Add these to your own pins, keeping the ones you have">Keep these pins</button>' : '') +
-          (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF; folded proofs are left out">Print</button>' : '') +
+          (opts.print ? '<button type="button" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in order with their notes, open proofs, and the definitions and notation they rest on">Print</button>' : '') +
+          (opts.epub ? '<button type="button" data-act="epub" title="Download a handout of this view as an EPUB e-book">EPUB</button>' : '') +
           '<button type="button" data-act="done" class="uses-done" title="Leave the shared view: back to the whole document and your own pins (Esc)">Dismiss</button>';
       } else {
         bar.innerHTML =
           `<span class="uses-what"><strong>Showing ${what(n)} pinned</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
           '<button type="button" data-act="edit" title="Pin or unpin results and equations">Change</button>' +
-          (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF; folded proofs are left out">Print</button>' : '') +
+          (opts.print ? '<button type="button" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in your reading order with their notes, open proofs, and the definitions and notation they rest on">Print</button>' : '') +
+          (opts.epub ? '<button type="button" data-act="epub" title="Download a handout of this view as an EPUB e-book, for an e-reader or a tablet">EPUB</button>' : '') +
           (opts.share && (!opts.canShare || opts.canShare()) ? '<button type="button" data-act="share" title="Share a link that opens the paper with this view">Share</button>' : '') +
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
       }
@@ -432,6 +678,8 @@
         if (picked.length) show();
       },
       snapshot: () => snapshot(doc),
+      handout,
+      printHandout,
     };
   }
 

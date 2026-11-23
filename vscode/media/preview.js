@@ -1002,7 +1002,12 @@
       case 'print':
         window.print();
         break;
+      case 'print-handout': // VS Code for the Web: print the handout here
+        if (picker) picker.printHandout(() => window.print());
+        break;
       case 'print-view': {
+        // Show only these prints its handout (the pins in order, with notes and what they rest on)
+        if (picker && picker.mode() === 'view') { handout('print'); break; }
         // Printing in the browser: which blocks show now (a selection, or Hide the rest)
         let view = null;
         try { view = window.TeXglassPick ? window.TeXglassPick.snapshot(preview) : null; } catch (e) { view = null; }
@@ -1167,10 +1172,27 @@
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;
       },
-      print: () => vscode.postMessage({ type: 'print-request' }),
+      // what a pinned result rests on: definitions and notation, folded under it
+      context: insight && insight.contextOf ? (el) => insight.contextOf(el) : undefined,
+      renderSymbols: insight ? (box) => insight.renderSymbols(box) : undefined,
+      // Print and EPUB make a handout of the view (the pins in order, with notes and what
+      // they rest on); the extension prints it in the browser, or saves the e-book
+      print: () => handout('print'),
+      epub: window.TeXglassEpub ? () => handout('epub') : undefined,
       onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
     })
     : null;
+  /** Send the handout of Show only these to the extension: figures inside, diagrams drawn. */
+  async function handout(as) {
+    if (!picker) return;
+    try {
+      const h = await picker.handout({ ids: as === 'epub' });
+      const html = await prepareEpub(h.html);
+      vscode.postMessage({ type: 'handout', as, html, title: h.title });
+    } catch (e) {
+      vscode.postMessage({ type: 'print-request' }); // print the view as it shows instead
+    }
+  }
 
   // Once something is pinned, a pin at the top right shows how many, and lists them
   // all (results and equations on the map, rows in the Notation tab) to jump to.

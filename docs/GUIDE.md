@@ -336,8 +336,10 @@ kept per paper with your notes, so it is exported, imported and synced with them
 - **Show pinned**: on the map, or **Show pinned results…** in the … menu
   (VS Code: **TeXglass: Show Pinned Results…**), shows only what is pinned,
   with the headings of their sections and the title; the rest is hidden. Proofs
-  come along folded to their first line; click one to open it. **Print** prints
-  exactly that view. **Change** lets you pin or unpin by ticking results and
+  come along folded to their first line; click one to open it. Under each
+  pinned result, **Rests on** lists what it rests on, folded (see
+  [Handouts](#handouts-print-or-epub)). **Print** and **EPUB** make a handout of
+  the view. **Change** lets you pin or unpin by ticking results and
   equations in the text; **Done** or <kbd>Esc</kbd> shows the whole paper.
   With nothing pinned, the menu item starts with the ticking.
 - **Save** the pins as a [pin set](#everything-pinned-in-one-place) (**Save as
@@ -379,7 +381,8 @@ by kind (**By kind**) or in your own reading order (**In order**):
 
 Click an item to jump to it, **×** to unpin it. **Show only these** shows only
 the pinned results, proofs, equations and figures (as **Show pinned** does) and the
-paragraphs holding pinned text, and prints just that. With nothing pinned
+paragraphs holding pinned text, with what each pinned result rests on folded
+under it; **Print** and **EPUB** on its bar make a handout of it. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
 it opens as a sheet at the bottom, from **Pinned** in the **…** menu.
 
@@ -401,9 +404,10 @@ the first time the paper is opened.
   The note shows under the item; click it to change it.
 - **Show only these** then opens with a **Reading order** box at the top,
   listing the pins in your order with their notes (click one to go to it), and
-  each pin's number and note just above it in the text. Printing prints the box
-  too. The paper's own order of the blocks stays as it is. With notes but no
-  order, the box lists the notes.
+  each pin's number and note just above it in the text. The paper's own order
+  of the blocks stays as it is on screen; the [handout](#handouts-print-or-epub)
+  follows your order. With notes but no order, the box lists the notes.
+
 
 **Pin sets.** A set is a named group of pins to switch between, such as "For
 the talk" and "For the referee report".
@@ -427,6 +431,36 @@ stay in this browser.
 name in the link: the person who opens it sees the same reading order box.
 **Keep these pins** adds the notes too (where they have none of their own) and
 the order (when they have no order yet).
+
+#### What a pin rests on
+
+Under each pinned result (and numbered equation) in **Show only these**, a
+folded line **Rests on** names the definitions it refers to and the notation its
+formulas use, such as "Definition 2.1, Definition 2.3 · notation 𝓕, μ". Click it
+to open: each definition is shown in full (or marked "shown in this view" when
+it is pinned too), and each symbol with the sentence (or the author's
+`\tgdefine` words) that introduces it. The names link to where they are. The
+definitions come from the map's links (a definition a pinned result refers to,
+and the definitions that one refers to); the notation from the
+**Notation** tab, as on hover.
+
+#### Handouts (print or EPUB)
+
+**Print** and **EPUB** on the bar of **Show only these** turn the view into a
+short handout:
+
+- the title, then your **Reading order** with the notes (when you made an order
+  or wrote notes);
+- each pin in your order (else the paper's), with its number and note, the
+  section it comes from, and its proofs that you opened;
+- what the pins brought along (a pin **+ uses**) under **Also in this view**;
+- at the end, **Definitions and notation used**: every definition and symbol
+  the pins rest on, once.
+
+**Print** prints it, or saves it as a PDF from the print dialog (in VS Code it
+opens in the browser, ready to print); **EPUB** downloads it as a short e-book
+named after the paper, `…-handout.epub` (in VS Code, a save dialog). A
+shared view makes the same handout.
 
 ## Understanding the logic
 
@@ -886,10 +920,10 @@ All in the Command Palette under **TeXglass:**.
 | Show Notation Index | The Notation tab. |
 | Show Dependency Map of the Results | The Map tab. |
 | Show Larger Dependency Map | <kbd>M</kbd> in the preview. |
-| Show Pinned Results… | Show (and print) only the pinned results and equations; with none pinned, tick some first. |
+| Show Pinned Results… | Show only the pinned results and equations, with what each rests on; **Print** and **EPUB** on its bar make a handout. With none pinned, tick some first. |
 | Export to HTML | A standalone page. |
 | Export to EPUB | An e-book for e-readers; with the preview open, its diagrams and PDF and EPS figures come along everywhere. |
-| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (pinned results, or **Hide the rest**). |
+| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (**Hide the rest**), or under **Show only these** its handout. |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |
@@ -961,7 +995,9 @@ in the browser that opens it.
 **Export as EPUB** (web viewer, **…** menu), **TeXglass: Export to EPUB** (VS
 Code) and `npx texglass paper.tex --epub` (command line, writes `paper.epub`)
 make an EPUB 3 e-book for Apple Books, Kobo, Thorium, Calibre, Google Play
-Books or a Kindle (send it with Send to Kindle).
+Books or a Kindle (send it with Send to Kindle). **EPUB** on the bar of **Show
+only these** makes a short one of the pinned view (see
+[Handouts](#handouts-print-or-epub)).
 
 - Formulas are MathML, which is text: they grow with the e-reader's font size
   and stay sharp. Letters in `\mathbb`, `\mathcal`, `\mathbf` and the like

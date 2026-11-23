@@ -1496,17 +1496,27 @@
    * a chapter per section, the e-reader's contents from the sections, figures
    * inside, and diagrams drawn here first, so they show in any e-reader.
    */
-  async function exportEpub() {
+  async function exportEpub(handout) {
     if (!window.TeXglassEpub || !window.TeXglassExport) return;
     if (inFrame) {
       flashStatus('Open TeXglass in a tab of its own to export an e-book');
       return;
     }
-    showStatus('Making the e-book…');
+    showStatus(handout ? 'Making the handout…' : 'Making the e-book…');
     try {
-      const result = await convert(doc, imageMap);
-      let body = TeXglassExport.joinBlocks(result.blocks);
-      if (/class="tg-diagram/.test(body)) body = await TeXglassEpub.drawDiagrams(body, document);
+      let result;
+      let body;
+      if (handout === true) {
+        // Show only these as a short e-book: the view in the reading order (src/pick.js)
+        const h = await picker.handout({ ids: true });
+        result = { title: (h.title || fileName.textContent || 'Document') + ' (handout)', toc: [] };
+        body = h.html;
+        if (/class="tg-diagram/.test(body)) body = await TeXglassEpub.drawDiagrams(body, document);
+      } else {
+        result = await convert(doc, imageMap);
+        body = TeXglassExport.joinBlocks(result.blocks);
+        if (/class="tg-diagram/.test(body)) body = await TeXglassEpub.drawDiagrams(body, document);
+      }
       const link = document.querySelector('link[rel="stylesheet"][href*="katex"]');
       const katexCss = link ? await fetch(link.href).then((r) => (r.ok ? r.text() : null), () => null) : null;
       const title = result.title || fileName.textContent || 'Document';
@@ -1525,7 +1535,8 @@
           return { data: new Uint8Array(await blob.arrayBuffer()), type: blob.type };
         },
       });
-      const name = TeXglassEpub.fileName(fileName.textContent, result.title);
+      let name = TeXglassEpub.fileName(fileName.textContent, result.title);
+      if (handout === true) name = name.replace(/\.epub$/i, '-handout.epub');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/epub+zip' }));
       a.download = name;
@@ -1582,7 +1593,7 @@
   $('save').addEventListener('click', save);
   $('export').addEventListener('click', () => exportHtml(false));
   if ($('export-reader')) $('export-reader').addEventListener('click', () => exportHtml(true));
-  if ($('export-epub')) $('export-epub').addEventListener('click', exportEpub);
+  if ($('export-epub')) $('export-epub').addEventListener('click', () => exportEpub(false));
   if ($('ai-prompt')) $('ai-prompt').addEventListener('click', copyAiPrompt);
 
   /**
@@ -2962,7 +2973,12 @@
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;
       },
-      print: () => window.print(),
+      // what a pinned result rests on: definitions and notation, folded under it
+      context: insight && insight.contextOf ? (el) => insight.contextOf(el) : undefined,
+      renderSymbols: insight ? (box) => insight.renderSymbols(box) : undefined,
+      // Print and EPUB make a handout of the view: the pins in order, with notes and what they rest on
+      print: () => picker.printHandout(() => window.print()),
+      epub: window.TeXglassEpub ? () => exportEpub(true) : undefined,
       share: () => sharePaper(),
       canShare: () => !!(Share && shareWhere()),
       onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
