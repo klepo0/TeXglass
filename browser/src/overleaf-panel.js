@@ -62,6 +62,9 @@
   // editor scrolls again.
   let held = false;
   const hold = () => { held = true; };
+  // A click in the preview moves the editor's cursor, and the editor scrolls to
+  // show it: that scroll must not drag the preview away from what was clicked.
+  let quietUntil = 0;
   let lastToc = [];
   let cursor = -1;
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
@@ -516,8 +519,14 @@
     // Text pulled in from another file (\input, or a chapter's main file) goes to that file.
     const c = offsetOf(block, e.target, e.clientX, e.clientY);
     const src = composed.sourceAt(c);
-    if (src.file && src.file !== composed.path) post({ type: 'jump', at: src.at, file: src.file });
-    else post({ type: 'jump', at: composed.toOpen(c) });
+    if (src.file && src.file !== composed.path) {
+      post({ type: 'jump', at: src.at, file: src.file });
+      return;
+    }
+    // Same file: the preview already shows the spot, so it stays where it is.
+    hold();
+    quietUntil = performance.now() + 600;
+    post({ type: 'jump', at: composed.toOpen(c) });
   }
 
   /** Go to `target` in the preview (a reference, the contents, Go to), unfolding what hides it. */
@@ -1040,6 +1049,7 @@
       } else renderTimer = setTimeout(render, 120);
     } else if (d.type === 'scroll' && typeof d.top === 'number') {
       editorTop = d.top;
+      if (performance.now() < quietUntil) return; // the editor answering our own click
       held = false;
       if (follow) showOffset(editorTop);
     } else if (d.type === 'cursor' && typeof d.at === 'number') {
