@@ -2358,6 +2358,22 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-sets-steps a.tg-sets-gone { opacity: 0.5; cursor: default; }
 .tg-sets-steps a.tg-sets-gone:hover { background: none; }
 .tg-sets-empty { color: var(--muted); margin: 8px 6px 0 8px; line-height: 1.45; }
+.tg-sets-row { display: flex; align-items: flex-start; gap: 2px; }
+.tg-sets-row > a { flex: 1; min-width: 0; }
+.tg-sets-x, .tg-sets-plus {
+  flex: none; width: 22px; height: 22px; margin-top: 2px; padding: 0; border: 0; border-radius: 5px;
+  background: none; color: var(--muted); font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.tg-sets-x { opacity: 0; }
+.tg-sets-row:hover .tg-sets-x, .tg-sets-x:focus-visible { opacity: 1; }
+@media (hover: none) { .tg-sets-x { opacity: 0.7; } }
+.tg-sets-x:hover { color: var(--ink); background: var(--accent-soft); }
+.tg-sets-plus { color: var(--accent); font-weight: 600; }
+.tg-sets-plus:hover { background: var(--accent-soft); }
+.tg-sets-add { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.tg-sets-extra .tg-sets-row { padding: 2px 8px 2px 4px; align-items: center; }
+.tg-sets-extra .toc-title { color: var(--muted); }
+.tg-sets-hint { color: var(--muted); font-size: 12px; margin: 10px 6px 0 8px; line-height: 1.45; }
 .tg-pins-menu {
   position: fixed; z-index: 60; width: min(340px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; overscroll-behavior: contain;
   box-sizing: border-box; padding: 6px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink);

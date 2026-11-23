@@ -3117,6 +3117,46 @@
       editsChanged('all', { label: `Opened the pin set “${name}”` });
       return true;
     }
+    /**
+     * Change a set without opening it: add pinned things to it (keys of pinnedList,
+     * or "text:<id>"; they go at the end of its order) or take things out. Taking
+     * something out of the set that is pinned now unpins it too, so it stays pinned now.
+     */
+    function editSet(name, change) {
+      const v = edits.view[name];
+      if (!v || !v.p) return false;
+      const add = (change && change.add) || [];
+      const remove = new Set((change && change.remove) || []);
+      const wasOn = setIsOn(v);
+      const p = Object.assign({}, v.p);
+      let x = isWholeSet(v) ? v.x.slice() : [];
+      const pins = allPins();
+      const keysOf = () => Object.keys(p).concat(x.map((id) => 'text:' + id));
+      const before = Array.isArray(v.o) ? v.o.filter((k) => keysOf().includes(k)) : [];
+      let order = before.length ? before.concat(keysOf().filter((k) => !before.includes(k))) : inReadingOrder(keysOf());
+      for (const k of add) {
+        if (k.startsWith('text:')) { if (!x.includes(k.slice(5))) x.push(k.slice(5)); } else if (!p[k]) p[k] = pins.get(k) || 'self';
+        if (!order.includes(k)) order.push(k);
+      }
+      for (const k of remove) {
+        if (k.startsWith('text:')) x = x.filter((id) => id !== k.slice(5));
+        else delete p[k];
+      }
+      order = order.filter((k) => !remove.has(k));
+      if (!Object.keys(p).length && !x.length) { deleteView(name); editsChanged('view', { label: `Emptied the pin set “${name}”` }); return true; }
+      // a map saved before sets held only the map's pins: it becomes a whole set once it holds passages
+      const next = { p, o: order };
+      if (isWholeSet(v) || x.length) next.x = x;
+      setEdit('view', name, next, true);
+      if (wasOn && remove.size) {
+        for (const k of remove) if (!k.startsWith('text:') && pins.has(k)) setEdit('pin', k, { d: '' }, true);
+        const gone = Array.from(remove).filter((k) => k.startsWith('text:')).map((k) => k.slice(5));
+        if (gone.length && textPins) { try { textPins.set(textPinIds().filter((id) => !gone.includes(id))); } catch (e) { /* the passages stay pinned */ } }
+      }
+      const what = add.length && remove.size ? 'Changed' : add.length ? (add.length === 1 ? `Added ${nameOfKey(add[0])} to` : `Added ${add.length} to`) : (remove.size === 1 ? `Took ${nameOfKey(Array.from(remove)[0])} out of` : `Took ${remove.size} out of`);
+      editsChanged('all', { label: `${what} the pin set “${name}”` });
+      return true;
+    }
     function deleteView(name) {
       if (activeView === name) activeView = null;
       if (edits.view[name]) setEdit('view', name, { p: null });
@@ -4671,6 +4711,8 @@
       setIsOn: (name) => setIsOn(edits.view[name]),
       /** A pin set's things in its reading order, with notes (null: no such set). */
       setItems,
+      /** Add pinned things to a set, or take things out: (name, { add: [keys], remove: [keys] }). */
+      editSet,
       suggestSetName: suggestName,
       /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
       setTextPins: (o) => { textPins = o || null; },
@@ -4701,7 +4743,7 @@
   }
 
   /**
-   * The side panel: tabs Contents, Map, Notation and Pins over the table of
+   * The side panel: tabs Contents, Map, Pins and Notation over the table of
    * contents, and a divider that drags to resize it (the width is remembered).
    *
    *   TeXglassInsight.sidePanel({
@@ -4718,7 +4760,7 @@
     const tabs = doc.createElement('div');
     tabs.className = 'side-tabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation'], ['pins', 'Pins']]
+    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['pins', 'Pins'], ['notation', 'Notation']]
       .map(([k, label]) => `<button type="button" role="tab" data-side-tab="${k}">${label}</button>`).join('');
     const title = o.head.querySelector('.toc-pane-title');
     if (title) title.replaceWith(tabs);

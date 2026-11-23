@@ -409,9 +409,11 @@
 
   /**
    * The Pins tab's HTML. sets: insight.pinSets(); chosen: the name of the set shown;
-   * items: its things in the reading order (insight.setItems, passages named).
+   * items: its things in the reading order (insight.setItems, passages named);
+   * extra: things pinned now that the set does not hold (to add to it).
    */
-  function panelHtml(sets, chosen, items) {
+  function panelHtml(sets, chosen, items, extra) {
+    extra = extra || [];
     if (!sets.length) {
       return '<div class="tg-sets-stuck"><div class="tg-sets-title">Saved sets</div></div>' +
         '<p class="tg-sets-empty">No pin sets yet. Pin results, equations, symbols or text, put them in order in the <b>Pinned</b> list ' +
@@ -431,14 +433,29 @@
         ? '<span class="tg-sets-on">Pinned now</span>'
         : `<button type="button" class="tg-sets-pin" data-sets-act="pin" title="${esc(`Pin the ${set.size} of “${set.name}” instead of the pins now`)}">Pin these</button>`) +
       '</div>';
-    if (!items || !items.length) return html + '<p class="tg-sets-empty">Nothing of this set is in this version of the document.</p></div>';
-    html += `<ol class="toc-list tg-sets-steps" aria-label="${esc(`Reading order of “${set.name}”`)}">` + items.map((x, i) => {
-      const there = !!(x.el || x.placed);
-      return `<li><a href="#" class="tg-sets-step${there ? '' : ' tg-sets-gone'}" data-sets-go="${i}"${there ? '' : ' aria-disabled="true" title="Not in this version of the document"'}>` +
-        `<span class="toc-num">${i + 1}</span><span class="toc-title">${labelHtml(x)}` +
-        (x.memo ? `<span class="tg-sets-memo">${esc(x.memo)}</span>` : '') + '</span></a></li>';
-    }).join('') + '</ol></div>';
-    return html;
+    const what = (x) => (x.kind === 'notation' ? (x.code || x.tex || x.name) : x.kind === 'text' ? 'the passage' : x.name);
+    if (!items || !items.length) html += '<p class="tg-sets-empty">Nothing of this set is in this version of the document.</p>';
+    else {
+      const out = set.on ? 'Take it out of this set (and unpin it)' : 'Take it out of this set';
+      html += `<ol class="toc-list tg-sets-steps" aria-label="${esc(`Reading order of “${set.name}”`)}">` + items.map((x, i) => {
+        const there = !!(x.el || x.placed);
+        return `<li class="tg-sets-row"><a href="#" class="tg-sets-step${there ? '' : ' tg-sets-gone'}" data-sets-go="${i}"${there ? '' : ' aria-disabled="true" title="Not in this version of the document"'}>` +
+          `<span class="toc-num">${i + 1}</span><span class="toc-title">${labelHtml(x)}` +
+          (x.memo ? `<span class="tg-sets-memo">${esc(x.memo)}</span>` : '') + '</span></a>' +
+          `<button type="button" class="tg-sets-x" data-sets-out="${esc(x.key)}" title="${out}" aria-label="${esc(`Take ${what(x)} out of “${set.name}”`)}">&times;</button></li>`;
+      }).join('') + '</ol>';
+    }
+    // what is pinned now and not in the set: add it
+    if (extra.length) {
+      html += '<div class="tg-sets-add"><div class="tg-sets-head"><span class="tg-sets-title">Pinned, not in this set</span>' +
+        (extra.length > 1 ? `<button type="button" class="tg-sets-pin" data-sets-act="add-all" title="${esc(`Add all ${extra.length} to “${set.name}”`)}">Add all</button>` : '') + '</div>' +
+        '<ul class="toc-list tg-sets-extra">' + extra.map((x) =>
+          `<li class="tg-sets-row"><button type="button" class="tg-sets-plus" data-sets-add="${esc(x.key)}" title="${esc(`Add to “${set.name}” (at the end of its order)`)}" aria-label="${esc(`Add ${what(x)} to “${set.name}”`)}">+</button>` +
+          `<span class="toc-title">${labelHtml(x)}</span></li>`).join('') + '</ul></div>';
+    } else {
+      html += '<p class="tg-sets-hint">To add to this set, pin something (on the map, the text or a preview): it shows here with a <b>+</b>.</p>';
+    }
+    return html + '</div>';
   }
 
   /**
@@ -453,6 +470,7 @@
     let shown = false;
     let chosen = null; // the set shown (the one opened or saved last, at first)
     let items = [];
+    let extra = []; // pinned now, not in the chosen set
 
     function nameText(x) {
       if (x.kind !== 'text') return x;
@@ -468,9 +486,19 @@
         chosen = act ? act.name : null;
       }
       try { items = chosen ? (insight.setItems(chosen) || []).map(nameText) : []; } catch (e) { items = []; }
+      extra = [];
+      if (chosen) {
+        const inSet = new Set(items.map((x) => x.key));
+        let now = [];
+        try { now = insight.pinnedList(); } catch (e) { now = []; }
+        try { for (const t of margin && margin.pinnedTexts ? margin.pinnedTexts() : []) now.push({ key: 'text:' + t.id, kind: 'text', id: t.id, name: t.quote.replace(/\s+/g, ' ').trim(), placed: t.placed }); } catch (e) { /* no passages */ }
+        const keys = insight.inReadingOrder ? insight.inReadingOrder(now.map((x) => x.key)) : now.map((x) => x.key);
+        const byKey = new Map(now.map((x) => [x.key, x]));
+        extra = keys.map((k) => byKey.get(k)).filter((x) => x && !inSet.has(x.key));
+      }
       const top = body.closest('.toc-pane') || body;
       const keep = top.scrollTop;
-      body.innerHTML = panelHtml(sets, chosen, items);
+      body.innerHTML = panelHtml(sets, chosen, items, extra);
       top.scrollTop = keep;
       if (insight.renderSymbols) insight.renderSymbols(body);
     }
@@ -495,8 +523,28 @@
         if (opts.onJump) opts.onJump();
         return;
       }
-      const act = e.target.closest('[data-sets-act="pin"]');
-      if (act && chosen) { insight.loadView(chosen); fill(); }
+      const out = e.target.closest('[data-sets-out]');
+      if (out && chosen && insight.editSet) {
+        const i = items.findIndex((x) => x.key === out.dataset.setsOut);
+        insight.editSet(chosen, { remove: [out.dataset.setsOut] });
+        fill();
+        // the focus goes to the next row's × (or the previous one's)
+        const xs = body.querySelectorAll('[data-sets-out]');
+        const next = xs[Math.min(i, xs.length - 1)] || body.querySelector('[data-sets-pick]');
+        if (next) next.focus({ preventScroll: true });
+        return;
+      }
+      const add = e.target.closest('[data-sets-add]');
+      if (add && chosen && insight.editSet) {
+        insight.editSet(chosen, { add: [add.dataset.setsAdd] });
+        fill();
+        const next = body.querySelector('[data-sets-add]') || body.querySelector('[data-sets-out]');
+        if (next) next.focus({ preventScroll: true });
+        return;
+      }
+      const act = e.target.closest('[data-sets-act]');
+      if (act && chosen && act.dataset.setsAct === 'pin') { insight.loadView(chosen); fill(); }
+      if (act && chosen && act.dataset.setsAct === 'add-all' && insight.editSet) { insight.editSet(chosen, { add: extra.map((x) => x.key) }); fill(); }
     });
     // ↑ ↓ move between the sets (a listbox)
     body.addEventListener('keydown', (e) => {

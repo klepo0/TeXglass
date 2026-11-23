@@ -20,7 +20,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Reading a paper](#reading-a-paper)
 - [Previews on hover](#previews-on-hover)
 - [Finding your way: Navigate, Go to, Uses](#finding-your-way-navigate-go-to-uses)
-- [The side panel: Contents, Map, Notation, Pins](#the-side-panel-contents-map-notation-pins)
+- [The side panel: Contents, Map, Pins, Notation](#the-side-panel-contents-map-pins-notation)
   - [Pins and your own map](#pins-and-your-own-map)
   - [Everything pinned in one place](#everything-pinned-in-one-place)
 - [Understanding the logic](#understanding-the-logic)
@@ -225,7 +225,7 @@ with three tabs:
   starting at the one you picked; the bar steps through them, **Change**
   reopens the search, **Done** or <kbd>Esc</kbd> ends it. A map on show
   lights up the same results. The search follows the same links as the
-  [Map](#the-side-panel-contents-map-notation-pins): your own links and
+  [Map](#the-side-panel-contents-map-pins-notation): your own links and
   `\tguses` hints count, links you took away don't.
 
 Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
@@ -250,7 +250,7 @@ screen doesn't count.
   web page. In VS Code it goes back in the preview while the preview has
   focus, and is VS Code's own **Go Back** everywhere else.
 
-## The side panel: Contents, Map, Notation, Pins
+## The side panel: Contents, Map, Pins, Notation
 
 **Contents** (the toolbar button with three lines; VS Code: **TeXglass: Show or Hide Contents**)
 opens the side panel. Drag its edge, or use <kbd>←</kbd> <kbd>→</kbd> on it, to
@@ -282,6 +282,20 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     drag a result to move it, pin results and equations, hide results, and
     draw your own links or take wrong ones away. **Lock** stops all of that
     (pins still work).
+- **Pins**: your [pin sets](#everything-pinned-in-one-place). **Saved sets**
+  stay fixed at the top of the tab while you scroll; click one (or move with
+  <kbd>↑</kbd> <kbd>↓</kbd>) to show its **Reading order** below, numbered like
+  the contents, with your one-line note under each item. Click an item to go to
+  it. Choosing a set here only shows it: **Pin these** pins exactly what it holds
+  instead of the pins now (a set already pinned says **Pinned now**). With no
+  sets yet, the tab says how to save one (**Save as set…** in the **Pinned**
+  list). Not in the exported reader page.
+  - **Change a set here**: **×** on a row (shown when you rest on it) takes that
+    item out of the set; for the set pinned now it is unpinned too, so the set
+    stays pinned now. Below the order, **Pinned, not in this set** lists what is
+    pinned now and the set lacks: **+** adds one at the end of its order
+    (**Add all** adds them all). To add something new, pin it as usual (on the
+    map, in the text or from a preview) and it appears there.
 - **Notation**: an index of the paper's macros and defined symbols, with
   their meaning in words where the text gives one and a link to the first use.
   The checkbox turns notation on hover off and on.
@@ -304,14 +318,6 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     finger, or focus the handle and press <kbd>↑</kbd> <kbd>↓</kbd>; the order
     is kept with the pins. The pin by
     **Used in …** keeps that strip in view too.
-- **Pins**: your [pin sets](#everything-pinned-in-one-place). **Saved sets**
-  stay fixed at the top of the tab while you scroll; click one (or move with
-  <kbd>↑</kbd> <kbd>↓</kbd>) to show its **Reading order** below, numbered like
-  the contents, with your one-line note under each item. Click an item to go to
-  it. Choosing a set here only shows it: **Pin these** pins exactly what it holds
-  instead of the pins now (a set already pinned says **Pinned now**). With no
-  sets yet, the tab says how to save one (**Save as set…** in the **Pinned**
-  list). Not in the exported reader page.
 
 ### Pins and your own map
 
@@ -435,7 +441,7 @@ the talk" and "For the referee report".
 - Sets are the same thing as the map's saved maps: they are listed above the
   map too (**Sets**, **Save as set…**). Maps saved before sets held only the
   map's pins; opening one leaves your symbols and passages as they are.
-- The **Pins** tab of the [side panel](#the-side-panel-contents-map-notation-pins)
+- The **Pins** tab of the [side panel](#the-side-panel-contents-map-pins-notation)
   lists the sets too and shows any of them in its reading order, like the
   contents, without pinning it.
 

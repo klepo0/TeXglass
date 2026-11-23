@@ -115,6 +115,35 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click('.side-pins [data-sets-act="pin"]');
     assert.equal(await badge(), '2');
     assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
+    const stepNames = () => page.$$eval('.side-pins .tg-sets-steps .toc-title', (t) => t.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
+
+    // the set pinned now: × takes a pin out of the set and unpins it, the set stays pinned now
+    await page.click('.side-pins [data-sets-out="label:first"]');
+    assert.equal(await badge(), '1');
+    assert.equal((await stepNames()).length, 1);
+    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
+    assert.equal(await page.isVisible('.side-pins .tg-sets-hint'), true, 'how to add');
+    // and the pins can still be unpinned and pinned anywhere
+    await pinThm('first');
+    assert.equal(await badge(), '2');
+    assert.equal(await page.isVisible('.side-pins [data-sets-add="label:first"]'), true, 'pinned, not in the set: offered with +');
+    await page.click('.side-pins [data-sets-add="label:first"]');
+    assert.deepEqual((await stepNames()).map((x) => x.replace(/ .*/, '')), ['Theorem', 'Lemma'], 'added at the end of the order');
+    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
+    await pinThm('main'); // unpin from the text
+    assert.equal(await badge(), '1');
+    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), false, 'the set is no longer what is pinned');
+    // a set not pinned now: × only changes the set
+    await page.click('[data-sets-pick="Main only"]');
+    await page.click('.side-pins [data-sets-add="label:first"]');
+    assert.equal(await page.locator('.side-pins .tg-sets-steps li').count(), 2);
+    await page.click('.side-pins [data-sets-out="label:main"]');
+    assert.equal(await page.locator('.side-pins .tg-sets-steps li').count(), 1);
+    assert.equal(await badge(), '1', 'the pins stay as they are');
+    // back to Talk, pinned
+    await page.click('[data-sets-pick="Talk"]');
+    await page.click('.side-pins [data-sets-act="pin"]');
+    assert.equal(await badge(), '2');
 
     // text over two paragraphs: Show only these keeps both
     await page.evaluate(() => { document.getElementById('preview-pane').scrollTop = 0; });
