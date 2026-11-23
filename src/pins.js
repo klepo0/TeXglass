@@ -21,8 +21,8 @@
  *   });
  *   pins.open(); pins.close(); pins.toggle(); pins.refresh();
  *
- * The side panel's Pins tab lists the pin sets (fixed at the top) and the one
- * chosen in its reading order, like the table of contents: TeXglassPins.panel().
+ * The side panel's Pins tab lists the pin sets (fixed at the top) and under them
+ * the same pin list, with its tools: TeXglassPins.panel().
  *
  * Works in the browser (window.TeXglassPins) and in Node (require), for tests.
  */
@@ -94,14 +94,16 @@
   /**
    * The list's HTML for items from insight.pinnedList() (each with memo, its note).
    * o: { showPinned, pinMore, order (one list in the reading order, else grouped by kind),
-   *      sets (insight.pinSets()), naming, suggest, update, editing (the key whose note is being written) }
+   *      sets (insight.pinSets()), noSets (leave the sets out: the Pins tab lists them above),
+   *      naming, suggest, update, editing (the key whose note is being written),
+   *      clearing (asking whether to unpin everything) }
    */
   function listHtml(items, o) {
     o = o || {};
     const sets = o.sets || [];
     if (!items.length) {
       return '<div class="tg-pins-head"><strong>Nothing pinned yet</strong></div>' +
-        (sets.length ? setsHtml(sets, {}) : '') +
+        (sets.length && !o.noSets ? setsHtml(sets, {}) : '') +
         '<p class="tg-pins-empty">Pin a result or a numbered equation with the pin by its corner on the <b>Map</b> (or the pin at an equation’s left, or a figure’s top right), ' +
         'a symbol with the pin on its row in the <b>Notation</b> tab, or anything with the pin on its preview. ' +
         'Select some text to pin it too. Pinned things gather here.</p>' +
@@ -112,7 +114,8 @@
       '<span class="tg-pins-views" role="group" aria-label="List the pins">' +
       `<button type="button" data-pins-view="kind" aria-pressed="${!o.order}" title="Grouped: results, equations, symbols…">By kind</button>` +
       `<button type="button" data-pins-view="order" aria-pressed="${!!o.order}" title="One list in your reading order: drag to reorder">In order</button></span></div>`;
-    html += setsHtml(sets, { naming: o.naming, suggest: o.suggest, update: o.update, any: true });
+    // in the side panel's Pins tab the sets are listed above: here only Save as set… and Update
+    html += setsHtml(o.noSets ? [] : sets, { naming: o.naming, suggest: o.suggest, update: o.update, any: true });
     html += `<div class="tg-pins-list"${o.order ? ' role="list" aria-label="Reading order"' : ''}>`;
     if (o.order) {
       for (const x of items) html += rowHtml(x, o);
@@ -126,10 +129,236 @@
       }
     }
     html += '</div>';
-    if (maps && o.showPinned) {
-      html += '<div class="tg-pins-actions"><button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text, in a study sheet with your order and notes; print them too">Show only these</button></div>';
-    }
+    const show = maps && o.showPinned;
+    html += '<div class="tg-pins-actions">' +
+      (show ? '<button type="button" data-pins-act="show" title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text, in a study sheet with your order and notes; print them too">Show only these</button>' : '') +
+      (o.clearing
+        ? `<span class="tg-pins-clear-ask">Unpin all ${items.length}?</span><button type="button" class="tg-pins-clear-yes" data-pins-act="clear-ok">Unpin all</button><button type="button" data-pins-act="clear-cancel">Keep</button>`
+        : '<button type="button" class="tg-pins-clear" data-pins-act="clear" title="Unpin everything (your pin sets and notes stay)">Clear all</button>') +
+      '</div>';
     return html;
+  }
+
+  /**
+   * The pin list's workings, in any element: the toolbar's list (attach) or the
+   * side panel's Pins tab (panel). o: { insight, margin, jump(el), showPinned,
+   * pinMore, noSets, done() (before a jump or an action: close the list),
+   * placed() (after it is filled again: place the list) }.
+   */
+  function controller(el, o) {
+    const insight = o.insight;
+    const margin = o.margin || null;
+    const doc = el.ownerDocument;
+    let items = [];
+    const done = () => { if (o.done) o.done(); };
+    const has = (f) => typeof insight[f] === 'function';
+    function texts() {
+      try { return margin && margin.pinnedTexts ? margin.pinnedTexts() : []; } catch (e) { return []; }
+    }
+    /** Everything pinned, in the reading order (by kind where there is none), each with its note. */
+    function allItems() {
+      let out = [];
+      try { out = insight.pinnedList(); } catch (e) { out = []; }
+      for (const t of texts()) out.push({ key: 'text:' + t.id, kind: 'text', id: t.id, name: t.quote.replace(/\s+/g, ' ').trim(), placed: t.placed, el: null });
+      const rank = (k) => GROUPS.findIndex((g) => g[0] === k);
+      out = out.map((x, i) => [x, i]).sort((a, b) => rank(a[0].kind) - rank(b[0].kind) || a[1] - b[1]).map((p) => p[0]);
+      if (has('inReadingOrder')) {
+        const byKey = new Map(out.map((x) => [x.key, x]));
+        out = insight.inReadingOrder(out.map((x) => x.key)).map((k) => byKey.get(k));
+      }
+      for (const x of out) x.memo = has('pinNote') ? insight.pinNote(x.key) : '';
+      return out;
+    }
+
+    // how the list shows: grouped by kind, or one list in the reading order (once there is one)
+    let listView = null; // null: by the order's presence
+    const inOrder = () => (listView ? listView === 'order' : !!(has('hasPinOrder') && insight.hasPinOrder()));
+    let naming = false; // the name of a new pin set is being typed
+    let editing = null; // the key whose note is being written
+    let clearing = false; // asking whether to unpin everything
+
+    function fill() {
+      items = allItems();
+      if (editing && !items.some((x) => x.key === editing)) editing = null;
+      if (!items.length) clearing = false;
+      const sets = has('pinSets') ? insight.pinSets() : [];
+      const act = has('activeSet') ? insight.activeSet() : null;
+      el.innerHTML = listHtml(items, {
+        showPinned: !!o.showPinned, pinMore: !!o.pinMore, order: inOrder(), sets, naming, noSets: !!o.noSets,
+        suggest: naming && has('suggestSetName') ? insight.suggestSetName() : '',
+        update: act && !insight.setIsOn(act) ? act : null, editing, clearing,
+      });
+      if (insight.renderSymbols) insight.renderSymbols(el);
+    }
+    /** Fill again, keeping the focus where it was (by what it does). */
+    function refill(focusSel) {
+      fill();
+      if (o.placed) o.placed();
+      const f = focusSel && el.querySelector(focusSel);
+      if (f) { f.focus({ preventScroll: true }); if (f.select && f.tagName === 'INPUT') f.select(); }
+    }
+    const sel = (attr, v) => `[${attr}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
+
+    // --- notes ---
+    let quiet = false; // a note is being kept: the list is filled again after
+    function saveMemo(input, refillAfter) {
+      const key = input.dataset.pinsMemoIn;
+      editing = null;
+      quiet = true;
+      try { if (has('setPinNote')) insight.setPinNote(key, input.value); } finally { quiet = false; }
+      if (refillAfter !== false && el.isConnected) refill(sel('data-pins-memo', key) + '.tg-pins-pen');
+    }
+
+    // --- the reading order ---
+    const orderKeys = () => Array.from(el.querySelectorAll('.tg-pins-row')).map((r) => r.dataset.key);
+    function moveBy(key, by) {
+      const keys = orderKeys();
+      const i = keys.indexOf(key);
+      const j = i + by;
+      if (i < 0 || j < 0 || j >= keys.length) return;
+      keys.splice(i, 1);
+      keys.splice(j, 0, key);
+      insight.setPinOrder(keys);
+      refill(sel('data-pins-drag', key));
+    }
+    let drag = null; // { key, row, pointerId }
+    el.addEventListener('pointerdown', (e) => {
+      const h = e.target.closest('[data-pins-drag]');
+      if (!h || e.button !== 0) return;
+      e.preventDefault();
+      const row = h.closest('.tg-pins-row');
+      drag = { key: h.dataset.pinsDrag, row, id: e.pointerId, moved: false };
+      row.classList.add('tg-pins-dragging');
+      try { h.setPointerCapture(e.pointerId); } catch (err) { /* moves still come to the list */ }
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const list = drag.row.parentElement;
+      for (const r of list.querySelectorAll('.tg-pins-row')) {
+        if (r === drag.row) continue;
+        const b = r.getBoundingClientRect();
+        if (e.clientY > b.top && e.clientY < b.bottom) {
+          const after = e.clientY > b.top + b.height / 2;
+          if (after && r.nextSibling !== drag.row) { list.insertBefore(drag.row, r.nextSibling); drag.moved = true; }
+          else if (!after && r.previousSibling !== drag.row) { list.insertBefore(drag.row, r); drag.moved = true; }
+          break;
+        }
+      }
+    });
+    const endDrag = (e) => {
+      if (!drag || (e && e.pointerId !== drag.id)) return;
+      const d = drag;
+      drag = null;
+      d.row.classList.remove('tg-pins-dragging');
+      if (d.moved) { insight.setPinOrder(orderKeys()); refill(sel('data-pins-drag', d.key)); }
+    };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+
+    // --- sets ---
+    function saveSet() {
+      const inp = el.querySelector('.tg-pins-set-name');
+      if (!inp) return;
+      if (insight.saveView(inp.value)) { naming = false; refill('[data-pins-act="save"]'); } else inp.focus();
+    }
+    /** Unpin everything: results, equations, symbols and passages (the sets and notes stay). */
+    function clearAll() {
+      clearing = false;
+      quiet = true;
+      try {
+        if (margin && margin.setPinnedTexts) margin.setPinnedTexts([]);
+        if (has('unpinAll')) insight.unpinAll();
+      } finally { quiet = false; }
+      refill('[data-pins-act="save"], button');
+    }
+
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-pins-drag]')) return;
+      const go = e.target.closest('[data-pins-go]');
+      if (go) {
+        const x = items.find((it) => it.key === go.dataset.pinsGo);
+        if (x && x.kind === 'text') { done(); margin.goTo(x.id); } else if (x && x.el) { done(); o.jump(x.el); }
+        return;
+      }
+      const memo = e.target.closest('[data-pins-memo]');
+      if (memo) { editing = memo.dataset.pinsMemo; refill(sel('data-pins-memo-in', editing)); return; }
+      const un = e.target.closest('[data-pins-unpin]');
+      if (un) {
+        const key = un.dataset.pinsUnpin;
+        if (key.startsWith('text:')) margin.unpinText(key.slice(5)); // refreshes the list through the margin's onPins
+        else insight.unpinKey(key); // refreshes the list through onPins
+        const next = el.querySelector('.tg-pins-x') || el.querySelector('button');
+        if (next) next.focus({ preventScroll: true });
+        return;
+      }
+      const v = e.target.closest('[data-pins-view]');
+      if (v) { listView = v.dataset.pinsView; refill(sel('data-pins-view', listView)); return; }
+      const set = e.target.closest('[data-pins-set]');
+      if (set) { insight.loadView(set.dataset.pinsSet); refill(sel('data-pins-set', set.dataset.pinsSet)); return; }
+      const del = e.target.closest('[data-pins-setdel]');
+      if (del) { insight.deleteView(del.dataset.pinsSetdel); refill('[data-pins-act="save"]'); return; }
+      const act = e.target.closest('[data-pins-act]');
+      if (act) {
+        const a = act.dataset.pinsAct;
+        if (a === 'save') { naming = true; refill('.tg-pins-set-name'); return; }
+        if (a === 'save-cancel') { naming = false; refill('[data-pins-act="save"]'); return; }
+        if (a === 'save-ok') { saveSet(); return; }
+        if (a === 'update') { const name = insight.activeSet(); if (name) insight.saveView(name); refill(sel('data-pins-set', name)); return; }
+        if (a === 'clear') { clearing = true; refill('[data-pins-act="clear-cancel"]'); return; }
+        if (a === 'clear-cancel') { clearing = false; refill('[data-pins-act="clear"]'); return; }
+        if (a === 'clear-ok') { clearAll(); return; }
+        done();
+        if (a === 'show' && o.showPinned) o.showPinned();
+        if (a === 'more' && o.pinMore) o.pinMore();
+      }
+    });
+    el.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t.matches('.tg-pins-memo-in')) {
+        if (e.key === 'Enter') { e.preventDefault(); saveMemo(t); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const k = editing; editing = null; refill(sel('data-pins-memo', k) + '.tg-pins-pen'); }
+        return;
+      }
+      if (t.matches('.tg-pins-set-name')) {
+        if (e.key === 'Enter') { e.preventDefault(); saveSet(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); naming = false; refill('[data-pins-act="save"]'); }
+        return;
+      }
+      if (t.matches('[data-pins-drag]') && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        moveBy(t.dataset.pinsDrag, e.key === 'ArrowUp' ? -1 : 1);
+      }
+    });
+    el.addEventListener('focusout', (e) => {
+      // a note being written is kept when the focus leaves it (not when the list is filled again)
+      const t = e.target;
+      if (!(t.matches && t.matches('.tg-pins-memo-in') && t.isConnected && editing === t.dataset.pinsMemoIn)) return;
+      // onto another button of the list: its click fills the list again (filling now would lose the click)
+      const inside = e.relatedTarget && el.contains(e.relatedTarget);
+      saveMemo(t, !inside);
+    });
+
+    /** Fill again after a change elsewhere: a note being written keeps its text and focus. */
+    function refresh() {
+      if (quiet) return;
+      const inp = el.querySelector('.tg-pins-memo-in');
+      const keep = inp && doc.activeElement === inp ? { key: inp.dataset.pinsMemoIn, value: inp.value } : null;
+      fill();
+      if (o.placed) o.placed();
+      if (keep) {
+        const again = el.querySelector(sel('data-pins-memo-in', keep.key));
+        if (again) { again.value = keep.value; again.focus({ preventScroll: true }); }
+      }
+    }
+    return {
+      fill,
+      refresh,
+      /** Start afresh: no set being named, no note being written, no question open. */
+      reset() { naming = false; editing = null; clearing = false; },
+      count: () => {
+        let n = 0;
+        try { n = insight.allPinCount ? insight.allPinCount() : insight.pinnedList().length; } catch (e) { n = 0; }
+        return n + texts().length;
+      },
+    };
   }
 
   function attach(opts) {
@@ -153,45 +382,20 @@
     menu.setAttribute('aria-label', 'Pinned');
     menu.hidden = true;
     doc.body.appendChild(menu);
-    let items = [];
 
     const margin = opts.margin || null;
-    function texts() {
-      try { return margin && margin.pinnedTexts ? margin.pinnedTexts() : []; } catch (e) { return []; }
-    }
-    function count() {
-      let n = 0;
-      try { n = insight.allPinCount ? insight.allPinCount() : insight.pinnedList().length; } catch (e) { n = 0; }
-      return n + texts().length;
-    }
     const has = (f) => typeof insight[f] === 'function';
     // pin sets carry the pinned passages too
     if (margin && margin.pinnedTextIds && margin.setPinnedTexts && has('setTextPins')) {
       insight.setTextPins({ get: () => margin.pinnedTextIds(), set: (ids) => margin.setPinnedTexts(ids), el: (id) => (margin.textElOf ? margin.textElOf(id) : null) });
     }
-    /** Everything pinned, in the reading order (by kind where there is none), each with its note. */
-    function allItems() {
-      let out = [];
-      try { out = insight.pinnedList(); } catch (e) { out = []; }
-      for (const t of texts()) out.push({ key: 'text:' + t.id, kind: 'text', id: t.id, name: t.quote.replace(/\s+/g, ' ').trim(), placed: t.placed, el: null });
-      const rank = (k) => GROUPS.findIndex((g) => g[0] === k);
-      out = out.map((x, i) => [x, i]).sort((a, b) => rank(a[0].kind) - rank(b[0].kind) || a[1] - b[1]).map((p) => p[0]);
-      if (has('inReadingOrder')) {
-        const byKey = new Map(out.map((x) => [x.key, x]));
-        out = insight.inReadingOrder(out.map((x) => x.key)).map((k) => byKey.get(k));
-      }
-      for (const x of out) x.memo = has('pinNote') ? insight.pinNote(x.key) : '';
-      return out;
-    }
-
-    // how the list shows: grouped by kind, or one list in the reading order (once there is one)
-    let listView = null; // null: by the order's presence
-    const inOrder = () => (listView ? listView === 'order' : !!(has('hasPinOrder') && insight.hasPinOrder()));
-    let naming = false; // the name of a new pin set is being typed
-    let editing = null; // the key whose note is being written
+    const list = controller(menu, {
+      insight, margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore,
+      done: () => close(), placed: () => place(),
+    });
 
     function refreshBadge() {
-      const n = count();
+      const n = list.count();
       badge.textContent = n ? String(n > 99 ? '99+' : n) : '';
       badge.hidden = !n;
       const label = n ? `Pinned: ${n} ${n === 1 ? 'thing' : 'things'}` : 'Pinned: nothing yet';
@@ -201,28 +405,8 @@
       if (opts.hideWhenEmpty) button.hidden = !n && !(has('pinSets') && insight.pinSets().length);
     }
 
-    function fill() {
-      items = allItems();
-      if (editing && !items.some((x) => x.key === editing)) editing = null;
-      const sets = has('pinSets') ? insight.pinSets() : [];
-      const act = has('activeSet') ? insight.activeSet() : null;
-      menu.innerHTML = listHtml(items, {
-        showPinned: !!opts.showPinned, pinMore: !!opts.pinMore, order: inOrder(), sets, naming,
-        suggest: naming && has('suggestSetName') ? insight.suggestSetName() : '',
-        update: act && !insight.setIsOn(act) ? act : null, editing,
-      });
-      if (insight.renderSymbols) insight.renderSymbols(menu);
-    }
-    /** Fill again, keeping the focus where it was (by what it does). */
-    function refill(focusSel) {
-      fill();
-      place();
-      const f = focusSel && menu.querySelector(focusSel);
-      if (f) { f.focus({ preventScroll: true }); if (f.select && f.tagName === 'INPUT') f.select(); }
-    }
-    const sel = (attr, v) => `[${attr}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
-
     function place() {
+      if (menu.hidden) return;
       // a sheet at the bottom on a phone, or when the button is out of sight (in the "…" menu, now closed)
       const narrow = win.matchMedia && win.matchMedia('(max-width: 480px)').matches;
       const sheet = !!narrow || button.hidden || !button.getClientRects().length;
@@ -237,9 +421,8 @@
 
     function open() {
       if (opts.onOpen) opts.onOpen();
-      naming = false;
-      editing = null;
-      fill();
+      list.reset();
+      list.fill();
       menu.hidden = false;
       button.setAttribute('aria-expanded', 'true');
       place();
@@ -254,130 +437,7 @@
     }
     const toggle = () => (menu.hidden ? open() : close());
 
-    // --- notes ---
-    let quiet = false; // a note is being kept: the list is filled again after
-    function saveMemo(input, refillAfter) {
-      const key = input.dataset.pinsMemoIn;
-      editing = null;
-      quiet = true;
-      try { if (has('setPinNote')) insight.setPinNote(key, input.value); } finally { quiet = false; }
-      if (refillAfter !== false && !menu.hidden) refill(sel('data-pins-memo', key) + '.tg-pins-pen');
-    }
-
-    // --- the reading order ---
-    const orderKeys = () => Array.from(menu.querySelectorAll('.tg-pins-row')).map((r) => r.dataset.key);
-    function moveBy(key, by) {
-      const keys = orderKeys();
-      const i = keys.indexOf(key);
-      const j = i + by;
-      if (i < 0 || j < 0 || j >= keys.length) return;
-      keys.splice(i, 1);
-      keys.splice(j, 0, key);
-      insight.setPinOrder(keys);
-      refill(sel('data-pins-drag', key));
-    }
-    let drag = null; // { key, row, pointerId }
-    menu.addEventListener('pointerdown', (e) => {
-      const h = e.target.closest('[data-pins-drag]');
-      if (!h || e.button !== 0) return;
-      e.preventDefault();
-      const row = h.closest('.tg-pins-row');
-      drag = { key: h.dataset.pinsDrag, row, id: e.pointerId, moved: false };
-      row.classList.add('tg-pins-dragging');
-      try { h.setPointerCapture(e.pointerId); } catch (err) { /* moves still come to the menu */ }
-    });
-    menu.addEventListener('pointermove', (e) => {
-      if (!drag || e.pointerId !== drag.id) return;
-      const list = drag.row.parentElement;
-      for (const r of list.querySelectorAll('.tg-pins-row')) {
-        if (r === drag.row) continue;
-        const b = r.getBoundingClientRect();
-        if (e.clientY > b.top && e.clientY < b.bottom) {
-          const after = e.clientY > b.top + b.height / 2;
-          if (after && r.nextSibling !== drag.row) { list.insertBefore(drag.row, r.nextSibling); drag.moved = true; }
-          else if (!after && r.previousSibling !== drag.row) { list.insertBefore(drag.row, r); drag.moved = true; }
-          break;
-        }
-      }
-    });
-    const endDrag = (e) => {
-      if (!drag || (e && e.pointerId !== drag.id)) return;
-      const d = drag;
-      drag = null;
-      d.row.classList.remove('tg-pins-dragging');
-      if (d.moved) { insight.setPinOrder(orderKeys()); refill(sel('data-pins-drag', d.key)); }
-    };
-    menu.addEventListener('pointerup', endDrag);
-    menu.addEventListener('pointercancel', endDrag);
-
-    // --- sets ---
-    function saveSet() {
-      const inp = menu.querySelector('.tg-pins-set-name');
-      if (!inp) return;
-      if (insight.saveView(inp.value)) { naming = false; refill('[data-pins-act="save"]'); } else inp.focus();
-    }
-
     button.addEventListener('click', (e) => { e.preventDefault(); toggle(); });
-    menu.addEventListener('click', (e) => {
-      if (e.target.closest('[data-pins-drag]')) return;
-      const go = e.target.closest('[data-pins-go]');
-      if (go) {
-        const x = items.find((it) => it.key === go.dataset.pinsGo);
-        if (x && x.kind === 'text') { close(); margin.goTo(x.id); } else if (x && x.el) { close(); opts.jump(x.el); }
-        return;
-      }
-      const memo = e.target.closest('[data-pins-memo]');
-      if (memo) { editing = memo.dataset.pinsMemo; refill(sel('data-pins-memo-in', editing)); return; }
-      const un = e.target.closest('[data-pins-unpin]');
-      if (un) {
-        const key = un.dataset.pinsUnpin;
-        if (key.startsWith('text:')) margin.unpinText(key.slice(5)); // refreshes the list through the margin's onPins
-        else insight.unpinKey(key); // refreshes the list through onPins
-        const next = menu.querySelector('.tg-pins-x') || menu.querySelector('button');
-        if (next) next.focus({ preventScroll: true });
-        return;
-      }
-      const v = e.target.closest('[data-pins-view]');
-      if (v) { listView = v.dataset.pinsView; refill(sel('data-pins-view', listView)); return; }
-      const set = e.target.closest('[data-pins-set]');
-      if (set) { insight.loadView(set.dataset.pinsSet); refill(sel('data-pins-set', set.dataset.pinsSet)); return; }
-      const del = e.target.closest('[data-pins-setdel]');
-      if (del) { insight.deleteView(del.dataset.pinsSetdel); refill('[data-pins-act="save"]'); return; }
-      const act = e.target.closest('[data-pins-act]');
-      if (act) {
-        const a = act.dataset.pinsAct;
-        if (a === 'save') { naming = true; refill('.tg-pins-set-name'); return; }
-        if (a === 'save-cancel') { naming = false; refill('[data-pins-act="save"]'); return; }
-        if (a === 'save-ok') { saveSet(); return; }
-        if (a === 'update') { const name = insight.activeSet(); if (name) insight.saveView(name); refill(sel('data-pins-set', name)); return; }
-        close();
-        if (a === 'show' && opts.showPinned) opts.showPinned();
-        if (a === 'more' && opts.pinMore) opts.pinMore();
-      }
-    });
-    menu.addEventListener('keydown', (e) => {
-      const t = e.target;
-      if (t.matches('.tg-pins-memo-in')) {
-        if (e.key === 'Enter') { e.preventDefault(); saveMemo(t); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const k = editing; editing = null; refill(sel('data-pins-memo', k) + '.tg-pins-pen'); }
-        return;
-      }
-      if (t.matches('.tg-pins-set-name')) {
-        if (e.key === 'Enter') { e.preventDefault(); saveSet(); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); naming = false; refill('[data-pins-act="save"]'); }
-        return;
-      }
-      if (t.matches('[data-pins-drag]') && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        e.preventDefault();
-        moveBy(t.dataset.pinsDrag, e.key === 'ArrowUp' ? -1 : 1);
-      }
-    });
-    menu.addEventListener('focusout', (e) => {
-      // a note being written is kept when the focus leaves it (not when the list is filled again)
-      const t = e.target;
-      if (!(t.matches && t.matches('.tg-pins-memo-in') && t.isConnected && editing === t.dataset.pinsMemoIn)) return;
-      // onto another button of the list: its click fills the list again (filling now would lose the click)
-      const inside = e.relatedTarget && menu.contains(e.relatedTarget);
-      saveMemo(t, !inside);
-    });
     doc.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !menu.hidden) { e.stopPropagation(); close(true); }
     }, true);
@@ -388,16 +448,7 @@
 
     function refresh() {
       refreshBadge();
-      if (menu.hidden || quiet) return;
-      // a note being written keeps its text and focus
-      const inp = menu.querySelector('.tg-pins-memo-in');
-      const keep = inp && doc.activeElement === inp ? { key: inp.dataset.pinsMemoIn, value: inp.value } : null;
-      fill();
-      place();
-      if (keep) {
-        const again = menu.querySelector(sel('data-pins-memo-in', keep.key));
-        if (again) { again.value = keep.value; again.focus({ preventScroll: true }); }
-      }
+      if (!menu.hidden) list.refresh();
     }
     if (insight.onPins) insight.onPins(refresh);
     refreshBadge();
@@ -405,161 +456,79 @@
     return { open, close, toggle, refresh, isOpen: () => !menu.hidden, menu };
   }
 
-  // --- the Pins tab of the side panel: the pin sets, and one in its reading order ----
+  // --- the Pins tab of the side panel: the pin sets on top, the pin list under them ----
 
-  /**
-   * The Pins tab's HTML. sets: insight.pinSets(); chosen: the name of the set shown;
-   * items: its things in the reading order (insight.setItems, passages named);
-   * extra: things pinned now that the set does not hold (to add to it).
-   */
-  function panelHtml(sets, chosen, items, extra) {
-    extra = extra || [];
+  /** The sets at the top of the Pins tab: click one to pin it, × to delete it. sets: insight.pinSets(). */
+  function panelSetsHtml(sets) {
+    let html = '<div class="tg-sets-title">Saved sets</div>';
     if (!sets.length) {
-      return '<div class="tg-sets-stuck"><div class="tg-sets-title">Saved sets</div></div>' +
-        '<p class="tg-sets-empty">No pin sets yet. Pin results, equations, symbols or text, put them in order in the <b>Pinned</b> list ' +
-        '(the pin in the toolbar), and choose <b>Save as set…</b> there. Your sets gather here, each with its reading order.</p>';
+      return html + '<p class="tg-sets-empty">No pin sets yet. Pin things, then <b>Save as set…</b> below keeps them, with their order and notes, under a name.</p>';
     }
-    let html = '<div class="tg-sets-stuck"><div class="tg-sets-title">Saved sets</div>' +
-      '<div class="tg-sets-list" role="listbox" aria-label="Saved pin sets">' +
-      sets.map((x) => `<button type="button" role="option" class="tg-sets-set" data-sets-pick="${esc(x.name)}" aria-selected="${x.name === chosen}">` +
+    return html + '<div class="tg-sets-list" role="group" aria-label="Saved pin sets">' +
+      sets.map((x) => `<span class="tg-sets-item"><button type="button" class="tg-sets-set" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}" ` +
+        `title="${esc(x.on ? `Pinned now: the ${x.size} of “${x.name}”` : `Pin the ${x.size} of “${x.name}” instead of the pins now`)}">` +
         `<span class="tg-sets-name">${esc(x.name)}</span>` +
-        (x.on ? '<span class="tg-sets-now" title="These are the pins now">pinned</span>' : '') +
-        `<span class="tg-sets-size" aria-label="${x.size} ${x.size === 1 ? 'thing' : 'things'}">${x.size}</span></button>`).join('') +
-      '</div></div>';
-    const set = sets.find((x) => x.name === chosen);
-    if (!set) return html;
-    html += '<div class="tg-sets-order"><div class="tg-sets-head"><span class="tg-sets-title">Reading order</span>' +
-      (set.on
-        ? '<span class="tg-sets-on">Pinned now</span>'
-        : `<button type="button" class="tg-sets-pin" data-sets-act="pin" title="${esc(`Pin the ${set.size} of “${set.name}” instead of the pins now`)}">Pin these</button>`) +
+        (x.on ? '<span class="tg-sets-now">pinned</span>' : '') +
+        `<span class="tg-sets-size" aria-label="${x.size} ${x.size === 1 ? 'thing' : 'things'}">${x.size}</span></button>` +
+        `<button type="button" class="tg-sets-del" data-pins-setdel="${esc(x.name)}" title="Delete this pin set (the pins stay)" aria-label="${esc('Delete the pin set ' + x.name)}">&times;</button></span>`).join('') +
       '</div>';
-    const what = (x) => (x.kind === 'notation' ? (x.code || x.tex || x.name) : x.kind === 'text' ? 'the passage' : x.name);
-    if (!items || !items.length) html += '<p class="tg-sets-empty">Nothing of this set is in this version of the document.</p>';
-    else {
-      const out = set.on ? 'Take it out of this set (and unpin it)' : 'Take it out of this set';
-      html += `<ol class="toc-list tg-sets-steps" aria-label="${esc(`Reading order of “${set.name}”`)}">` + items.map((x, i) => {
-        const there = !!(x.el || x.placed);
-        return `<li class="tg-sets-row"><a href="#" class="tg-sets-step${there ? '' : ' tg-sets-gone'}" data-sets-go="${i}"${there ? '' : ' aria-disabled="true" title="Not in this version of the document"'}>` +
-          `<span class="toc-num">${i + 1}</span><span class="toc-title">${labelHtml(x)}` +
-          (x.memo ? `<span class="tg-sets-memo">${esc(x.memo)}</span>` : '') + '</span></a>' +
-          `<button type="button" class="tg-sets-x" data-sets-out="${esc(x.key)}" title="${out}" aria-label="${esc(`Take ${what(x)} out of “${set.name}”`)}">&times;</button></li>`;
-      }).join('') + '</ol>';
-    }
-    // what is pinned now and not in the set: add it
-    if (extra.length) {
-      html += '<div class="tg-sets-add"><div class="tg-sets-head"><span class="tg-sets-title">Pinned, not in this set</span>' +
-        (extra.length > 1 ? `<button type="button" class="tg-sets-pin" data-sets-act="add-all" title="${esc(`Add all ${extra.length} to “${set.name}”`)}">Add all</button>` : '') + '</div>' +
-        '<ul class="toc-list tg-sets-extra">' + extra.map((x) =>
-          `<li class="tg-sets-row"><button type="button" class="tg-sets-plus" data-sets-add="${esc(x.key)}" title="${esc(`Add to “${set.name}” (at the end of its order)`)}" aria-label="${esc(`Add ${what(x)} to “${set.name}”`)}">+</button>` +
-          `<span class="toc-title">${labelHtml(x)}</span></li>`).join('') + '</ul></div>';
-    } else {
-      html += '<p class="tg-sets-hint">To add to this set, pin something (on the map, the text or a preview): it shows here with a <b>+</b>.</p>';
-    }
-    return html + '</div>';
   }
 
   /**
-   * Fill the side panel's Pins tab (TeXglassInsight.sidePanel's pinsTab).
-   *   TeXglassPins.panel({ body, insight, margin, jump(el), onJump() }) → { show(), hide(), refresh() }
+   * Fill the side panel's Pins tab (TeXglassInsight.sidePanel's pinsTab): the
+   * saved sets fixed at the top, and under them the pin list as the toolbar's pin
+   * shows it (By kind / In order, notes, unpin, Show only these, Clear all).
+   *   TeXglassPins.panel({ body, insight, margin, jump(el), showPinned(), onJump() }) → { show(), hide(), refresh() }
    */
   function panel(opts) {
     const body = opts.body;
     const insight = opts.insight;
-    if (!body || !insight || !insight.pinSets || !insight.setItems) return null;
-    const margin = opts.margin || null;
+    if (!body || !insight || !insight.pinSets || !insight.pinnedList) return null;
+    const doc = body.ownerDocument;
+    body.innerHTML = '<div class="tg-sets-stuck"></div><div class="tg-pins-panel"></div>';
+    const top = body.firstElementChild;
+    const listEl = body.lastElementChild;
     let shown = false;
-    let chosen = null; // the set shown (the one opened or saved last, at first)
-    let items = [];
-    let extra = []; // pinned now, not in the chosen set
+    const list = controller(listEl, {
+      insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, noSets: true,
+      done: () => { if (opts.onJump) opts.onJump(); },
+    });
 
-    function nameText(x) {
-      if (x.kind !== 'text') return x;
-      const t = margin && margin.textOf ? margin.textOf(x.id) : null;
-      return Object.assign(x, { name: t ? t.quote.replace(/\s+/g, ' ').trim() : 'A passage no longer in your notes', placed: !!(t && t.placed) });
-    }
-    function fill() {
-      if (!shown) return;
+    function fillSets() {
       let sets = [];
       try { sets = insight.pinSets(); } catch (e) { sets = []; }
-      if (!sets.some((x) => x.name === chosen)) {
-        const act = sets.find((x) => x.active) || sets.find((x) => x.on) || sets[0];
-        chosen = act ? act.name : null;
-      }
-      try { items = chosen ? (insight.setItems(chosen) || []).map(nameText) : []; } catch (e) { items = []; }
-      extra = [];
-      if (chosen) {
-        const inSet = new Set(items.map((x) => x.key));
-        let now = [];
-        try { now = insight.pinnedList(); } catch (e) { now = []; }
-        try { for (const t of margin && margin.pinnedTexts ? margin.pinnedTexts() : []) now.push({ key: 'text:' + t.id, kind: 'text', id: t.id, name: t.quote.replace(/\s+/g, ' ').trim(), placed: t.placed }); } catch (e) { /* no passages */ }
-        const keys = insight.inReadingOrder ? insight.inReadingOrder(now.map((x) => x.key)) : now.map((x) => x.key);
-        const byKey = new Map(now.map((x) => [x.key, x]));
-        extra = keys.map((k) => byKey.get(k)).filter((x) => x && !inSet.has(x.key));
-      }
-      const top = body.closest('.toc-pane') || body;
-      const keep = top.scrollTop;
-      body.innerHTML = panelHtml(sets, chosen, items, extra);
-      top.scrollTop = keep;
-      if (insight.renderSymbols) insight.renderSymbols(body);
+      top.innerHTML = panelSetsHtml(sets);
     }
-
-    body.addEventListener('click', (e) => {
-      const pick = e.target.closest('[data-sets-pick]');
-      if (pick) {
-        chosen = pick.dataset.setsPick;
-        fill();
-        const again = body.querySelector(`[data-sets-pick="${chosen.replace(/["\\]/g, '\\$&')}"]`);
+    const sel = (attr, v) => `[${attr}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
+    top.addEventListener('click', (e) => {
+      const set = e.target.closest('[data-pins-set]');
+      if (set) {
+        const name = set.dataset.pinsSet;
+        insight.loadView(name); // fills both again through onPins
+        const again = top.querySelector(sel('data-pins-set', name));
         if (again) again.focus({ preventScroll: true });
         return;
       }
-      const go = e.target.closest('[data-sets-go]');
-      if (go) {
-        e.preventDefault();
-        const x = items[Number(go.dataset.setsGo)];
-        if (!x) return;
-        if (x.kind === 'text') { if (!margin || !margin.goTo || !margin.goTo(x.id)) return; } else if (x.el) opts.jump(x.el); else return;
-        body.querySelectorAll('.tg-sets-step.active').forEach((a) => a.classList.remove('active'));
-        go.classList.add('active');
-        if (opts.onJump) opts.onJump();
-        return;
-      }
-      const out = e.target.closest('[data-sets-out]');
-      if (out && chosen && insight.editSet) {
-        const i = items.findIndex((x) => x.key === out.dataset.setsOut);
-        insight.editSet(chosen, { remove: [out.dataset.setsOut] });
+      const del = e.target.closest('[data-pins-setdel]');
+      if (del) {
+        insight.deleteView(del.dataset.pinsSetdel);
         fill();
-        // the focus goes to the next row's × (or the previous one's)
-        const xs = body.querySelectorAll('[data-sets-out]');
-        const next = xs[Math.min(i, xs.length - 1)] || body.querySelector('[data-sets-pick]');
+        const next = top.querySelector('[data-pins-set]');
         if (next) next.focus({ preventScroll: true });
-        return;
       }
-      const add = e.target.closest('[data-sets-add]');
-      if (add && chosen && insight.editSet) {
-        insight.editSet(chosen, { add: [add.dataset.setsAdd] });
-        fill();
-        const next = body.querySelector('[data-sets-add]') || body.querySelector('[data-sets-out]');
-        if (next) next.focus({ preventScroll: true });
-        return;
-      }
-      const act = e.target.closest('[data-sets-act]');
-      if (act && chosen && act.dataset.setsAct === 'pin') { insight.loadView(chosen); fill(); }
-      if (act && chosen && act.dataset.setsAct === 'add-all' && insight.editSet) { insight.editSet(chosen, { add: extra.map((x) => x.key) }); fill(); }
     });
-    // ↑ ↓ move between the sets (a listbox)
-    body.addEventListener('keydown', (e) => {
-      const b = e.target.closest && e.target.closest('[data-sets-pick]');
-      if (!b || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
-      const all = Array.from(body.querySelectorAll('[data-sets-pick]'));
-      const next = all[all.indexOf(b) + (e.key === 'ArrowDown' ? 1 : -1)];
-      if (!next) return;
-      e.preventDefault();
-      next.click();
-    });
+    function fill() {
+      if (!shown) return;
+      const scroller = body.closest('.toc-pane') || body;
+      const keep = scroller.scrollTop;
+      fillSets();
+      list.refresh();
+      scroller.scrollTop = keep;
+    }
     if (insight.onPins) insight.onPins(fill);
 
     return {
-      show() { shown = true; fill(); },
+      show() { shown = true; list.reset(); fill(); },
       hide() { shown = false; },
       refresh: fill,
     };
@@ -618,5 +587,5 @@
     return out;
   }
 
-  return { attach, panel, panelHtml, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
+  return { attach, panel, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
 });

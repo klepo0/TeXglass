@@ -2332,48 +2332,32 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 }
 .tg-pins-badge[hidden] { display: none; }
 .more-compact .tg-pins-badge { position: static; margin-left: 2px; }
+.tg-pins-menu .tg-pins-clear-ask, .tg-pins-panel .tg-pins-clear-ask { margin-right: auto; align-self: center; color: var(--ink); font-size: 13px; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions .tg-pins-clear { color: var(--muted); margin-right: auto; order: -1; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions .tg-pins-clear-yes { border-color: #c0392b; color: #c0392b; }
 /* The side panel's Pins tab (src/pins.js panel): the pin sets fixed at the top,
-   the one chosen below in its reading order, drawn like the contents. */
+   the pin list (as the toolbar's pin shows it) under them. */
 .side-pins { font-size: 13px; }
 .tg-sets-stuck { position: sticky; top: calc(var(--side-head-h, 40px) - 34px); z-index: 1; background: var(--bg); padding: 0 2px 6px 8px; border-bottom: 1px solid var(--rule); max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
 .tg-sets-title { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 2px 0 4px; }
 .tg-sets-list { display: flex; flex-direction: column; gap: 1px; }
+.tg-sets-item { display: flex; align-items: center; border-radius: 5px; }
+.tg-sets-item:hover { background: var(--accent-soft); }
 .tg-sets-set {
-  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; color: var(--ink);
+  display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--ink);
   padding: 4px 8px; border: 0; border-left: 2px solid transparent; border-radius: 5px; background: none; cursor: pointer;
 }
-.tg-sets-set:hover { background: var(--accent-soft); }
-.tg-sets-set[aria-selected="true"] { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.tg-sets-set[aria-pressed="true"] { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 500; }
 .tg-sets-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tg-sets-size { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
-.tg-sets-now, .tg-sets-on { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; font-weight: 500; }
-.tg-sets-order { padding-top: 8px; }
-.tg-sets-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 2px 4px 8px; }
-.tg-sets-head .tg-sets-title { margin: 0; }
-.tg-sets-pin { font: inherit; font-size: 12px; padding: 2px 9px; border: 1px solid var(--rule); border-radius: 6px; background: none; color: var(--ink); cursor: pointer; }
-.tg-sets-pin:hover { border-color: var(--accent); color: var(--accent); }
-.tg-sets-steps .toc-title { display: block; }
-.tg-sets-steps .tg-sets-memo { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; font-weight: 400; font-style: italic; }
-.tg-sets-steps .tg-pins-along { font-size: 11.5px; }
-.tg-sets-steps a.tg-sets-gone { opacity: 0.5; cursor: default; }
-.tg-sets-steps a.tg-sets-gone:hover { background: none; }
-.tg-sets-empty { color: var(--muted); margin: 8px 6px 0 8px; line-height: 1.45; }
-.tg-sets-row { display: flex; align-items: flex-start; gap: 2px; }
-.tg-sets-row > a { flex: 1; min-width: 0; }
-.tg-sets-x, .tg-sets-plus {
-  flex: none; width: 22px; height: 22px; margin-top: 2px; padding: 0; border: 0; border-radius: 5px;
-  background: none; color: var(--muted); font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
-}
-.tg-sets-x { opacity: 0; }
-.tg-sets-row:hover .tg-sets-x, .tg-sets-x:focus-visible { opacity: 1; }
-@media (hover: none) { .tg-sets-x { opacity: 0.7; } }
-.tg-sets-x:hover { color: var(--ink); background: var(--accent-soft); }
-.tg-sets-plus { color: var(--accent); font-weight: 600; }
-.tg-sets-plus:hover { background: var(--accent-soft); }
-.tg-sets-add { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--rule); }
-.tg-sets-extra .tg-sets-row { padding: 2px 8px 2px 4px; align-items: center; }
-.tg-sets-extra .toc-title { color: var(--muted); }
-.tg-sets-hint { color: var(--muted); font-size: 12px; margin: 10px 6px 0 8px; line-height: 1.45; }
+.tg-sets-now { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; font-weight: 500; }
+.tg-sets-del { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); font: inherit; font-size: 15px; cursor: pointer; opacity: 0; }
+.tg-sets-item:hover .tg-sets-del, .tg-sets-del:focus-visible { opacity: 1; }
+@media (hover: none) { .tg-sets-del { opacity: 0.7; } }
+.tg-sets-del:hover { color: var(--ink); }
+.tg-sets-empty { color: var(--muted); margin: 0 6px 2px 0; line-height: 1.45; }
+.tg-pins-panel { padding: 6px 0 0 2px; }
+.tg-pins-panel .tg-pins-head { padding-left: 6px; }
 .tg-pins-menu {
   position: fixed; z-index: 60; width: min(340px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; overscroll-behavior: contain;
   box-sizing: border-box; padding: 6px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink);
@@ -2390,7 +2374,7 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-pins-title { padding: 6px 8px 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .tg-pins-row { display: flex; align-items: stretch; border-radius: 6px; }
 .tg-pins-row:hover { background: var(--accent-soft); }
-.tg-pins-menu button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; border-radius: 6px; }
+:is(.tg-pins-menu, .tg-pins-panel) button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; border-radius: 6px; }
 .tg-pins-go { flex: 1; min-width: 0; text-align: left; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; }
 .tg-pins-go:disabled { opacity: 0.5; cursor: default; }
 .tg-pins-go:focus-visible, .tg-pins-x:focus-visible, .tg-pins-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -2400,30 +2384,30 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-pins-along { font-size: 12.5px; }
 .tg-pins-sym .katex { font-size: 1.05em; }
 .tg-pins-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 4px 2px; margin-top: 4px; border-top: 1px solid var(--rule); }
-.tg-pins-menu .tg-pins-actions button { border: 1px solid var(--rule); padding: 5px 12px; }
-.tg-pins-menu .tg-pins-actions button:hover { border-color: var(--accent); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions button { border: 1px solid var(--rule); padding: 5px 12px; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions button:hover { border-color: var(--accent); }
 /* list by kind or in the reading order */
 .tg-pins-views { margin-left: auto; display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.tg-pins-menu .tg-pins-views button { border-radius: 0; padding: 2px 8px; font-size: 12.5px; color: var(--muted); }
-.tg-pins-menu .tg-pins-views button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-views button { border-radius: 0; padding: 2px 8px; font-size: 12.5px; color: var(--muted); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-views button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
 /* pin sets */
 .tg-pins-sets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 0 8px 6px; font-size: 13px; }
 .tg-pins-sets-k { color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .tg-pins-set { display: inline-flex; }
-.tg-pins-menu .tg-pins-sets button { border: 1px solid var(--rule); padding: 2px 8px; }
-.tg-pins-menu .tg-pins-set button:first-child { border-radius: 5px 0 0 5px; }
-.tg-pins-menu .tg-pins-set .tg-pins-set-del { border-left: 0; border-radius: 0 5px 5px 0; padding: 2px 6px; color: var(--muted); }
-.tg-pins-menu .tg-pins-set-on button { border-color: var(--accent); }
-.tg-pins-menu .tg-pins-set-on button:first-child { background: var(--accent); color: var(--paper); }
-.tg-pins-menu .tg-pins-sets .tg-pins-set-update { border-color: var(--accent); color: var(--accent); }
-.tg-pins-menu .tg-pins-sets button:hover { border-color: var(--accent); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-sets button { border: 1px solid var(--rule); padding: 2px 8px; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-set button:first-child { border-radius: 5px 0 0 5px; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-set .tg-pins-set-del { border-left: 0; border-radius: 0 5px 5px 0; padding: 2px 6px; color: var(--muted); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-set-on button { border-color: var(--accent); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-set-on button:first-child { background: var(--accent); color: var(--paper); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-sets .tg-pins-set-update { border-color: var(--accent); color: var(--accent); }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-sets button:hover { border-color: var(--accent); }
 .tg-pins-set-new { display: inline-flex; gap: 4px; }
 .tg-pins-set-name, .tg-pins-memo-in { font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid var(--accent); border-radius: 5px; background: var(--paper); color: var(--ink); }
 .tg-pins-set-name { width: 11em; }
 /* a row: drag handle, the item and its note, pen, × */
 .tg-pins-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .tg-pins-main .tg-pins-go { flex: none; }
-.tg-pins-menu .tg-pins-memo { text-align: left; padding: 0 8px 6px; margin-top: -3px; font-size: 12.5px; color: var(--accent); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:is(.tg-pins-menu, .tg-pins-panel) .tg-pins-memo { text-align: left; padding: 0 8px 6px; margin-top: -3px; font-size: 12.5px; color: var(--accent); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-pins-memo-in { margin: 0 8px 6px; }
 .tg-pins-drag { flex: none; width: 22px; color: var(--muted); cursor: grab !important; touch-action: none; display: flex; align-items: center; justify-content: center; }
 .tg-pins-drag svg { width: 9px; height: 14px; }

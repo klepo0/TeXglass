@@ -67,7 +67,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click('#pins');
     await page.click('[data-pins-view="order"]');
     await page.focus('[data-pins-drag="label:first"]');
-    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowDown');
     await page.click('.tg-pins-row[data-key="label:main"] .tg-pins-pen');
     await page.fill('.tg-pins-memo-in', 'the point of it all');
     await page.keyboard.press('Enter');
@@ -76,74 +76,70 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
 
-    // the Pins tab: the set on top, its reading order like the contents
+    // the Pins tab: the sets on top, the pin list under them, as the toolbar's pin shows it
     await page.click('[data-side-tab="pins"]');
-    assert.equal(await page.isVisible('#toc-list, .toc-list:not(.tg-sets-steps)').catch(() => false), false);
-    assert.deepEqual(await page.$$eval('.side-pins [data-sets-pick]', (b) => b.map((x) => [x.dataset.setsPick, x.getAttribute('aria-selected')])), [['Talk', 'true']]);
-    const steps = await page.$$eval('.side-pins .tg-sets-steps li', (li) => li.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
-    assert.equal(steps.length, 2);
-    assert.match(steps[0], /^1\s*Lemma 1\.1/);
-    assert.match(steps[1], /^2\s*Theorem 1\.2.*the point of it all/);
-    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true, 'the set is pinned now');
-
-    // a second set; picking it shows its order, the first stays listed
-    await page.click('#pins');
-    await page.click('.tg-pins-row[data-key="label:first"] .tg-pins-x');
-    await page.click('[data-pins-act="save"]');
-    await page.fill('.tg-pins-set-name', 'Main only');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Escape');
-    assert.deepEqual(await page.$$eval('.side-pins [data-sets-pick]', (b) => b.map((x) => x.dataset.setsPick)), ['Main only', 'Talk']);
-    await page.click('[data-sets-pick="Talk"]');
-    assert.equal(await page.locator('.side-pins .tg-sets-steps li').count(), 2);
-    assert.equal(await page.isVisible('.side-pins [data-sets-act="pin"]'), true, 'Pin these, since it is not pinned now');
-    // ↓ moves to the next set
-    await page.focus('[data-sets-pick="Talk"]');
+    const P = '.side-pins ';
+    const rowsIn = () => page.$$eval(P + '.tg-pins-row', (r) => r.map((x) => x.dataset.key));
+    assert.deepEqual(await page.$$eval(P + '[data-pins-set]', (b) => b.map((x) => [x.dataset.pinsSet, x.getAttribute('aria-pressed')])), [['Talk', 'true']]);
+    assert.equal(await page.getAttribute(P + '[data-pins-view="order"]', 'aria-pressed'), 'true');
+    assert.deepEqual(await rowsIn(), ['label:main', 'label:first']);
+    assert.match(await page.textContent(P + '.tg-pins-row[data-key="label:main"]'), /the point of it all/);
+    assert.equal(await page.locator(P + '.tg-pins-sets [data-pins-set]').count(), 0, 'the sets are not listed twice');
+    // By kind groups them
+    await page.click(P + '[data-pins-view="kind"]');
+    assert.deepEqual(await page.$$eval(P + '.tg-pins-title', (t) => t.map((x) => x.textContent)), ['Results']);
+    await page.click(P + '[data-pins-view="order"]');
+    // reorder and note in the tab
+    await page.focus(P + '[data-pins-drag="label:first"]');
     await page.keyboard.press('ArrowUp');
-    assert.equal(await page.getAttribute('[data-sets-pick="Main only"]', 'aria-selected'), 'true');
-    await page.click('[data-sets-pick="Talk"]');
+    assert.deepEqual(await rowsIn(), ['label:first', 'label:main']);
     // a click goes there
     await page.evaluate(() => { document.getElementById('preview-pane').scrollTop = 0; });
     await page.waitForTimeout(200);
     const before = await page.$eval('#preview .theorem[data-label="main"]', (el) => el.getBoundingClientRect().top);
     assert.ok(before > 760, 'out of sight first: ' + before);
-    await page.click('.side-pins .tg-sets-steps li:nth-child(2) a');
+    await page.click(P + '.tg-pins-row[data-key="label:main"] .tg-pins-go');
     await page.waitForTimeout(700);
     const top = await page.$eval('#preview .theorem[data-label="main"]', (el) => el.getBoundingClientRect().top);
     assert.ok(top > 0 && top < 700, 'jumped to Theorem 1.2: ' + top);
-    // Pin these brings the set back
-    await page.click('.side-pins [data-sets-act="pin"]');
-    assert.equal(await badge(), '2');
-    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
-    const stepNames = () => page.$$eval('.side-pins .tg-sets-steps .toc-title', (t) => t.map((x) => x.textContent.replace(/\s+/g, ' ').trim()));
-
-    // the set pinned now: × takes a pin out of the set and unpins it, the set stays pinned now
-    await page.click('.side-pins [data-sets-out="label:first"]');
+    // × unpins, a second set, and a click on a set pins it
+    await page.click(P + '.tg-pins-row[data-key="label:first"] .tg-pins-x');
     assert.equal(await badge(), '1');
-    assert.equal((await stepNames()).length, 1);
-    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
-    assert.equal(await page.isVisible('.side-pins .tg-sets-hint'), true, 'how to add');
-    // and the pins can still be unpinned and pinned anywhere
+    assert.deepEqual(await rowsIn(), ['label:main']);
+    await page.click(P + '[data-pins-act="save"]');
+    await page.fill(P + '.tg-pins-set-name', 'Main only');
+    await page.keyboard.press('Enter');
+    assert.deepEqual(await page.$$eval(P + '[data-pins-set]', (b) => b.map((x) => x.dataset.pinsSet)), ['Main only', 'Talk']);
+    await page.click(P + '[data-pins-set="Talk"]');
+    assert.equal(await badge(), '2');
+    assert.deepEqual(await rowsIn(), ['label:main', 'label:first'], 'the set brings its own order back');
+    // pinned now from a set: still unpinned anywhere, and pinned again
+    await pinThm('first');
+    assert.equal(await badge(), '1');
     await pinThm('first');
     assert.equal(await badge(), '2');
-    assert.equal(await page.isVisible('.side-pins [data-sets-add="label:first"]'), true, 'pinned, not in the set: offered with +');
-    await page.click('.side-pins [data-sets-add="label:first"]');
-    assert.deepEqual((await stepNames()).map((x) => x.replace(/ .*/, '')), ['Theorem', 'Lemma'], 'added at the end of the order');
-    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), true);
-    await pinThm('main'); // unpin from the text
-    assert.equal(await badge(), '1');
-    assert.equal(await page.isVisible('.side-pins .tg-sets-on'), false, 'the set is no longer what is pinned');
-    // a set not pinned now: × only changes the set
-    await page.click('[data-sets-pick="Main only"]');
-    await page.click('.side-pins [data-sets-add="label:first"]');
-    assert.equal(await page.locator('.side-pins .tg-sets-steps li').count(), 2);
-    await page.click('.side-pins [data-sets-out="label:main"]');
-    assert.equal(await page.locator('.side-pins .tg-sets-steps li').count(), 1);
-    assert.equal(await badge(), '1', 'the pins stay as they are');
-    // back to Talk, pinned
-    await page.click('[data-sets-pick="Talk"]');
-    await page.click('.side-pins [data-sets-act="pin"]');
+    // Clear all asks first, then unpins everything; the sets stay
+    await page.click(P + '[data-pins-act="clear"]');
+    await page.click(P + '[data-pins-act="clear-cancel"]');
     assert.equal(await badge(), '2');
+    await page.click(P + '[data-pins-act="clear"]');
+    await page.click(P + '[data-pins-act="clear-ok"]');
+    assert.equal(await badge(), '');
+    assert.equal(await page.locator(P + '[data-pins-set]').count(), 2);
+    // and in the toolbar's list too
+    await page.click(P + '[data-pins-set="Talk"]');
+    assert.equal(await badge(), '2');
+    await page.click('#pins');
+    await page.click('.tg-pins-menu [data-pins-act="clear"]');
+    await page.click('.tg-pins-menu [data-pins-act="clear-ok"]');
+    assert.equal(await badge(), '');
+    await page.keyboard.press('Escape');
+    await page.click(P + '[data-pins-set="Talk"]');
+    assert.equal(await badge(), '2');
+    // Show only these from the tab
+    await page.click(P + '[data-pins-act="show"]');
+    await page.waitForSelector('#preview.pick-view');
+    await page.keyboard.press('Escape');
 
     // text over two paragraphs: Show only these keeps both
     await page.evaluate(() => { document.getElementById('preview-pane').scrollTop = 0; });
@@ -158,7 +154,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click('.tg-hlbar-pin');
     assert.equal(await badge(), '3');
     await page.click('#pins');
-    await page.click('[data-pins-act="show"]');
+    await page.click('.tg-pins-menu [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     const seen = async (txt) => page.locator('#preview p', { hasText: txt }).first().isVisible();
     assert.equal(await seen('Alpha words'), true);
@@ -175,7 +171,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     assert.equal(await badge(), '4');
     await page.click('#pins');
     assert.match(await page.textContent('.tg-pins-menu'), /Unnumbered equation \(x\^2 \+ y\^2 = r\^2\)/);
-    await page.click('[data-pins-act="show"]');
+    await page.click('.tg-pins-menu [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     assert.equal(await page.locator('#preview .math-display:not(:has(.tag))').first().isVisible(), true, 'shown under Show only these');
     await page.keyboard.press('Escape');

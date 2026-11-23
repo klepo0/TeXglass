@@ -1251,9 +1251,10 @@
       },
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
-      // the Pins tab: the pin sets, and the one chosen in its reading order (shared/pins.js)
+      // the Pins tab: the pin sets on top, the pin list under them (shared/pins.js)
       pinsTab: window.TeXglassPins && insight ? (body) => window.TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
+        showPinned: picker ? () => picker.show() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       }) : undefined,
     })

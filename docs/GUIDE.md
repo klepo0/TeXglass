@@ -282,20 +282,14 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     drag a result to move it, pin results and equations, hide results, and
     draw your own links or take wrong ones away. **Lock** stops all of that
     (pins still work).
-- **Pins**: your [pin sets](#everything-pinned-in-one-place). **Saved sets**
-  stay fixed at the top of the tab while you scroll; click one (or move with
-  <kbd>↑</kbd> <kbd>↓</kbd>) to show its **Reading order** below, numbered like
-  the contents, with your one-line note under each item. Click an item to go to
-  it. Choosing a set here only shows it: **Pin these** pins exactly what it holds
-  instead of the pins now (a set already pinned says **Pinned now**). With no
-  sets yet, the tab says how to save one (**Save as set…** in the **Pinned**
-  list). Not in the exported reader page.
-  - **Change a set here**: **×** on a row (shown when you rest on it) takes that
-    item out of the set; for the set pinned now it is unpinned too, so the set
-    stays pinned now. Below the order, **Pinned, not in this set** lists what is
-    pinned now and the set lacks: **+** adds one at the end of its order
-    (**Add all** adds them all). To add something new, pin it as usual (on the
-    map, in the text or from a preview) and it appears there.
+- **Pins**: your pin sets and pins, in one place. **Saved sets** stay fixed at
+  the top of the tab while you scroll: click one to pin exactly what it holds,
+  in its order (the set pinned now is highlighted, marked "pinned"); **×**
+  deletes a set (the pins stay). Under them is the same list as the toolbar's
+  [pin](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
+  <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
+  unpin, **Save as set…** and **Update “name”**, **Show only these** and
+  **Clear all**. Click an item to go to it. Not in the exported reader page.
 - **Notation**: an index of the paper's macros and defined symbols, with
   their meaning in words where the text gives one and a link to the first use.
   The checkbox turns notation on hover off and on.
@@ -397,7 +391,9 @@ by kind (**By kind**) or in your own reading order (**In order**):
 - **Text**: passages pinned with the pin on the bar that appears when you
   select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
 
-Click an item to jump to it, **×** to unpin it. **Show only these** shows only
+Click an item to jump to it, **×** to unpin it. **Clear all** unpins
+everything, after asking (your pin sets and notes stay, so a saved set brings
+them back). **Show only these** shows only
 the pinned results, proofs, equations and figures (as **Show pinned** does) and the
 paragraphs holding pinned text, with what each pinned result rests on folded
 under it; **Print** and **EPUB** on its bar make a handout of it. With nothing pinned
@@ -442,8 +438,7 @@ the talk" and "For the referee report".
   map too (**Sets**, **Save as set…**). Maps saved before sets held only the
   map's pins; opening one leaves your symbols and passages as they are.
 - The **Pins** tab of the [side panel](#the-side-panel-contents-map-pins-notation)
-  lists the sets too and shows any of them in its reading order, like the
-  contents, without pinning it.
+  keeps the sets listed at the top, with this whole list under them.
 
 Pins, their order and notes and the sets are kept with your notes, so they
 sync with them and go into exported notes files. A document typed into the web

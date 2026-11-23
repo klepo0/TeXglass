@@ -2923,32 +2923,6 @@
       return out;
     }
 
-    /**
-     * A pin set's things in its reading order (for the Pins tab), each like
-     * pinnedList's, a pinned passage as { key: 'text:<id>', kind: 'text', id }
-     * for the host to name. null when there is no such set.
-     */
-    function setItems(name) {
-      const v = edits.view[name];
-      if (!v || !v.p) return null;
-      const pins = Object.entries(v.p).filter(([, d]) => d);
-      const keys = pins.map(([k]) => k).concat((Array.isArray(v.x) ? v.x : []).map((id) => 'text:' + id));
-      const items = itemsOf(pins.filter(([k]) => !isNotationKey(k)), new Set(pins.map(([k]) => k).filter(isNotationKey)));
-      const byKey = new Map(items.map((x) => [x.key, x]));
-      for (const k of keys) if (k.startsWith('text:')) byKey.set(k, { key: k, kind: 'text', id: k.slice(5), name: '', el: null });
-      // the order kept with the set, then what it left out, the document's way
-      const order = (Array.isArray(v.o) ? v.o : []).filter((k) => byKey.has(k));
-      const rest = keys.filter((k) => !order.includes(k) && byKey.has(k));
-      const at = (x) => (x && x.el ? x.el : null);
-      rest.sort((a, b) => {
-        const ea = at(byKey.get(a));
-        const eb = at(byKey.get(b));
-        if (!ea || !eb) return (ea ? -1 : 0) + (eb ? 1 : 0);
-        return ea === eb ? 0 : ea.compareDocumentPosition(eb) & 4 ? -1 : 1;
-      });
-      return order.concat(rest).map((k) => Object.assign(byKey.get(k), { memo: pinNote(k) }));
-    }
-
     /** Unpin one thing by its key (from pinnedList). */
     function unpinKey(key) {
       setPin(key, '');
@@ -3115,46 +3089,6 @@
       if (Array.isArray(v.o)) setPinOrder(v.o, true);
       activeView = name;
       editsChanged('all', { label: `Opened the pin set “${name}”` });
-      return true;
-    }
-    /**
-     * Change a set without opening it: add pinned things to it (keys of pinnedList,
-     * or "text:<id>"; they go at the end of its order) or take things out. Taking
-     * something out of the set that is pinned now unpins it too, so it stays pinned now.
-     */
-    function editSet(name, change) {
-      const v = edits.view[name];
-      if (!v || !v.p) return false;
-      const add = (change && change.add) || [];
-      const remove = new Set((change && change.remove) || []);
-      const wasOn = setIsOn(v);
-      const p = Object.assign({}, v.p);
-      let x = isWholeSet(v) ? v.x.slice() : [];
-      const pins = allPins();
-      const keysOf = () => Object.keys(p).concat(x.map((id) => 'text:' + id));
-      const before = Array.isArray(v.o) ? v.o.filter((k) => keysOf().includes(k)) : [];
-      let order = before.length ? before.concat(keysOf().filter((k) => !before.includes(k))) : inReadingOrder(keysOf());
-      for (const k of add) {
-        if (k.startsWith('text:')) { if (!x.includes(k.slice(5))) x.push(k.slice(5)); } else if (!p[k]) p[k] = pins.get(k) || 'self';
-        if (!order.includes(k)) order.push(k);
-      }
-      for (const k of remove) {
-        if (k.startsWith('text:')) x = x.filter((id) => id !== k.slice(5));
-        else delete p[k];
-      }
-      order = order.filter((k) => !remove.has(k));
-      if (!Object.keys(p).length && !x.length) { deleteView(name); editsChanged('view', { label: `Emptied the pin set “${name}”` }); return true; }
-      // a map saved before sets held only the map's pins: it becomes a whole set once it holds passages
-      const next = { p, o: order };
-      if (isWholeSet(v) || x.length) next.x = x;
-      setEdit('view', name, next, true);
-      if (wasOn && remove.size) {
-        for (const k of remove) if (!k.startsWith('text:') && pins.has(k)) setEdit('pin', k, { d: '' }, true);
-        const gone = Array.from(remove).filter((k) => k.startsWith('text:')).map((k) => k.slice(5));
-        if (gone.length && textPins) { try { textPins.set(textPinIds().filter((id) => !gone.includes(id))); } catch (e) { /* the passages stay pinned */ } }
-      }
-      const what = add.length && remove.size ? 'Changed' : add.length ? (add.length === 1 ? `Added ${nameOfKey(add[0])} to` : `Added ${add.length} to`) : (remove.size === 1 ? `Took ${nameOfKey(Array.from(remove)[0])} out of` : `Took ${remove.size} out of`);
-      editsChanged('all', { label: `${what} the pin set “${name}”` });
       return true;
     }
     function deleteView(name) {
@@ -4709,10 +4643,6 @@
       activeSet,
       /** Whether the pins now are exactly the set's. */
       setIsOn: (name) => setIsOn(edits.view[name]),
-      /** A pin set's things in its reading order, with notes (null: no such set). */
-      setItems,
-      /** Add pinned things to a set, or take things out: (name, { add: [keys], remove: [keys] }). */
-      editSet,
       suggestSetName: suggestName,
       /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
       setTextPins: (o) => { textPins = o || null; },
@@ -4771,7 +4701,7 @@
     o.list.after(body);
     const view = o.insight ? o.insight.mount(body, { onJump: o.onJump }) : null;
     if (!view) tabs.querySelectorAll('[data-side-tab="notation"], [data-side-tab="deps"]').forEach((b) => b.remove());
-    // the Pins tab: the pin sets, and the one chosen in its reading order
+    // the Pins tab: the pin sets on top, the pin list under them
     const pinsBody = doc.createElement('div');
     pinsBody.className = 'side-pins';
     pinsBody.hidden = true;
