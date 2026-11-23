@@ -1550,6 +1550,10 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @media print {
   .pick-sheet-go { color: inherit; }
   .pick-sheet, .pick-memo { break-inside: avoid; }
+  /* Print on the bar of Show only these prints the handout (src/pick.js), alone */
+  .pick-printing > :not(.pick-handout) { display: none !important; }
+  .pick-printing > .pick-handout { display: block !important; }
+  .pick-context:not([open]) > .pick-ctx-body { display: none; }
   .tg-step-btn, .tg-step-bar, .tg-step-fold { display: none !important; }
   #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
@@ -2670,6 +2674,32 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .pick-box[aria-checked="true"]::after { content: "✓"; font-size: 0.8em; font-weight: 700; }
 .math-display > .pick-box { right: auto; left: 0.3em; top: 50%; transform: translateY(-50%); }
 .pick-view .pick-hide { display: none !important; }
+/* What a pinned result rests on (Show only these): definitions and notation, folded */
+.pick-context { margin: -0.2em 0 1em; padding: 4px 10px; border-left: 3px solid var(--rule); font-size: 0.9em; color: var(--muted); }
+.pick-context > summary { cursor: pointer; line-height: 1.6; }
+.pick-context > summary:hover { color: var(--ink); }
+.pick-context[open] { color: inherit; border-left-color: var(--accent); }
+.pick-ctx-k { font-weight: 600; font-variant: small-caps; letter-spacing: 0.02em; margin-right: 0.25em; }
+.pick-ctx-k2 { font-style: italic; }
+.pick-ctx-sym code { font-size: 0.85em; }
+.pick-ctx-body { padding: 4px 0 2px; }
+.pick-ctx-def { margin: 0.4em 0 0.8em; }
+.pick-ctx-src { font-size: 0.92em; margin-bottom: 2px; }
+.pick-ctx-src a, .pick-ctx-where { color: var(--accent); }
+.pick-ctx-def > .theorem { margin: 0; }
+.pick-ctx-syms { margin: 0.3em 0; padding-left: 1.2em; }
+.pick-ctx-syms li { margin: 0.35em 0; }
+.pick-ctx-what { display: inline-block; min-width: 2em; margin-right: 0.3em; }
+.pick-ctx-shown > * { display: inline; }
+.pick-ctx-where { font-size: 0.9em; white-space: nowrap; }
+/* The handout (Print on the bar of Show only these): only on paper */
+.pick-handout { display: none; }
+.pick-handout-order { margin: 0 0 1.4em; }
+.pick-handout-order ol { padding-left: 1.6em; }
+.pick-handout-item { margin: 0 0 1.2em; }
+.pick-handout-from { margin: 0.8em 0 0.2em; font-size: 0.85em; color: var(--muted); font-variant: small-caps; }
+.pick-handout-rests { margin: 0.3em 0 0; font-size: 0.88em; color: var(--muted); }
+.pick-handout-context { margin-top: 2em; }
 /* room to scroll the last item above the bar */
 @media screen { .pick-mode, .pick-view { padding-bottom: 6rem !important; } }
 .pick-names { color: var(--muted); font-size: 0.9em; }

@@ -49,7 +49,7 @@
   // Reading the page
   // ---------------------------------------------------------------------------
 
-  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .diff-old';
+  const INSIDE_POPOVER = '.ref-popover, .insight-popover, .insight-dialog, .diff-old, .pick-context, .pick-handout';
 
   /** The formulas of the page, in document order (not the copies inside popovers). */
   function formulas(doc) {
@@ -559,6 +559,11 @@
     const m = /\bthm-env-([\w-]+)/.exec(el.className);
     return m ? m[1] : 'theorem';
   };
+
+  /** A result that defines things: a definition, notation, convention or setting (not an example). */
+  function isDefinitionNode(n) {
+    return /^(def|dfn|notation|nota$|conv|setting|termin)/i.test(n.kind) || /^(Definitions?|Notations?|Conventions?|Settings?|Terminology)\b/i.test(n.name || '');
+  }
 
   function styleOf(el) {
     if (el.classList.contains('thm-definition')) return 'definition';
@@ -1691,8 +1696,8 @@
           if (h) { e.innerHTML = h; e.removeAttribute('data-sym'); }
         }
       };
-      if (!missing.length || !opts.renderTex) { put(); return; }
-      Promise.resolve(opts.renderTex(missing, defs))
+      if (!missing.length || !opts.renderTex) { put(); return Promise.resolve(); }
+      return Promise.resolve(opts.renderTex(missing, defs))
         .then((htmls) => {
           if (!htmls) return;
           missing.forEach((t, k) => { if (htmls[k] && !/math-error|katex-error/.test(htmls[k])) symbolCache.set(t, htmls[k]); });
@@ -4464,6 +4469,50 @@
         down.delete(n);
         const els = (set) => Array.from(set).filter((m) => m.el && !m.cite).sort((a, b) => a.order - b.order).map((m) => m.el);
         return { uses: up.size, usedBy: down.size, usesEls: els(up), usedByEls: els(down) };
+      },
+      /**
+       * What a result (or a numbered equation) rests on, for Show only these and
+       * its handout (src/pick.js): { defs: [{ el, name }], symbols: [{ tex, key,
+       * el, where, shown() }] }, or null if there is nothing.
+       * defs: the definitions it refers to (in its statement or its proof), and
+       * the definitions those refer to, in document order; symbols: the
+       * notation its own formulas use that is introduced elsewhere (the
+       * notation index's symbols, not the macros), with shown() the sentence
+       * (or the author's words) that introduces each.
+       */
+      contextOf(el) {
+        if (!el || !doc.contains(el)) return null;
+        const g = getGraph();
+        const n = g.byEl.get(el);
+        const defs = [];
+        if (n) {
+          const seen = new Set([n]);
+          const todo = Array.from(n.uses);
+          while (todo.length) {
+            const m = todo.shift();
+            if (!m || seen.has(m)) continue;
+            seen.add(m);
+            if (m.cite || !m.el || !isDefinitionNode(m)) continue;
+            defs.push(m);
+            for (const u of m.uses) if (!seen.has(u)) todo.push(u);
+          }
+          defs.sort((a, b) => a.order - b.order);
+        }
+        const idx = getIndex();
+        const syms = new Map();
+        const inside = (x) => el.contains(x) || defs.some((m) => m.el.contains(x));
+        for (const f of el.querySelectorAll('.math[data-tex]')) {
+          if (f.closest(INSIDE_POPOVER) || f.parentElement.closest('.math')) continue;
+          for (const d of definitionsUsed(idx.defs, f)) {
+            if (syms.has(d.key) || (!d.everywhere && inside(d.el))) continue;
+            syms.set(d.key, d);
+          }
+        }
+        const symbols = Array.from(syms.values())
+          .sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & 4 ? -1 : 1))
+          .map((d) => ({ tex: d.tex, key: d.key, el: d.el, where: d.everywhere ? '' : where(d.el), shown: () => shownOf(d) }));
+        if (!defs.length && !symbols.length) return null;
+        return { defs: defs.map((m) => ({ el: m.el, name: m.name })), symbols };
       },
       /**
        * Search by use: { inc: [result or equation elements], exc: [...], any, direct }
