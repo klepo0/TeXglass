@@ -182,6 +182,15 @@ test('on a phone the pin moves into the "…" menu and the list opens as a sheet
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
     assert.equal(await page.isVisible('#pins'), false);
+    // Contents is not in the phone toolbar either: it is in the "…" menu (and a swipe opens it)
+    assert.equal(await page.isVisible('#toc-toggle'), false);
+    await page.click('#more');
+    assert.equal(await page.isVisible('#more-compact #toc-toggle .tb-label'), true);
+    await page.click('#toc-toggle');
+    await page.waitForTimeout(300);
+    assert.equal(await page.isVisible('#toc-pane'), true, 'Contents opens the side panel');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
     await page.click('#more');
     assert.equal(await page.isVisible('#more-compact #pins'), true);
     assert.equal(await page.isVisible('#more-compact #pins .tb-label'), true, 'with its name in the menu');

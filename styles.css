@@ -2402,6 +2402,7 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
   .toolbar .icon-button svg, .tb-icon { width: 22px; height: 22px; }
   .tb-icon { display: block; }
   #toc-toggle .tb-label, #find .tb-label, #save-offline .tb-label, #share .tb-label { display: none; }
+  .more-compact #toc-toggle .tb-label { display: inline; }
   .toolbar .tb-iconic .tb-icon { width: 22px; height: 22px; }
   .toolbar .more-compact .tb-iconic .tb-icon { width: 18px; height: 18px; }
   #save-offline .tb-icon, #share .tb-icon { width: 22px; height: 22px; }

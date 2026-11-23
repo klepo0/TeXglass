@@ -127,6 +127,7 @@ test('the viewer: no grip under the side panel when it is a drawer over the text
   try {
     const { page } = await open(browser, { viewport: { width: 700, height: 700 } });
     assert.equal(await page.locator('.text-resizer-left').isVisible(), true, 'grips in a narrow window');
+    await page.click('#more'); // in a narrow window Contents is in the "…" menu
     await page.click('#toc-toggle');
     await page.waitForSelector('#toc-pane:not([hidden])');
     await page.waitForTimeout(300);
