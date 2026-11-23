@@ -321,8 +321,15 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
   unpin, **Save as set…** and **Update “name”**, **Show only these** and
   **Clear all** (with nothing pinned, **Pin results…** lets you tick results
-  and equations in the text). Click an item to go to it. The **pin** in the
-  toolbar opens this tab. Below them, **Across papers**
+  and equations in the text). Click an item to go to it. Next to the count
+  ("Pinned 11"), the name of the pin set your pins are now shows ("Set 2"; with
+  "(changed)" once you change them after opening it).
+  While [What does this use?](#understanding-the-logic), a search by use or a
+  shared view is on, the tab follows it: **Showing** lists what is on screen,
+  with its name ("Theorem 2.1 with what it uses"); **×** takes one out of the
+  view (not out of your pins), and **Save as pin set**, **Add to my pins** and
+  **Done** work as on the bar. On **Done** the tab shows your own pins again.
+  The **pin** in the toolbar opens this tab. Below them, **Across papers**
   holds your [collections](#collections-pins-from-several-papers). Not in the
   exported reader page.
 - **Notation**: an index of the paper's macros and defined symbols, with

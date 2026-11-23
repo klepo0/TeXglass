@@ -21,6 +21,10 @@
  *     root,               // optional: the document, for P (pin what is under the pointer)
  *     toc,                // optional: the contents list, to show how many pins each section holds
  *     keys,               // false: no P / J / K
+ *     view(),             // optional: the view on screen when it is not the pins (What does
+ *                         //   this use?, a shared view): { kind, title, note, items: [{ name, el }],
+ *                         //   save, keep }, or null; the list then shows it (refresh() when it changes)
+ *     viewAct(a, el),     // optional: its buttons: 'save', 'keep', 'done', 'away' (take el out)
  *   });
  *   pins.open(); pins.close(); pins.toggle(); pins.refresh();
  *
@@ -114,6 +118,7 @@
     }
     const maps = items.filter((x) => x.kind !== 'notation').length;
     let html = `<div class="tg-pins-head"><strong>Pinned</strong> <span class="tg-pins-count">${items.length}</span>` +
+      (o.setName ? `<span class="tg-pins-setname" title="${esc(o.setName.title)}">${esc(o.setName.text)}</span>` : '') +
       '<span class="tg-pins-views" role="group" aria-label="List the pins">' +
       `<button type="button" data-pins-view="kind" aria-pressed="${!o.order}" title="Grouped: results, equations, symbols…">By kind</button>` +
       `<button type="button" data-pins-view="order" aria-pressed="${!!o.order}" title="One list in your reading order: drag to reorder">In order</button></span></div>`;
@@ -139,6 +144,29 @@
         ? `<span class="tg-pins-clear-ask">Unpin all ${items.length}?</span><button type="button" class="tg-pins-clear-yes" data-pins-act="clear-ok">Unpin all</button><button type="button" data-pins-act="clear-cancel">Keep</button>`
         : '<button type="button" class="tg-pins-clear" data-pins-act="clear" title="Unpin everything (your pin sets and notes stay)">Clear all</button>') +
       '</div>';
+    return html;
+  }
+
+  /**
+   * The list's HTML while a view is on screen that is not the reader's pins
+   * (What does this use?, a search by use, a shared view): what it shows, and
+   * its Keep buttons. v: { kind, title, note, items: [{ name, el }], save, keep, pins }.
+   */
+  function viewHtml(v) {
+    const temp = v.kind === 'uses';
+    let html = `<div class="tg-pins-head tg-pins-head-view"><strong>Showing</strong> <span class="tg-pins-count">${v.items.length}</span>` +
+      `<span class="tg-pins-setname" title="${esc(v.title)}">${esc(v.title)}</span></div>`;
+    html += `<p class="tg-pins-viewnote">${v.note ? `<b>${esc(v.note)}.</b> ` : ''}${temp ? 'A temporary set' : 'A view from a link'}: ` +
+      `${v.pins ? `your ${v.pins} pin${v.pins === 1 ? '' : 's'} come${v.pins === 1 ? 's' : ''} back` : 'your pins are as they were'} when you leave it.</p>`;
+    html += '<div class="tg-pins-list" role="list" aria-label="Shown now">';
+    v.items.forEach((x, i) => {
+      html += `<div class="tg-pins-row" role="listitem"><div class="tg-pins-main"><button type="button" class="tg-pins-go" data-pins-vgo="${i}" title="Go to it">${esc(x.name)}</button></div>` +
+        (temp ? `<button type="button" class="tg-pins-x" data-pins-vx="${i}" title="Take it out of this view (your pins stay as they are)" aria-label="Take ${esc(x.name)} out of this view">&times;</button>` : '') + '</div>';
+    });
+    html += '</div><div class="tg-pins-actions">' +
+      (v.save ? '<button type="button" data-pins-act="view-save" title="Keep these as a pin set of their own, to open later; your pins now stay as they are">Save as pin set</button>' : '') +
+      (v.keep ? `<button type="button" data-pins-act="view-keep" title="Pin these too, with the pins you have">${temp ? 'Add to my pins' : 'Keep these pins'}</button>` : '') +
+      `<button type="button" data-pins-act="view-done" title="Leave this view: back to the whole document and your own pins">${temp ? 'Done' : 'Dismiss'}</button></div>`;
     return html;
   }
 
@@ -180,7 +208,28 @@
     let editing = null; // the key whose note is being written
     let clearing = false; // asking whether to unpin everything
 
+    /** The view on screen when it is not the reader's pins (o.view(): the host's picker), or null. */
+    let view = null;
+    function viewNow() {
+      let v = null;
+      try { v = o.view ? o.view() : null; } catch (e) { v = null; }
+      return v && v.items ? v : null;
+    }
+    /** The name of the pin set the pins are now: { text, title }, or null. */
+    function setNameOf(sets) {
+      const on = sets.find((x) => x.on && x.active) || sets.find((x) => x.on);
+      if (on) return { text: on.name, title: `Your pins now are the pin set “${on.name}”` };
+      const act = has('activeSet') ? insight.activeSet() : null;
+      return act ? { text: `${act} (changed)`, title: `Opened from the pin set “${act}”, then changed: Update “${act}” keeps the change` } : null;
+    }
+
     function fill() {
+      view = viewNow();
+      if (view) {
+        items = [];
+        el.innerHTML = viewHtml(Object.assign({ pins: count() }, view));
+        return;
+      }
       items = allItems();
       if (editing && !items.some((x) => x.key === editing)) editing = null;
       if (!items.length) clearing = false;
@@ -189,7 +238,7 @@
       el.innerHTML = listHtml(items, {
         showPinned: !!o.showPinned, pinMore: !!o.pinMore, order: inOrder(), sets, naming, noSets: !!o.noSets,
         suggest: naming && has('suggestSetName') ? insight.suggestSetName() : '',
-        update: act && !insight.setIsOn(act) ? act : null, editing, clearing,
+        update: act && !insight.setIsOn(act) ? act : null, editing, clearing, setName: setNameOf(sets),
       });
       if (insight.renderSymbols) insight.renderSymbols(el);
     }
@@ -277,6 +326,19 @@
 
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-pins-drag]')) return;
+      // the view on screen (not the reader's pins)
+      const vgo = e.target.closest('[data-pins-vgo]');
+      if (vgo) { const x = view && view.items[+vgo.dataset.pinsVgo]; if (x && x.el) { done(); o.jump(x.el); } return; }
+      const vx = e.target.closest('[data-pins-vx]');
+      if (vx) {
+        const x = view && view.items[+vx.dataset.pinsVx];
+        if (x && o.viewAct) o.viewAct('away', x.el); // the host's onView fills the list again
+        const next = el.querySelector('.tg-pins-x') || el.querySelector('button');
+        if (next) next.focus({ preventScroll: true });
+        return;
+      }
+      const va = e.target.closest('[data-pins-act^="view-"]');
+      if (va) { if (o.viewAct) o.viewAct(va.dataset.pinsAct.slice(5)); return; }
       const go = e.target.closest('[data-pins-go]');
       if (go) {
         const x = items.find((it) => it.key === go.dataset.pinsGo);
@@ -339,6 +401,13 @@
       saveMemo(t, !inside);
     });
 
+    /** How many things the reader has pinned. */
+    function count() {
+      let n = 0;
+      try { n = insight.allPinCount ? insight.allPinCount() : insight.pinnedList().length; } catch (e) { n = 0; }
+      return n + texts().length;
+    }
+
     /** Fill again after a change elsewhere: a note being written keeps its text and focus. */
     function refresh() {
       if (quiet) return;
@@ -358,11 +427,7 @@
       reset() { naming = false; editing = null; clearing = false; },
       /** Everything pinned, in the reading order. */
       items: () => allItems(),
-      count: () => {
-        let n = 0;
-        try { n = insight.allPinCount ? insight.allPinCount() : insight.pinnedList().length; } catch (e) { n = 0; }
-        return n + texts().length;
-      },
+      count,
     };
   }
 
@@ -396,6 +461,7 @@
     }
     const list = controller(menu, {
       insight, margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore,
+      view: opts.view, viewAct: opts.viewAct,
       done: () => close(), placed: () => place(),
     });
 
@@ -628,6 +694,7 @@
     let shown = false;
     const list = controller(listEl, {
       insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore, noSets: true,
+      view: opts.view, viewAct: opts.viewAct,
       done: () => { if (opts.onJump) opts.onJump(); },
     });
 
@@ -839,5 +906,29 @@
     return out;
   }
 
-  return { attach, panel, tabOpener, listHtml, setsHtml, sheet, shareFields, sharedSheet, ICON };
+  /**
+   * What a picker (src/pick.js) shows when it is not the reader's pins, as the
+   * pin list's view() takes it: the results, equations and figures in it, by name.
+   */
+  function viewOf(picker) {
+    const v = picker && picker.view ? picker.view() : null;
+    if (!v) return null;
+    const Pick = typeof TeXglassPick !== 'undefined' ? TeXglassPick : null;
+    const named = (el) => el.classList.contains('theorem') || (Pick && Pick.isNumberedDisplay(el)) || el.matches('figure.float');
+    const nameOf = (el) => {
+      if (el.matches('figure.float')) { const h = el.querySelector('.caption-head'); return h ? h.textContent.replace(/[.:]\s*$/, '').trim() : 'Figure'; }
+      return Pick ? Pick.nameOf(el) : (el.textContent || '').trim().slice(0, 40);
+    };
+    return Object.assign({}, v, { items: v.els.filter(named).map((el) => ({ el, name: nameOf(el) })) });
+  }
+  /** The view's buttons in the pin list: 'save', 'keep', 'done', 'away' (take el out). */
+  function viewAct(picker, a, el) {
+    if (!picker) return;
+    if (a === 'save') picker.saveView();
+    else if (a === 'keep') picker.keepView();
+    else if (a === 'done') picker.stop();
+    else if (a === 'away') picker.takeAway(el);
+  }
+
+  return { attach, panel, tabOpener, listHtml, setsHtml, sheet, shareFields, sharedSheet, viewOf, viewAct, ICON };
 });

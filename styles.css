@@ -2405,6 +2405,10 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 }
 .tg-pins-head { display: flex; align-items: baseline; gap: 8px; padding: 4px 8px 6px; }
 .tg-pins-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* the pin set the pins are (or the view on screen): in the header, next to the count */
+.tg-pins-setname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: 13px; }
+.tg-pins-viewnote { margin: 0 8px 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.tg-pins-head-view { border-left: 3px solid var(--accent); padding-left: 8px; }
 .tg-pins-empty { margin: 0 8px 8px; color: var(--muted); line-height: 1.45; }
 .tg-pins-title { padding: 6px 8px 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .tg-pins-row { display: flex; align-items: stretch; border-radius: 6px; }

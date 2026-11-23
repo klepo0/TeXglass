@@ -3148,6 +3148,8 @@
       share: () => sharePaper(),
       canShare: () => !!(Share && shareWhere()),
       onStart: () => hidePopover(),
+      // the Pins tab (and the pin's list) follow the view on screen
+      onView: () => { if (pinsPanel) pinsPanel.refresh(); if (pinsButton) pinsButton.refresh(); },
     })
     : null;
   // The pin in the toolbar: how many things are pinned, and a list of them all
@@ -3162,6 +3164,8 @@
       jump: (el) => jumpTo(el),
       showPinned: picker ? () => picker.show() : undefined,
       pinMore: picker ? () => picker.start() : undefined,
+      view: picker && window.TeXglassPins.viewOf ? () => TeXglassPins.viewOf(picker) : undefined,
+      viewAct: picker && window.TeXglassPins.viewAct ? (a, el) => TeXglassPins.viewAct(picker, a, el) : undefined,
       onOpen: () => { setMenu(false); hidePopover(); },
       // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
       openTab: TeXglassPins.tabOpener ? TeXglassPins.tabOpener({
@@ -3212,6 +3216,9 @@
       pinsTab: window.TeXglassPins && insight ? (body) => (pinsPanel = TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
         showPinned: picker ? () => picker.show() : undefined,
+        // while What does this use? (or a shared view) is on, the tab shows what it shows
+        view: picker && TeXglassPins.viewOf ? () => TeXglassPins.viewOf(picker) : undefined,
+        viewAct: picker && TeXglassPins.viewAct ? (a, el) => TeXglassPins.viewAct(picker, a, el) : undefined,
         pinMore: picker ? () => picker.start() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
         // pins gathered from several papers
