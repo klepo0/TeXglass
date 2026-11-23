@@ -65,6 +65,7 @@
   let lastToc = [];
   let cursor = -1;
   let insight = null; // notation on hover, notation index, dependency map (src/insight.js)
+  let picker = null; // Show only these: where "What does this use?" shows (src/pick.js)
   let params = null; // sliders for \tgparam (src/params.js)
   let cites = null; // citation previews (src/cite.js)
 
@@ -165,6 +166,7 @@
         lastToc = result.toc || [];
         updateToc();
         if (insight) insight.invalidate(); // read the page again when next needed
+        if (picker) picker.refresh(); // the same view, on the new page
         if (params) params.refresh(); // sliders for \tgparam; moved values stay
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
         explain(c);
@@ -813,7 +815,21 @@
       },
       locked: store.get('texglass:map-locked') === '1',
       onLock: (on) => store.set('texglass:map-locked', on ? '1' : ''),
-      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change search" on a search by use
+      // "What does this use?" and a search by use show in Show only these (src/pick.js)
+      picker: () => picker,
+    })
+    : null;
+  // Show only these: what "What does this use?" shows, the rest hidden, with a handout to print
+  picker = window.TeXglassPick && insight
+    ? TeXglassPick.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      proofsOf: (el) => { const n = insight.graph().byEl.get(el); return n ? n.proofs : null; },
+      context: insight.contextOf ? (el) => insight.contextOf(el) : undefined,
+      renderSymbols: (box) => insight.renderSymbols(box),
+      print: () => picker.printHandout(() => window.print()),
+      onStart: () => hidePopover(),
     })
     : null;
   // The pin in the toolbar: how many things are pinned on the map, and a list to jump to.
@@ -869,13 +885,13 @@
       scroller: pane,
       reveal,
       onJump: () => { hold(); hidePopover(); },
-      // Uses tab: pick a result, see what it uses and what uses it, or light up one side
-      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      // Uses tab: pick a result, see what it uses and what uses it, or show only one side
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { at: o && o.at }); },
       pinSet: (el) => (insight && insight.pinAsSet ? insight.pinAsSet(el, 'uses') : null),
       related: (el, o) => (insight ? insight.related(el, o) : null),
-      // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      // or search by use ("Lemma 2 but not Assumption A"), and show only what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),
-      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el }); },
     });
     TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));

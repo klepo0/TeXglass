@@ -47,17 +47,20 @@ test('the Uses tab picks a result, lists what it uses and what uses it, and hide
       `<section class="pane" id="pane" style="height:100vh;overflow:auto"><article id="preview" class="document">${r.blocks.join('\n')}</article></section>`
     );
     await p.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+    await p.addScriptTag({ path: path.join(ROOT, 'src/pick.js') });
     await p.addScriptTag({ path: path.join(ROOT, 'src/find.js') });
     await p.evaluate(() => {
       const root = document.getElementById('preview');
-      const insight = TeXglassInsight.attach({ root, jump: (el) => el.scrollIntoView() });
+      // what the Uses tab picks shows in Show only these
+      const picker = TeXglassPick.attach({ root, jump: (el) => el.scrollIntoView(), proofsOf: (el) => { const n = insight.graph().byEl.get(el); return n ? n.proofs : null; } });
+      const insight = TeXglassInsight.attach({ root, jump: (el) => el.scrollIntoView(), picker });
       window.finder = TeXglassFind.attach({
         root,
         scroller: document.getElementById('pane'),
-        onFocus: (el, o) => insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }),
+        onFocus: (el, o) => insight.focus(el, (o && o.dir) || 'both', { at: o && o.at }),
         related: (el, o) => insight.related(el, o),
         uses: (q) => insight.searchUses(q),
-        onUses: (q, el) => insight.showUses(q, { at: el, scroll: true, collapse: true }),
+        onUses: (q, el) => insight.showUses(q, { at: el }),
       });
       window.finder.open('trace'); // the old Trace tab's name opens Uses
     });
@@ -102,8 +105,7 @@ test('the Uses tab picks a result, lists what it uses and what uses it, and hide
       paras: Array.from(document.querySelectorAll('#preview > p, #preview section > p')).filter((el) => el.offsetParent).length,
       heads: Array.from(document.querySelectorAll('#preview h2')).filter((el) => el.offsetParent).length,
       bar: document.querySelector('.uses-bar:not([hidden])') && document.querySelector('.uses-bar').textContent,
-      both: document.querySelector('.uses-bar [data-dir="both"]').getAttribute('aria-pressed'),
-      collapse: document.querySelector('.uses-bar [data-act="collapse"]').getAttribute('aria-pressed'),
+      both: document.querySelector('.uses-bar [data-dir="both"]') && document.querySelector('.uses-bar [data-dir="both"]').getAttribute('aria-pressed'),
     }));
     let s = await state();
     // Lemma 1.2, what it uses (Lemma 1.1) and what uses it (Theorem 2.1, Corollary 2.2); not Lemma 1.3, no paragraphs.
@@ -112,7 +114,6 @@ test('the Uses tab picks a result, lists what it uses and what uses it, and hide
     assert.equal(s.heads, 2); // headings stay
     assert.match(s.bar, /Lemma 1\.2 uses 1 result, is used in 2 results/);
     assert.equal(s.both, 'true');
-    assert.equal(s.collapse, 'true');
     // The proofs of the other results stay, folded to their first line; a click opens one, its arrow folds it again.
     const proofs = () => p.evaluate(() => Array.from(document.querySelectorAll('#preview .proof')).map((el) => {
       if (!el.offsetParent) return 'hidden';
@@ -121,7 +122,7 @@ test('the Uses tab picks a result, lists what it uses and what uses it, and hide
     }));
     // Lemma 1.2's own proof is open; Theorem 2.1's and Corollary 2.2's are folded.
     assert.deepEqual(await proofs(), ['open', 'folded', 'folded']);
-    await p.click('#preview .proof.uses-proof >> nth=0');
+    await p.click('#preview .proof.pick-proof:not(.pick-open) >> nth=0');
     assert.deepEqual(await proofs(), ['open', 'open', 'folded']);
     await p.evaluate(() => {
       const b = document.createElement('button');
@@ -129,12 +130,8 @@ test('the Uses tab picks a result, lists what it uses and what uses it, and hide
       b.textContent = 'v';
       document.querySelectorAll('#preview .proof')[1].firstElementChild.prepend(b);
     });
-    await p.click('#preview .proof.uses-proof >> nth=0 >> .fold-toggle');
+    await p.click('#preview .proof.pick-proof >> nth=1 >> .fold-toggle');
     assert.deepEqual(await proofs(), ['open', 'folded', 'folded']);
-    // Faded instead of hidden, they are not folded.
-    await p.click('.uses-bar [data-act="collapse"]');
-    assert.deepEqual(await proofs(), ['open', 'open', 'open']);
-    await p.click('.uses-bar [data-act="collapse"]');
     // The bar switches to one side.
     await p.click('.uses-bar [data-dir="uses"]');
     s = await state();

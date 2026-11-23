@@ -2610,11 +2610,23 @@
   }
 
   // The view on screen goes in the link too (src/share.js): Show only these with
-  // the pins, What does this use? (with Hide the rest or not), a search by use.
+  // the pins, What does this use?, a search by use (both shown in Show only these).
   let sharedView = null; // the view that came in a link, while it shows
 
   /** The view showing now, as Share.encodeView takes it, or null for the whole paper. */
   function viewHere() {
+    // What does this use? or a search by use: a temporary set (changed: its pins)
+    const f = insight && insight.focused();
+    const temp = picker && picker.temp && picker.temp();
+    if (f && temp && !temp.edited) {
+      if (f.search) return { m: 's', s: { inc: f.search.inc, exc: f.search.exc, any: f.search.any, direct: f.search.direct }, h: 1 };
+      if (f.key) return { m: 'u', f: f.key, d: f.dir, h: 1 };
+    }
+    if (temp && insight) {
+      const p = [];
+      for (const el of picker.shown()) { const k = insight.keyOfEl(el); if (k && !p.some((e) => e[0] === k)) p.push([k, 'self']); }
+      return p.length ? { m: 'p', p, t: [], o: [] } : null;
+    }
     if (picker && picker.mode() === 'view' && insight) {
       if (picker.isShared() && sharedView) return sharedView;
       const owner = new Map();
@@ -2628,11 +2640,7 @@
         o: picker.openProofs().map((p) => owner.get(p)).filter(Boolean),
       }, window.TeXglassPins ? TeXglassPins.shareFields(insight, t) : {});
     }
-    const f = insight && insight.focused();
-    if (!f) return null;
-    const h = preview.classList.contains('uses-collapse') ? 1 : 0;
-    if (f.search) return { m: 's', s: { inc: f.search.inc, exc: f.search.exc, any: f.search.any, direct: f.search.direct }, h };
-    return f.key && f.dir !== 'set' ? { m: 'u', f: f.key, d: f.dir, h } : null;
+    return null;
   }
 
   /** What a key in a view is called here: "Lemma 2", "(3.4)". */
@@ -2680,9 +2688,10 @@
       }
     } else if (v.m === 'u') {
       const el = insight.elOfKey(v.f);
-      if (el) { insight.focus(el, v.d, { scroll: true, collapse: !!v.h }); ok = !!insight.focused(); }
+      // What does this use? (links made before it moved into Show only these too: h is not needed)
+      if (el) { insight.focus(el, v.d); ok = !!insight.focused(); }
     } else if (v.m === 's') {
-      ok = insight.showUses(v.s, { scroll: true, collapse: !!v.h });
+      ok = insight.showUses(v.s);
     }
     flashStatus(ok ? `Showing the view that was shared: ${Share.describeView(v, viewName)}` : 'The shared view is not in this version of the paper; showing the whole paper');
     return ok;
@@ -2991,13 +3000,13 @@
       scroller: previewPane,
       reveal,
       onJump: hidePopover,
-      // Uses tab: pick a result, see what it uses and what uses it, or light up one side
-      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      // Uses tab: pick a result, see what it uses and what uses it, or show only one side
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { at: o && o.at }); },
       pinSet: (el) => (insight && insight.pinAsSet ? insight.pinAsSet(el, 'uses') : null),
       related: (el, o) => (insight ? insight.related(el, o) : null),
-      // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      // or search by use ("Lemma 2 but not Assumption A"), and show only what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),
-      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el }); },
     });
     window.TeXglassFind.bindKeys(window, finder);
     $('find').addEventListener('click', () => finder.open('find'));
@@ -3098,9 +3107,9 @@
       usedPinned: store.get('texglass:notation-used-pinned') === '1',
       onUsedPinned: (on) => store.set('texglass:notation-used-pinned', on ? '1' : ''),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
-      print: () => window.print(),
-      onFocusStart: () => { if (picker) picker.stop(); },
-      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
+      // "What does this use?" and a search by use show in Show only these, as a temporary pin set
+      picker: () => picker,
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change search" on a search by use
       // the reader's pins, hidden results, own links, layout and saved maps
       edits: {
         get: () => (paper && NotesSync ? paper.record.map : looseMap()),
@@ -3138,7 +3147,7 @@
       epub: window.TeXglassEpub ? () => exportEpub(true) : undefined,
       share: () => sharePaper(),
       canShare: () => !!(Share && shareWhere()),
-      onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
+      onStart: () => hidePopover(),
     })
     : null;
   // The pin in the toolbar: how many things are pinned, and a list of them all

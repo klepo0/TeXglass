@@ -209,8 +209,8 @@ with three tabs:
     pick one to see its lists instead.
   - Picking the result itself starts
     [What does this use?](#understanding-the-logic) on it, both ways. Picking
-    one from **Uses** lights up what the result uses, starting at the one you
-    picked; picking one from **Used by** lights up everything that uses it,
+    one from **Uses** shows only what the result uses, starting at the one you
+    picked; picking one from **Used by** shows only everything that uses it,
     starting there.
   - Combine names to search by structure, for every result that uses them:
     several, separated by commas or `and`, for results that use all of them;
@@ -226,10 +226,12 @@ with three tabs:
     on the map does.
 
   A search counts what it found ("3 results use Lemma 2 but not Assumption
-  A"). Picking one lights them all up in the text, with **Hide the rest** on,
-  starting at the one you picked; the bar steps through them, **Change**
-  reopens the search, **Done** or <kbd>Esc</kbd> ends it. A map on show
-  lights up the same results. The search follows the same links as the
+  A"). Picking one shows only them (and what you searched for) in
+  [Show only these](#everything-pinned-in-one-place), as a temporary set like
+  [What does this use?](#understanding-the-logic), starting at the one you
+  picked; the bar steps through them, **Change search** reopens the search,
+  **Keep** saves them as a pin set or adds them to your pins, **Done** or
+  <kbd>Esc</kbd> ends it. A map on show lights up the same results. The search follows the same links as the
   [Map](#the-side-panel-contents-map-pins-notation): your own links and
   `\tguses` hints count, links you took away don't.
 
@@ -348,7 +350,8 @@ kept per paper with your notes, so it is exported, imported and synced with them
   in** (with everything that uses it) or **+ both**. Pinned results get a pin on
   the map; what a pin brings along gets a dashed outline. You can also pin from
   the text: a pin appears by a result's heading when you rest on it, and
-  **Pin** on the "What does this use?" bar pins the result with what is lit.
+  **Keep** → **Add to my pins** on the "What does this use?" bar pins the
+  result with what it shows.
   **+ uses, as a set** pins the result with everything it uses and keeps that
   as a [pin set](#everything-pinned-in-one-place) of its own ("Lemma 2 with
   what it uses"); your other pins stay pinned.
@@ -528,20 +531,31 @@ shared view makes the same handout.
 
 ## Understanding the logic
 
-- **What does this use?** The small button by a theorem's heading lights up
-  the results it rests on, directly or not, its proof and the equations it
-  cites, and fades the rest of the page.
-  - Switch to **Used in** for the other direction, and step through the
-    results with the arrows in the bar.
-  - Results reached only through a guessed link get a dashed outline; cited
-    works light up in the bibliography.
-  - **Hide the rest** folds everything else away (headings stay). The proofs
-    of the shown results stay folded until you click them.
+- **What does this use?** The small button by a theorem's heading shows only
+  that result, the results it rests on (directly or not), the equations they
+  refer to and the works they cite, with the rest of the paper hidden
+  (section headings stay). It opens in
+  [Show only these](#everything-pinned-in-one-place) as a **temporary pin
+  set**: your own pins stay as they are, and nothing is kept unless you say so.
+  - The result's own proof is open; the proofs of the others stay folded to
+    their first line until you click them.
+  - Switch to **Used in** (or **Both**) for the other direction, and step
+    through the results with **‹** **›** in the bar (or <kbd>J</kbd> /
+    <kbd>K</kbd>).
+  - Results reached only through a guessed link get a dashed outline.
+  - **Change** lets you take results away from the view or add others
+    (click them), without touching your own pins.
+  - **Keep** → **Save as pin set** keeps what is shown as a
+    [pin set](#everything-pinned-in-one-place) of its own ("Lemma 2 with what
+    it uses"), to open later; **Keep** → **Add to my pins** pins it along with
+    your other pins.
+  - **Print or share** makes a handout of what is shown, as an EPUB too, or
+    copies a link to this view; the **Rests on** line under each result
+    folds out the definitions and notation it uses.
   - A map on show lights up the same results, and picking a result on the map
-    moves the focus to it.
-  - **Done** or <kbd>Esc</kbd> ends it.
-  - **Print** on the bar prints what is shown: with **Hide the rest** on, only
-    the lit results, and of their proofs only the ones you opened.
+    moves the view to it.
+  - **Done** or <kbd>Esc</kbd> ends it and throws the temporary set away;
+    your own pins are back as they were.
 - **Uses** in the Navigate bar: the same, chosen by name, with what a result
   uses and what uses it as two lists; or every result that uses a given
   lemma, assumption or equation, and not another; see
@@ -815,8 +829,9 @@ install; after the first visit it opens and renders offline.
 - **Share what you see.** When a view is on, the link opens the paper with the
   same view instead of at a section: **Show only these** with your pinned
   results, equations, figures and text passages (and the proofs you opened in
-  it), **What does this use?** (or what uses it), with **Hide the rest** or
-  without, or a search by use. The bar of **Show only these** has
+  it), **What does this use?** (or what uses it), or a search by use. Links
+  made before these opened in Show only these (with **Hide the rest** or
+  without) still work. The bar of **Show only these** has
   **Share a link** under its **Print or share** button too. The view rides along in the link as `&view=…`.
 - Whoever opens such a link sees a **Shared view** bar. Their own pins stay as
   they are: **Keep these pins** adds the shared ones to theirs, **Dismiss** (or
@@ -1007,7 +1022,7 @@ All in the Command Palette under **TeXglass:**.
 | Show Pinned Results… | Show only the pinned results and equations, with what each rests on; **Print** and **EPUB** on its bar make a handout. With none pinned, tick some first. |
 | Export to HTML | A standalone page. |
 | Export to EPUB | An e-book for e-readers; with the preview open, its diagrams and PDF and EPS figures come along everywhere. |
-| Print / Save as PDF | Laid out like a paper, in the browser; prints what the preview shows (**Hide the rest**), or under **Show only these** its handout. |
+| Print / Save as PDF | Laid out like a paper, in the browser; prints the preview, or under **Show only these** (and **What does this use?**) its handout. |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |

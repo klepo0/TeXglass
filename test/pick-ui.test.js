@@ -75,7 +75,7 @@ test('Show pinned results shows only the pinned items, proofs folded, and prints
     await p.evaluate(() => {
       const root = document.getElementById('preview');
       window.printed = 0;
-      window.insight = TeXglassInsight.attach({ root, jump: () => {}, print: () => window.printed++, onFocusStart: () => window.pick.stop() });
+      window.insight = TeXglassInsight.attach({ root, jump: () => {}, picker: () => window.pick });
       window.pick = TeXglassPick.attach({
         root,
         jump: () => {},
@@ -147,15 +147,16 @@ test('Show pinned results shows only the pinned items, proofs folded, and prints
     assert.equal(s.thms.length, 2);
     assert.equal(await p.evaluate(() => window.pick.snapshot()), null);
 
-    // "What does this use?" with Hide the rest prints what it shows.
-    await p.evaluate(() => window.insight.focus(document.getElementById('t:one') || document.querySelector('.theorem'), 'uses', { collapse: true }));
+    // "What does this use?" (in Show only these) prints what it shows.
+    await p.evaluate(() => window.insight.focus(document.getElementById('t:one') || document.querySelector('.theorem'), 'uses'));
     await p.emulateMedia({ media: 'print' });
     s = await state();
     assert.deepEqual(s.thms, ['Theorem 1']);
     assert.equal(s.words, false);
     await p.emulateMedia({ media: 'screen' });
-    assert.ok(await p.evaluate(() => window.pick.snapshot() && document.querySelector('.uses-bar:not(.pick-bar) [data-act="print"]') !== null));
-    await p.click('.uses-bar:not(.pick-bar) [data-act="print"]');
+    assert.ok(await p.evaluate(() => window.pick.snapshot() && window.pick.temp() !== null));
+    await p.click('.pick-bar [data-act="out"]');
+    await p.click('.pick-bar [data-act="print"]');
     assert.equal(await p.evaluate(() => window.printed), 2);
     // starting a selection ends it
     await p.evaluate(() => window.pick.start());

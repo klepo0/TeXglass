@@ -312,7 +312,7 @@
    *   The Uses tab (with onFocus or uses): pick or type a result to see two
    *   lists, what it uses and what uses it; "and", "or" or "but not" between
    *   names searches by use instead.
-   *   onFocus(el, o): optional; light up el with what it uses and what uses it
+   *   onFocus(el, o): optional; show only el with what it uses and what uses it
    *     (o.dir 'uses' or 'usedBy' for one side), starting at o.at if given
    *     (TeXglassInsight focus),
    *   related(el, { direct }): optional, { uses, usedBy } counts and the lists
@@ -589,7 +589,7 @@
       const pinSetBtn = !eq && options.pinSet && usesEls && usesEls.length
         ? '<button type="button" class="uses-pinset" title="Pin it with everything it uses, kept as a pin set of its own (your other pins stay)">Pin as a set</button>' : '';
       let html = `<li class="uses-head"><span class="uses-sum"><strong>${name}</strong> ${sum.join(', ') || ''}${direct ? ' directly' : ''}</span>${pinSetBtn}${directBtn(direct, p.direct)}</li>`;
-      html += row(t, 'self', `<span class="goto-rel">${eq ? 'light up what uses it' : 'light up both ways'}</span>`);
+      html += row(t, 'self', `<span class="goto-rel">${eq ? 'show only what uses it' : 'show only it, both ways'}</span>`);
       const group = (title, els, kind) => {
         let h = `<li class="uses-group" role="presentation">${title}</li>`;
         h += els.length ? els.map((el) => row(asTarget(el), kind)).join('') : '<li class="goto-empty uses-none">Nothing</li>';
@@ -684,7 +684,7 @@
       if (options.onJump) options.onJump(t.el);
     }
 
-    /** Picking in the Uses tab: light up what it found, starting at t. */
+    /** Picking in the Uses tab: show only what it found, starting at t. */
     function goUses(t, kind) {
       const s = subject;
       const one = s && (s.type === 'equation' ? s.block : s.el);

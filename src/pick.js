@@ -36,6 +36,14 @@
  *   pick.refresh();       // after a new render: the same selection again
  *   pick.showShared({ items, keep, onEnd, sheet, hasOrder }); // a view from a link (src/share.js),
  *                         //   shown without touching the reader's pins: Keep / Dismiss
+ *   pick.showTemp(view);  // a temporary set, shown without touching the reader's pins
+ *                         //   ("What does this use?", a search by use; src/insight.js):
+ *                         //   view: { kind: 'uses', items(), stops(), marks(), open(), at,
+ *                         //   label(n), controls(), act(name, button), editable, save(info),
+ *                         //   keep(info), onEnd() }; info: { edited, els }. Done (or Esc)
+ *                         //   throws it away, and the reader's own pins are as they were
+ *   pick.temp();          // the temporary view showing (or being changed), or null
+ *   pick.shown();         // the elements the view shows now
  *   await pick.handout({ ids });  // the view as a handout: { title, html } with the pins in the
  *                         //   reading order, each with its note, the proofs opened, and at the end
  *                         //   the definitions and notation they rest on (ids: keep the ids, for an e-book)
@@ -59,7 +67,7 @@
   /** Not part of the document: popovers, margin notes, the margin column. */
   const OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar, .pick-sheet, .pick-memo, .pick-context, .pick-handout';
   const HEADING = /^H([1-6])$/;
-  const CLASSES = ['pick-on', 'pick-hide', 'pick-proof', 'pick-open', 'pick-head'];
+  const CLASSES = ['pick-on', 'pick-hide', 'pick-proof', 'pick-open', 'pick-head', 'pick-sel', 'pick-guess', 'pick-ref'];
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
@@ -102,8 +110,7 @@
       hiddenCache.set(el, h);
       return h;
     };
-    const collapse = root.classList.contains('uses-focus') && root.classList.contains('uses-collapse');
-    const folded = (el) => !!(el.closest('.pick-proof:not(.pick-open)') || (collapse && el.closest('.uses-proof:not(.uses-open)')));
+    const folded = (el) => !!el.closest('.pick-proof:not(.pick-open)');
     const keep = [];
     let all = true;
     blocks.forEach((el, i) => {
@@ -120,20 +127,34 @@
     let picked = []; // ids, in the order they were ticked
     let marked = [];
     let bar = null;
-    let shared = null; // a view someone shared: { items(), keep(), name } while it shows
+    // A view shown without touching the reader's pins, while it shows: one someone
+    // shared ({ items(), keep() }), or a temporary set ({ kind: 'uses', … }: What
+    // does this use?, a search by use; see showTemp). Changing a temporary set
+    // (Change) takes results away (removed: ids) or adds them (added: ids).
+    let shared = null;
     let stops = []; // the pins to step through in the view (‹ › on the bar, J / K), in the reading order
     let at = -1; // the one stepped to last
 
     const pickables = () => blocksOf(doc).filter((el) => (el.classList.contains('theorem') && el.id) || (isNumberedDisplay(el) && el.id));
+    const isTemp = () => !!(shared && shared.kind === 'uses');
+    /** A temporary set's elements, with the reader's changes to it. */
+    const tempEls = () => {
+      let els = [];
+      try { els = shared.items() || []; } catch (e) { els = []; }
+      if (!shared.removed && !shared.added) return els;
+      const out = els.filter((el) => !(el && el.id && shared.removed && shared.removed.has(el.id)));
+      for (const id of shared.added || []) out.push(document_.getElementById(id));
+      return out;
+    };
     const pickedEls = () => {
       const els = shared
-        ? Array.from(new Set(shared.items() || [])).filter((el) => el && doc.contains(el))
+        ? Array.from(new Set(tempEls())).filter((el) => el && doc.contains(el))
         : opts.items
         ? Array.from(new Set(opts.items() || [])).filter((el) => el && doc.contains(el))
         : picked.map((id) => document_.getElementById(id)).filter((el) => el && doc.contains(el));
       return els.sort((a, b) => (a === b ? 0 : a.compareDocumentPosition(b) & 4 ? -1 : 1));
     };
-    const isOn = (el) => (opts.isOn ? !!opts.isOn(el) : picked.includes(el.id));
+    const isOn = (el) => (isTemp() ? pickedEls().includes(el) : opts.isOn ? !!opts.isOn(el) : picked.includes(el.id));
 
     function proofsOf(el) {
       const given = opts.proofsOf ? opts.proofsOf(el) : null;
@@ -161,8 +182,9 @@
     // --- picking -------------------------------------------------------------
 
     function drawBoxes() {
+      const inTemp = isTemp() ? new Set(pickedEls()) : null;
       for (const el of pickables()) {
-        const on = { has: () => isOn(el) }; // pinned
+        const on = { has: () => (inTemp ? inTemp.has(el) : isOn(el)) }; // pinned (or in the temporary set)
         el.classList.add('pick-able');
         el.classList.toggle('pick-on', on.has(el.id));
         let box = el.querySelector(':scope > .pick-box');
@@ -173,13 +195,21 @@
           el.insertBefore(box, el.firstChild);
         }
         box.setAttribute('aria-checked', String(on.has(el.id)));
-        box.setAttribute('aria-label', `Pin ${nameOf(el)}`);
-        box.title = on.has(el.id) ? 'Pinned: click to unpin' : 'Click to pin';
+        box.setAttribute('aria-label', inTemp ? `Show ${nameOf(el)} in this view` : `Pin ${nameOf(el)}`);
+        box.title = inTemp ? (on.has(el.id) ? 'In this view: click to take it away' : 'Click to add it to this view') : on.has(el.id) ? 'Pinned: click to unpin' : 'Click to pin';
       }
     }
 
-    function start() {
+    /** Leave the view shown without the reader's pins (if any), telling it so. */
+    function endTemp() {
+      const was = shared;
       shared = null;
+      if (was && was.onEnd) was.onEnd();
+    }
+
+    /** Pin and unpin (o.temp: add to and take away from the temporary set showing instead). */
+    function start(o) {
+      if (!(o && o.temp && isTemp())) endTemp();
       if (opts.onStart) opts.onStart();
       clearMarks();
       mode = 'pick';
@@ -190,7 +220,16 @@
 
     function toggle(el) {
       if (!el || !el.id) return;
-      if (opts.toggle) opts.toggle(el);
+      if (isTemp()) {
+        // the temporary set changes; the reader's pins stay as they are
+        const on = pickedEls().includes(el);
+        shared.removed = shared.removed || new Set();
+        shared.added = shared.added || new Set();
+        if (on) { shared.removed.add(el.id); shared.added.delete(el.id); }
+        else { shared.removed.delete(el.id); shared.added.add(el.id); }
+        shared.edited = true;
+        shared.note = '';
+      } else if (opts.toggle) opts.toggle(el);
       else {
         const k = picked.indexOf(el.id);
         if (k >= 0) picked.splice(k, 1);
@@ -249,19 +288,46 @@
         }
       };
       walk(doc);
+      // a temporary set marks what it is about (the result asked about, what it refers to)
+      if (shared && shared.marks) {
+        let extra = null;
+        try { extra = shared.marks(); } catch (e) { extra = null; }
+        for (const [el, cls] of extra || []) {
+          if (!el || !keep.has(el)) continue;
+          el.classList.add(...cls.split(' '));
+          if (!marked.includes(el)) marked.push(el);
+        }
+      }
+      // and opens the proofs it wants open (the proof of the result asked about)
+      if (shared && shared.open && !stay) {
+        let open = [];
+        try { open = shared.open() || []; } catch (e) { open = []; }
+        for (const p of open) if (keep.get(p) === 'pick-proof') p.classList.add('pick-open');
+      }
       const sheet = drawSheet();
       drawContexts(els, keep);
       doc.classList.add('pick-view');
       const was = at >= 0 ? stops[at] : null;
       stops = stepOrder(els);
-      at = stay ? stops.indexOf(was) : sheet ? -1 : 0;
+      if (stay) at = stops.indexOf(was);
+      else if (shared && shared.at) {
+        // the temporary set starts at the result it was asked from
+        at = Math.max(0, stops.indexOf(shared.at));
+        shared.at = null;
+      } else at = sheet ? -1 : 0;
       showBar();
-      if (opts.jump && !stay) opts.jump(sheet || els[0]);
+      if (opts.jump && !stay) opts.jump(at >= 0 ? stops[at] : sheet || els[0]);
     }
 
     /** The pins to step through: in the reader's order when there is one, else the paper's. */
     function stepOrder(els) {
       const src = shared || opts;
+      if (shared && shared.stops) {
+        // a temporary set steps through its results (not what they refer to)
+        let own = [];
+        try { own = (shared.stops() || []).filter((el) => els.includes(el)); } catch (e) { own = []; }
+        if (own.length) return Array.from(new Set(own));
+      }
       let rows = [];
       try { rows = src.hasOrder && src.hasOrder() && src.sheet ? (src.sheet() || []) : []; } catch (e) { rows = []; }
       const out = [];
@@ -565,8 +631,8 @@
       mode = null;
       stops = [];
       at = -1;
-      if (was && was.onEnd) was.onEnd();
       if (bar) bar.hidden = true;
+      if (was && was.onEnd) was.onEnd();
     }
 
     /** After a new render: tick the same results again, or show them again. */
@@ -592,35 +658,48 @@
         bar = document_.createElement('div');
         bar.className = 'uses-bar pick-bar';
         bar.setAttribute('role', 'status');
+        // the bar's menus (Print or share, Keep): a button with data-menu opens the menu after it
+        const closeMenus = (except) => {
+          let closed = null;
+          for (const m of bar.querySelectorAll('.pick-out-menu')) {
+            if (m === except || m.hidden) continue;
+            m.hidden = true;
+            const ob = m.parentElement.querySelector('[data-menu]');
+            if (ob) ob.setAttribute('aria-expanded', 'false');
+            closed = ob || closed;
+          }
+          return closed;
+        };
         bar.addEventListener('click', (e) => {
           const b = e.target.closest('button');
           if (!b) return;
           const act = b.dataset.act;
-          const out = bar.querySelector('.pick-out-menu');
-          if (act === 'out') {
-            if (out) { out.hidden = !out.hidden; b.setAttribute('aria-expanded', String(!out.hidden)); if (!out.hidden) { const f = out.querySelector('button'); if (f) f.focus(); } }
+          if (b.dataset.menu != null) {
+            const menu = b.parentElement.querySelector('.pick-out-menu');
+            closeMenus(menu);
+            if (menu) { menu.hidden = !menu.hidden; b.setAttribute('aria-expanded', String(!menu.hidden)); if (!menu.hidden) { const f = menu.querySelector('button'); if (f) f.focus(); } }
             return;
           }
-          if (out && !out.hidden) { out.hidden = true; const ob = bar.querySelector('[data-act="out"]'); if (ob) ob.setAttribute('aria-expanded', 'false'); }
-          if (act === 'show') { shared = null; show(); }
-          else if (act === 'keep') keepShared();
+          closeMenus();
+          if (act === 'show') show();
+          else if (act === 'keep') { if (isTemp()) keepTemp(); else keepShared(); }
+          else if (act === 'save') saveTemp();
           else if (act === 'share') { if (opts.share) opts.share(); }
           else if (act === 'clear') { if (opts.clear) opts.clear(); else picked = []; drawBoxes(); showBar(); }
-          else if (act === 'edit') start();
+          else if (act === 'edit') start({ temp: true });
           else if (act === 'print') { if (opts.print) opts.print(); }
           else if (act === 'epub') { if (opts.epub) opts.epub(); }
           else if (act === 'next') step(1);
           else if (act === 'prev') step(-1);
           else if (act === 'done') stop();
+          else if (act && isTemp() && shared.act) shared.act(act, b); // the temporary set's own buttons
         });
         document_.body.appendChild(bar);
-        // the Print or share menu closes on a click elsewhere, or Escape (before Escape leaves the view)
+        // a menu closes on a click elsewhere, or Escape (before Escape leaves the view)
         const closeOut = () => {
-          const out = bar.querySelector('.pick-out-menu');
-          if (!out || out.hidden) return false;
-          out.hidden = true;
-          const ob = bar.querySelector('[data-act="out"]');
-          if (ob) { ob.setAttribute('aria-expanded', 'false'); ob.focus(); }
+          const ob = closeMenus();
+          if (!ob) return false;
+          ob.focus();
           return true;
         };
         document_.addEventListener('pointerdown', (e) => { if (!bar.contains(e.target)) closeOut(); });
@@ -628,17 +707,20 @@
       }
       const n = pickedEls().length;
       const what = (k) => `${k} item${k === 1 ? '' : 's'}`;
-      // Print, EPUB and Share in one button, with a small menu (Escape or a click elsewhere closes it)
+      // a button with a small menu opening upwards (Escape or a click elsewhere closes it)
+      const menu = (act, label, title, items) => (items.length
+        ? '<span class="pick-out">' +
+          `<button type="button" data-act="${act}" data-menu="" aria-haspopup="menu" aria-expanded="false" title="${title}">${label} ▾</button>` +
+          `<span class="pick-out-menu" role="menu" hidden>${items.join('')}</span></span>`
+        : '');
+      // Print, EPUB and Share in one button
       const outMenu = (share) => {
         const items = [
           opts.print ? '<button type="button" role="menuitem" data-act="print" title="Print a handout of this view, or save it as a PDF: the pins in your reading order with their notes, open proofs, and the definitions and notation they rest on">Print or save as PDF</button>' : '',
           opts.epub ? '<button type="button" role="menuitem" data-act="epub" title="Download a handout of this view as an EPUB e-book, for an e-reader or a tablet">EPUB e-book</button>' : '',
           share && opts.share && (!opts.canShare || opts.canShare()) ? '<button type="button" role="menuitem" data-act="share" title="Share a link that opens the paper with this view">Share a link</button>' : '',
         ].filter(Boolean);
-        if (!items.length) return '';
-        return '<span class="pick-out">' +
-          `<button type="button" data-act="out" aria-haspopup="menu" aria-expanded="false" title="${share ? 'Print this view, download it as an EPUB, or share a link to it' : 'Print this view, or download it as an EPUB'}">${share ? 'Print or share' : 'Print'} ▾</button>` +
-          `<span class="pick-out-menu" role="menu" hidden>${items.join('')}</span></span>`;
+        return menu('out', share ? 'Print or share' : 'Print', share ? 'Print this view, download it as an EPUB, or share a link to it' : 'Print this view, or download it as an EPUB', items);
       };
       // ‹ 2/5 ›: step through the pins shown (J / K too), as the "What does this use?" bar does
       const stepper = stops.length > 1
@@ -648,7 +730,14 @@
           '<button type="button" data-act="next" aria-label="Next pinned item" title="Next pinned item (J)">›</button></span>'
         : '';
       const blockName = (el) => (el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : null);
-      if (mode === 'pick') {
+      const label = () => { try { return shared.label(n); } catch (e) { return `<strong>${what(n)}</strong>`; } };
+      if (mode === 'pick' && isTemp()) {
+        // changing a temporary set: the reader's own pins stay as they are
+        bar.innerHTML =
+          `<span class="uses-what">${label()} <span class="insight-muted">click results and equations to add or take them away</span></span>` +
+          `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only these">Show only these</button>` +
+          '<button type="button" data-act="done" title="Back to the whole document and your own pins (Esc)">Done</button>';
+      } else if (mode === 'pick') {
         const names = pickedEls().map(blockName).filter(Boolean);
         const list = names.length ? ` <span class="pick-names" title="${esc(names.join(', '))}">${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ', …' : ''}</span>` : '';
         bar.innerHTML =
@@ -656,6 +745,22 @@
           `<button type="button" data-act="show" class="uses-done"${n ? '' : ' disabled'} title="Show only the pinned results and equations">Show only these</button>` +
           (n ? '<button type="button" data-act="clear" title="Take every pin away">Clear all</button>' : '') +
           '<button type="button" data-act="done" title="Back to the whole document (Esc)">Done</button>';
+      } else if (isTemp()) {
+        // What does this use? (or a search by use): a temporary set, thrown away on Done
+        const keepItems = [
+          shared.save ? '<button type="button" role="menuitem" data-act="save" title="Keep these as a pin set of their own (Pins tab), to open again later. Your pins now stay as they are">Save as pin set</button>' : '',
+          shared.keep ? '<button type="button" role="menuitem" data-act="keep" title="Pin these too, with the pins you have">Add to my pins</button>' : '',
+        ].filter(Boolean);
+        let controls = '';
+        try { controls = shared.controls ? shared.controls() : ''; } catch (e) { controls = ''; }
+        bar.innerHTML =
+          `<span class="uses-what">${label()}${shared.note ? ` <span class="pick-saved">${esc(shared.note)}</span>` : ''}</span>` +
+          controls +
+          stepper +
+          (shared.editable ? '<button type="button" data-act="edit" title="Take results away from this view, or add others (your own pins stay as they are)">Change</button>' : '') +
+          menu('keep-menu', 'Keep', 'Keep these: save them as a pin set, or add them to your pins. Otherwise Done throws them away', keepItems) +
+          outMenu(true) +
+          '<button type="button" data-act="done" class="uses-done" title="Back to the whole document; your own pins are as they were (Esc)">Done</button>';
       } else if (shared) {
         bar.innerHTML =
           `<span class="uses-what"><strong>Shared view: ${what(n)}</strong> <span class="insight-muted">your own pins stay as they are; proofs fold: click one to open it</span></span>` +
@@ -682,10 +787,39 @@
      * pins), onEnd() (the view was left) }. False if nothing in it is here.
      */
     function showShared(view) {
+      if (shared && shared !== view) endTemp();
       shared = view;
       if (!pickedEls().length) { shared = null; return false; }
       show();
       return true;
+    }
+
+    /**
+     * A temporary set: shown like the reader's pins, but without touching them.
+     * Done throws it away; Keep saves it as a pin set or adds it to the pins.
+     * False (and nothing shown) when it holds nothing here.
+     */
+    function showTemp(view) {
+      return showShared(Object.assign(view, { kind: 'uses' }));
+    }
+
+    /** What the Keep buttons hand the temporary set: whether the reader changed it, and what it shows. */
+    const tempInfo = () => ({ edited: !!shared.edited, els: pickedEls() });
+
+    function saveTemp() {
+      if (!isTemp() || !shared.save) return;
+      let name = null;
+      try { name = shared.save(tempInfo()); } catch (e) { name = null; }
+      shared.note = name ? `Saved as “${name}”` : 'Nothing here to save';
+      showBar();
+    }
+
+    function keepTemp() {
+      if (!isTemp() || !shared.keep) return;
+      let msg = '';
+      try { msg = shared.keep(tempInfo()); } catch (e) { msg = ''; }
+      shared.note = msg || '';
+      showBar();
     }
 
     function keepShared() {
@@ -742,7 +876,7 @@
 
     return {
       start,
-      show: () => { shared = null; show(); },
+      show: () => { endTemp(); show(); },
       stop,
       refresh: () => refresh(),
       toggle,
@@ -751,8 +885,13 @@
       /** null, 'pick' or 'view' */
       mode: () => mode,
       showShared,
+      showTemp,
       /** Whether the view showing is one that came in a link. */
-      isShared: () => !!shared,
+      isShared: () => !!shared && !isTemp(),
+      /** The temporary set showing (What does this use?, a search by use), or null. */
+      temp: () => (isTemp() ? shared : null),
+      /** The elements the view shows now. */
+      shown: () => pickedEls(),
       /** The proofs a click opened (in the view of pinned items). */
       openProofs: () => marked.filter((el) => el.classList.contains('pick-proof') && el.classList.contains('pick-open')),
       picked: () => picked.slice(),
