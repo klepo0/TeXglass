@@ -60,6 +60,8 @@ letters are ignored while you type in a text field.
 | <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> <kbd>F</kbd> | In the larger map: zoom in, zoom out, 100%, fit the whole map. Ctrl + scroll or a pinch zooms at the pointer; drag the background to move. |
 | <kbd>→</kbd> / <kbd>←</kbd> | While [stepping through a proof](#understanding-the-logic): the next / previous piece. <kbd>Space</kbd> and <kbd>Shift+Space</kbd>, <kbd>PageDown</kbd> and <kbd>PageUp</kbd> do the same; <kbd>Home</kbd> / <kbd>End</kbd> go to the first / last piece; <kbd>Esc</kbd> stops. |
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
+| <kbd>P</kbd> | [Pin](#everything-pinned-in-one-place) or unpin what is under the pointer (a result, proof, equation or figure), or the selected text. |
+| <kbd>J</kbd> / <kbd>K</kbd> | Go to the next / previous pin, in your reading order (the paper's order until you reorder). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
 | Click a formula | Copy its LaTeX. |
 | <kbd>←</kbd> <kbd>→</kbd> on a divider | Resize the side panel, the margin column or the [text width](#looks-themes-handwritten-notes-zoom) from the keyboard. |
@@ -219,6 +221,9 @@ with three tabs:
     need the assumption.
   - **Directly** (or typing `directly`) counts only the links written in a
     result itself, not what it uses through other results.
+  - **Pin as a set** (by a result that uses something) pins it with
+    everything it uses, kept as a pin set of its own, as **+ uses, as a set**
+    on the map does.
 
   A search counts what it found ("3 results use Lemma 2 but not Assumption
   A"). Picking one lights them all up in the text, with **Hide the rest** on,
@@ -259,7 +264,8 @@ The button at its top moves it to the other side (VS Code: **TeXglass: Move
 Contents to the Other Side**, `texglass.contentsPosition`).
 
 - **Contents**: the sections, highlighting the one you are reading, plus the
-  reading progress summary.
+  reading progress summary. A small count by a section says how many things
+  you pinned in it.
 - **Map**: which results each theorem uses, read from the `\ref`s in its
   statement and proof.
   - Solid lines: used in a proof. Dotted: only named in a statement. Dashed:
@@ -285,7 +291,11 @@ Contents to the Other Side**, `texglass.contentsPosition`).
 - **Pins**: your pin sets and pins, in one place. **Saved sets** stay fixed at
   the top of the tab while you scroll: click one to pin exactly what it holds,
   in its order (the set pinned now is highlighted, marked "pinned"); **×**
-  deletes a set (the pins stay). Under them is the same list as the toolbar's
+  deletes a set (the pins stay). **+ Suggest a set: main results** (offered
+  until you have it) makes a set of the paper's theorems (or, without any, its
+  propositions) with the definitions they rest on, in the paper's order; it is
+  pinned at once when nothing else is, and you change it like any set. Under
+  them is the same list as the toolbar's
   [pin](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
   <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
   unpin, **Save as set…** and **Update “name”**, **Show only these** and
@@ -336,6 +346,9 @@ kept per paper with your notes, so it is exported, imported and synced with them
   the map; what a pin brings along gets a dashed outline. You can also pin from
   the text: a pin appears by a result's heading when you rest on it, and
   **Pin** on the "What does this use?" bar pins the result with what is lit.
+  **+ uses, as a set** pins the result with everything it uses and keeps that
+  as a [pin set](#everything-pinned-in-one-place) of its own ("Lemma 2 with
+  what it uses"); your other pins stay pinned.
 - **Pin an equation**: rest on a numbered equation and click the pin that
   appears at its left (or tick it in **Show pinned results**). A pinned equation
   shows on the map as a small round node, linked to the results that refer to
@@ -393,7 +406,9 @@ by kind (**By kind**) or in your own reading order (**In order**):
 
 Click an item to jump to it, **×** to unpin it. **Clear all** unpins
 everything, after asking (your pin sets and notes stay, so a saved set brings
-them back). **Show only these** shows only
+them back; the reading order goes, so new pins start in the paper's order).
+<kbd>P</kbd> pins (or unpins) what is under the pointer, or the selected text;
+<kbd>J</kbd> and <kbd>K</kbd> go to the next and previous pin. **Show only these** shows only
 the pinned results, proofs, equations and figures (as **Show pinned** does) and the
 paragraphs holding pinned text, with what each pinned result rests on folded
 under it; **Print** and **EPUB** on its bar make a handout of it. With nothing pinned

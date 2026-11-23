@@ -2995,7 +2995,9 @@
     }
     function unpinAll() {
       for (const k of allPins().keys()) setEdit('pin', k, { d: '' }, true);
-      editsChanged('pin');
+      // the reading order goes with the pins (the notes stay): pins made after start in the paper's order
+      for (const [k, e] of Object.entries(edits.note)) if (e && Number.isFinite(e.o)) setEdit('note', k, { n: e.n || '', o: null }, true);
+      editsChanged('all', { label: 'Unpinned everything' });
     }
 
     // --- pin sets: named groups of pins to switch between (once "saved maps") ---
@@ -3090,6 +3092,59 @@
       activeView = name;
       editsChanged('all', { label: `Opened the pin set “${name}”` });
       return true;
+    }
+    /**
+     * One click: pin a result with what it uses (d), and keep that as a pin set of
+     * its own, "Theorem 2 with what it uses". The other pins stay. The set's name.
+     */
+    function pinAsSet(key, d) {
+      if (!key) return null;
+      d = d || 'uses';
+      const base = (nameOfKey(key) + (WITH[d] || '')).replace(/^equation /, 'Equation ');
+      let name = base;
+      for (let i = 2; edits.view[name] && setSize(edits.view[name]) && !(Object.keys(edits.view[name].p).length === 1 && edits.view[name].p[key] === d); i++) name = `${base} (${i})`;
+      setEdit('pin', key, { d }, true);
+      setEdit('view', name, { p: { [key]: d }, x: [], o: [key] }, true);
+      activeView = name;
+      editsChanged('all', { label: `Pinned ${base}, kept as the set “${name}”` });
+      return name;
+    }
+    /**
+     * A starter set to suggest: the paper's theorems (its main results; failing
+     * those, its propositions), with the definitions they rest on, in the paper's
+     * order. { name, keys } or null when the paper has none.
+     */
+    const STARTER = 'Main results (suggested)';
+    function starterKeys() {
+      const g = getGraph();
+      const real = g.nodes.filter((n) => !n.cite && n.key && n.el && doc.contains(n.el));
+      const isThm = (n) => /^(thm|theorem|main|mthm|mainthm|maintheorem|introthm|thm[a-z]?|bigthm)$/i.test(n.kind) || /^(Main )?Theorem\b/.test(n.name || '');
+      let top = real.filter(isThm);
+      if (!top.length) top = real.filter((n) => /^(prop|proposition)$/i.test(n.kind) || /^Proposition\b/.test(n.name || ''));
+      if (!top.length) return [];
+      const pick = new Set(top);
+      for (const n of top) {
+        const todo = Array.from(n.uses);
+        const seen = new Set([n]);
+        while (todo.length) {
+          const m = todo.shift();
+          if (!m || seen.has(m)) continue;
+          seen.add(m);
+          if (m.cite || !m.el || !isDefinitionNode(m)) continue;
+          pick.add(m);
+          for (const u of m.uses) if (!seen.has(u)) todo.push(u);
+        }
+      }
+      return Array.from(pick).sort((a, b) => a.order - b.order).map((n) => n.key);
+    }
+    /** Keep the suggested starter set (and pin it when nothing is pinned): its name, or null. */
+    function suggestStarter() {
+      const keys = starterKeys();
+      if (!keys.length) return null;
+      setEdit('view', STARTER, { p: Object.fromEntries(keys.map((k) => [k, 'self'])), x: [], o: keys }, true);
+      editsChanged('view', { label: `Suggested the pin set “${STARTER}”` });
+      if (!allPins().size && !textPinIds().length) loadView(STARTER);
+      return STARTER;
     }
     function deleteView(name) {
       if (activeView === name) activeView = null;
@@ -3366,7 +3421,8 @@
         (x.eq || x.cite ? '' : pinB('uses', '+ uses', 'Pin it with everything it uses, directly or not') +
           pinB('usedBy', '+ used in', 'Pin it with everything that uses it, directly or not') +
           pinB('both', '+ both', 'Pin it with what it uses and what uses it')) +
-        (d ? '<button type="button" data-mpin="" title="Take the pin away">Unpin</button>' : '') + '</span>';
+        (d ? '<button type="button" data-mpin="" title="Take the pin away">Unpin</button>' : '') + '</span>' +
+        (x.eq || x.cite ? '' : ' <button type="button" class="dep-pin-set" data-mset="uses" title="Pin it with everything it uses and keep that as a pin set of its own (your other pins stay)">+ uses, as a set</button>');
       if (!locked) {
         const hid = hiddenSet().has(x.key);
         html += ` <button type="button" data-mhide="${hid ? '0' : '1'}" title="${hid ? 'Draw it on the map again' : 'Leave it off the map (Hidden brings it back)'}">${hid ? 'Show on map' : 'Hide from map'}</button>`;
@@ -3869,7 +3925,7 @@
     function mapClick(view, e) {
       const t = e.target.closest('[data-mpin], [data-mhide], [data-link], [data-link-cancel], [data-link-edit], [data-unlink], [data-relink], ' +
         '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout], ' +
-        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update]');
+        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update], [data-mset]');
       if (!t) return false;
       e.preventDefault();
       const cur = () => {
@@ -3881,6 +3937,7 @@
       const x = cur();
       const d = t.dataset;
       if (d.mpin != null) { if (x) setPin(x.key, d.mpin); }
+      else if (d.mset != null) { if (x) pinAsSet(x.key, d.mset); }
       else if (d.mhide != null) { if (x) setHidden(x.key, d.mhide === '1'); }
       else if (d.link != null) {
         if (x && !locked) { view.linking = { key: x.key, dir: d.link }; view.linkEdit = false; fillDeps(view); }
@@ -4634,6 +4691,12 @@
       resetMap,
       saveView,
       loadView,
+      /** Whether a starter set can be suggested (the paper has theorems or propositions), and its name. */
+      starterSet: () => (starterKeys().length ? STARTER : null),
+      /** Keep the suggested starter set, main results and the definitions they rest on: its name. */
+      suggestStarter,
+      /** Pin a result (element or key) with what it uses, as a pin set of its own: the set's name. */
+      pinAsSet: (x, d) => pinAsSet(typeof x === 'string' ? x : keyOfEl(x), d),
       deleteView,
       savedViews: () => savedViews().map(([name]) => name),
       // --- pin sets, reading order and notes (src/pins.js shows them)

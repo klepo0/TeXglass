@@ -2952,6 +2952,7 @@
       onJump: hidePopover,
       // Uses tab: pick a result, see what it uses and what uses it, or light up one side
       onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      pinSet: (el) => (insight && insight.pinAsSet ? insight.pinAsSet(el, 'uses') : null),
       related: (el, o) => (insight ? insight.related(el, o) : null),
       // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),
@@ -3106,6 +3107,8 @@
       button: $('pins'),
       insight,
       margin,
+      root: preview,
+      toc: tocList,
       jump: (el) => jumpTo(el),
       showPinned: picker ? () => picker.show() : undefined,
       pinMore: picker ? () => picker.start() : undefined,

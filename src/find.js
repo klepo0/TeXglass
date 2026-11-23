@@ -320,7 +320,9 @@
    *   uses(q): optional; search by use: q is { inc: [element],
    *     exc: [element], any, direct } (results and displayed equations), and it
    *     returns { results: [result elements], text } (TeXglassInsight searchUses),
-   *   onUses(q, el): picking one of those results: light them all up, at el }
+   *   onUses(q, el): picking one of those results: light them all up, at el,
+   *   pinSet(el): optional; "Pin as a set": pin a result with what it uses, as a
+   *     pin set of its own (TeXglassInsight pinAsSet); returns the set's name }
    * Returns { open(mode, text), close(), next(), prev(), refresh(), state() }.
    */
   function attach(options) {
@@ -584,7 +586,9 @@
       const sum = [];
       if (usesEls) sum.push(usesEls.length ? `uses ${plural(usesEls.length, 'result')}` : 'uses no result');
       if (usedByEls) sum.push(usedByEls.length ? `is used in ${plural(usedByEls.length, 'result')}` : 'is used in no result');
-      let html = `<li class="uses-head"><span class="uses-sum"><strong>${name}</strong> ${sum.join(', ') || ''}${direct ? ' directly' : ''}</span>${directBtn(direct, p.direct)}</li>`;
+      const pinSetBtn = !eq && options.pinSet && usesEls && usesEls.length
+        ? '<button type="button" class="uses-pinset" title="Pin it with everything it uses, kept as a pin set of its own (your other pins stay)">Pin as a set</button>' : '';
+      let html = `<li class="uses-head"><span class="uses-sum"><strong>${name}</strong> ${sum.join(', ') || ''}${direct ? ' directly' : ''}</span>${pinSetBtn}${directBtn(direct, p.direct)}</li>`;
       html += row(t, 'self', `<span class="goto-rel">${eq ? 'light up what uses it' : 'light up both ways'}</span>`);
       const group = (title, els, kind) => {
         let h = `<li class="uses-group" role="presentation">${title}</li>`;
@@ -822,6 +826,13 @@
       if (tab) {
         setMode(tab.dataset.mode);
         input.focus();
+        return;
+      }
+      const ps = e.target.closest('.uses-pinset');
+      if (ps) {
+        let name = null;
+        try { name = subject && options.pinSet ? options.pinSet(subject.el) : null; } catch (err) { name = null; }
+        if (name) { ps.textContent = 'Pinned ✓'; ps.disabled = true; ps.title = `Kept as the pin set “${name}” (the Pins tab lists it)`; }
         return;
       }
       if (e.target.closest('.uses-direct')) {

@@ -18,6 +18,9 @@
  *     pinMore(),          // optional: start pinning results (with nothing pinned yet)
  *     hideWhenEmpty,      // optional: hide the button while nothing is pinned (VS Code)
  *     onOpen(),           // optional: before the list opens (close other menus)
+ *     root,               // optional: the document, for P (pin what is under the pointer)
+ *     toc,                // optional: the contents list, to show how many pins each section holds
+ *     keys,               // false: no P / J / K
  *   });
  *   pins.open(); pins.close(); pins.toggle(); pins.refresh();
  *
@@ -353,6 +356,8 @@
       refresh,
       /** Start afresh: no set being named, no note being written, no question open. */
       reset() { naming = false; editing = null; clearing = false; },
+      /** Everything pinned, in the reading order. */
+      items: () => allItems(),
       count: () => {
         let n = 0;
         try { n = insight.allPinCount ? insight.allPinCount() : insight.pinnedList().length; } catch (e) { n = 0; }
@@ -446,12 +451,91 @@
     });
     win.addEventListener('resize', () => { if (!menu.hidden) place(); });
 
+    // --- the keyboard: P pins what is under the pointer (or selected), J / K step through the pins ---
+    const root = opts.root || null;
+    let hovered = null; // the block under the pointer, to pin with P
+    const PINNABLE = '.theorem[id], .math-display, figure.float, .proof';
+    if (root) {
+      root.addEventListener('mouseover', (e) => { const t = e.target.closest && e.target.closest(PINNABLE); if (t) hovered = t; });
+      root.addEventListener('mouseleave', () => { hovered = null; });
+    }
+    const typing = (el) => !!el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName) ||
+      (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(el.type)));
+    let atKey = null; // the pin J / K went to last
+    function step(by) {
+      const all = list.items().filter((x) => x.el || x.kind === 'text');
+      if (!all.length) return false;
+      const i = all.findIndex((x) => x.key === atKey);
+      const at = i < 0 ? (by > 0 ? 0 : all.length - 1) : (i + by + all.length) % all.length;
+      const x = all[at];
+      atKey = x.key;
+      if (x.kind === 'text') { if (margin && margin.goTo) margin.goTo(x.id); } else opts.jump(x.el);
+      if (opts.onStep) opts.onStep(x, at, all.length);
+      return true;
+    }
+    function pinHere() {
+      // a selection: what its bar's pin does
+      const barPin = doc.querySelector('.tg-hlbar:not([hidden]) .tg-hlbar-pin');
+      if (barPin) { barPin.click(); return true; }
+      const focus = doc.activeElement && doc.activeElement.closest && doc.activeElement.closest(PINNABLE);
+      const el = focus && root && root.contains(focus) ? focus : hovered && doc.contains(hovered) ? hovered : null;
+      if (!el || !insight.togglePin) return false;
+      // a proof and a result share a corner: the innermost block under the pointer wins
+      insight.togglePin(el);
+      return true;
+    }
+    if (opts.keys !== false) {
+      doc.addEventListener('keydown', (e) => {
+        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+        if (typing(e.target) || doc.querySelector('dialog[open]')) return;
+        const k = e.key;
+        if (k === 'p' || k === 'P') { if (pinHere()) e.preventDefault(); return; }
+        if (k === 'j' || k === 'J') { if (step(1)) e.preventDefault(); return; }
+        if (k === 'k' || k === 'K') { if (step(-1)) e.preventDefault(); }
+      });
+    }
+
+    // --- Contents: how many things are pinned in each section ---
+    const toc = opts.toc || null;
+    function tocBadges() {
+      if (!toc) return;
+      const links = Array.from(toc.querySelectorAll('a[data-id], a[href^="#"]'));
+      for (const b of toc.querySelectorAll('.tg-toc-pins')) b.remove();
+      if (!links.length) return;
+      const els = [];
+      for (const x of list.items()) {
+        const el = x.kind === 'text' ? (margin && margin.textElOf ? margin.textElOf(x.id) : null) : x.el;
+        if (el && doc.contains(el)) els.push(el);
+      }
+      if (!els.length) return;
+      const depth = (a) => { const m = /toc-d(\d)/.exec((a.closest('li') || {}).className || ''); return m ? +m[1] : 0; };
+      const heads = links.map((a) => ({ a, el: doc.getElementById(a.dataset.id || decodeURIComponent(a.getAttribute('href').slice(1))), d: depth(a) })).filter((h) => h.el);
+      const after = (x, y) => !!(x.compareDocumentPosition(y) & 4); // y comes after x
+      heads.forEach((h, i) => {
+        let end = null;
+        for (let j = i + 1; j < heads.length; j++) if (heads[j].d <= h.d) { end = heads[j].el; break; }
+        const n = els.filter((el) => (el === h.el || after(h.el, el) || el.contains(h.el)) && !(end && (el === end || after(end, el)))).length;
+        if (!n) return;
+        const b = doc.createElement('span');
+        b.className = 'tg-toc-pins';
+        b.textContent = String(n);
+        b.title = `${n} pinned in this section`;
+        b.setAttribute('aria-label', `${n} pinned`);
+        h.a.appendChild(b);
+      });
+    }
+    let tocTimer = null;
+    if (toc && typeof win.MutationObserver === 'function') new win.MutationObserver(() => { clearTimeout(tocTimer); tocTimer = setTimeout(tocBadges, 50); }).observe(toc, { childList: true });
+
     function refresh() {
       refreshBadge();
       if (!menu.hidden) list.refresh();
+      clearTimeout(tocTimer);
+      tocTimer = setTimeout(tocBadges, 50);
     }
     if (insight.onPins) insight.onPins(refresh);
     refreshBadge();
+    tocTimer = setTimeout(tocBadges, 300);
 
     return { open, close, toggle, refresh, isOpen: () => !menu.hidden, menu };
   }
@@ -459,10 +543,13 @@
   // --- the Pins tab of the side panel: the pin sets on top, the pin list under them ----
 
   /** The sets at the top of the Pins tab: click one to pin it, × to delete it. sets: insight.pinSets(). */
-  function panelSetsHtml(sets) {
+  function panelSetsHtml(sets, starter) {
     let html = '<div class="tg-sets-title">Saved sets</div>';
+    // a starter set to suggest: the main results with the definitions they rest on
+    const suggest = starter && !sets.some((x) => x.name === starter)
+      ? '<button type="button" class="tg-sets-starter" data-pins-starter title="A pin set of the paper’s main theorems with the definitions they rest on, in the paper’s order: change it as you like">+ Suggest a set: main results</button>' : '';
     if (!sets.length) {
-      return html + '<p class="tg-sets-empty">No pin sets yet. Pin things, then <b>Save as set…</b> below keeps them, with their order and notes, under a name.</p>';
+      return html + '<p class="tg-sets-empty">No pin sets yet. Pin things, then <b>Save as set…</b> below keeps them, with their order and notes, under a name.</p>' + suggest;
     }
     return html + '<div class="tg-sets-list" role="group" aria-label="Saved pin sets">' +
       sets.map((x) => `<span class="tg-sets-item"><button type="button" class="tg-sets-set" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}" ` +
@@ -471,7 +558,7 @@
         (x.on ? '<span class="tg-sets-now">pinned</span>' : '') +
         `<span class="tg-sets-size" aria-label="${x.size} ${x.size === 1 ? 'thing' : 'things'}">${x.size}</span></button>` +
         `<button type="button" class="tg-sets-del" data-pins-setdel="${esc(x.name)}" title="Delete this pin set (the pins stay)" aria-label="${esc('Delete the pin set ' + x.name)}">&times;</button></span>`).join('') +
-      '</div>';
+      '</div>' + suggest;
   }
 
   /**
@@ -497,7 +584,9 @@
     function fillSets() {
       let sets = [];
       try { sets = insight.pinSets(); } catch (e) { sets = []; }
-      top.innerHTML = panelSetsHtml(sets);
+      let starter = null;
+      try { starter = insight.starterSet ? insight.starterSet() : null; } catch (e) { starter = null; }
+      top.innerHTML = panelSetsHtml(sets, starter);
     }
     const sel = (attr, v) => `[${attr}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
     top.addEventListener('click', (e) => {
@@ -506,6 +595,13 @@
         const name = set.dataset.pinsSet;
         insight.loadView(name); // fills both again through onPins
         const again = top.querySelector(sel('data-pins-set', name));
+        if (again) again.focus({ preventScroll: true });
+        return;
+      }
+      if (e.target.closest('[data-pins-starter]')) {
+        const name = insight.suggestStarter && insight.suggestStarter();
+        fill();
+        const again = name && top.querySelector(sel('data-pins-set', name));
         if (again) again.focus({ preventScroll: true });
         return;
       }
