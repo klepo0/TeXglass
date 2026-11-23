@@ -100,7 +100,7 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     const proof = page.locator('#preview .proof', { hasText: 'By Lemmas' });
     await proof.scrollIntoViewIfNeeded();
     await proof.hover();
-    await page.click('#preview .proof:has-text("By Lemmas") > .tg-pin-btn');
+    await page.click('#preview .proof:has-text("By Lemmas") .tg-pin-btn');
     assert.equal(await badge(), '4');
     await page.mouse.move(5, 500);
     await page.click('#pins');

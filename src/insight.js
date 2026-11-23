@@ -952,10 +952,25 @@
     return null;
   }
 
+  /** An unnumbered display's TeX (from KaTeX's annotations), '' when there is none. */
+  function displayTex(el) {
+    return Array.from(el.querySelectorAll('annotation[encoding="application/x-tex"]')).map((a) => a.textContent).join(' ').replace(/\s+/g, ' ').trim();
+  }
+  /** An unnumbered display's key, by its formula: "eq:~" and a short hash (null: no formula). */
+  function displayKeyOf(el) {
+    if (!el || !el.classList || !el.classList.contains('math-display') || eqKeyOf(el)) return null;
+    const tex = displayTex(el);
+    if (!tex) return null;
+    let h = 5381;
+    for (let i = 0; i < tex.length; i++) h = ((h * 33) ^ tex.charCodeAt(i)) >>> 0;
+    return 'eq:~' + h.toString(36);
+  }
+  const isUnnumberedKey = (k) => k.startsWith('eq:~');
+
   /** What a numbered equation is called: "(3.4)", or "(3.4), (3.5)" for several rows. */
   function eqNameOf(el) {
     const tags = Array.from(el.querySelectorAll('.katex .tag, .diagram-tag')).map((t) => t.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
-    return tags.length ? (tags.length > 2 ? `${tags[0]}–${tags[tags.length - 1]}` : tags.join(', ')) : 'Equation';
+    return tags.length ? (tags.length > 2 ? `${tags[0]}–${tags[tags.length - 1]}` : tags.join(', ')) : 'Unnumbered equation';
   }
 
   /**
@@ -2609,9 +2624,14 @@
     function eqEls() {
       if (eqCache) return eqCache;
       eqCache = new Map();
+      const seen = new Map(); // the same unnumbered formula twice: "#2" on the second
       for (const el of doc.querySelectorAll('.math-display')) {
         if (el.closest(INSIDE_POPOVER)) continue;
-        const k = eqKeyOf(el);
+        let k = eqKeyOf(el);
+        if (!k) {
+          k = displayKeyOf(el);
+          if (k) { const n = (seen.get(k) || 0) + 1; seen.set(k, n); if (n > 1) k += '#' + n; }
+        }
         if (k && !eqCache.has(k)) eqCache.set(k, el);
       }
       return eqCache;
@@ -2638,7 +2658,7 @@
     function pinnedEqs(g) {
       const out = [];
       for (const k of pinMap().keys()) {
-        if (!k.startsWith('eq:')) continue;
+        if (!k.startsWith('eq:') || isUnnumberedKey(k)) continue; // an unnumbered one is not on the map
         const el = eqEls().get(k);
         if (!el) continue;
         const usedBy = new Set();
@@ -2696,6 +2716,7 @@
       if (n) return n.key;
       const k = eqKeyOf(el);
       if (k) return eqEls().get(k) === el ? k : null;
+      if (displayKeyOf(el)) { for (const [dk, e] of eqEls()) if (e === el) return dk; return null; }
       const f = figKeyOf(el);
       if (f) return figEls().get(f) === el ? f : null;
       return proofKeyOf(el);
@@ -2782,6 +2803,7 @@
       if (k.startsWith('text:')) return 'a pinned passage';
       if (k.startsWith('m:')) return '\\' + k.slice(2);
       if (k.startsWith('s:')) return k.slice(2);
+      if (isUnnumberedKey(k)) return 'an unnumbered equation';
       if (k.startsWith('eq:')) return 'equation ' + k.slice(3);
       if (k.startsWith('fig:')) return k.slice(4);
       if (k.startsWith('proof:')) return 'the proof of ' + nameOfKey(k.slice(6));
@@ -2860,12 +2882,17 @@
      * tex (notation: what to draw), code (notation: a macro's name) }.
      */
     function pinnedList() {
+      return itemsOf(Array.from(pinMap()), notationPins());
+    }
+    /** pinnedList's items for these map pins ([[key, d]]) and Notation keys (m:… / s:…). */
+    function itemsOf(mapPins, sym) {
       const out = [];
       const g = getGraph();
-      for (const [k, d] of pinMap()) {
+      for (const [k, d] of mapPins) {
         if (k.startsWith('eq:')) {
           const el = eqEls().get(k);
-          out.push({ key: k, kind: 'equation', name: el ? eqNameOf(el) : k.slice(3), el: el && doc.contains(el) ? el : null, d });
+          const tex = el && isUnnumberedKey(k) ? displayTex(el) : '';
+          out.push({ key: k, kind: 'equation', name: el ? eqNameOf(el) : isUnnumberedKey(k) ? 'Unnumbered equation' : k.slice(3), note: tex.length > 40 ? tex.slice(0, 38) + '…' : tex, el: el && doc.contains(el) ? el : null, d });
         } else if (k.startsWith('proof:')) {
           const n = g.byKey.get(k.slice(6));
           const el = proofOfKey(k);
@@ -2883,7 +2910,6 @@
           out.push({ key: k, kind: 'result', name, note: n && n.note && !String(name).includes(n.note) ? n.note : '', el: n && n.el && doc.contains(n.el) ? n.el : null, d });
         }
       }
-      const sym = notationPins();
       if (sym.size) {
         const entries = new Map();
         try { for (const e of entriesOf(getIndex())) entries.set(e.pin, e); } catch (err) { /* no index: names only */ }
@@ -2895,6 +2921,32 @@
         }
       }
       return out;
+    }
+
+    /**
+     * A pin set's things in its reading order (for the Pins tab), each like
+     * pinnedList's, a pinned passage as { key: 'text:<id>', kind: 'text', id }
+     * for the host to name. null when there is no such set.
+     */
+    function setItems(name) {
+      const v = edits.view[name];
+      if (!v || !v.p) return null;
+      const pins = Object.entries(v.p).filter(([, d]) => d);
+      const keys = pins.map(([k]) => k).concat((Array.isArray(v.x) ? v.x : []).map((id) => 'text:' + id));
+      const items = itemsOf(pins.filter(([k]) => !isNotationKey(k)), new Set(pins.map(([k]) => k).filter(isNotationKey)));
+      const byKey = new Map(items.map((x) => [x.key, x]));
+      for (const k of keys) if (k.startsWith('text:')) byKey.set(k, { key: k, kind: 'text', id: k.slice(5), name: '', el: null });
+      // the order kept with the set, then what it left out, the document's way
+      const order = (Array.isArray(v.o) ? v.o : []).filter((k) => byKey.has(k));
+      const rest = keys.filter((k) => !order.includes(k) && byKey.has(k));
+      const at = (x) => (x && x.el ? x.el : null);
+      rest.sort((a, b) => {
+        const ea = at(byKey.get(a));
+        const eb = at(byKey.get(b));
+        if (!ea || !eb) return (ea ? -1 : 0) + (eb ? 1 : 0);
+        return ea === eb ? 0 : ea.compareDocumentPosition(eb) & 4 ? -1 : 1;
+      });
+      return order.concat(rest).map((k) => Object.assign(byKey.get(k), { memo: pinNote(k) }));
     }
 
     /** Unpin one thing by its key (from pinnedList). */
@@ -2984,8 +3036,38 @@
     const orderOf = (k) => { const e = edits.note[k]; return e && Number.isFinite(e.o) ? e.o : null; };
     /** Keys in the reading order: ordered ones first, the rest after them as they come. */
     function inReadingOrder(keys) {
-      return keys.map((k, i) => [k, orderOf(k), i]).sort((a, b) => (a[1] == null ? Infinity : a[1]) - (b[1] == null ? Infinity : b[1]) || a[2] - b[2]).map((x) => x[0]);
+      // the reader's order first; the rest as they come in the paper (not as they were pinned)
+      const els = new Map();
+      if (keys.some((k) => orderOf(k) == null)) for (const k of keys) els.set(k, orderOf(k) == null ? paperElOf(k) : null);
+      const byPaper = (a, b) => {
+        const ea = els.get(a);
+        const eb = els.get(b);
+        if (!ea || !eb || ea === eb) return (ea ? -1 : 0) + (eb ? 1 : 0);
+        return ea.compareDocumentPosition(eb) & 4 ? -1 : 1;
+      };
+      return keys.map((k, i) => [k, orderOf(k), i])
+        .sort((a, b) => (a[1] == null ? Infinity : a[1]) - (b[1] == null ? Infinity : b[1]) || (a[1] == null && b[1] == null ? byPaper(a[0], b[0]) : 0) || a[2] - b[2])
+        .map((x) => x[0]);
     }
+    /** Where a pinned thing is in the paper: its block, a symbol's first use, a passage's paragraph. */
+    function paperElOf(k) {
+      try {
+        if (k.startsWith('text:')) return textPins && textPins.el ? textPins.el(k.slice(5)) || null : null;
+        if (isNotationKey(k)) {
+          const idx = getIndex();
+          if (!symbolFirst || symbolFirstOf !== idx) {
+            symbolFirst = new Map();
+            symbolFirstOf = idx;
+            for (const e of entriesOf(idx)) if (e.first && doc.contains(e.first)) symbolFirst.set(e.pin, e.first);
+          }
+          return symbolFirst.get(k) || null;
+        }
+        const el = elOfKey(k);
+        return el && doc.contains(el) ? el : null;
+      } catch (e) { return null; }
+    }
+    let symbolFirst = null; // a symbol's first use, by its pin key (made again with the index)
+    let symbolFirstOf = null;
     /** Put the pins in this reading order (keys); pins left out follow them. */
     function setPinOrder(keys, quiet) {
       const all = allPinKeys();
@@ -3104,15 +3186,17 @@
     function addPinButton(el) {
       const isFig = el.matches('figure.float');
       const isProof = el.classList.contains('proof');
-      if (el._pinBtn || (!el.id && !isFig && !isProof) || el.closest(INSIDE_POPOVER)) return;
       const isEq = el.classList.contains('math-display');
+      if (el._pinBtn || (!el.id && !isFig && !isProof && !isEq) || el.closest(INSIDE_POPOVER)) return;
       let at = null;
       if (isProof) {
         if (!proofKeyOf(el)) return;
+        // by the proof's title ("Proof."), on the left like every other pin
+        for (const h of el.querySelectorAll('.proof-head')) if (h.closest('.proof') === el) { at = h; break; }
       } else if (isFig) {
         if (!figKeyOf(el)) return;
       } else if (isEq) {
-        if (!eqKeyOf(el)) return;
+        if (!keyOfEl(el)) return; // numbered, or unnumbered with a formula
       } else {
         at = headOf(el);
         if (!at) return;
@@ -3129,7 +3213,7 @@
         if (!k) return;
         setPin(k, pinMap().has(k) ? '' : 'self');
       });
-      if (isEq || isFig || isProof) el.appendChild(b);
+      if (isEq || isFig || (isProof && !at)) el.appendChild(b);
       else (el._usesBtn || at).after(b);
       el._pinBtn = b;
       paintPinButton(el);
@@ -3145,7 +3229,7 @@
     }
     doc.addEventListener('mouseover', (e) => {
       if (!e.target.closest) return;
-      const t = e.target.closest('.theorem[id], .math-display[id], figure.float, .proof');
+      const t = e.target.closest('.theorem[id], .math-display, figure.float, .proof');
       if (t && doc.contains(t)) addPinButton(t);
     });
     doc.addEventListener('focusin', (e) => {
@@ -4585,6 +4669,8 @@
       activeSet,
       /** Whether the pins now are exactly the set's. */
       setIsOn: (name) => setIsOn(edits.view[name]),
+      /** A pin set's things in its reading order, with notes (null: no such set). */
+      setItems,
       suggestSetName: suggestName,
       /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
       setTextPins: (o) => { textPins = o || null; },
@@ -4615,13 +4701,15 @@
   }
 
   /**
-   * The side panel: tabs Contents, Map and Notation over the table of
+   * The side panel: tabs Contents, Map, Notation and Pins over the table of
    * contents, and a divider that drags to resize it (the width is remembered).
    *
    *   TeXglassInsight.sidePanel({
    *     pane, head, list,                 // the panel, its head row, the contents list
    *     insight,                          // from attach()
    *     store: { get(k), set(k, v) },     // where the tab and width are kept
+   *     pinsTab(body),                    // optional: fills the Pins tab (TeXglassPins.panel),
+   *                                       //   returns { show(), hide() }
    *     onTab(tab) { ... },               // optional
    *   });
    */
@@ -4630,7 +4718,7 @@
     const tabs = doc.createElement('div');
     tabs.className = 'side-tabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation']]
+    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation'], ['pins', 'Pins']]
       .map(([k, label]) => `<button type="button" role="tab" data-side-tab="${k}">${label}</button>`).join('');
     const title = o.head.querySelector('.toc-pane-title');
     if (title) title.replaceWith(tabs);
@@ -4641,6 +4729,13 @@
     o.list.after(body);
     const view = o.insight ? o.insight.mount(body, { onJump: o.onJump }) : null;
     if (!view) tabs.querySelectorAll('[data-side-tab="notation"], [data-side-tab="deps"]').forEach((b) => b.remove());
+    // the Pins tab: the pin sets, and the one chosen in its reading order
+    const pinsBody = doc.createElement('div');
+    pinsBody.className = 'side-pins';
+    pinsBody.hidden = true;
+    body.after(pinsBody);
+    const pinsView = o.pinsTab ? o.pinsTab(pinsBody) : null;
+    if (!pinsView) { tabs.querySelector('[data-side-tab="pins"]').remove(); pinsBody.remove(); }
 
     // Stack the tabs when one row does not fit the panel.
     function fitTabs() {
@@ -4656,14 +4751,20 @@
     let tab = 'toc';
     const off = new Set(); // tabs switched off in Settings
     function show(t, quiet) {
-      tab = view && (t === 'notation' || t === 'deps') && !off.has(t) ? t : 'toc';
+      tab = (view && (t === 'notation' || t === 'deps')) || (pinsView && t === 'pins') ? t : 'toc';
+      if (off.has(tab)) tab = 'toc';
       tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sideTab === tab)));
       o.list.hidden = tab !== 'toc';
-      body.hidden = tab === 'toc';
+      body.hidden = tab === 'toc' || tab === 'pins';
+      if (pinsView) pinsBody.hidden = tab !== 'pins';
       o.pane.dataset.tab = tab;
       if (view) {
-        if (tab === 'toc') view.hide();
+        if (tab === 'toc' || tab === 'pins') view.hide();
         else view.show(tab);
+      }
+      if (pinsView) {
+        if (tab === 'pins') pinsView.show();
+        else pinsView.hide();
       }
       if (o.store && !quiet) o.store.set('texglass:side-tab', tab);
       if (o.onTab) o.onTab(tab);
@@ -4730,9 +4831,9 @@
     return {
       show: (t) => show(t, true),
       tab: () => tab,
-      /** Show or hide the Map and Notation tabs: { deps, notation }. */
+      /** Show or hide the Map, Notation and Pins tabs: { deps, notation, pins }. */
       setTabs(f) {
-        for (const k of ['deps', 'notation']) {
+        for (const k of ['deps', 'notation', 'pins']) {
           if (f && f[k] === false) off.add(k);
           else if (f && f[k] === true) off.delete(k);
           const b = tabs.querySelector(`[data-side-tab="${k}"]`);

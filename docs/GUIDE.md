@@ -20,7 +20,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Reading a paper](#reading-a-paper)
 - [Previews on hover](#previews-on-hover)
 - [Finding your way: Navigate, Go to, Uses](#finding-your-way-navigate-go-to-uses)
-- [The side panel: Contents, Map, Notation](#the-side-panel-contents-map-notation)
+- [The side panel: Contents, Map, Notation, Pins](#the-side-panel-contents-map-notation-pins)
   - [Pins and your own map](#pins-and-your-own-map)
   - [Everything pinned in one place](#everything-pinned-in-one-place)
 - [Understanding the logic](#understanding-the-logic)
@@ -225,7 +225,7 @@ with three tabs:
   starting at the one you picked; the bar steps through them, **Change**
   reopens the search, **Done** or <kbd>Esc</kbd> ends it. A map on show
   lights up the same results. The search follows the same links as the
-  [Map](#the-side-panel-contents-map-notation): your own links and
+  [Map](#the-side-panel-contents-map-notation-pins): your own links and
   `\tguses` hints count, links you took away don't.
 
 Web viewer links can go straight to a result: `?arxiv=<id>&goto=Theorem 4.1`.
@@ -250,7 +250,7 @@ screen doesn't count.
   web page. In VS Code it goes back in the preview while the preview has
   focus, and is VS Code's own **Go Back** everywhere else.
 
-## The side panel: Contents, Map, Notation
+## The side panel: Contents, Map, Notation, Pins
 
 **Contents** (the toolbar button with three lines; VS Code: **TeXglass: Show or Hide Contents**)
 opens the side panel. Drag its edge, or use <kbd>←</kbd> <kbd>→</kbd> on it, to
@@ -304,6 +304,14 @@ Contents to the Other Side**, `texglass.contentsPosition`).
     finger, or focus the handle and press <kbd>↑</kbd> <kbd>↓</kbd>; the order
     is kept with the pins. The pin by
     **Used in …** keeps that strip in view too.
+- **Pins**: your [pin sets](#everything-pinned-in-one-place). **Saved sets**
+  stay fixed at the top of the tab while you scroll; click one (or move with
+  <kbd>↑</kbd> <kbd>↓</kbd>) to show its **Reading order** below, numbered like
+  the contents, with your one-line note under each item. Click an item to go to
+  it. Choosing a set here only shows it: **Pin these** pins exactly what it holds
+  instead of the pins now (a set already pinned says **Pinned now**). With no
+  sets yet, the tab says how to save one (**Save as set…** in the **Pinned**
+  list). Not in the exported reader page.
 
 ### Pins and your own map
 
@@ -369,8 +377,12 @@ pinned) shows how many things are pinned, and a click lists them all, grouped
 by kind (**By kind**) or in your own reading order (**In order**):
 
 - **Results** and **Equations** pinned on the map, from the text, or with the
-  pin on a reference's preview (a result pinned with what it uses says so);
-- **Proofs**: rest on a proof and click the pin at its top right; under
+  pin on a reference's preview (a result pinned with what it uses says so).
+  Unnumbered displayed equations have a pin at their left too (listed as
+  "Unnumbered equation" with the start of the formula; they are not drawn on
+  the map);
+- **Proofs**: rest on a proof and click the pin just after its title
+  (**Proof.**), on the left like a result's pin by its heading; under
   **Show only these** a pinned proof shows in full, not folded;
 - **Figures** (and tables with a caption): rest on one and click the pin at its
   top right, or the pin on its reference's preview;
@@ -393,6 +405,8 @@ the first time the paper is opened.
 
 **A study sheet: order and notes.**
 
+- Until you reorder them, pins come in the order they appear in the paper, not
+  the order you pinned them in.
 - **In order** shows one list with a handle on each row: drag a handle (mouse,
   pen or finger) to put the pins in the order you want to read them, or focus a
   handle and press <kbd>↑</kbd> <kbd>↓</kbd>. Once there is an order, the list
@@ -421,6 +435,9 @@ the talk" and "For the referee report".
 - Sets are the same thing as the map's saved maps: they are listed above the
   map too (**Sets**, **Save as set…**). Maps saved before sets held only the
   map's pins; opening one leaves your symbols and passages as they are.
+- The **Pins** tab of the [side panel](#the-side-panel-contents-map-notation-pins)
+  lists the sets too and shows any of them in its reading order, like the
+  contents, without pinning it.
 
 Pins, their order and notes and the sets are kept with your notes, so they
 sync with them and go into exported notes files. A document typed into the web
@@ -577,7 +594,9 @@ Overleaf panel).
   below the selection handles, and appears once a long press has selected.
 - **Pin**: the pin on that bar pins the selected text (it is highlighted
   yellow unless it already has a colour), so it shows under **Text** in the
-  toolbar's **Pinned** list; click there to come back to it. Click a pinned
+  toolbar's **Pinned** list; click there to come back to it. A selection over
+  several paragraphs is one pin, and **Show only these** and its handout keep
+  every paragraph it runs through. Click a pinned
   highlight and the pin again to unpin it (the highlight stays). Pinned text
   syncs with your notes.
 - **Note**: the note button on that bar writes a note on the selection; or
@@ -980,7 +999,7 @@ works offline:
 - previews of references, citations and footnotes on hover (a sheet on touch
   screens), with what each result uses and where it is used;
 - notation on hover and **What does this use?** by each result;
-- the side panel with **Contents**, **Map** and **Notation**;
+- the side panel with **Contents**, **Map** and **Notation** (not **Pins**);
 - **Navigate**: <kbd>Ctrl+F</kbd> to find, <kbd>Ctrl+G</kbd> to go to a
   number, **Uses** (what a result uses and what uses it, or search by what results use); **Back** and **Forward** after a jump;
 - click a formula to copy its LaTeX; light and dark.

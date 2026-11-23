@@ -1242,6 +1242,11 @@
       },
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
+      // the Pins tab: the pin sets, and the one chosen in its reading order (shared/pins.js)
+      pinsTab: window.TeXglassPins && insight ? (body) => window.TeXglassPins.panel({
+        body, insight, margin, jump: (el) => jumpTo(el),
+        onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
+      }) : undefined,
     })
     : null;
 

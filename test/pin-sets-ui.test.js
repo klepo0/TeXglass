@@ -67,12 +67,14 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     assert.equal(await page.locator('.tg-pins-drag').count(), 0);
     await page.click('[data-pins-view="order"]');
     assert.equal(await page.locator('.tg-pins-drag').count(), 3);
-    assert.deepEqual(await rows(), ['label:main', 'label:first', 'eq:(1)']);
+    // before any reordering: the paper's order, not the order they were pinned in
+    assert.deepEqual(await rows(), ['eq:(1)', 'label:first', 'label:main']);
     // ↑ on a handle moves it up, and it keeps the focus
-    await page.focus('[data-pins-drag="eq:(1)"]');
+    await page.focus('[data-pins-drag="label:main"]');
+    await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     assert.deepEqual(await rows(), ['label:main', 'eq:(1)', 'label:first']);
-    assert.equal(await page.evaluate(() => document.activeElement.dataset.pinsDrag), 'eq:(1)');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.pinsDrag), 'label:main');
     // drag Lemma 1.1 to the top
     const h = await page.locator('[data-pins-drag="label:first"]').boundingBox();
     const top = await page.locator('.tg-pins-row').first().boundingBox();

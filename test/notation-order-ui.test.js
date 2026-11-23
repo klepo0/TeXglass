@@ -152,24 +152,25 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     await page.click('.side-insight .insight-group:not(.insight-group-pinned) [data-pin="s:\\\\Gamma"]');
     await page.waitForSelector('.side-insight .insight-pin-item:nth-child(2)');
     const pinOrder = () => page.locator('.side-insight .insight-pin-item').evaluateAll((els) => els.map((e) => e.dataset.pinItem));
-    assert.deepEqual(await pinOrder(), ['m:Var', 's:\\Gamma']);
-    const handle = page.locator('.side-insight .insight-pin-item[data-pin-item="s:\\\\Gamma"] .insight-drag');
+    // before any reordering, pins come in the paper's order (Γ is used before \\Var)
+    assert.deepEqual(await pinOrder(), ['s:\\Gamma', 'm:Var']);
+    const handle = page.locator('.side-insight .insight-pin-item[data-pin-item="m:Var"] .insight-drag');
     const hb = await handle.boundingBox();
     const first = await page.locator('.side-insight .insight-pin-item').first().boundingBox();
     await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
     await page.mouse.down();
     await page.mouse.move(hb.x + hb.width / 2, first.y + 4, { steps: 8 });
     await page.mouse.up();
-    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 's:\\Gamma');
+    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 'm:Var');
     // pins of the Notation tab are pins like the others now: the order is the reading order of the Pinned list
     await page.click('#pins');
     assert.deepEqual(await page.$$eval('.tg-pins-menu [data-pins-view="order"]', (b) => b.map((x) => x.getAttribute('aria-pressed'))), ['true'], 'an order shows the list in order');
-    assert.deepEqual(await page.$$eval('.tg-pins-menu .tg-pins-row', (rows) => rows.map((r) => r.dataset.key)), ['s:\\Gamma', 'm:Var']);
+    assert.deepEqual(await page.$$eval('.tg-pins-menu .tg-pins-row', (rows) => rows.map((r) => r.dataset.key)), ['m:Var', 's:\\Gamma']);
     await page.keyboard.press('Escape');
     await page.locator('.side-insight .insight-pin-item').first().locator('.insight-drag').focus();
     await page.keyboard.press('ArrowDown');
-    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 'm:Var');
-    assert.equal(await page.evaluate(() => document.activeElement.closest('.insight-pin-item').dataset.pinItem), 's:\\Gamma', 'the moved row keeps the focus');
+    await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 's:\\Gamma');
+    assert.equal(await page.evaluate(() => document.activeElement.closest('.insight-pin-item').dataset.pinItem), 'm:Var', 'the moved row keeps the focus');
     await page.click('.side-insight .insight-group-pinned [data-pin="s:\\\\Gamma"]');
     await page.waitForFunction(() => document.querySelectorAll('.side-insight .insight-pin-item').length === 1);
 
