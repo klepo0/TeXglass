@@ -561,20 +561,64 @@
       '</div>' + suggest;
   }
 
+  // --- collections: pins from several papers in one list (src/collections.js) ---
+
+  /**
+   * The Pins tab's "Across papers" part. c: { names, items(name) , here (the open
+   * paper's key or null), adding (the name box is open), count (pins here that can
+   * go in), open (the names of the collections shown open) }.
+   */
+  function collectionsHtml(c) {
+    let html = '<div class="tg-sets-title">Across papers</div>';
+    if (c.adding) {
+      html += '<form class="tg-coll-add" data-coll-form>' +
+        `<input class="tg-coll-name" type="text" list="tg-coll-names" maxlength="80" placeholder="Collection, e.g. Talk at the seminar" aria-label="Add the pins to this collection" value="${esc(c.adding === true ? (c.names[0] ? c.names[0].name : '') : c.adding)}">` +
+        `<datalist id="tg-coll-names">${c.names.map((x) => `<option value="${esc(x.name)}">`).join('')}</datalist>` +
+        '<button type="submit">Add</button><button type="button" data-coll-act="cancel">Cancel</button></form>';
+    } else if (c.count) {
+      html += `<button type="button" class="tg-sets-starter tg-coll-addbtn" data-coll-act="add" title="Put the results, equations, figures and proofs pinned in this paper (with their notes) in a collection that gathers pins from several papers: for a talk or a literature review">+ Add the ${c.count} ${c.count === 1 ? 'pin' : 'pins'} here to a collection…</button>`;
+    }
+    if (!c.names.length) {
+      return html + '<p class="tg-sets-empty">A collection gathers pins from several papers in one list, for a talk or a literature review. Pin things in a paper, add them to a collection, then do the same in the next paper.</p>';
+    }
+    html += '<div class="tg-coll-list">';
+    for (const x of c.names) {
+      const items = c.items(x.name);
+      html += `<details class="tg-coll" data-coll="${esc(x.name)}"${c.open.has(x.name) ? ' open' : ''}><summary>` +
+        `<span class="tg-sets-name">${esc(x.name)}</span><span class="tg-coll-meta">${x.size} from ${x.papers} ${x.papers === 1 ? 'paper' : 'papers'}</span>` +
+        `<button type="button" class="tg-sets-del" data-coll-del="${esc(x.name)}" title="Delete this collection (the pins in the papers stay)" aria-label="${esc('Delete the collection ' + x.name)}">&times;</button></summary>`;
+      let paperKey = null;
+      for (const it of items) {
+        if (it.paper !== paperKey) {
+          paperKey = it.paper;
+          html += `<div class="tg-coll-paper${it.paper === c.here ? ' tg-coll-here' : ''}">${esc(it.title || it.arxiv || it.paper)}${it.paper === c.here ? ' <span class="tg-sets-now">open</span>' : ''}</div>`;
+        }
+        const can = it.paper === c.here || it.arxiv || it.gh || c.saved(it.paper);
+        html += `<div class="tg-coll-row"><button type="button" class="tg-coll-go" data-coll-go="${esc(it.id)}"${can ? '' : ' disabled title="This paper is not on arXiv or GitHub, nor saved on this device: open it yourself"'}>` +
+          `<span class="tg-pins-name">${esc(it.name || it.key)}</span>${it.note ? ` <span class="tg-pins-note">(${esc(it.note)})</span>` : ''}</button>` +
+          `<button type="button" class="tg-sets-del" data-coll-x="${esc(it.id)}" title="Take it out of this collection" aria-label="${esc('Take ' + (it.name || it.key) + ' out of ' + x.name)}">&times;</button></div>`;
+      }
+      html += '</details>';
+    }
+    return html + '</div>';
+  }
+
   /**
    * Fill the side panel's Pins tab (TeXglassInsight.sidePanel's pinsTab): the
    * saved sets fixed at the top, and under them the pin list as the toolbar's pin
    * shows it (By kind / In order, notes, unpin, Show only these, Clear all).
-   *   TeXglassPins.panel({ body, insight, margin, jump(el), showPinned(), onJump() }) → { show(), hide(), refresh() }
+   *   TeXglassPins.panel({ body, insight, margin, jump(el), showPinned(), onJump(), collections }) → { show(), hide(), refresh() }
+   * collections (optional, the web viewer): pins gathered from several papers, see fillColl.
    */
   function panel(opts) {
     const body = opts.body;
     const insight = opts.insight;
     if (!body || !insight || !insight.pinSets || !insight.pinnedList) return null;
     const doc = body.ownerDocument;
-    body.innerHTML = '<div class="tg-sets-stuck"></div><div class="tg-pins-panel"></div>';
-    const top = body.firstElementChild;
-    const listEl = body.lastElementChild;
+    body.innerHTML = '<div class="tg-sets-stuck"></div><div class="tg-pins-panel"></div><div class="tg-coll-part" hidden></div>';
+    const top = body.children[0];
+    const listEl = body.children[1];
+    const collEl = body.children[2];
     let shown = false;
     const list = controller(listEl, {
       insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, noSets: true,
@@ -613,12 +657,87 @@
         if (next) next.focus({ preventScroll: true });
       }
     });
+    // collections (opts.collections: { read(), write(list), here() (the open paper:
+    // { paper, title, arxiv, gh } or null), saved(paperKey), open(item) }), with
+    // TeXglassCollections for the list's workings
+    const C = opts.collections;
+    const Coll = C && (doc.defaultView || {}).TeXglassCollections;
+    let adding = false;
+    const openColl = new Set();
+    /** The pins here that can go in a collection: results, equations, figures, proofs. */
+    const collectable = () => list.items().filter((x) => x.el && x.kind !== 'notation' && x.kind !== 'text');
+    function fillColl() {
+      if (!C || !Coll) return;
+      const here = C.here();
+      const cur = C.read();
+      collEl.hidden = false;
+      const count = here ? collectable().length : 0;
+      if (!count && adding) adding = false;
+      collEl.innerHTML = collectionsHtml({
+        names: Coll.names(cur), items: (n) => Coll.items(cur, n), here: here && here.paper,
+        adding, count, open: openColl, saved: (k) => !!(C.saved && C.saved(k)),
+      });
+      if (adding) {
+        const input = collEl.querySelector('.tg-coll-name');
+        if (input) { input.focus({ preventScroll: true }); input.select(); }
+      }
+    }
+    if (C && Coll) {
+      collEl.addEventListener('toggle', (e) => {
+        const d = e.target.closest && e.target.closest('details[data-coll]');
+        if (!d) return;
+        if (d.open) openColl.add(d.dataset.coll); else openColl.delete(d.dataset.coll);
+      }, true);
+      collEl.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = collEl.querySelector('.tg-coll-name');
+        const name = input ? input.value.trim() : '';
+        const here = C.here();
+        if (!name || !here) return;
+        const items = collectable().map((x) => Object.assign({ key: x.key, name: x.note ? `${x.name} (${x.note})` : x.name, note: x.memo || '' }, here));
+        C.write(Coll.add(C.read(), name, items));
+        adding = false;
+        openColl.add(name.replace(/\s+/g, ' ').slice(0, 80));
+        fillColl();
+      });
+      collEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && adding) { e.stopPropagation(); adding = false; fillColl(); }
+      });
+      collEl.addEventListener('click', (e) => {
+        const act = e.target.closest('[data-coll-act]');
+        if (act) { adding = act.dataset.collAct === 'add'; fillColl(); return; }
+        const del = e.target.closest('[data-coll-del]');
+        if (del) {
+          e.preventDefault(); // not the details' toggle
+          C.write(Coll.removeCollection(C.read(), del.dataset.collDel));
+          fillColl();
+          return;
+        }
+        const x = e.target.closest('[data-coll-x]');
+        if (x) {
+          C.write(Coll.remove(C.read(), [x.dataset.collX]));
+          fillColl();
+          return;
+        }
+        const go = e.target.closest('[data-coll-go]');
+        if (go) {
+          const id = go.dataset.collGo;
+          const it = Coll.byId(C.read(), id);
+          if (it) {
+            if (opts.onJump) opts.onJump();
+            C.open(it);
+          }
+        }
+      });
+    }
+
     function fill() {
       if (!shown) return;
       const scroller = body.closest('.toc-pane') || body;
       const keep = scroller.scrollTop;
       fillSets();
       list.refresh();
+      fillColl();
       scroller.scrollTop = keep;
     }
     if (insight.onPins) insight.onPins(fill);

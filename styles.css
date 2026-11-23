@@ -2362,6 +2362,22 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-sets-empty { color: var(--muted); margin: 0 6px 2px 0; line-height: 1.45; }
 .tg-sets-starter { margin: 4px 0 0; font: inherit; font-size: 12px; padding: 3px 8px; border: 1px dashed var(--accent); border-radius: 6px; background: none; color: var(--accent); cursor: pointer; }
 .tg-sets-starter:hover { background: var(--accent-soft); }
+.tg-coll-part { padding: 8px 2px 10px 8px; border-top: 1px solid var(--rule); margin-top: 8px; }
+.tg-coll-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.tg-coll > summary { display: flex; align-items: center; gap: 6px; padding: 3px 0 3px 6px; border-radius: 5px; cursor: pointer; }
+.tg-coll > summary:hover { background: var(--accent-soft); }
+.tg-coll > summary:hover .tg-sets-del, .tg-coll-row:hover .tg-sets-del { opacity: 1; }
+.tg-coll-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tg-coll-paper { font-size: 12px; color: var(--muted); margin: 6px 0 1px 18px; overflow-wrap: anywhere; }
+.tg-coll-paper.tg-coll-here { color: var(--ink); }
+.tg-coll-row { display: flex; align-items: center; margin-left: 18px; border-radius: 5px; }
+.tg-coll-row:hover { background: var(--accent-soft); }
+.tg-coll-go { flex: 1; min-width: 0; text-align: left; font: inherit; font-size: 13px; padding: 3px 6px; border: 0; background: none; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.tg-coll-go:disabled { cursor: default; color: var(--muted); }
+.tg-coll-add { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 6px 4px 0; }
+.tg-coll-name { flex: 1 1 140px; min-width: 0; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 5px; background: var(--bg); color: var(--ink); }
+.tg-coll-add button { font: inherit; font-size: 12px; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 5px; background: none; color: inherit; cursor: pointer; }
+.tg-coll-add button[type="submit"] { border-color: var(--accent); color: var(--accent); }
 .tg-pins-panel { padding: 6px 0 0 2px; }
 .tg-pins-panel .tg-pins-head { padding-left: 6px; }
 .tg-pins-menu {

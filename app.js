@@ -2058,6 +2058,7 @@
       return;
     }
     if (window.TeXglassLibrary) delete papers[TeXglassLibrary.LIST_KEY]; // the saved-papers list in a gist's file
+    if (window.TeXglassCollections) delete papers[TeXglassCollections.LIST_KEY]; // and the collections
     const keys = Object.keys(papers);
     // One paper's file goes on the open paper (its notes find their text again);
     // a file of many papers (the gist's) fills in each of them.
@@ -2333,6 +2334,49 @@
     return true;
   }
 
+  // Collections: pins gathered from several papers (src/collections.js), kept
+  // here and synced with the saved list. The Pins tab shows them.
+  const Collections = window.TeXglassCollections;
+  const COLLECTIONS = 'texglass:collections';
+  let pinsPanel = null; // the side panel's Pins tab, filled again after a sync
+  function readCollections() {
+    try {
+      const r = JSON.parse(store.get(COLLECTIONS) || 'null');
+      if (r && Array.isArray(r.notes)) return Object.assign(Collections.emptyList(), r);
+    } catch (e) { /* not a list */ }
+    return Collections.emptyList();
+  }
+  let collectionsTimer = 0;
+  function writeCollections(list, synced) {
+    store.set(COLLECTIONS, JSON.stringify(list));
+    if (synced) return;
+    clearTimeout(collectionsTimer);
+    collectionsTimer = setTimeout(syncLibrary, 2500);
+  }
+  /** The open paper, as a collection names it. */
+  function collectionHere() {
+    if (!paper || !NotesSync) return null;
+    const title = (Library && Library.plainTitle(NotesSync.titleOf(doc))) || fileName.title || fileName.textContent || '';
+    const arxiv = opened.arxiv || (paper.key.startsWith('arxiv:') ? paper.key.slice(6) : null);
+    const gh = opened.gh && opened.gh.links && opened.gh.links.view;
+    return { paper: paper.key, title, arxiv: arxiv || undefined, gh: gh || undefined };
+  }
+  /** Go to a collected item: here, or in its paper (the saved copy, else arXiv or GitHub). */
+  async function openCollected(it) {
+    const go = () => {
+      const el = insight && insight.elOfKey ? insight.elOfKey(it.key) : null;
+      if (el) jumpTo(el.closest('.math-display') || el);
+      else if (it.name) goToNamed(it.name);
+    };
+    if (paper && paper.key === it.paper) return go();
+    let ok = libraryHere.has(it.paper) && await openSavedKey(it.paper);
+    if (!ok && it.arxiv && window.TeXglassArxiv) ok = await importArxiv(it.arxiv);
+    if (!ok && it.gh && window.TeXglassGitHub) ok = await importGitHub(it.gh);
+    if (!ok) { flashStatus('Could not open ' + (it.title || 'that paper')); return; }
+    await render();
+    go();
+  }
+
   /** Merge the saved list with the notes gist (if signed in there). Quiet. */
   function syncLibrary() {
     if (!Library || !NotesSync || !gistToken() || navigator.onLine === false || librarySyncing) return notesSyncing;
@@ -2343,6 +2387,10 @@
         const merged = await g.sync(Library.LIST_KEY, readLibraryList());
         if (g.id()) store.set('texglass:gist-id', g.id());
         if (merged) writeLibraryList(Object.assign(Library.emptyList(), merged));
+        if (Collections) {
+          const mc = await g.sync(Collections.LIST_KEY, readCollections());
+          if (mc) { writeCollections(Object.assign(Collections.emptyList(), mc), true); if (pinsPanel) pinsPanel.refresh(); }
+        }
         store.set('texglass:gist-synced', new Date().toISOString());
         if (libraryDialog && libraryDialog.open) renderLibrary();
         if (arxivDialog.open) renderRecentSaved();
@@ -3151,11 +3199,16 @@
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
       // the Pins tab: the pin sets on top, the pin list under them (src/pins.js)
-      pinsTab: window.TeXglassPins && insight ? (body) => TeXglassPins.panel({
+      pinsTab: window.TeXglassPins && insight ? (body) => (pinsPanel = TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
         showPinned: picker ? () => picker.show() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
-      }) : undefined,
+        // pins gathered from several papers
+        collections: Collections ? {
+          read: readCollections, write: (l) => writeCollections(l), here: collectionHere,
+          saved: (k) => libraryHere.has(k), open: (it) => openCollected(it),
+        } : undefined,
+      })) : undefined,
     });
   }
   // Reading progress: markers by the results, progress in Contents, colours on the map.

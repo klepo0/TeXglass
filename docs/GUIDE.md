@@ -299,7 +299,9 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   [pin](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
   <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
   unpin, **Save as set…** and **Update “name”**, **Show only these** and
-  **Clear all**. Click an item to go to it. Not in the exported reader page.
+  **Clear all**. Click an item to go to it. Below them, **Across papers**
+  holds your [collections](#collections-pins-from-several-papers). Not in the
+  exported reader page.
 - **Notation**: an index of the paper's macros and defined symbols, with
   their meaning in words where the text gives one and a link to the first use.
   The checkbox turns notation on hover off and on.
@@ -414,6 +416,26 @@ paragraphs holding pinned text, with what each pinned result rests on folded
 under it; **Print** and **EPUB** on its bar make a handout of it. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
 it opens as a sheet at the bottom, from **Pinned** in the **…** menu.
+
+### Collections: pins from several papers
+
+A collection gathers results from several papers in one list, for a talk or a
+literature review ("Mixing times": Theorem 2 of one paper, Lemma 4.1 of
+another). It lives under **Across papers** at the bottom of the side panel's
+**Pins** tab (web viewer and browser extension):
+
+- Pin things in a paper, then **+ Add the N pins here to a collection…**, type
+  a name (or pick one you have) and **Add**. Results, equations, figures and
+  proofs go in, with their pin notes; symbols and text passages stay out.
+  Open the next paper and do the same with the same name.
+- Click a collection to open it: its items are grouped by paper, the open paper
+  marked "open". Click an item to go to it, in this paper or in its own (from
+  your [saved copy](#web-viewer) if you have one, else from
+  arXiv or GitHub; a paper from your computer that is not saved can't be opened
+  from here). **×** by an item takes it out; **×** by a collection deletes it.
+  The pins in the papers stay either way.
+- Collections follow you to your other devices with
+  [notes sync](#your-own-highlights-and-notes), like the saved-papers list.
 
 All pins are one kind of thing: a symbol pinned in the **Notation** tab is in the
 same list, the same sets and the same order as a pinned lemma, and unpinning it
