@@ -206,3 +206,22 @@ test('the map changes ride along with the notes and merge entry by entry', () =>
   const store = JSON.parse(N.toStore({ k: { notes: [], map: m } }));
   assert.ok(store.papers.k.map.view.Proof);
 });
+
+test('pin sets, the reading order and notes on pins ride along too', () => {
+  const N = require('../src/notes-sync.js');
+  const a = { notes: [], map: {
+    pin: { 'm:R': { d: 'self', t: '2026-01-01T00:00:00Z' } }, // a Notation row is a pin like the others
+    note: { 'label:main': { n: '  start   here ', o: 1, t: '2026-01-01T00:00:00Z' }, 'text:n1': { n: 'x'.repeat(300), o: 0, t: '2026-01-01T00:00:00Z' } },
+    view: { Talk: { p: { 'label:main': 'self', 'm:R': 'self' }, x: ['n1', 'n1', 7], o: ['text:n1', 'label:main'], t: '2026-01-01T00:00:00Z' } },
+  } };
+  const b = { notes: [], map: {
+    note: { 'label:main': { n: 'start with the proof', o: 'first', t: '2026-01-02T00:00:00Z' } }, // later wins; a bad order goes
+  } };
+  const m = N.merge(a, b).map;
+  assert.deepEqual(m.pin['m:R'], { d: 'self', t: '2026-01-01T00:00:00Z' });
+  assert.deepEqual(m.note['label:main'], { n: 'start with the proof', o: null, t: '2026-01-02T00:00:00Z' });
+  assert.equal(m.note['text:n1'].n.length, 200, 'a note is one line');
+  assert.deepEqual(m.view.Talk.x, ['n1'], 'passages by id, once');
+  assert.deepEqual(m.view.Talk.o, ['text:n1', 'label:main']);
+  assert.deepEqual(N.cleanMap({ note: { k: { n: 'a\nb' } } }).note.k, { n: 'a b', o: null });
+});

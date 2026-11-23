@@ -2452,12 +2452,14 @@
       if (picker.isShared() && sharedView) return sharedView;
       const owner = new Map();
       try { for (const n of insight.graph().byEl.values()) for (const p of n.proofs || []) owner.set(p, n.key); } catch (e) { /* no graph: no open proofs */ }
-      return {
+      const t = margin && margin.sharedTexts ? margin.sharedTexts() : [];
+      // with the reading order, the notes and the pin set's name (src/pins.js)
+      return Object.assign({
         m: 'p',
         p: insight.pinEntries(),
-        t: margin && margin.sharedTexts ? margin.sharedTexts() : [],
+        t,
         o: picker.openProofs().map((p) => owner.get(p)).filter(Boolean),
-      };
+      }, window.TeXglassPins ? TeXglassPins.shareFields(insight, t) : {});
     }
     const f = insight && insight.focused();
     if (!f) return null;
@@ -2480,8 +2482,22 @@
     if (v.m === 'p' && picker) {
       ok = picker.showShared({
         items: () => insight.pinnedEls(v.p).concat(margin && margin.textElsFor ? margin.textElsFor(v.t) : []),
+        sheet: () => (window.TeXglassPins ? TeXglassPins.sharedSheet(v, {
+          elOf: (k) => insight.elOfKey(k),
+          textEl: (t) => (margin && margin.textElsFor ? margin.textElsFor([t])[0] : null),
+          nameOf: viewName,
+        }) : []),
+        hasOrder: () => !!(v.r && v.r.length),
         keep: () => {
-          const n = insight.addPins(v.p) + (margin && margin.pinTexts ? margin.pinTexts(v.t) : 0);
+          const ids = [];
+          const hadOrder = insight.hasPinOrder && insight.hasPinOrder();
+          const n = insight.addPins(v.p) + (margin && margin.pinTexts ? margin.pinTexts(v.t, ids) : 0);
+          // the sharer's notes and order come along, where the reader has none of their own
+          const key = (r) => { const m = /^t(\d+)$/.exec(r); return m ? (ids[+m[1]] ? 'text:' + ids[+m[1]] : null) : r; };
+          const notes = {};
+          for (const [r, note] of Object.entries(v.n || {})) if (key(r)) notes[key(r)] = note;
+          if (insight.addPinNotes) insight.addPinNotes(notes);
+          if (!hadOrder && v.r && v.r.length && insight.setPinOrder) insight.setPinOrder(v.r.map(key).filter(Boolean));
           sharedView = null;
           flashStatus(n ? `Kept ${n} pin${n === 1 ? '' : 's'} with your own` : 'You had these pinned already');
         },
@@ -2545,10 +2561,14 @@
   // --- the reader's changes to the dependency map --------------------------------------
   // Pins, hidden results, their own links, where they dragged things and saved
   // maps (src/insight.js), kept with the paper's notes (record.map), so they are
-  // exported, imported and synced with them. Without a paper: for this visit.
-  let looseMap = {};
+  // exported, imported and synced with them. Without a paper (a document typed
+  // in): kept in this browser under the document's name.
+  const looseKey = () => 'texglass:loose-map:' + fileName.textContent;
+  function looseMap() {
+    try { const m = JSON.parse(store.get(looseKey()) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; }
+  }
   function mapEditsChanged(m) {
-    if (!paper || !NotesSync) { looseMap = m; return; }
+    if (!paper || !NotesSync) { try { store.set(looseKey(), JSON.stringify(NotesSync ? NotesSync.cleanMap(m) : m)); } catch (e) { /* for this visit only */ } return; }
     paper.record = Object.assign({}, paper.record, { map: m });
     writeNotes(paper.key, paper.record);
     clearTimeout(notesPushTimer);
@@ -2915,7 +2935,7 @@
       onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
       // the reader's pins, hidden results, own links, layout and saved maps
       edits: {
-        get: () => (paper && NotesSync ? paper.record.map : looseMap),
+        get: () => (paper && NotesSync ? paper.record.map : looseMap()),
         set: mapEditsChanged,
       },
       locked: store.get('texglass:map-locked') === '1',
@@ -2935,6 +2955,9 @@
       isOn: insight ? (el) => insight.isPinned(el) : undefined,
       toggle: insight ? (el) => insight.togglePin(el) : undefined,
       clear: insight ? () => insight.unpinAll() : undefined,
+      // the study sheet: the pins in the reader's order, with their notes
+      sheet: insight && window.TeXglassPins ? () => TeXglassPins.sheet(insight, margin) : undefined,
+      hasOrder: insight ? () => insight.hasPinOrder() : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;

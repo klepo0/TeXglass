@@ -1161,6 +1161,8 @@
       isOn: insight ? (el) => insight.isPinned(el) : undefined,
       toggle: insight ? (el) => insight.togglePin(el) : undefined,
       clear: insight ? () => insight.unpinAll() : undefined,
+      sheet: insight && window.TeXglassPins ? () => TeXglassPins.sheet(insight, margin) : undefined,
+      hasOrder: insight ? () => insight.hasPinOrder() : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;

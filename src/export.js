@@ -70,7 +70,7 @@ body { display: block; }
   // hides the others. If the page's blocks do not match the preview's, the
   // whole document prints.
   const VIEW_BLOCKS = 'h1, h2, h3, h4, h5, h6, header, .theorem, .proof, .math-display, figure, table, li, p, blockquote, pre';
-  const VIEW_OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar';
+  const VIEW_OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar, .pick-sheet, .pick-memo';
   function applyView(root, view, blocksSel, outsideSel) {
     var blocks = Array.prototype.filter.call(root.querySelectorAll(blocksSel), function (el) { return !el.closest(outsideSel); });
     if (!view || blocks.length !== view.n) return false;

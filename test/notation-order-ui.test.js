@@ -161,7 +161,11 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     await page.mouse.move(hb.x + hb.width / 2, first.y + 4, { steps: 8 });
     await page.mouse.up();
     await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 's:\\Gamma');
-    assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('texglass:notation-pins:' + document.getElementById('file-name').textContent))), ['s:\\Gamma', 'm:Var']);
+    // pins of the Notation tab are pins like the others now: the order is the reading order of the Pinned list
+    await page.click('#pins');
+    assert.deepEqual(await page.$$eval('.tg-pins-menu [data-pins-view="order"]', (b) => b.map((x) => x.getAttribute('aria-pressed'))), ['true'], 'an order shows the list in order');
+    assert.deepEqual(await page.$$eval('.tg-pins-menu .tg-pins-row', (rows) => rows.map((r) => r.dataset.key)), ['s:\\Gamma', 'm:Var']);
+    await page.keyboard.press('Escape');
     await page.locator('.side-insight .insight-pin-item').first().locator('.insight-drag').focus();
     await page.keyboard.press('ArrowDown');
     await page.waitForFunction(() => document.querySelector('.side-insight .insight-pin-item').dataset.pinItem === 'm:Var');

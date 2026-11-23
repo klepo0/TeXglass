@@ -21,7 +21,7 @@
  * Two copies are merged result by result: the later setting wins.
  *
  * The reader's changes to the dependency map (src/insight.js) ride along too,
- * as "map": { pos, pin, hide, link, view }, each keyed like progress (a result's
+ * as "map": { pos, pin, hide, link, view, note }, each keyed like progress (a result's
  * key, "cite:…" for a cited work, "eq:(3.4)" for a numbered equation; a link
  * is "<from> > <to>", an arrow from the result used to the one using it):
  *   pos:  { key: { x, y, t } }       where the reader dragged it (no x: back in place)
@@ -29,7 +29,11 @@
  *   hide: { key: { h, t } }          hidden from the map (h false: shown again)
  *   link: { "a > b": { s, t } }      s 'add' (the reader's own arrow), 'del' (a link
  *                                    of the paper taken away) or '' (as the paper has it)
- *   view: { name: { p, t } }         a saved set of pins (p: { key: d }; null: deleted)
+ *   view: { name: { p, s, x, o, t } } a pin set: p the map's pins { key: d } (null: deleted),
+ *                                    s pinned Notation rows, x ids of pinned passages,
+ *                                    o the reading order (keys)
+ *   note: { key: { n, o, t } }       a pin's one-line note n and place o in the reading
+ *                                    order (any pinned thing: "m:…" a Notation row, "text:<id>" a passage)
  * Two copies are merged entry by entry, the later one winning, as for progress.
  *
  * Two copies of a paper's notes are merged by note id: of two versions of a
@@ -160,21 +164,33 @@
 
   const PIN_DIRS = ['', 'self', 'uses', 'usedBy', 'both'];
   const LINK_STATES = ['', 'add', 'del'];
+  const NOTE_MAX = 200; // a pin's note: one line
   /** Each part of the map's changes: how to clean one entry (null drops it). */
   const MAP_PARTS = {
     pos: (e) => (Number.isFinite(e.x) && Number.isFinite(e.y) ? { x: Math.round(e.x * 10) / 10, y: Math.round(e.y * 10) / 10 } : {}),
     pin: (e) => (PIN_DIRS.includes(e.d || '') ? { d: e.d || '' } : null),
     hide: (e) => ({ h: !!e.h }),
     link: (e, k) => (LINK_STATES.includes(e.s || '') && / > /.test(k) ? { s: e.s || '' } : null),
+    // a pin set (a saved map): p the map's pins { key: d }, s the Notation tab's pinned rows,
+    // x the ids of pinned passages (notes), o the reading order (keys); { p: null } once deleted
     view: (e) => {
       if (!e.p || typeof e.p !== 'object' || Array.isArray(e.p)) return { p: null };
       const p = {};
       for (const [k, d] of Object.entries(e.p)) if (k && PIN_DIRS.includes(d) && d) p[k] = d;
-      return { p };
+      const out = { p };
+      for (const f of ['s', 'x', 'o']) {
+        if (Array.isArray(e[f])) out[f] = Array.from(new Set(e[f].filter((k) => typeof k === 'string' && k && k.length <= 300))).slice(0, 500);
+      }
+      return out;
+    },
+    // a pin's place in the reading order (o) and its one-line note (n)
+    note: (e) => {
+      const n = typeof e.n === 'string' ? e.n.replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) : '';
+      return { n, o: Number.isFinite(e.o) ? e.o : null };
     },
   };
 
-  /** The map's changes with only well-formed entries: { pos, pin, hide, link, view }, parts left out when empty. */
+  /** The map's changes with only well-formed entries: { pos, pin, hide, link, view, note }, parts left out when empty. */
   function cleanMap(m) {
     const out = {};
     if (!m || typeof m !== 'object' || Array.isArray(m)) return out;

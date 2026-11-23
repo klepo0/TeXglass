@@ -58,7 +58,9 @@
   // A view: { m: 'p' | 'u' | 's', ... }
   //   'p' Show only these: p: [[key, d]] the map's pins (d: 'self', 'uses',
   //       'usedBy', 'both'), t: [{ q, a, b }] pinned text (quote, before, after),
-  //       o: [key] results whose proof was opened
+  //       o: [key] results whose proof was opened,
+  //       r: [ref] the reading order, n: { ref: note } one-line notes, s: the pin set's name
+  //       (a ref is a key of p, or 't<i>' for the i-th passage of t)
   //   'u' What does this use?: f: the result's key, d: 'uses' | 'usedBy' | 'both', h: 1 with Hide the rest
   //   's' search by use: s: { inc: [key], exc: [key], any, direct }, h: 1 with Hide the rest
 
@@ -95,6 +97,17 @@
         .map((t) => ({ q: t.q, a: typeof t.a === 'string' ? t.a.slice(-16) : '', b: typeof t.b === 'string' ? t.b.slice(0, 16) : '' })).slice(0, 100);
       out.o = keys(v.o);
       if (!out.p.length && !out.t.length) return null;
+      const refs = new Set(out.p.map((e) => e[0]).concat(out.t.map((t, i) => 't' + i)));
+      out.r = Array.from(new Set(keys(v.r))).filter((k) => refs.has(k));
+      out.n = {};
+      if (v.n && typeof v.n === 'object' && !Array.isArray(v.n)) {
+        for (const [k, t] of Object.entries(v.n)) {
+          const note = typeof t === 'string' ? t.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+          if (refs.has(k) && note) out.n[k] = note;
+        }
+      }
+      const name = str(typeof v.s === 'string' ? v.s.trim() : null, 80);
+      if (name) out.s = name;
     } else if (v.m === 'u') {
       if (!str(v.f) || !DIRS[v.d] || v.d === 'self') return null;
       out.f = v.f;
@@ -115,7 +128,8 @@
     // a pin with nothing brought along is just its key
     if (v.m === 'p') {
       v.p = v.p.map((e) => (e[1] === 'self' ? e[0] : e));
-      for (const k of ['t', 'o']) if (!v[k].length) delete v[k];
+      for (const k of ['t', 'o', 'r']) if (!v[k].length) delete v[k];
+      if (!Object.keys(v.n).length) delete v.n;
     }
     const bytes = new TextEncoder().encode(JSON.stringify(v));
     const plain = '1' + toB64url(bytes);
@@ -148,7 +162,8 @@
     if (!v) return '';
     if (v.m === 'p') {
       const n = v.p.length + v.t.length;
-      return `${n} pinned item${n === 1 ? '' : 's'}`;
+      const items = `${n} pinned item${n === 1 ? '' : 's'}`;
+      return v.s ? `the pin set “${v.s}” (${items})` : items;
     }
     if (v.m === 'u') return v.d === 'usedBy' ? `what uses ${name(v.f)}` : v.d === 'both' ? `what ${name(v.f)} uses and what uses it` : `what ${name(v.f)} uses`;
     return 'a search by use';

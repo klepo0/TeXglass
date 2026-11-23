@@ -313,7 +313,7 @@ kept per paper with your notes, so it is exported, imported and synced with them
 
 - **Undo** and **Redo** (the ↶ ↷ buttons above the map, or <kbd>Ctrl+Z</kbd>
   and <kbd>Ctrl+Shift+Z</kbd>) take back or redo each change: a drag, a pin,
-  a hidden result, a link, a saved map. After each change a short note says
+  a hidden result, a link, a pin set. After each change a short note says
   what happened ("Hid Lemma 2") with an **Undo** button.
 - **Reset map…** puts the map back as the paper has it: TeXglass's layout,
   nothing hidden or pinned, only the paper's links. It asks first, **saved
@@ -340,12 +340,13 @@ kept per paper with your notes, so it is exported, imported and synced with them
   exactly that view. **Change** lets you pin or unpin by ticking results and
   equations in the text; **Done** or <kbd>Esc</kbd> shows the whole paper.
   With nothing pinned, the menu item starts with the ticking.
-- **Save** the pins under a name (**Save as…** above the map; a name is
-  suggested, such as "Theorem 2 with what it uses", which you can type over):
-  the saved maps are listed beside **Saved**; click one to pin exactly those
-  again, **×** deletes it. The saved map whose pins are showing is
-  highlighted; once you change those pins, **Update “name”** keeps the new
-  pins under the same name. **Unpin all** clears the pins, not the saved maps.
+- **Save** the pins as a [pin set](#everything-pinned-in-one-place) (**Save as
+  set…** above the map; a name is suggested, such as "Theorem 2 with what it
+  uses", which you can type over): the sets are listed beside **Sets**; click
+  one to pin exactly those again, **×** deletes it. The set whose pins are
+  showing is highlighted; once you change those pins, **Update “name”** keeps
+  the new pins under the same name. **Unpin all** clears every pin (symbols
+  too), not the sets. **Reset map…** leaves the symbols you pinned and the sets alone.
 - **Hide**: **Hide from map** leaves a result off the map. **Hidden (n)**
   above the map draws the hidden ones faded, so you can pick one and **Show on
   map** again.
@@ -362,7 +363,8 @@ kept per paper with your notes, so it is exported, imported and synced with them
 
 The **pin** in the toolbar (web viewer, browser extension and the Overleaf
 panel; in VS Code it floats at the top right of the preview once something is
-pinned) shows how many things are pinned, and a click lists them all, grouped:
+pinned) shows how many things are pinned, and a click lists them all, grouped
+by kind (**By kind**) or in your own reading order (**In order**):
 
 - **Results** and **Equations** pinned on the map, from the text, or with the
   pin on a reference's preview (a result pinned with what it uses says so);
@@ -379,9 +381,52 @@ Click an item to jump to it, **×** to unpin it. **Show only these** shows only
 the pinned results, proofs, equations and figures (as **Show pinned** does) and the
 paragraphs holding pinned text, and prints just that. With nothing pinned
 the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
-it opens as a sheet at the bottom, from **Pinned** in the **…** menu. Pins are
-kept with your notes, so they sync with them (in the Overleaf panel they stay in
-this browser).
+it opens as a sheet at the bottom, from **Pinned** in the **…** menu.
+
+All pins are one kind of thing: a symbol pinned in the **Notation** tab is in the
+same list, the same sets and the same order as a pinned lemma, and unpinning it
+anywhere unpins it everywhere. Symbols pinned before this were moved over
+the first time the paper is opened.
+
+**A study sheet: order and notes.**
+
+- **In order** shows one list with a handle on each row: drag a handle (mouse,
+  pen or finger) to put the pins in the order you want to read them, or focus a
+  handle and press <kbd>↑</kbd> <kbd>↓</kbd>. Once there is an order, the list
+  opens in it; **By kind** groups the pins again (the order stays). Dragging
+  pinned rows in the **Notation** tab changes the same order.
+- The **pencil** on a row (shown when you rest on the row; always on touch
+  screens) adds a one-line note, such as "start the talk here". <kbd>Enter</kbd>
+  keeps it, <kbd>Esc</kbd> leaves it as it was; clear the text to take it off.
+  The note shows under the item; click it to change it.
+- **Show only these** then opens with a **Reading order** box at the top,
+  listing the pins in your order with their notes (click one to go to it), and
+  each pin's number and note just above it in the text. Printing prints the box
+  too. The paper's own order of the blocks stays as it is. With notes but no
+  order, the box lists the notes.
+
+**Pin sets.** A set is a named group of pins to switch between, such as "For
+the talk" and "For the referee report".
+
+- **Save as set…** keeps everything pinned now (results, equations, figures,
+  proofs, symbols and passages) with its order under a name; a name is suggested.
+- The sets are listed beside **Sets**: click one to pin exactly what it held,
+  in its order, instead of the pins now. The set showing is highlighted; once
+  you change its pins, **Update “name”** keeps the new pins under the same name.
+  **×** deletes a set (the pins stay).
+- Sets are the same thing as the map's saved maps: they are listed above the
+  map too (**Sets**, **Save as set…**). Maps saved before sets held only the
+  map's pins; opening one leaves your symbols and passages as they are.
+
+Pins, their order and notes and the sets are kept with your notes, so they
+sync with them and go into exported notes files. A document typed into the web
+viewer keeps them in this browser, under its name. In the Overleaf panel they
+stay in this browser.
+
+**Share** in **Show only these** carries the order, the notes and the set's
+name in the link: the person who opens it sees the same reading order box.
+**Keep these pins** adds the notes too (where they have none of their own) and
+the order (when they have no order yet).
 
 ## Understanding the logic
 

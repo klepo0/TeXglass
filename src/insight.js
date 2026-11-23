@@ -1837,7 +1837,7 @@
         // pin a symbol or macro from its preview: it joins the Notation tab's pinned rows
         e.preventDefault();
         togglePin(pin.dataset.popPin);
-        setPinPressed(pin, pinned.has(pin.dataset.popPin), pin.dataset.what);
+        setPinPressed(pin, allPins().has(pin.dataset.popPin), pin.dataset.what);
         return;
       }
       const a = e.target.closest('a[data-go]');
@@ -2274,7 +2274,7 @@
 
     /** The pin on a notation preview: pins the symbol (or macro) to the Notation tab. */
     function popPinBtn(key, what) {
-      const on = pinned.has(key);
+      const on = allPins().has(key);
       return `<button type="button" class="insight-pin insight-pop-pin" data-pop-pin="${esc(key)}" data-what="${esc(what)}" aria-pressed="${on}" title="${on ? 'Pinned: click to unpin' : 'Pin it: it stays at the top of the Notation tab and joins the Pinned list'}" aria-label="${on ? 'Unpin' : 'Pin'} ${esc(what)}">${PIN_ICON}</button>`;
     }
     function setPinPressed(b, on, what) {
@@ -2312,34 +2312,25 @@
       return b;
     }
 
-    // Rows the reader pinned stay at the top of the tab (kept per paper by the host).
+    // Rows the reader pinned stay at the top of the tab (pins like any other, see allPins).
     const PIN_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.5h4l-.6 4.2 2.6 2.6v1.2H4V8.3l2.6-2.6z M8 9.5V14.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>';
-    const readPins = () => {
-      try {
-        const v = opts.pins && opts.pins.get();
-        return new Set(Array.isArray(v) ? v : []);
-      } catch (e) { return new Set(); }
-    };
-    let pinned = readPins();
     const pinBtn = (key, what) => {
-      const on = pinned.has(key);
+      const on = allPins().has(key);
       return `<button type="button" class="insight-pin" data-pin="${esc(key)}" aria-pressed="${on}" title="${on ? 'Unpin' : 'Pin to the top of the list'}" aria-label="${on ? 'Unpin' : 'Pin'} ${esc(what)}">${PIN_ICON}</button>`;
     };
+    /** Pin or unpin a Notation row (its key). */
     function togglePin(key) {
-      if (pinned.has(key)) pinned.delete(key);
-      else pinned.add(key);
-      try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
-      for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
-      pinsChanged();
+      setPin(key, allPins().has(key) ? '' : 'self'); // the Notation tab fills again through editsChanged
     }
-    /** Keep the pinned rows in this order (keys; pins left out keep their place after them). */
+    /** Keep the pinned rows in this order (keys): they take the places in the reading order the rows had. */
     function orderPins(keys, focusKey) {
-      const next = new Set(keys.filter((k) => pinned.has(k)));
-      for (const k of pinned) next.add(k);
-      if (Array.from(next).join('\n') === Array.from(pinned).join('\n')) return;
-      pinned = next;
-      try { if (opts.pins) opts.pins.set(Array.from(pinned)); } catch (e) { /* keep it for this visit */ }
-      pinsChanged();
+      const was = Array.from(notationPins());
+      const next = keys.filter((k) => was.includes(k));
+      for (const k of was) if (!next.includes(k)) next.push(k);
+      if (next.join('\n') === was.join('\n')) return;
+      const all = inReadingOrder(allPinKeys());
+      let i = 0;
+      setPinOrder(all.map((k) => (isNotationKey(k) && was.includes(k) ? next[i++] : k)));
       for (const v of views) {
         if (v.tab !== 'notation' || !v.isShown()) continue;
         fillNotation(v);
@@ -2516,10 +2507,9 @@
         '<div class="insight-order" role="radiogroup" aria-label="Arrange the notation">' +
         ORDERS.map(([k, label, title]) => `<button type="button" role="radio" data-order="${k}" aria-checked="${k === notationOrder}" title="${esc(title)}">${label}</button>`).join('') +
         '</div></div>';
-      pinned = readPins();
       // in the reader's order (they drag the rows to change it)
       const byPin = new Map(entries.map((e) => [e.pin, e]));
-      const pins = Array.from(pinned).map((k) => byPin.get(k)).filter(Boolean);
+      const pins = Array.from(notationPins()).map((k) => byPin.get(k)).filter(Boolean);
       const pinnedHtml = pins.length ? `<div class="insight-pinned">${pinnedHtmlOf(view, pins)}</div>` : '';
       const usedHtml = view.side ? '<div class="insight-used"></div>' : '';
       // pinned rows (and "Used in …" when pinned) stay in view while the list scrolls
@@ -2578,9 +2568,11 @@
     // --- the reader's changes to the map ---------------------------------------------
     // Kept per paper by the host with the paper's notes (record.map, see
     // src/notes-sync.js), so they are exported and synced with them:
-    // { pos, pin, hide, link, view }, each entry stamped with when it was set.
+    // { pos, pin, hide, link, view, note }, each entry stamped with when it was set.
+    // view holds the pin sets (named groups of pins, "saved maps" once); note each
+    // pin's one-line note and place in the reading order.
 
-    const EDIT_PARTS = ['pos', 'pin', 'hide', 'link', 'view'];
+    const EDIT_PARTS = ['pos', 'pin', 'hide', 'link', 'view', 'note'];
     function readEdits() {
       let m = null;
       try { m = opts.edits ? opts.edits.get() : null; } catch (e) { m = null; }
@@ -2589,6 +2581,22 @@
       return out;
     }
     let edits = readEdits();
+    // Notation rows pinned before the one pin model were kept by the host (opts.pins):
+    // they become pins like the others (synced with the notes), once.
+    function migrateNotationPins() {
+      let old = null;
+      try { old = opts.pins && opts.pins.get(); } catch (e) { old = null; }
+      if (!Array.isArray(old) || !old.length) return;
+      let n = 0;
+      for (const k of old) {
+        if (typeof k !== 'string' || !isNotationKey(k) || edits.pin[k]) continue; // an entry wins: it is newer
+        edits.pin = Object.assign({}, edits.pin, { [k]: { d: 'self', t: new Date().toISOString() } });
+        n++;
+      }
+      try { if (n && opts.edits) opts.edits.set(edits); } catch (e) { /* kept for this visit */ }
+      try { opts.pins.set([]); } catch (e) { /* the host keeps its copy; entries win next time */ }
+    }
+    migrateNotationPins();
     let locked = !!opts.locked; // the reader locked the map: no dragging, hiding or link changes
     let eqCache = null;
 
@@ -2603,14 +2611,23 @@
       }
       return eqCache;
     }
-    const pinMap = () => new Map(Object.entries(edits.pin).filter(([, e]) => e && e.d).map(([k, e]) => [k, e.d]));
+    // One pin model: everything pinned is an entry of edits.pin, results, equations,
+    // figures and proofs (the map's) and Notation rows ("m:<macro>", "s:<symbol>") alike.
+    const isNotationKey = (k) => /^[ms]:/.test(k);
+    const allPins = () => new Map(Object.entries(edits.pin).filter(([, e]) => e && e.d).map(([k, e]) => [k, e.d]));
+    /** The map's pins: results, cited works, equations, figures, proofs. */
+    const pinMap = () => new Map(Array.from(allPins()).filter(([k]) => !isNotationKey(k)));
+    /** The Notation tab's pinned rows, in the reading order. */
+    const notationPins = () => new Set(inReadingOrder(Array.from(allPins().keys()).filter(isNotationKey)));
     const hiddenSet = () => new Set(Object.entries(edits.hide).filter(([, e]) => e && e.h).map(([k]) => k));
     const posOf = () => {
       const out = {};
       for (const [k, e] of Object.entries(edits.pos)) if (e && Number.isFinite(e.x) && Number.isFinite(e.y)) out[k] = e;
       return out;
     };
-    const savedViews = () => Object.entries(edits.view).filter(([, e]) => e && e.p && Object.keys(e.p).length).sort((a, b) => a[0].localeCompare(b[0]));
+    /** How many things a pin set holds: map pins, Notation rows, passages. */
+    const setSize = (e) => (e && e.p ? Object.keys(e.p).length + (Array.isArray(e.x) ? e.x.length : 0) : 0);
+    const savedViews = () => Object.entries(edits.view).filter(([, e]) => setSize(e)).sort((a, b) => a[0].localeCompare(b[0]));
 
     /** The pinned equations, to draw on the map: [{ eq, key, el, name, order, usedBy }]. */
     function pinnedEqs(g) {
@@ -2742,7 +2759,8 @@
       if (part === 'pin') return e.d || null;
       if (part === 'hide') return e.h ? '1' : null;
       if (part === 'link') return e.s || null;
-      return e.p && Object.keys(e.p).length ? JSON.stringify(Object.entries(e.p).sort()) : null;
+      if (part === 'note') return e.n || Number.isFinite(e.o) ? (e.n || '') + '|' + (Number.isFinite(e.o) ? e.o : '') : null;
+      return setSize(e) ? JSON.stringify([Object.entries(e.p).sort(), e.x || null, e.o || null]) : null;
     };
     /** The entries two copies of the changes differ in: [[part, key]]. */
     function diff(a, b) {
@@ -2756,6 +2774,9 @@
     }
     /** What a key is called: "Lemma 2", "equation (3.1)". */
     function nameOfKey(k) {
+      if (k.startsWith('text:')) return 'a pinned passage';
+      if (k.startsWith('m:')) return '\\' + k.slice(2);
+      if (k.startsWith('s:')) return k.slice(2);
       if (k.startsWith('eq:')) return 'equation ' + k.slice(3);
       if (k.startsWith('fig:')) return k.slice(4);
       if (k.startsWith('proof:')) return 'the proof of ' + nameOfKey(k.slice(6));
@@ -2785,7 +2806,12 @@
         const what = `${nameOfKey(y)} uses ${nameOfKey(x)}`;
         return v.s === 'add' ? `Linked: ${what}` : v.s === 'del' ? `Took away: ${what}` : `Back as the paper has it: ${what}`;
       }
-      return v.p ? `Saved the map “${k}”` : `Deleted the map “${k}”`;
+      if (p === 'note') {
+        const was = (a.note || {})[k] || {};
+        if (n > 1 || (was.n || '') === (v.n || '')) return 'Reordered the pins';
+        return v.n ? `Noted ${nameOfKey(k)}` : `Took the note off ${nameOfKey(k)}`;
+      }
+      return v.p ? `Saved the pin set “${k}”` : `Deleted the pin set “${k}”`;
     }
     function showNote(text, kind) {
       note = text ? { text, kind } : null;
@@ -2809,10 +2835,11 @@
       const all = part === 'all';
       if ((all || part === 'link') && graph) applyLinks(graph, edits.link);
       for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
+      if (all || part === 'pin' || part === 'note') for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v);
       markPins();
       if ((all || part === 'link') && focusState) refocus();
-      if ((all || part === 'pin' || part === 'link' || part === 'view') && opts.onPinsChange) opts.onPinsChange();
-      if (all || part === 'pin' || part === 'view') pinsChanged();
+      if ((all || part === 'pin' || part === 'link' || part === 'view' || part === 'note') && opts.onPinsChange) opts.onPinsChange();
+      if (all || part === 'pin' || part === 'view' || part === 'note') pinsChanged();
     }
 
     // Whoever shows the pins (src/pins.js: the toolbar's pin and its list) hears of every change.
@@ -2851,10 +2878,11 @@
           out.push({ key: k, kind: 'result', name, note: n && n.note && !String(name).includes(n.note) ? n.note : '', el: n && n.el && doc.contains(n.el) ? n.el : null, d });
         }
       }
-      if (pinned.size) {
+      const sym = notationPins();
+      if (sym.size) {
         const entries = new Map();
         try { for (const e of entriesOf(getIndex())) entries.set(e.pin, e); } catch (err) { /* no index: names only */ }
-        for (const k of pinned) {
+        for (const k of sym) {
           const e = entries.get(k);
           const isMacro = k.startsWith('m:');
           const tex = e ? (isMacro ? sampleOf(e.it) || '' : e.it.tex) : (isMacro ? '' : k.slice(2));
@@ -2866,13 +2894,12 @@
 
     /** Unpin one thing by its key (from pinnedList). */
     function unpinKey(key) {
-      if (pinned.has(key)) togglePin(key);
-      else setPin(key, '');
+      setPin(key, '');
     }
 
     /** Write the values of `target` wherever the changes differ from it. */
     function moveTo(target) {
-      const EMPTY = { pos: {}, pin: { d: '' }, hide: { h: false }, link: { s: '' }, view: { p: null } };
+      const EMPTY = { pos: {}, pin: { d: '' }, hide: { h: false }, link: { s: '' }, view: { p: null }, note: { n: '', o: null } };
       for (const [p, k] of diff(edits, target)) {
         const v = (target[p] || {})[k];
         const clean = v && meaning(p, v) != null ? Object.assign({}, v) : Object.assign({}, EMPTY[p]);
@@ -2900,16 +2927,16 @@
     }
 
     /** Whether the map differs from the paper's: moved, pinned, hidden or relinked anything. */
-    const changedFromPaper = () => ['pos', 'pin', 'hide', 'link'].some((p) => Object.values(edits[p]).some((e) => meaning(p, e) != null));
+    const changedFromPaper = () => ['pos', 'pin', 'hide', 'link'].some((p) => Object.entries(edits[p]).some(([k, e]) => meaning(p, e) != null && !(p === 'pin' && isNotationKey(k))));
     /**
      * The map as the paper has it: TeXglass's layout, nothing hidden, no links of
-     * the reader's own or taken away, no pins. Saved maps stay as they are.
+     * the reader's own or taken away, no pins. Pin sets stay as they are.
      */
     function resetMap() {
       if (locked) return;
       for (const p of ['pos', 'pin', 'hide', 'link']) {
         for (const [k, e] of Object.entries(edits[p])) {
-          if (meaning(p, e) == null) continue;
+          if (meaning(p, e) == null || (p === 'pin' && isNotationKey(k))) continue; // the Notation tab's pins stay
           setEdit(p, k, p === 'pos' ? {} : p === 'pin' ? { d: '' } : p === 'hide' ? { h: false } : { s: '' }, true);
         }
       }
@@ -2936,51 +2963,98 @@
       return n;
     }
     function unpinAll() {
-      for (const k of pinMap().keys()) setEdit('pin', k, { d: '' }, true);
+      for (const k of allPins().keys()) setEdit('pin', k, { d: '' }, true);
       editsChanged('pin');
     }
 
-    /** Save the pins under a name, to bring back later (synced with the notes). */
+    // --- pin sets: named groups of pins to switch between (once "saved maps") ---
+    // A set holds every pin (p: { key: d }, Notation rows among them), the pinned
+    // passages (x: ids, through the host's textPins: { get() → ids, set(ids) }) and
+    // the reading order (o). Maps saved before (no x) held only the map's pins.
+    let textPins = opts.textPins || null;
+    const textPinIds = () => { try { return textPins ? (textPins.get() || []).slice() : []; } catch (e) { return []; } };
+    const isWholeSet = (e) => Array.isArray(e.x);
+    /** Every pinned thing's key: pins, Notation rows among them, and passages ("text:<id>"). */
+    const allPinKeys = () => Array.from(allPins().keys()).concat(textPinIds().map((id) => 'text:' + id));
+    const orderOf = (k) => { const e = edits.note[k]; return e && Number.isFinite(e.o) ? e.o : null; };
+    /** Keys in the reading order: ordered ones first, the rest after them as they come. */
+    function inReadingOrder(keys) {
+      return keys.map((k, i) => [k, orderOf(k), i]).sort((a, b) => (a[1] == null ? Infinity : a[1]) - (b[1] == null ? Infinity : b[1]) || a[2] - b[2]).map((x) => x[0]);
+    }
+    /** Put the pins in this reading order (keys); pins left out follow them. */
+    function setPinOrder(keys, quiet) {
+      const all = allPinKeys();
+      const order = keys.filter((k) => all.includes(k));
+      for (const k of inReadingOrder(all)) if (!order.includes(k)) order.push(k);
+      let n = 0;
+      order.forEach((k, i) => {
+        if (orderOf(k) === i) return;
+        setEdit('note', k, { n: (edits.note[k] && edits.note[k].n) || '', o: i }, true);
+        n++;
+      });
+      if (n && !quiet) editsChanged('note', { label: 'Reordered the pins' });
+      return n;
+    }
+    /** A pin's one-line note ('' takes it off). */
+    function setPinNote(key, text) {
+      if (!key) return;
+      const n = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const had = edits.note[key] || {};
+      if ((had.n || '') === n) return;
+      setEdit('note', key, { n, o: Number.isFinite(had.o) ? had.o : null });
+    }
+    const pinNote = (key) => (edits.note[key] && edits.note[key].n) || '';
+
+    /** Save everything pinned now under a name, to bring back later (synced with the notes). */
     function saveView(name) {
       name = String(name || '').trim().slice(0, 80);
-      const pins = pinMap();
-      if (!name || !pins.size) return false;
+      const pins = allPins();
+      const x = textPinIds();
+      if (!name || !(pins.size + x.length)) return false;
       activeView = name;
-      setEdit('view', name, { p: Object.fromEntries(pins) });
+      setEdit('view', name, { p: Object.fromEntries(pins), x, o: inReadingOrder(allPinKeys()) });
       return true;
     }
-    /** Pin what a saved view pinned, instead of the pins now. */
+    /** Pin what a set pinned, instead of the pins now. */
     function loadView(name) {
       const v = edits.view[name];
       if (!v || !v.p) return false;
       const want = new Map(Object.entries(v.p));
-      for (const k of pinMap().keys()) if (!want.has(k)) setEdit('pin', k, { d: '' }, true);
+      // a map saved before sets held everything leaves the Notation rows and passages as they are
+      const now = isWholeSet(v) ? allPins() : pinMap();
+      for (const k of now.keys()) if (!want.has(k)) setEdit('pin', k, { d: '' }, true);
       for (const [k, d] of want) if (((edits.pin[k] && edits.pin[k].d) || '') !== d) setEdit('pin', k, { d }, true);
+      if (isWholeSet(v) && textPins) { try { textPins.set(v.x); } catch (e) { /* the passages stay as they are */ } }
+      if (Array.isArray(v.o)) setPinOrder(v.o, true);
       activeView = name;
-      editsChanged('pin', { label: `Opened the map “${name}”` });
+      editsChanged('all', { label: `Opened the pin set “${name}”` });
       return true;
     }
     function deleteView(name) {
       if (activeView === name) activeView = null;
       if (edits.view[name]) setEdit('view', name, { p: null });
     }
-    // the saved map last opened or saved, to offer "Update" once its pins change
+    // the set last opened or saved, to offer "Update" once its pins change
     let activeView = null;
-    /** Whether the pins now are exactly a saved map's. */
-    const pinsAre = (p) => {
-      const pins = pinMap();
-      const want = Object.entries(p || {});
-      return want.length === pins.size && want.every(([k, d]) => pins.get(k) === d);
+    /** Whether the pins now are exactly a set's (its Notation rows and passages too, where it has them). */
+    const setIsOn = (e) => {
+      if (!e || !e.p) return false;
+      const pins = isWholeSet(e) ? allPins() : pinMap();
+      const want = Object.entries(e.p);
+      if (want.length !== pins.size || !want.every(([k, d]) => pins.get(k) === d)) return false;
+      const ids = new Set(textPinIds());
+      return !isWholeSet(e) || (e.x.length === ids.size && e.x.every((k) => ids.has(k)));
     };
-    /** A name to suggest for the pins now: "Theorem 2 with what it uses", or "Map 3". */
+    const activeSet = () => (activeView && setSize(edits.view[activeView]) ? activeView : null);
+    /** A name to suggest for the pins now: "Theorem 2 with what it uses", or "Set 3". */
     function suggestName() {
       const pins = Array.from(pinMap());
-      if (activeView && edits.view[activeView] && edits.view[activeView].p) return activeView;
-      if (pins.length === 1) return (nameOfKey(pins[0][0]) + (WITH[pins[0][1]] || '')).replace(/^equation /, 'Equation ');
+      if (activeSet()) return activeView;
+      if (pins.length === 1 && !notationPins().size && !textPinIds().length) return (nameOfKey(pins[0][0]) + (WITH[pins[0][1]] || '')).replace(/^equation /, 'Equation ');
       const used = new Set(Object.keys(edits.view));
       let i = savedViews().length + 1;
-      while (used.has('Map ' + i)) i++;
-      return 'Map ' + i;
+      while (used.has('Set ' + i)) i++;
+      return 'Set ' + i;
     }
 
     function setHidden(key, on) {
@@ -3203,19 +3277,19 @@
         parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
         if (opts.showPinned) parts.push('<button type="button" data-show-pinned title="Show only the pinned results and equations in the text, the rest hidden">Show pinned</button>');
         parts.push(view.naming
-          ? `<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this map" aria-label="Name for the saved map" maxlength="80" value="${esc(suggestName())}"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>`
-          : '<button type="button" data-save-view title="Keep these pins under a name, to bring them back later (saved with your notes)">Save as…</button>');
-        // the saved map in use, changed since: one click keeps the new pins under its name
-        const act = activeView && edits.view[activeView] && edits.view[activeView].p ? activeView : null;
-        if (act && !view.naming && !pinsAre(edits.view[act].p)) parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}" title="${esc(`Keep the pins now under “${act}”, instead of what it held`)}">Update “${esc(act)}”</button>`);
+          ? `<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this pin set" aria-label="Name for the pin set" maxlength="80" value="${esc(suggestName())}"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>`
+          : '<button type="button" data-save-view title="Keep everything pinned under a name, as a pin set to switch back to later (saved with your notes)">Save as set…</button>');
+        // the set in use, changed since: one click keeps the new pins under its name
+        const act = activeSet();
+        if (act && !view.naming && !setIsOn(edits.view[act])) parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}" title="${esc(`Keep the pins now under “${act}”, instead of what it held`)}">Update “${esc(act)}”</button>`);
         parts.push('<button type="button" data-unpin-all title="Take every pin away">Unpin all</button>');
       } else {
         parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text, to show only those later.</span>');
       }
       if (saved.length) {
-        parts.push('<span class="dep-views"><span class="insight-usedby-k">Saved</span> ' + saved.map(([name, e]) =>
-          `<span class="dep-view${pinsAre(e.p) ? ' dep-view-on' : ''}"><button type="button" data-view="${esc(name)}" aria-pressed="${pinsAre(e.p)}" title="${esc(pinsAre(e.p) ? `Pinned now: the ${Object.keys(e.p).length} of “${name}”` : `Pin these ${Object.keys(e.p).length} again, instead of the pins now`)}">${esc(name)}</button>` +
-          `<button type="button" class="dep-view-del" data-view-del="${esc(name)}" aria-label="${esc('Delete the saved map ' + name)}" title="Delete">×</button></span>`).join('') + '</span>');
+        parts.push('<span class="dep-views"><span class="insight-usedby-k">Sets</span> ' + saved.map(([name, e]) =>
+          `<span class="dep-view${setIsOn(e) ? ' dep-view-on' : ''}"><button type="button" data-view="${esc(name)}" aria-pressed="${setIsOn(e)}" title="${esc(setIsOn(e) ? `Pinned now: the ${setSize(e)} of “${name}”` : `Pin these ${setSize(e)} again, instead of the pins now`)}">${esc(name)}</button>` +
+          `<button type="button" class="dep-view-del" data-view-del="${esc(name)}" aria-label="${esc('Delete the pin set ' + name)}" title="Delete">×</button></span>`).join('') + '</span>');
       }
       return `<div class="dep-pins">${parts.join('')}</div>`;
     }
@@ -3291,7 +3365,7 @@
         `<button type="button" data-undo${lastU ? '' : ' disabled'} title="${esc(lastU ? `Undo: ${lastU.label} (Ctrl+Z)` : 'Nothing to undo')}" aria-label="Undo">↶</button>` +
         `<button type="button" data-redo${lastR ? '' : ' disabled'} title="${esc(lastR ? `Redo: ${lastR.label} (Ctrl+Shift+Z)` : 'Nothing to redo')}" aria-label="Redo">↷</button></span>`);
       if (lay.moved && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-layout title="Put every result back where TeXglass placed it (pins, hidden results and links stay)">Reset layout</button>');
-      if (changedFromPaper() && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-map title="Back to the map as the paper has it: TeXglass’s layout, nothing hidden or pinned, only the paper’s links. Saved maps stay.">Reset map…</button>');
+      if (changedFromPaper() && !locked) opts_.push('<button type="button" class="dep-reset" data-reset-map title="Back to the map as the paper has it: TeXglass’s layout, nothing hidden or pinned, only the paper’s links. Pin sets stay.">Reset map…</button>');
       // the larger map zooms: buttons, Ctrl + wheel or a pinch, and + − 0 F keys
       const zoomBar = view.zoomable
         ? '<span class="dep-zoom" role="group" aria-label="Zoom the map">' +
@@ -3302,7 +3376,7 @@
         : '';
       const noteHtml = note ? `<span class="dep-note" role="status">${esc(note.text)} <button type="button" data-${note.kind}>${note.kind === 'undo' ? 'Undo' : 'Redo'}</button></span>` : '';
       const confirmHtml = view.confirmReset && !locked
-        ? '<div class="dep-confirm" role="alertdialog" aria-label="Reset the map"><span>Put the map back as the paper has it? Your layout, hidden results, own links and pins go; <strong>saved maps stay</strong>, and Undo brings it all back.</span>' +
+        ? '<div class="dep-confirm" role="alertdialog" aria-label="Reset the map"><span>Put the map back as the paper has it? Your layout, hidden results, own links and pins go; <strong>pin sets stay</strong>, and Undo brings it all back.</span>' +
           '<button type="button" class="dep-confirm-yes" data-reset-yes>Reset map</button><button type="button" data-reset-no>Cancel</button></div>'
         : '';
       const controls = `<div class="dep-opts">${opts_.join('')}${zoomBar}</div>` + confirmHtml + pinsRowHtml(view) + noteHtml;
@@ -4361,7 +4435,7 @@
       /** Keep "Used in …" in view at the top of the side panel's Notation tab. */
       setUsedPinned: (on) => setUsedPinned(on, false),
       /** The host's pins changed (another paper opened): draw them. */
-      refreshPins: () => { pinned = readPins(); for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v); pinsChanged(); },
+      refreshPins: () => { migrateNotationPins(); for (const v of views) if (v.tab === 'notation' && v.isShown()) fillNotation(v); pinsChanged(); },
       /** Switch parts on or off: { map, notation, uses, words } (missing keys stay as they are). */
       setFeatures(f) {
         const before = Object.assign({}, feats);
@@ -4408,11 +4482,12 @@
       /** The host's copy changed (another device, an import): read it again and redraw. */
       refreshEdits() {
         edits = readEdits();
+        migrateNotationPins();
         committed = edits;
         undoStack.length = 0;
         redoStack.length = 0;
         if (graph) applyLinks(graph, edits.link);
-        for (const v of views) if (v.tab === 'deps' && v.isShown()) fillDeps(v);
+        for (const v of views) if ((v.tab === 'deps' || v.tab === 'notation') && v.isShown()) (v.tab === 'deps' ? fillDeps : fillNotation)(v);
         markPins();
         if (focusState) refocus();
         pinsChanged();
@@ -4431,7 +4506,7 @@
       /** Everything pinned: map pins and Notation rows (see pinnedList above). */
       pinnedList,
       /** How many things are pinned anywhere: map pins and Notation rows. */
-      allPinCount: () => pinMap().size + pinned.size,
+      allPinCount: () => allPins().size,
       /** A pin button for the preview of a result or numbered equation (null for anything else). */
       pinButtonFor,
       /** Unpin one item of pinnedList by its key. */
@@ -4454,6 +4529,37 @@
       loadView,
       deleteView,
       savedViews: () => savedViews().map(([name]) => name),
+      // --- pin sets, reading order and notes (src/pins.js shows them)
+      /** The pin sets: [{ name, size, on (pinned now exactly), active (opened or saved last) }]. */
+      pinSets: () => savedViews().map(([name, e]) => ({ name, size: setSize(e), on: setIsOn(e), active: name === activeView })),
+      /** The set opened or saved last, if it still exists (to offer "Update"), else null. */
+      activeSet,
+      /** Whether the pins now are exactly the set's. */
+      setIsOn: (name) => setIsOn(edits.view[name]),
+      suggestSetName: suggestName,
+      /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
+      setTextPins: (o) => { textPins = o || null; },
+      /** Keys (of pinnedList, or "text:<id>") in the reading order. */
+      inReadingOrder,
+      /** Put the pins in this reading order (keys). */
+      setPinOrder: (keys) => setPinOrder(keys || []),
+      /** Whether the reader put any pin in order. */
+      hasPinOrder: () => allPinKeys().some((k) => orderOf(k) != null),
+      pinNote,
+      setPinNote,
+      /** Notes on pins: { key: note } for those that have one. */
+      pinNotes: () => Object.fromEntries(Object.entries(edits.note).filter(([, e]) => e && e.n).map(([k, e]) => [k, e.n])),
+      /** Add notes (from a shared view) where the reader has none: the number added. */
+      addPinNotes(notes) {
+        let n = 0;
+        for (const [k, t] of Object.entries(notes || {})) {
+          if (!k || typeof t !== 'string' || !t.trim() || pinNote(k)) continue;
+          setEdit('note', k, { n: t.replace(/\s+/g, ' ').trim().slice(0, 200), o: orderOf(k) }, true);
+          n++;
+        }
+        if (n) editsChanged('note', { label: n === 1 ? 'Kept a note' : `Kept ${n} notes` });
+        return n;
+      },
       setLocked: (on) => setLocked(on, false),
       locked: () => locked,
     };

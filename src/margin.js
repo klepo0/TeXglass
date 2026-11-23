@@ -154,7 +154,7 @@
   // ---------------------------------------------------------------------------
 
   // Not part of the reading text: MathML copies of formulas, buttons, notes.
-  const SKIP = '.katex-mathml, .fold-toggle, .mnote, .sync-mark, .tg-margin, script, style, textarea';
+  const SKIP = '.katex-mathml, .fold-toggle, .mnote, .sync-mark, .tg-margin, .pick-sheet, .pick-memo, script, style, textarea';
   const BLOCKISH = 'p, li, h1, h2, h3, h4, h5, h6, div, figcaption, td, th, dd, dt, blockquote, pre, figure, .math-display, .katex-display';
   const isSpace = (c) => c === ' ' || c === '\n' || c === '\t' || c === '\r' || c === '\f' || c === ' ';
 
@@ -1722,12 +1722,12 @@
     // --- pinned text in a shared view (src/share.js) ---
     const SHARE_QUOTE = 400; // longer passages are shared by their start
     const SHARE_CONTEXT = 16;
-    /** The pinned passages as short anchors { q, a, b } (quote, text before, text after), to put in a link. */
+    /** The pinned passages as short anchors { q, a, b } (quote, text before, text after), to put in a link; id: the note's. */
     function sharedTexts() {
       const out = [];
       for (const a of list) {
         if (!a.pin || !a.anchor || !a.anchor.quote) continue;
-        out.push({ q: a.anchor.quote.slice(0, SHARE_QUOTE), a: (a.anchor.prefix || '').slice(-SHARE_CONTEXT), b: a.anchor.quote.length > SHARE_QUOTE ? '' : (a.anchor.suffix || '').slice(0, SHARE_CONTEXT) });
+        out.push({ id: a.id, q: a.anchor.quote.slice(0, SHARE_QUOTE), a: (a.anchor.prefix || '').slice(-SHARE_CONTEXT), b: a.anchor.quote.length > SHARE_QUOTE ? '' : (a.anchor.suffix || '').slice(0, SHARE_CONTEXT) });
       }
       return out;
     }
@@ -1741,15 +1741,35 @@
       }
       return out;
     }
-    /** Pin these shared passages here too (those not pinned already): the number pinned. */
-    function pinTexts(texts) {
+    /** Pin these shared passages here too (those not pinned already): the number pinned. ids (an array) gets each one's note id. */
+    function pinTexts(texts, ids) {
       let n = 0;
-      for (const t of texts || []) {
+      (texts || []).forEach((t, i) => {
         const at = findShared(t);
-        if (!at || at.end <= at.start) continue;
+        if (!at || at.end <= at.start) return;
         const same = list.find((a) => { const p = placed.get(a.id); return p && p.start === at.start && p.end === at.end; });
-        if (same) { if (!same.pin) { same.pin = true; n++; } continue; }
-        add(at.start, at.end, { color: 'yellow', pin: true });
+        if (same) {
+          if (ids) ids[i] = same.id;
+          if (!same.pin) { same.pin = true; n++; }
+          return;
+        }
+        const a = add(at.start, at.end, { color: 'yellow', pin: true });
+        if (ids && a) ids[i] = a.id;
+        n++;
+      });
+      if (n) changed();
+      return n;
+    }
+    /** Pin exactly these passages (by id; for a pin set): the others are unpinned, their highlights stay. */
+    function setPinnedTexts(ids) {
+      const want = new Set(ids || []);
+      let n = 0;
+      for (const a of list) {
+        if (!a.anchor || !a.anchor.quote) continue;
+        const on = want.has(a.id);
+        if (!!a.pin === on) continue;
+        if (on) a.pin = true;
+        else delete a.pin;
         n++;
       }
       if (n) changed();
@@ -1765,7 +1785,11 @@
 
     return {
       refresh, setAnnotations, setStudy, layout, notes,
-      pinnedTexts, pinnedTextEls, goTo, unpinText,
+      pinnedTexts, pinnedTextEls, goTo, unpinText, setPinnedTexts,
+      /** The ids of the pinned passages. */
+      pinnedTextIds: () => list.filter((a) => a.pin && a.anchor && a.anchor.quote).map((a) => a.id),
+      /** The paragraph (or item, display…) holding one passage, by its id. */
+      textElOf: (id) => blockAt(placed.get(id)),
       /** Pinned text in a shared view: anchors to put in a link, the blocks they are in, pin them here. */
       sharedTexts, textElsFor, pinTexts,
       /** The margin's width in px (null: automatic). */
