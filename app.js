@@ -1922,6 +1922,120 @@
     if (document.visibilityState === 'visible' && paper && gistToken()) syncNotes(true);
   });
 
+  // --- clearing (Settings → Your notes) ---------------------------------------------
+  // NotesSync.clear leaves tombstones (notes deleted, map and progress set back,
+  // stamped now), so the clearing wins when copies are merged and reaches the
+  // browser's sync and the gist like any other change.
+
+  /** What the reader made: on the open paper ('paper') or in every paper here ('all'). */
+  function notesSummary(scope) {
+    if (scope === 'paper') return paper ? Features.describeNotes(NotesSync.counts(paper.record)) : '';
+    const all = allNotes();
+    if (paper) all[paper.key] = paper.record;
+    const total = { notes: 0, pins: 0, sets: 0, progress: 0, checks: 0, map: 0 };
+    let papers = 0;
+    for (const [k, r] of Object.entries(all)) {
+      if (!NotesSync.isPaperKey(k)) continue;
+      const c = NotesSync.counts(r);
+      if (!Object.values(c).some(Boolean)) continue;
+      papers++;
+      for (const f of Object.keys(total)) total[f] += c[f];
+    }
+    return Features.describeNotes(total, papers) + (gistToken() ? ' Papers kept only in your GitHub gist are cleared too.' : '');
+  }
+
+  /** Show the open paper's record after it changed underneath (cleared). */
+  function showRecord() {
+    if (!paper) return;
+    writeNotes(paper.key, paper.record);
+    if (progress) progress.setMap(paper.record.progress);
+    if (insight) insight.refreshEdits();
+    showNotes();
+    if (picker && picker.pinsChanged) picker.pinsChanged();
+  }
+
+  /** Clear what the reader made on the open paper. */
+  function clearPaperNotes(parts) {
+    if (!paper) return Promise.reject(new Error('no paper is open'));
+    clearTimeout(notesPushTimer);
+    const run = async () => {
+      paper.record = Object.assign(NotesSync.clear(paper.record, parts), { paper: paper.key });
+      showRecord();
+    };
+    notesSyncing = notesSyncing.then(run, run);
+    return notesSyncing.then(() => syncNotes(true)).then(() => {
+      const err = gistToken() ? store.get('texglass:gist-error') : '';
+      return err ? `Cleared here. GitHub sync failed (${err}); it clears there on the next sync.` : 'Cleared this paper.';
+    });
+  }
+
+  /**
+   * Clear what the reader made in every paper: in this browser, in the browser's
+   * sync (extension) and in the gist, papers this browser has never opened too.
+   * When signed in to GitHub and the gist cannot be reached, nothing is cleared:
+   * papers kept only there would come back.
+   */
+  function clearAllNotes(parts) {
+    clearTimeout(notesPushTimer);
+    const run = async () => {
+      const now = new Date();
+      const local = allNotes();
+      if (paper) local[paper.key] = paper.record;
+      let remote = {};
+      let g = null;
+      if (gistToken()) {
+        if (navigator.onLine === false) throw new Error('you are offline, and your notes on GitHub would come back. Try again when online.');
+        g = gistClient();
+        remote = await g.read();
+      }
+      let ext = {};
+      if (extApi) {
+        try {
+          const items = await extApi.storage.sync.get(null);
+          for (const [item, r] of Object.entries(items || {})) if (item.startsWith('notes:') && r) ext[item.slice(6)] = Object.assign(NotesSync.empty(item.slice(6)), r);
+        } catch (e) { ext = {}; }
+      }
+      const keys = new Set([...Object.keys(local), ...Object.keys(remote), ...Object.keys(ext)].filter(NotesSync.isPaperKey));
+      const cleared = {};
+      let papers = 0;
+      for (const k of keys) {
+        const merged = NotesSync.merge(NotesSync.merge(local[k], remote[k] && Object.assign({}, remote[k], { paper: k })), ext[k] && Object.assign({}, ext[k], { paper: k }));
+        if (Object.values(NotesSync.counts(merged)).some(Boolean)) papers++;
+        cleared[k] = Object.assign(NotesSync.clear(merged, parts, now), { paper: k });
+        if (local[k]) writeNotes(k, cleared[k]);
+      }
+      if (paper && cleared[paper.key]) paper.record = cleared[paper.key];
+      if (parts.pins) {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('texglass:loose-map:')) store.remove(k);
+          }
+        } catch (e) { /* storage unavailable */ }
+      }
+      showRecord();
+      if (!paper && insight) insight.refreshEdits();
+      if (extApi) for (const k of Object.keys(ext)) if (cleared[k]) await extSync(k, cleared[k]);
+      const done = `Cleared ${papers} paper${papers === 1 ? '' : 's'}`;
+      if (!g) return done + '.';
+      try {
+        await g.sync(null, cleared);
+        if (g.id()) store.set('texglass:gist-id', g.id());
+        store.set('texglass:gist-error', '');
+        store.set('texglass:gist-synced', new Date().toISOString());
+        return done + ', here and on GitHub.';
+      } catch (e) {
+        store.set('texglass:gist-error', e.message);
+        return `${done} here, but GitHub failed (${e.message}). Clear everything again when it works, or notes kept only there come back.`;
+      } finally {
+        updateSyncMenu();
+      }
+    };
+    const job = notesSyncing.then(run, run);
+    notesSyncing = job.catch(() => {});
+    return job;
+  }
+
   function exportNotes() {
     if (!paper) return;
     const base = (fileName.textContent || 'paper.tex').replace(/\.(tex|ltx|latex)$/i, '');
@@ -3099,7 +3213,15 @@
     features = Features.read(store);
     applyFeatures();
   }
-  const settingsPanel = Features ? Features.panel({ get: () => features, set: setFeature }) : null;
+  const settingsPanel = Features ? Features.panel({
+    get: () => features,
+    set: setFeature,
+    notes: NotesSync && margin ? {
+      canClearPaper: () => !!paper,
+      summary: notesSummary,
+      clear: (scope, parts) => (scope === 'paper' ? clearPaperNotes(parts) : clearAllNotes(parts)),
+    } : null,
+  }) : null;
   if ($('settings')) {
     if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
     else $('settings').hidden = true;
