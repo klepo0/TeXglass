@@ -2923,32 +2923,6 @@
       return out;
     }
 
-    /**
-     * A pin set's things in its reading order (for the Pins tab), each like
-     * pinnedList's, a pinned passage as { key: 'text:<id>', kind: 'text', id }
-     * for the host to name. null when there is no such set.
-     */
-    function setItems(name) {
-      const v = edits.view[name];
-      if (!v || !v.p) return null;
-      const pins = Object.entries(v.p).filter(([, d]) => d);
-      const keys = pins.map(([k]) => k).concat((Array.isArray(v.x) ? v.x : []).map((id) => 'text:' + id));
-      const items = itemsOf(pins.filter(([k]) => !isNotationKey(k)), new Set(pins.map(([k]) => k).filter(isNotationKey)));
-      const byKey = new Map(items.map((x) => [x.key, x]));
-      for (const k of keys) if (k.startsWith('text:')) byKey.set(k, { key: k, kind: 'text', id: k.slice(5), name: '', el: null });
-      // the order kept with the set, then what it left out, the document's way
-      const order = (Array.isArray(v.o) ? v.o : []).filter((k) => byKey.has(k));
-      const rest = keys.filter((k) => !order.includes(k) && byKey.has(k));
-      const at = (x) => (x && x.el ? x.el : null);
-      rest.sort((a, b) => {
-        const ea = at(byKey.get(a));
-        const eb = at(byKey.get(b));
-        if (!ea || !eb) return (ea ? -1 : 0) + (eb ? 1 : 0);
-        return ea === eb ? 0 : ea.compareDocumentPosition(eb) & 4 ? -1 : 1;
-      });
-      return order.concat(rest).map((k) => Object.assign(byKey.get(k), { memo: pinNote(k) }));
-    }
-
     /** Unpin one thing by its key (from pinnedList). */
     function unpinKey(key) {
       setPin(key, '');
@@ -4669,8 +4643,6 @@
       activeSet,
       /** Whether the pins now are exactly the set's. */
       setIsOn: (name) => setIsOn(edits.view[name]),
-      /** A pin set's things in its reading order, with notes (null: no such set). */
-      setItems,
       suggestSetName: suggestName,
       /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
       setTextPins: (o) => { textPins = o || null; },
@@ -4701,7 +4673,7 @@
   }
 
   /**
-   * The side panel: tabs Contents, Map, Notation and Pins over the table of
+   * The side panel: tabs Contents, Map, Pins and Notation over the table of
    * contents, and a divider that drags to resize it (the width is remembered).
    *
    *   TeXglassInsight.sidePanel({
@@ -4718,7 +4690,7 @@
     const tabs = doc.createElement('div');
     tabs.className = 'side-tabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['notation', 'Notation'], ['pins', 'Pins']]
+    tabs.innerHTML = [['toc', 'Contents'], ['deps', 'Map'], ['pins', 'Pins'], ['notation', 'Notation']]
       .map(([k, label]) => `<button type="button" role="tab" data-side-tab="${k}">${label}</button>`).join('');
     const title = o.head.querySelector('.toc-pane-title');
     if (title) title.replaceWith(tabs);
@@ -4729,7 +4701,7 @@
     o.list.after(body);
     const view = o.insight ? o.insight.mount(body, { onJump: o.onJump }) : null;
     if (!view) tabs.querySelectorAll('[data-side-tab="notation"], [data-side-tab="deps"]').forEach((b) => b.remove());
-    // the Pins tab: the pin sets, and the one chosen in its reading order
+    // the Pins tab: the pin sets on top, the pin list under them
     const pinsBody = doc.createElement('div');
     pinsBody.className = 'side-pins';
     pinsBody.hidden = true;

@@ -837,7 +837,7 @@
       store: sideStore,
       onJump: () => { hold(); if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
-      // the Pins tab: the pin sets, and the one chosen in its reading order (src/pins.js)
+      // the Pins tab: the pin sets on top, the pin list under them (src/pins.js)
       pinsTab: window.TeXglassPins ? (body) => TeXglassPins.panel({
         body, insight, jump: (el) => jumpTo(el),
         onJump: () => { hold(); if (narrow.matches) { tocWanted = false; showToc(); } },

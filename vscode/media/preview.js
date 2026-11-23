@@ -95,7 +95,8 @@
       files: () => sourceFiles,
       save: (list) => vscode.postMessage({ type: 'annotations', list }),
       // text pinned from the selection bar shows in the Pinned list (the pin at the top right)
-      onPins: () => { try { if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
+      // the pins changed: the pin list and the Pins tab follow (through insight), and Show only these
+      onPins: () => { try { if (insight && insight.refreshPins) insight.refreshPins(); else if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => new Promise((resolve) => {
         const id = ++noteSeq;
         noteWaiting.set(id, resolve);
@@ -1250,9 +1251,10 @@
       },
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
-      // the Pins tab: the pin sets, and the one chosen in its reading order (shared/pins.js)
+      // the Pins tab: the pin sets on top, the pin list under them (shared/pins.js)
       pinsTab: window.TeXglassPins && insight ? (body) => window.TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
+        showPinned: picker ? () => picker.show() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       }) : undefined,
     })

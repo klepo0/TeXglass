@@ -17,7 +17,8 @@
       // the reader's highlights and notes, kept per paper (see "the reader's notes" below)
       save: (list) => notesChanged(list),
       // text pinned from the selection bar shows in the toolbar's Pinned list
-      onPins: () => { try { if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
+      // the pins changed: the pin list and the Pins tab follow (through insight), and Show only these
+      onPins: () => { try { if (insight && insight.refreshPins) insight.refreshPins(); else if (pinsButton) pinsButton.refresh(); if (picker) picker.pinsChanged(); } catch (e) { /* not set up yet */ } },
       renderNote: (text) => {
         const at = doc.indexOf('\\begin{document}');
         const preamble = at >= 0 ? doc.slice(0, at) : '';
@@ -3146,9 +3147,10 @@
       store,
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
-      // the Pins tab: the pin sets, and the one chosen in its reading order (src/pins.js)
+      // the Pins tab: the pin sets on top, the pin list under them (src/pins.js)
       pinsTab: window.TeXglassPins && insight ? (body) => TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
+        showPinned: picker ? () => picker.show() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       }) : undefined,
     });
