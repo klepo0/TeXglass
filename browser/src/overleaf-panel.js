@@ -818,7 +818,7 @@
     : null;
   // The pin in the toolbar: how many things are pinned on the map, and a list to jump to.
   const pinsButton = window.TeXglassPins && insight
-    ? TeXglassPins.attach({ button: $('pins'), insight, jump: (el) => jumpTo(el), onOpen: () => hidePopover() })
+    ? TeXglassPins.attach({ button: $('pins'), insight, root: preview, toc: tocList, jump: (el) => jumpTo(el), onOpen: () => hidePopover() })
     : null;
   if (!pinsButton) $('pins').hidden = true;
   // The side panel's tabs (Contents, Map, Notation) and its divider. The panel's tab and
@@ -863,6 +863,7 @@
       onJump: () => { hold(); hidePopover(); },
       // Uses tab: pick a result, see what it uses and what uses it, or light up one side
       onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      pinSet: (el) => (insight && insight.pinAsSet ? insight.pinAsSet(el, 'uses') : null),
       related: (el, o) => (insight ? insight.related(el, o) : null),
       // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),

@@ -628,6 +628,8 @@ body.toc-right .toc-side svg { transform: scaleX(-1); }
 .toc-list a.active .toc-num { color: inherit; }
 .toc-list .toc-title { min-width: 0; overflow-wrap: anywhere; }
 .toc-list .toc-title .katex { font-size: 1em; }
+/* how many things are pinned in a section (src/pins.js) */
+.toc-list .tg-toc-pins { margin-left: auto; align-self: center; flex: none; min-width: 1.5em; padding: 0 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; line-height: 1.6; text-align: center; font-variant-numeric: tabular-nums; }
 .toc-list .toc-d1 a { padding-left: 20px; }
 .toc-list .toc-d2 a { padding-left: 32px; font-size: 13px; }
 .toc-list .toc-d3 a { padding-left: 44px; font-size: 13px; }
@@ -1531,6 +1533,8 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   cursor: pointer;
 }
 .uses-direct[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.uses-pinset { flex: none; margin-right: 6px; font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--accent); border-radius: 5px; background: transparent; color: var(--accent); cursor: pointer; }
+.uses-pinset:disabled { cursor: default; opacity: 0.8; }
 .uses-direct:disabled { cursor: default; }
 .uses-help b { color: var(--ink); font-weight: 600; }
 .goto-list li.uses-group { cursor: default; padding-top: 6px; font-size: 0.82em; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
@@ -2356,6 +2360,24 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 @media (hover: none) { .tg-sets-del { opacity: 0.7; } }
 .tg-sets-del:hover { color: var(--ink); }
 .tg-sets-empty { color: var(--muted); margin: 0 6px 2px 0; line-height: 1.45; }
+.tg-sets-starter { margin: 4px 0 0; font: inherit; font-size: 12px; padding: 3px 8px; border: 1px dashed var(--accent); border-radius: 6px; background: none; color: var(--accent); cursor: pointer; }
+.tg-sets-starter:hover { background: var(--accent-soft); }
+.tg-coll-part { padding: 8px 2px 10px 8px; border-top: 1px solid var(--rule); margin-top: 8px; }
+.tg-coll-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.tg-coll > summary { display: flex; align-items: center; gap: 6px; padding: 3px 0 3px 6px; border-radius: 5px; cursor: pointer; }
+.tg-coll > summary:hover { background: var(--accent-soft); }
+.tg-coll > summary:hover .tg-sets-del, .tg-coll-row:hover .tg-sets-del { opacity: 1; }
+.tg-coll-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tg-coll-paper { font-size: 12px; color: var(--muted); margin: 6px 0 1px 18px; overflow-wrap: anywhere; }
+.tg-coll-paper.tg-coll-here { color: var(--ink); }
+.tg-coll-row { display: flex; align-items: center; margin-left: 18px; border-radius: 5px; }
+.tg-coll-row:hover { background: var(--accent-soft); }
+.tg-coll-go { flex: 1; min-width: 0; text-align: left; font: inherit; font-size: 13px; padding: 3px 6px; border: 0; background: none; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.tg-coll-go:disabled { cursor: default; color: var(--muted); }
+.tg-coll-add { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 6px 4px 0; }
+.tg-coll-name { flex: 1 1 140px; min-width: 0; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 5px; background: var(--bg); color: var(--ink); }
+.tg-coll-add button { font: inherit; font-size: 12px; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 5px; background: none; color: inherit; cursor: pointer; }
+.tg-coll-add button[type="submit"] { border-color: var(--accent); color: var(--accent); }
 .tg-pins-panel { padding: 6px 0 0 2px; }
 .tg-pins-panel .tg-pins-head { padding-left: 6px; }
 .tg-pins-menu {
