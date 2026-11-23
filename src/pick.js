@@ -44,6 +44,11 @@
  *                         //   throws it away, and the reader's own pins are as they were
  *   pick.temp();          // the temporary view showing (or being changed), or null
  *   pick.shown();         // the elements the view shows now
+ *   pick.view();          // the view shown without the reader's pins (a temporary set or a
+ *                         //   shared view): { kind, title, note, edited, els }, or null
+ *   pick.saveView(); pick.keepView(); pick.takeAway(el); // its Keep buttons and Change, from
+ *                         //   elsewhere (the Pins tab, src/pins.js)
+ *   opts.onView()         // optional: the view changed (shown, changed, left): to show it elsewhere
  *   await pick.handout({ ids });  // the view as a handout: { title, html } with the pins in the
  *                         //   reading order, each with its note, the proofs opened, and at the end
  *                         //   the definitions and notation they rest on (ids: keep the ids, for an e-book)
@@ -633,6 +638,7 @@
       at = -1;
       if (bar) bar.hidden = true;
       if (was && was.onEnd) was.onEnd();
+      changed();
     }
 
     /** After a new render: tick the same results again, or show them again. */
@@ -777,6 +783,12 @@
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
       }
       bar.hidden = false;
+      changed();
+    }
+
+    /** Tell the host the view changed (the Pins tab follows it). */
+    function changed() {
+      if (opts.onView) { try { opts.onView(); } catch (e) { /* the view stays */ } }
     }
 
     // --- a view someone shared ---------------------------------------------------
@@ -892,6 +904,25 @@
       temp: () => (isTemp() ? shared : null),
       /** The elements the view shows now. */
       shown: () => pickedEls(),
+      /** The view showing without the reader's pins, or null. */
+      view: () => (shared && mode ? {
+        kind: isTemp() ? 'uses' : 'shared',
+        title: shared.title || 'Shared view',
+        note: shared.note || '',
+        edited: !!shared.edited,
+        els: pickedEls(),
+        save: !!(isTemp() && shared.save),
+        keep: !!shared.keep,
+      } : null),
+      saveView: () => saveTemp(),
+      keepView: () => { if (isTemp()) keepTemp(); else keepShared(); },
+      /** Take an element away from the temporary set showing (as Change does). */
+      takeAway(el) {
+        if (!isTemp() || !el || !el.id || !pickedEls().includes(el)) return;
+        toggle(el);
+        if (!pickedEls().length) return stop();
+        if (mode === 'view') show(true); else { drawBoxes(); showBar(); }
+      },
       /** The proofs a click opened (in the view of pinned items). */
       openProofs: () => marked.filter((el) => el.classList.contains('pick-proof') && el.classList.contains('pick-open')),
       picked: () => picked.slice(),

@@ -1190,8 +1190,11 @@
       print: () => handout('print'),
       epub: window.TeXglassEpub ? () => handout('epub') : undefined,
       onStart: () => hidePopover(),
+      // the Pins tab (and the pin's list) follow the view on screen
+      onView: () => { try { if (pinsTabPanel) pinsTabPanel.refresh(); if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
     })
     : null;
+  let pinsTabPanel = null; // the side panel's Pins tab
   /** Send the handout of Show only these to the extension: figures inside, diagrams drawn. */
   async function handout(as) {
     if (!picker) return;
@@ -1215,6 +1218,8 @@
       toc: tocList,
       jump: (el) => jumpTo(el),
       showPinned: picker ? () => picker.show() : undefined,
+      view: () => TeXglassPins.viewOf(picker),
+      viewAct: (a, el) => TeXglassPins.viewAct(picker, a, el),
       hideWhenEmpty: true,
       onOpen: () => hidePopover(),
       // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
@@ -1261,12 +1266,15 @@
       onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
       // the Pins tab: the pin sets on top, the pin list under them (shared/pins.js)
-      pinsTab: window.TeXglassPins && insight ? (body) => window.TeXglassPins.panel({
+      pinsTab: window.TeXglassPins && insight ? (body) => (pinsTabPanel = window.TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
+        // while What does this use? is on, the tab shows what it shows
+        view: () => TeXglassPins.viewOf(picker),
+        viewAct: (a, el) => TeXglassPins.viewAct(picker, a, el),
         showPinned: picker ? () => picker.show() : undefined,
         pinMore: picker ? () => picker.start() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
-      }) : undefined,
+      })) : undefined,
     })
     : null;
 

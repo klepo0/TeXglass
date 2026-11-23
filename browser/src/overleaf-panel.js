@@ -839,12 +839,17 @@
       renderSymbols: (box) => insight.renderSymbols(box),
       print: () => picker.printHandout(() => window.print()),
       onStart: () => hidePopover(),
+      // the Pins tab (and the pin's list) follow the view on screen
+      onView: () => { try { if (pinsTabPanel) pinsTabPanel.refresh(); if (pinsButton) pinsButton.refresh(); } catch (e) { /* not set up yet */ } },
     })
     : null;
+  let pinsTabPanel = null; // the side panel's Pins tab
   // The pin in the toolbar: how many things are pinned on the map, and a list to jump to.
   const pinsButton = window.TeXglassPins && insight
     ? TeXglassPins.attach({
       button: $('pins'), insight, root: preview, toc: tocList, jump: (el) => jumpTo(el), onOpen: () => hidePopover(),
+      view: () => TeXglassPins.viewOf(picker),
+      viewAct: (a, el) => TeXglassPins.viewAct(picker, a, el),
       // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
       openTab: TeXglassPins.tabOpener ? TeXglassPins.tabOpener({
         get side() { return sideView; },
@@ -871,10 +876,13 @@
       onJump: () => { hold(); if (narrow.matches) { tocWanted = false; showToc(); } },
       onTab: (tab) => { if (tab === 'toc') spyToc(); },
       // the Pins tab: the pin sets on top, the pin list under them (src/pins.js)
-      pinsTab: window.TeXglassPins ? (body) => TeXglassPins.panel({
+      pinsTab: window.TeXglassPins ? (body) => (pinsTabPanel = TeXglassPins.panel({
         body, insight, jump: (el) => jumpTo(el),
+        // while What does this use? is on, the tab shows what it shows
+        view: () => TeXglassPins.viewOf(picker),
+        viewAct: (a, el) => TeXglassPins.viewAct(picker, a, el),
         onJump: () => { hold(); if (narrow.matches) { tocWanted = false; showToc(); } },
-      }) : undefined,
+      })) : undefined,
     });
   }
 

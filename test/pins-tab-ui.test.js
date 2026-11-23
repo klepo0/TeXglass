@@ -186,3 +186,63 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await browser.close();
   }
 });
+
+test('the Pins tab follows the view on screen: What does this use? lists its set there, and the header names the pin set', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await serve(page);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview h1, #preview h2, #preview .section');
+    await page.setInputFiles('#file-input', { name: 'tab-view.tex', mimeType: 'text/x-tex', buffer: Buffer.from(DOC) });
+    await page.waitForFunction(() => document.querySelectorAll('#preview .theorem').length >= 2);
+    // pin Lemma 1.1 and save the pins as a set
+    await page.hover('#preview .theorem[data-label="first"]');
+    await page.waitForSelector('#preview .theorem[data-label="first"] .tg-pin-btn', { state: 'attached' });
+    await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"] .tg-pin-btn').click());
+    await openPins(page);
+    await page.click('.side-pins [data-pins-act="save"]');
+    await page.fill('.side-pins .tg-pins-set-name', 'My set');
+    await page.keyboard.press('Enter');
+    const head = () => page.evaluate(() => {
+      const h = document.querySelector('.side-pins .tg-pins-panel .tg-pins-head');
+      return h && Array.from(h.children).filter((c) => !c.matches('.tg-pins-views')).map((c) => c.textContent.trim()).join(' ');
+    });
+    // the header names the set the pins are
+    assert.equal(await head(), 'Pinned 1 My set');
+    // What does this use? on the theorem: the tab shows its set, not the reader's pins
+    await page.hover('#preview .theorem[data-label="main"]');
+    await page.waitForSelector('#preview .theorem[data-label="main"] .uses-btn', { state: 'attached' });
+    await page.evaluate(() => document.querySelector('#preview .theorem[data-label="main"] .uses-btn').click());
+    await page.waitForFunction(() => document.querySelector('.side-pins .tg-pins-head-view'));
+    assert.match(await head(), /^Showing 2 Theorem 1\.2 with what it uses$/);
+    const rows = () => page.$$eval('.side-pins .tg-pins-panel .tg-pins-go', (bs) => bs.map((b) => b.textContent));
+    assert.deepEqual(await rows(), ['Lemma 1.1', 'Theorem 1.2']);
+    assert.match(await page.textContent('.side-pins .tg-pins-viewnote'), /your 1 pin comes back/);
+    // switching to "Used in" moves the tab along
+    await page.click('.pick-bar [data-dir="usedBy"]');
+    await page.waitForFunction(() => /what uses it/.test(document.querySelector('.side-pins .tg-pins-head').textContent));
+    assert.deepEqual(await rows(), ['Theorem 1.2']);
+    await page.click('.pick-bar [data-dir="uses"]');
+    // × takes one out of the view (not out of the pins)
+    await page.click('.side-pins .tg-pins-panel .tg-pins-x >> nth=0');
+    await page.waitForFunction(() => document.querySelectorAll('.side-pins .tg-pins-panel .tg-pins-go').length === 1);
+    assert.equal(await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"]').offsetParent), null);
+    assert.match(await page.textContent('.pick-bar .uses-what'), /changed/);
+    // Save as pin set from the tab
+    await page.click('.side-pins [data-pins-act="view-save"]');
+    await page.waitForFunction(() => /Saved as/.test(document.querySelector('.side-pins .tg-pins-viewnote').textContent));
+    assert.match(await page.textContent('.side-pins .tg-sets-stuck'), /Theorem 1\.2 with what it uses \(changed\)/);
+    // Done: back to the reader's pins, with the set's name
+    await page.click('.side-pins [data-pins-act="view-done"]');
+    await page.waitForFunction(() => !document.querySelector('.side-pins .tg-pins-head-view'));
+    assert.equal(await head(), 'Pinned 1 My set');
+    assert.equal(await page.evaluate(() => document.getElementById('preview').classList.contains('pick-view')), false);
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});
