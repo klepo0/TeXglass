@@ -902,6 +902,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'cited.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'cite.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'features.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'coach.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'textwidth.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'diff.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
@@ -1115,6 +1116,9 @@ ${INK_FILTERS}
         vscode.commands.executeCommand('texglass.exportHtml', this.uri, undefined, true,
           m.view && Array.isArray(m.view.keep) ? { n: m.view.n, keep: m.view.keep } : undefined);
         break;
+      case 'coach-seen':
+        this.context.globalState.update('texglass.coachSeen', true);
+        break;
       case 'ready': {
         this.ready = true;
         this.post({ type: 'doc', uri: this.uri.toString() });
@@ -1131,6 +1135,8 @@ ${INK_FILTERS}
           marginCollapsed: this.context.globalState.get('texglass.marginCollapsed', false),
           textWidth: this.context.globalState.get('texglass.textWidth', ''),
           notePad: this.context.globalState.get('texglass.notePad', null),
+          // the first-run tour, shown once (texglass.coachSeen)
+          coach: !this.context.globalState.get('texglass.coachSeen', false),
         });
         setContext('texglass.tocOpen', this.context.globalState.get('texglass.toc', true));
         setContext('texglass.hasProofs', false);
@@ -1879,6 +1885,11 @@ function activate(context) {
     vscode.commands.registerCommand('texglass.showDependencies', () => preview && preview.post({ type: 'insight', tab: 'deps' })),
     vscode.commands.registerCommand('texglass.showLargerMap', () => preview && preview.post({ type: 'larger-map' })),
     // The preview's Settings panel: switch reading aids on or off (texglass.* settings).
+    // The first-run tour in the preview (shared/coach.js), again.
+    vscode.commands.registerCommand('texglass.showTour', () => {
+      if (preview) preview.post({ type: 'coach' });
+      else vscode.window.showInformationMessage('Open a TeXglass preview first (TeXglass: Open Preview to the Side), then run Show Me Around.');
+    }),
     vscode.commands.registerCommand('texglass.showSettings', () => {
       if (preview) preview.post({ type: 'show-settings' });
       else vscode.commands.executeCommand('workbench.action.openSettings', '@ext:klepo1.texglass');

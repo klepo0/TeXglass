@@ -16,6 +16,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 
 **Contents**
 
+- [First-run tour: Show me around](#first-run-tour-show-me-around)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Reading a paper](#reading-a-paper)
 - [Previews on hover](#previews-on-hover)
@@ -37,6 +38,25 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [What LaTeX it understands](#what-latex-it-understands)
 - [Hints for TeXglass in your own papers](#hints-for-texglass-in-your-own-papers)
 - [Render dashboard](#render-dashboard)
+
+## First-run tour: Show me around
+
+The first time you open TeXglass (the web viewer, the browser extension's
+viewer, or a VS Code preview), a few cards point out where things are: **Open**,
+the side panel (Contents, Map, Pins, Notation), **Navigate**, what you can do in
+the text (previews, pins, What does this use?, Step through, notes), the **pin**
+with Show only these, **Share**, **Save offline** and **Back**, and **Settings**
+and the **…** menu. On a phone the cards sit at the bottom of the screen (or the
+top) and point at the compact toolbar; the side panel opens as its drawer while
+its card shows.
+
+**Next**, **Back** and **Skip the tour** are on each card; <kbd>→</kbd> or
+<kbd>Enter</kbd> goes on, <kbd>←</kbd> back, <kbd>Esc</kbd> ends it. It shows
+only once. To see it again: **Show me around** in the **…** menu, or at the foot
+of **Settings**; in VS Code the **TeXglass: Show Me Around** command (also in
+the preview's `…` menu). Adding `?coach` to the web viewer's address shows it
+too. Away from the tour paper, its last card offers **Try it on a paper**, which
+opens the tour paper (**Take the tour**, see [Web viewer](#web-viewer)).
 
 ## Keyboard shortcuts
 
@@ -744,7 +764,8 @@ Overleaf panel).
 
 The **gear** button (on a phone, **Settings** in the **…** menu) opens Settings, a list of TeXglass's reading aids with a
 switch for each. Turn off what you don't use; **Turn everything back on**
-restores them. Choices apply to every paper at once. Under the switches, *Your
+restores them. Choices apply to every paper at once. **Show me around** at the
+foot replays the [first-run tour](#first-run-tour-show-me-around). Under the switches, *Your
 notes* has **Clear notes in this paper…** and **Clear all TeXglass notes…** (see
 [Your own highlights and notes](#your-own-highlights-and-notes)).
 
@@ -888,7 +909,8 @@ install; after the first visit it opens and renders offline.
   signed in), **Export notes** and **Import notes…**.
 - **For authors**: **Copy AI prompt for authors** (see
   [Let an AI chatbot suggest the hints](#let-an-ai-chatbot-suggest-the-hints)).
-- At the very end, **Take the tour** (see above).
+- At the very end, **Show me around** (the [first-run tour](#first-run-tour-show-me-around)
+  of the controls) and **Take the tour** (see above).
 
 **☕ Support** beside the TeXglass name in the toolbar opens its
 [Buy Me a Coffee](https://buymeacoffee.com/texglass) page (on a phone, where the
@@ -1028,6 +1050,7 @@ All in the Command Palette under **TeXglass:**.
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
 | Reset Zoom | <kbd>Ctrl+0</kbd>. |
 | Support TeXglass ☕ | Opens its [Buy Me a Coffee](https://buymeacoffee.com/texglass) page (also at the end of the preview's `…` menu). |
+| Show Me Around | The [first-run tour](#first-run-tour-show-me-around) again (also in the preview's `…` menu). |
 
 ### Settings
 
@@ -1137,6 +1160,10 @@ view you have on (**Show only these**, **What does this use?**).
 offline** (the bookmark) at the top of the **…** menu. The **Open** dialog lists the recent ones and
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
+
+**The first-run tour** works here too: its cards sit at the bottom of the
+screen and point at the compact toolbar (see
+[First-run tour](#first-run-tour-show-me-around)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Open**, **Navigate** (the magnifier), the **pin** (it opens

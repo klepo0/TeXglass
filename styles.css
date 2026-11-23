@@ -1565,6 +1565,7 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .tg-step-btn, .tg-step-bar, .tg-step-fold { display: none !important; }
   #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
+  .tg-coach-veil, .tg-coach-spot, .tg-coach-card { display: none !important; } /* the first-run tour */
   .pick-view :is(.pick-sel, .pick-guess) { outline: none !important; }
   .pick-view .pick-ref { background: none !important; }
   /* Print what the view shows: in Show only these (src/pick.js), hidden blocks
@@ -2872,3 +2873,43 @@ p > .tg-sliders, li > .tg-sliders, td > .tg-sliders, dd > .tg-sliders { margin-b
 .features-clear button.danger { background: var(--warn); border-color: var(--warn); color: var(--paper); font-weight: 600; }
 .features-clear .clear-done { margin: 6px 0 0; font-size: 13px; }
 .features-clear .clear-done:empty { display: none; }
+
+/* The first-run tour (src/coach.js): the page dimmed around one control, a card beside it */
+.tg-coach-veil { position: fixed; inset: 0; z-index: 2147483000; background: transparent; }
+.tg-coach-veil.tg-coach-dim { background: rgba(0, 0, 0, 0.45); }
+.tg-coach-spot {
+  position: fixed; z-index: 2147483001; pointer-events: none; border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  transition: left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+.tg-coach-card {
+  position: fixed; z-index: 2147483002; box-sizing: border-box; width: min(360px, calc(100vw - 20px));
+  padding: 14px 16px 12px; border: 1px solid var(--rule); border-radius: 12px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.tg-coach-card.tg-coach-sheet {
+  left: 0 !important; right: 0; width: auto; border-radius: 0; border-width: 1px 0 0;
+  padding: 14px 16px calc(12px + env(safe-area-inset-bottom));
+}
+.tg-coach-card.tg-coach-sheet[data-sheet="bottom"] { bottom: 0; top: auto !important; border-radius: 14px 14px 0 0; }
+.tg-coach-card.tg-coach-sheet[data-sheet="top"] { top: 0 !important; bottom: auto; border-width: 0 0 1px; border-radius: 0 0 14px 14px; padding-top: calc(14px + env(safe-area-inset-top)); padding-bottom: 12px; }
+.tg-coach-count { display: flex; gap: 5px; margin-bottom: 8px; }
+.tg-coach-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rule); }
+.tg-coach-dot.on { background: var(--accent); }
+.tg-coach-title { margin: 0 0 4px; font-size: 15.5px; font-weight: 600; }
+.tg-coach-body { color: var(--ink); }
+.tg-coach-body p { margin: 0 0 6px; }
+.tg-coach-body kbd { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 1px 4px; border: 1px solid var(--rule); border-radius: 4px; background: var(--code-bg); }
+.tg-coach-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.tg-coach-grow { flex: 1; }
+.tg-coach-actions button:not(.link-button) {
+  font: inherit; font-size: 13.5px; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
+}
+.tg-coach-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tg-coach-skip { font-size: 13px; color: var(--muted); }
+@media (pointer: coarse) { .tg-coach-actions button:not(.link-button) { min-height: 40px; padding: 8px 16px; } .tg-coach-skip { min-height: 40px; } }
+/* the pointed-at result shows its own buttons (pin, What does this use?, Step through) */
+.tg-coach-hot .uses-btn, .tg-coach-hot .tg-pin-btn, .tg-coach-hot .tg-step-btn { opacity: 1 !important; }
+@media (prefers-reduced-motion: reduce) { .tg-coach-spot { transition: none; } }

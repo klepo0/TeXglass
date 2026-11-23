@@ -267,6 +267,11 @@
         "category": "TeXglass"
       },
       {
+        "command": "texglass.showTour",
+        "title": "Show Me Around",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.showSettings",
         "title": "Settings: Switch Reading Aids On or Off",
         "category": "TeXglass",
@@ -399,6 +404,11 @@
           "command": "texglass.syncNotes",
           "when": "activeWebviewPanelId == 'texglass.preview' && config.texglass.studyTools",
           "group": "5_notes@3"
+        },
+        {
+          "command": "texglass.showTour",
+          "when": "activeWebviewPanelId == 'texglass.preview'",
+          "group": "9_support@0"
         },
         {
           "command": "texglass.support",
