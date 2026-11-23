@@ -31,6 +31,7 @@ for (const [from, to] of [
   ['src/hypotheses.js', 'hypotheses.js'],
   ['src/cite.js', 'cite.js'],
   ['src/features.js', 'features.js'],
+  ['src/coach.js', 'coach.js'],
   ['src/textwidth.js', 'textwidth.js'],
   ['src/diff.js', 'diff.js'],
   ['src/cited.js', 'cited.js'],

@@ -3290,6 +3290,13 @@
       summary: notesSummary,
       clear: (scope, parts) => (scope === 'paper' ? clearPaperNotes(parts) : clearAllNotes(parts)),
     } : null,
+    footer: window.TeXglassCoach ? (() => {
+      const p = document.createElement('p');
+      p.className = 'features-extra';
+      p.innerHTML = 'New here, or lost a button? <button type="button" class="link-button">Show me around</button>';
+      p.querySelector('button').addEventListener('click', () => { settingsPanel.close(); startCoach(); });
+      return p;
+    })() : null,
   }) : null;
   if ($('settings')) {
     if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
@@ -3301,6 +3308,70 @@
     features = Features.read(store);
     applyFeatures();
   });
+
+  // --- the first-run tour (src/coach.js) ------------------------------------------
+  // A few cards that point at the main controls, once, the first time the viewer
+  // opens; again from Settings or "Show me around" in the … menu. On a phone the
+  // controls that moved into the … menu are pointed at there.
+  const Coach = window.TeXglassCoach || null;
+  const shownEl = (el) => (el && !el.hidden && el.offsetParent !== null ? el : null);
+  // a toolbar button, or "…" when a narrow window moved it into the menu
+  const orMore = (id) => (narrow.matches && $(id) && $(id).closest('#more-menu') ? $('more') : shownEl($(id)));
+  function coachSteps() {
+    const phone = narrow.matches;
+    const touch = coarse.matches;
+    const rest = touch ? 'Tap' : 'Rest on';
+    const key = (k) => (touch ? '' : ` (<kbd>${k}</kbd>)`);
+    let tocOpened = false;
+    return [
+      { target: () => shownEl($('open')), title: 'Open a paper',
+        body: `<p>Search arXiv by words or an id, paste a GitHub link, or open a <code>.tex</code> file from this computer${key('Ctrl+K')}.</p>` },
+      { title: 'The side panel',
+        target: () => (phone ? (tocWanted ? tocPane : null) : (shownEl(tocPane) || orMore('toc-toggle'))),
+        before: () => { if (phone && !tocWanted && !tocToggle.hidden) { tocWanted = true; tocOpened = true; showToc(); } },
+        after: () => { if (tocOpened) { tocOpened = false; tocWanted = false; showToc(); } },
+        body: '<p><b>Contents</b>, the <b>Map</b> of which result uses which, your <b>Pins</b>, and the <b>Notation</b> index: where each symbol is defined.' +
+          (phone ? ' Swipe in from the edge of the screen to open it.' : '') + '</p>' },
+      { target: () => shownEl($('find')), title: 'Navigate',
+        body: `<p>Search the text${key('Ctrl+F')}, go to “Theorem 2.1”${key('Ctrl+G')}, or ask the <b>Uses</b> tab for “Lemma 2 but not Assumption A”.</p>` },
+      { title: 'Reading the paper', hot: true,
+        target: () => preview.querySelector('.theorem'),
+        body: `<p>${rest} a reference to preview it, or a formula to see where its symbols are defined. ` +
+          'By each result: a pin and <b>What does this use?</b>; by each proof, <b>Step through</b>.</p>' +
+          `<p>Select text to highlight it or write a note in the margin${phone ? ' (swipe in from the right to see your notes)' : ''}.</p>` },
+      { target: () => shownEl($('pins')), title: 'Pinned',
+        body: `<p>Pin results, equations and symbols${key('P')} and they gather here. <b>Show only these</b> hides the rest of the paper; “What does this use?” opens there too.</p>` },
+      { target: () => shownEl($('share')) || orMore('save-offline'), title: 'Share, save, go back',
+        body: '<p><b>Share</b> a link that opens this paper at the section you are reading. <b>Save offline</b> keeps it on this device. ' +
+          `After a jump, <b>Back</b>${key('Alt+←')} returns you to where you were.</p>` },
+      { target: () => (phone ? shownEl($('more')) : shownEl($('settings')) || shownEl($('more'))), title: phone ? 'More in “…”' : 'Settings and “…”',
+        body: '<p>Switch reading aids on or off in <b>Settings</b>. Export, print and your notes are in the <b>…</b> menu, and so is this tour: <b>Show me around</b>.</p>' },
+    ];
+  }
+  function startCoach() {
+    if (!Coach) return null;
+    setMenu(false);
+    store.set('texglass:coach', 'seen');
+    const onTour = fileName.textContent === 'tour.tex';
+    return Coach.start({
+      steps: coachSteps(),
+      finish: onTour ? null : { label: 'Try it on a paper', action: () => { loadTour(); } },
+    });
+  }
+  if ($('coach-open')) {
+    if (Coach) $('coach-open').addEventListener('click', () => startCoach());
+    else $('coach-open').hidden = true;
+  }
+  // once, after the first document is on screen; ?coach shows it again. Not in
+  // automated browsers (the tests), nor over a dialog the address asked for.
+  function maybeCoach() {
+    const asked = new URLSearchParams(location.search).has('coach');
+    if (!Coach || (!asked && (store.get('texglass:coach') || navigator.webdriver))) return;
+    setTimeout(() => {
+      if (document.querySelector('dialog[open]') || Coach.running()) return;
+      startCoach();
+    }, 700);
+  }
 
   // --- resizable split ------------------------------------------------------------
 
@@ -4248,8 +4319,9 @@
     return loadWelcome();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  const begin = () => Promise.resolve(start()).catch(() => {}).then(maybeCoach);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
+  else begin();
 
   // Keep the viewer's files and KaTeX in the browser's cache (sw.js), so the
   // site opens and renders offline after one visit. Only on a web page: the

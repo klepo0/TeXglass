@@ -927,6 +927,7 @@
         setStatus(n ? `${n} warning${n > 1 ? 's' : ''}` : '');
         status.title = m.warnings.join('\n');
         vscode.postMessage({ type: 'shown', blocks: shown.length, math: preview.querySelectorAll('.katex').length });
+        if (coachWanted && shown.length) { coachWanted = false; setTimeout(startCoach, 700); }
         break;
       }
       case 'error':
@@ -956,6 +957,10 @@
         }
         applyFolds();
         showToc();
+        if (m.coach) coachWanted = true;
+        break;
+      case 'coach':
+        startCoach();
         break;
       case 'toggle-toc':
         tocWanted = !tocWanted;
@@ -1346,12 +1351,42 @@
       footer: (() => {
         const p = document.createElement('p');
         p.className = 'features-extra';
-        p.innerHTML = 'These are VS Code settings (texglass.*), kept with your other settings. <button type="button" class="link-button">Open in Settings</button>';
+        p.innerHTML = 'These are VS Code settings (texglass.*), kept with your other settings. <button type="button" class="link-button">Open in Settings</button>' +
+          (window.TeXglassCoach ? ' · <button type="button" class="link-button" data-coach-open>Show me around</button>' : '');
         p.querySelector('button').addEventListener('click', () => vscode.postMessage({ type: 'open-settings' }));
+        const tour = p.querySelector('[data-coach-open]');
+        if (tour) tour.addEventListener('click', () => startCoach());
         return p;
       })(),
     })
     : null;
+
+  // --- the first-run tour (shared/coach.js) ------------------------------------------
+  // Once, the first time a preview opens (the extension remembers it), and again
+  // from "TeXglass: Show Me Around" or Settings. The preview has no toolbar, so
+  // the cards point at the side panel, a result and the pin, then name the commands.
+  let coachWanted = false;
+  function startCoach() {
+    if (!window.TeXglassCoach) return;
+    vscode.postMessage({ type: 'coach-seen' });
+    if (settingsPanel && settingsPanel.isOpen()) settingsPanel.close();
+    TeXglassCoach.start({
+      steps: [
+        { title: 'Welcome to TeXglass', target: () => null,
+          body: '<p>A quick look at the reading tools in this preview. It updates as you type; Ctrl+click or double-click in it jumps to that line of the source.</p>' },
+        { title: 'The side panel', optional: true, target: () => (tocPane.hidden ? null : tocPane),
+          body: '<p><b>Contents</b>, the <b>Map</b> of which result uses which, your <b>Pins</b>, and the <b>Notation</b> index: where each symbol is defined. The Contents button above the preview shows or hides it.</p>' },
+        { title: 'Reading the paper', optional: true, hot: true, target: () => preview.querySelector('.theorem'),
+          body: '<p>Rest on a reference to preview it, or on a formula to see where its symbols are defined. By each result: a pin and <b>What does this use?</b>; by each proof, <b>Step through</b>.</p>' +
+            '<p>Select text to highlight it or write a note in the margin.</p>' },
+        { title: 'Pinned', optional: true, target: () => document.getElementById('pins-float'),
+          body: '<p>What you pin gathers here. <b>Show only these</b> hides the rest of the paper.</p>' },
+        { title: 'Keys and commands', target: () => null,
+          body: '<p><kbd>Ctrl+F</kbd> finds, <kbd>Ctrl+G</kbd> goes to a theorem, equation or section, <kbd>Alt+←</kbd> goes back after a jump.</p>' +
+            '<p>Everything else is in the Command Palette under <b>TeXglass</b>, and in the preview’s … menu: export, print, notes, Settings, and this tour (<b>Show Me Around</b>).</p>' },
+      ],
+    });
+  }
 
   vscode.postMessage({ type: 'ready' });
 })();

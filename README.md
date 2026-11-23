@@ -94,6 +94,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Everything pinned in one place**: results, equations, symbols and passages of text you pin (from the map, the Notation tab, any preview or a selection) gather behind the pin in the toolbar; put them in a reading order with a one-line note each for a **study sheet**, and keep **pin sets** ("For the talk") to switch between.
 - **Save for offline**: keep papers on your device and find them under **Saved papers**.
 - **Share** a link that opens the paper in TeXglass at the section you are reading, or with the view you have on (your pins under **Show only these**, **What does this use?**).
+- **Show me around**: a short first-run tour of the controls, on phones too, replayable from Settings or the **…** menu.
 - **Sync** notes automatically through a private GitHub gist (sign in once), your browser's sync or VS Code Settings Sync.
 
 ### Write
