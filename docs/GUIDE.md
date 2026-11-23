@@ -922,7 +922,8 @@ editor.
 - **Follow**: scrolls along with the editor (turn it off to read on your own)
   and marks the paragraph holding the cursor.
 - Click in the preview to move the editor's cursor there (a formula: Ctrl+click
-  or double-click); text from an `\input` file opens that file first.
+  or double-click); the preview stays put while the editor scrolls to it. Text
+  from an `\input` file opens that file first.
 - Click a formula to copy it, hover previews, folding and **Hide proofs**,
   **Contents** (left or right), the **pin** with everything pinned (see
   [Everything pinned in one place](#everything-pinned-in-one-place)), **Navigate** (<kbd>Ctrl+F</kbd>,
