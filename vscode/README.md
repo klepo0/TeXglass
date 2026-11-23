@@ -70,9 +70,9 @@ lists every feature, command, setting and shortcut.
   index by meaning, and pin the symbols you keep looking up.
 - **Dependency map**: which lemma each theorem uses, grouped by section.
   Press **M** for a larger map you can zoom and drag.
-- **What does this use?**: the button by a theorem's heading lights up the
-  results it rests on (or, with **Used in**, the ones that rest on it), and
-  **Hide the rest** folds everything else away.
+- **What does this use?**: the button by a theorem's heading shows only the
+  results it rests on (or, with **Used in**, the ones that rest on it), as a
+  temporary pin set in **Show only these**: save it as a pin set, or let it go.
 - **Navigate**: find in the text (**Ctrl+F**), go to `Lemma 4.1` or `(3.2)`
   (**Ctrl+G**), or open **Uses**: pick a result to see what it uses and what
   uses it, or search by structure for every result that uses `Lemma 2` but not

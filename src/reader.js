@@ -196,15 +196,29 @@
       root: preview,
       jump: (el) => jumpTo(el),
       onEditSearch: () => { if (finder) finder.open('uses'); },
+      // "What does this use?" and a search by use show in Show only these (src/pick.js)
+      picker: () => picker,
       renderTex: (texs, defs) => (window.TeXglass && TeXglass.renderSnippets ? TeXglass.renderSnippets(defs, texs) : null),
       hover: store.get('texglass:notationHover') !== 'off',
       onHoverChange: (on) => store.set('texglass:notationHover', on ? 'on' : 'off'),
       notationOrder: store.get('texglass:notation-order'),
       onNotationOrder: (order) => store.set('texglass:notation-order', order),
-      print: () => window.print(),
     })
     : null;
   if (insight && data.defs) insight.setDefinitions(data.defs);
+  // Show only these: what "What does this use?" shows, the rest hidden, with a
+  // handout to print (the page has no pins of its own to show)
+  const picker = window.TeXglassPick && insight
+    ? TeXglassPick.attach({
+      root: preview,
+      jump: (el) => jumpTo(el),
+      proofsOf: (el) => { const n = insight.graph().byEl.get(el); return n ? n.proofs : null; },
+      context: insight.contextOf ? (el) => insight.contextOf(el) : undefined,
+      renderSymbols: (box) => insight.renderSymbols(box),
+      print: () => picker.printHandout(() => window.print()),
+      onStart: () => hidePopover(),
+    })
+    : null;
 
   // --- the side panel: Contents, Map, Notation ----------------------------------------
 
@@ -299,10 +313,10 @@
       scroller: pane,
       reveal: () => {},
       onJump: hidePopover,
-      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { at: o && o.at }); },
       related: (el, o) => (insight ? insight.related(el, o) : null),
       uses: (q) => (insight ? insight.searchUses(q) : null),
-      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el }); },
     });
     TeXglassFind.bindKeys(window, finder);
     if (findButton) findButton.addEventListener('click', () => finder.open('find'));

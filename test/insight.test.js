@@ -182,10 +182,13 @@ test('the side panel has Contents, Map and Notation tabs, in that order, and a d
       `<section class="pane" id="preview-pane"><article id="preview" class="document">${r.blocks.join('\n')}</article></section></main>`
     );
     await page.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+    await page.addScriptTag({ path: path.join(ROOT, 'src/pick.js') });
     await page.evaluate((defs) => {
       window.saved = { 'texglass:side-tab': 'notation', 'texglass:side-width': '300' };
       const store = { get: (k) => window.saved[k] || null, set: (k, v) => { window.saved[k] = v; } };
-      const insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {} });
+      // "What does this use?" shows in Show only these
+      const picker = TeXglassPick.attach({ root: document.getElementById('preview'), jump() {} });
+      const insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {}, picker });
       insight.setDefinitions(defs);
       window.ins = insight;
       window.side = TeXglassInsight.sidePanel({
@@ -216,7 +219,7 @@ test('the side panel has Contents, Map and Notation tabs, in that order, and a d
     assert.match(await page.textContent('.side-insight .dep-node.dep-sel'), /Theorem 2\.1/);
     assert.equal(await page.locator('.side-insight .dep-node.dep-up').count(), 4);
     await page.click('.side-insight .dep-node[data-n="1"]');
-    assert.equal(await page.evaluate(() => document.querySelectorAll('#preview .theorem')[1].classList.contains('uses-sel')), true);
+    assert.equal(await page.evaluate(() => document.querySelectorAll('#preview .theorem')[1].classList.contains('pick-sel')), true);
     assert.match(await page.textContent('.side-insight .dep-node.dep-sel'), /Lemma 1\.2/);
     await page.evaluate(() => window.ins.unfocus());
     assert.equal(await page.locator('.side-insight .dep-map.dep-picked').count(), 0);
@@ -341,8 +344,10 @@ test('the map reads equations, mentions and citations, groups by section and fol
       `<section class="pane" id="pane" style="height:100vh;overflow:auto"><article id="preview" class="document">${r.blocks.join('\n')}</article></section>`
     );
     await page.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+    await page.addScriptTag({ path: path.join(ROOT, 'src/pick.js') });
     await page.evaluate(() => {
-      window.insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {} });
+      const picker = TeXglassPick.attach({ root: document.getElementById('preview'), jump() {} });
+      window.insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump() {}, picker });
     });
     const g = await page.evaluate(() => {
       const graph = window.insight.graph();
@@ -406,13 +411,13 @@ test('the map reads equations, mentions and citations, groups by section and fol
     assert.equal(await page.locator('.dep-band').count(), 0);
     await page.evaluate(() => document.querySelector('.insight-dialog').close());
 
-    // "What does this use?": a result reached only through a guess is marked so; cited entries light up.
+    // "What does this use?": a result reached only through a guess is marked so; cited entries show.
     await page.evaluate(() => window.insight.focus(document.querySelectorAll('#preview .theorem')[2], 'uses'));
-    const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem'), (el) => (el.className.match(/uses-\w+/g) || []).join(' ')));
-    assert.deepEqual(lit.slice(0, 3), ['uses-on', 'uses-on uses-guess', 'uses-sel']);
+    const lit = await page.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem'), (el) => (el.className.match(/pick-(on|sel|guess|hide)/g) || []).join(' ')));
+    assert.deepEqual(lit.slice(0, 3), ['pick-on', 'pick-on pick-guess', 'pick-on pick-sel']);
     assert.match(await page.textContent('.uses-bar'), /uses 2 results \(1 guessed\)/);
-    // its own citation [2] lights up; [1], cited in the proof of Lemma 1.1, does not
-    assert.deepEqual(await page.$$eval('.bibliography li', (els) => els.map((e) => e.classList.contains('uses-ref'))), [false, true]);
+    // its own citation [2] shows; [1], cited in the proof of Lemma 1.1, does not
+    assert.deepEqual(await page.$$eval('.bibliography li', (els) => els.map((e) => e.classList.contains('pick-ref'))), [false, true]);
   } finally {
     await browser.close();
   }

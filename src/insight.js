@@ -9,10 +9,11 @@
  *   - a notation index: the paper's macros and defined symbols, with first uses,
  *     arranged by section, by kind or A–Z, searchable by symbol or meaning, with
  *     the symbols of the section being read at the top (side panel);
- *   - "What does this use?": a button by each result's heading lights up the
- *     results it rests on (or that rest on it) in the text and fades the rest.
+ *   - "What does this use?": a button by each result's heading shows only the
+ *     results it rests on (or that rest on it), as a temporary pin set in Show
+ *     only these (the host's picker, src/pick.js); the reader's own pins stay.
  *     While it is on, a map on show (side panel or larger map) lights up the
- *     same results, and picking a result on the map moves the light to it.
+ *     same results, and picking a result on the map moves the view to it.
  *
  * None of this runs while a document renders. Everything is read from the
  * page the first time it is needed, kept until the page changes
@@ -27,8 +28,9 @@
  *     notationOrder: 'section',            // how the index is arranged: 'section' | 'kind' | 'az'
  *     onNotationOrder(order) { ... },      // the reader picked another arrangement (to keep it)
  *     statusOf(el) { ... },                // optional: reading progress { s, q } (src/progress.js)
- *     print() { ... },                     // optional: a Print button on the "What does this use?" bar
- *     onFocusStart() { ... },              // optional: "What does this use?" starts lighting up
+ *     picker,                              // the host's TeXglassPick (or a function returning it):
+ *                                          //   "What does this use?" shows in it (no picker: no button)
+ *     onEditSearch(q) { ... },             // optional: "Change search" on a search by use
  *   });
  *   insight.setDefinitions(result.defs);   // after each render: the paper's macros
  *   insight.invalidate();                  // after the page changed
@@ -36,7 +38,7 @@
  *   insight.setNotationOrder('kind');      // arrange the notation index
  *   insight.toggleMap();                   // open or close the larger map (also the M key)
  *   insight.usedByNote(target);            // "Used in …" for the reference popover, or null
- *   insight.focus(theoremEl, 'uses' | 'usedBy' | 'both', { scroll, collapse }); insight.unfocus();
+ *   insight.focus(theoremEl, 'uses' | 'usedBy' | 'both', { at }); insight.unfocus();
  *   insight.repaint();                     // reading statuses changed: recolour the maps
  */
 (function (root) {
@@ -3860,8 +3862,8 @@
       detail.innerHTML =
         `<div class="dep-detail-head"><strong>${esc(n.name)}</strong>${n.note ? ` <span class="insight-muted">(${esc(n.note)})</span>` : ''} <a href="#" class="dep-go">Go to it</a>` +
         (lit
-          ? ` <span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
-          : ` <a href="#" class="dep-focus" title="Light up what it uses in the text, and fade the rest">Show what it uses</a></div>`) +
+          ? ` <span class="insight-muted">shown in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></div>`
+          : ` <a href="#" class="dep-focus" title="Show only it and what it uses in the text (your own pins stay as they are)">Show what it uses</a></div>`) +
         `<p><span class="insight-usedby-k">Uses</span> ${pickList(n.uses, (m) => n.edges.get(m), unlink((m) => m.key + ' > ' + n.key))}${indirect(up, n.uses)}</p>` +
         `<p><span class="insight-usedby-k">Used in</span> ${pickList(n.usedBy, (m) => m.edges.get(n), unlink((m) => n.key + ' > ' + m.key))}${indirect(down, n.usedBy)}</p>` +
         removedHtml +
@@ -4037,7 +4039,7 @@
         return true;
       }
       if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) select(view, n.order, focusState.dir);
-      else clearPick(view, `${esc(focusState.name)} is lit up in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
+      else clearPick(view, `${esc(focusState.name)} is shown in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
       view.synced = true;
       return true;
     }
@@ -4061,7 +4063,7 @@
       const detail = body.querySelector('.dep-detail');
       if (detail) {
         detail.innerHTML = `<p><strong>${focusState.stops.length || 'No'} result${focusState.stops.length === 1 ? '' : 's'}</strong> ${esc(focusState.text)} ` +
-          '<span class="insight-muted">lit up in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></p>';
+          '<span class="insight-muted">shown in the text</span> <a href="#" class="dep-unfocus" title="Show the whole page again">Done</a></p>';
       }
       view.synced = true;
       return true;
@@ -4198,18 +4200,24 @@
     }
 
 
-    // --- "What does this use?": light up a result's dependencies in the text ------
+    // --- "What does this use?": a temporary pin set in Show only these ----------------
 
     // Each result gets a small button by its heading (added when the pointer
-    // first comes near it, never while rendering). Pressing it lights up the
+    // first comes near it, never while rendering). Pressing it shows only the
     // result, its proof, the results it rests on (directly or not) and the
-    // equations it refers to, and fades the rest of the page. A bar at the
-    // bottom steps through them, switches to "what uses it", and ends it.
-    let focusState = null; // { id, dir, marked: [el], stops: [el], at }
-    let bar = null;
-    // "Hide the rest": the unrelated text is folded away instead of faded
-    // (kept from one result to the next until switched off).
-    let collapseRest = false;
+    // equations it refers to, in Show only these (src/pick.js, the host's
+    // picker), as a temporary pin set: the reader's own pins stay as they are,
+    // and Done throws the set away unless they keep it (Keep: save it as a pin
+    // set, or add it to their pins). The bar steps through the results and
+    // switches to "what uses it". A search by use shows what it finds the same way.
+    let focusState = null; // { id, key, dir, name, stops: [el], set, text, btn, view }
+    let opening = false; // a view is being put up: the picker's onStart must not take it down
+
+    /** The host's picker (src/pick.js), or null. */
+    const picker = () => {
+      const p = typeof opts.picker === 'function' ? opts.picker() : opts.picker;
+      return p && p.showTemp ? p : null;
+    };
 
     const USES_ICON =
       '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
@@ -4222,14 +4230,15 @@
     }
 
     function addUsesButton(el) {
-      if (!feats.uses || el._usesBtn || !el.id || el.closest(INSIDE_POPOVER)) return;
+      if (!feats.uses || el._usesBtn || !el.id || el.closest(INSIDE_POPOVER) || !picker()) return;
       const head = headOf(el);
       if (!head) return;
       const b = document_.createElement('button');
       b.type = 'button';
       b.className = 'uses-btn';
-      b.title = 'What does this use? Light up what it rests on, and fade the rest';
+      b.title = 'What does this use? Show only it and what it rests on (your own pins stay as they are)';
       b.setAttribute('aria-label', 'What does this use?');
+      b.setAttribute('aria-pressed', String(!!(focusState && focusState.id === el.id)));
       b.innerHTML = USES_ICON;
       b.addEventListener('mousedown', (e) => e.stopPropagation());
       b.addEventListener('click', (e) => {
@@ -4250,127 +4259,164 @@
       if (t) addUsesButton(t);
     });
 
-    const HEADING = /^H[1-6]$/;
-
-    // With "Hide the rest" on, a click on a folded proof opens it, and its fold
-    // arrow folds it again. This sits above the host's own proof folding (run
-    // first, in the capture phase) and leaves the folds the host remembers alone.
-    doc.addEventListener('click', (e) => {
-      if (!focusState || !collapseRest || e.ctrlKey || e.metaKey || !e.target.closest) return;
-      const proof = e.target.closest('.uses-proof');
-      if (!proof || !doc.contains(proof)) return;
-      const toggle = e.target.closest('.fold-toggle');
-      if (proof.classList.contains('uses-open')) {
-        if (!toggle || toggle.closest('.proof') !== proof || proof.classList.contains('folded')) return;
-        proof.classList.remove('uses-open');
-      } else {
-        if (!toggle && e.target.closest('a, .math-copyable .math[data-tex]')) return;
-        proof.classList.add('uses-open');
-        if (proof.classList.contains('folded')) return; // the host unfolds its own fold too
-      }
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }, true);
-
     /** The block an equation, figure or item reference lights up. */
     const blockOf = (t) => t.closest('.math-display, figure, table, .theorem, .proof, li, p') || t;
 
-    function clearMarks() {
-      if (!focusState) return;
-      for (const el of focusState.marked) el.classList.remove('uses-on', 'uses-sel', 'uses-fade', 'uses-ref', 'uses-head', 'uses-guess', 'uses-proof', 'uses-open');
-      doc.classList.remove('uses-focus', 'uses-collapse');
-      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
-    }
-
-    /** Mark the page: keep (Map element → classes) lit, fade the rest. Returns what was marked. */
-    function markKeep(keep) {
-      // Fade every block that holds nothing lit; go inside the ones that do.
-      const lit = new Set();
-      for (const k of keep.keys()) for (let p = k.parentElement; p && p !== doc; p = p.parentElement) lit.add(p);
-      const marked = [];
-      const walk = (node) => {
-        for (const c of node.children) {
-          const cls = keep.get(c);
-          if (cls) { c.classList.add(...cls.split(' ')); marked.push(c); }
-          else if (lit.has(c)) walk(c);
-          else if (!c.classList.contains('uses-btn')) {
-            c.classList.add('uses-fade');
-            if (HEADING.test(c.tagName) || (c.children.length === 1 && HEADING.test(c.firstElementChild.tagName))) c.classList.add('uses-head');
-            marked.push(c);
-          }
-        }
-      };
-      walk(doc);
-      doc.classList.add('uses-focus');
-      doc.classList.toggle('uses-collapse', collapseRest);
-      return marked;
-    }
-
-    /** The blocks a set of results refers to (equations, figures, cited works), lit with them. */
-    function addRefs(keep, nodes) {
-      const refs = new Set();
-      for (const m of nodes) {
-        for (const r of m.refs.statement) refs.add(r);
-        for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
-      }
+    /**
+     * Add to keep (element → class) the blocks refs point to (equations, figures,
+     * cited works), as 'pick-ref': not those inside a proof (the proof shows them,
+     * folded or open) or inside something kept already.
+     */
+    function addRefBlocks(keep, refs) {
       for (const r of refs) {
         const b = blockOf(r);
-        if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
-        keep.set(b, 'uses-ref');
+        if (!doc.contains(b) || keep.has(b) || b.closest('.proof')) continue;
+        if (Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
+        keep.set(b, 'pick-ref');
       }
     }
 
     /**
-     * Light up what el uses (dir 'uses'), what uses it ('usedBy'), or both
-     * ('both'). collapse: also switch on "Hide the rest". at: one of those
-     * results to start at (and scroll to) instead of el.
+     * What "What does this use?" shows for a result (by key, or its element):
+     * { el, n, keep: Map(element → class), stops: [el], count, counts, guessed },
+     * or null when it is not here. dir: 'uses', 'usedBy' or 'both'.
      */
-    function focus(el, dir, scroll, collapse, at) {
-      if (!el || !doc.contains(el)) return;
-      if (collapse) collapseRest = true;
-      if (!focusState && opts.onFocusStart) opts.onFocusStart(); // e.g. end "Show pinned results"
-      clearMarks();
-      hidePop();
+    function usesView(key, dir, elHint) {
+      const el = (key && elOfKey(key)) || elHint;
+      if (!el || !doc.contains(el)) return null;
       const g = getGraph();
       const n = g.byEl.get(el) || { el, name: thmName(el), proofs: [], refs: { statement: new Set(), proof: new Set() }, uses: new Set(), usedBy: new Set(), edges: new Map(), cites: new Map() };
       const others = Array.from(closure(n, dir)).sort((a, b) => a.order - b.order);
       // reached only through a link guessed from the wording ("the previous lemma")
       const sure = explicitClosure(n, dir);
       const guessed = others.filter((m) => !sure.has(m));
-      const keep = new Map(); // element -> class
-      keep.set(el, 'uses-sel');
-      for (const p of n.proofs) keep.set(p, 'uses-sel');
-      for (const m of others) if (!keep.has(m.el)) keep.set(m.el, sure.has(m) ? 'uses-on' : 'uses-on uses-guess');
+      const keep = new Map();
+      keep.set(el, 'pick-sel');
+      for (const m of others) if (m.el && doc.contains(m.el) && !keep.has(m.el)) keep.set(m.el, sure.has(m) ? '' : 'pick-guess');
       if (dir !== 'usedBy') {
         const refs = new Set([...n.refs.statement, ...n.refs.proof]);
         for (const m of others) for (const r of m.refs.statement) refs.add(r);
         // the works it cites, and those cited in the statements of what it uses
         for (const c of n.cites.keys()) if (c.el) refs.add(c.el);
         for (const m of others) for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
-        for (const r of refs) {
-          const b = blockOf(r);
-          if (!doc.contains(b) || Array.from(keep.keys()).some((k) => k.contains(b) || b.contains(k))) continue;
-          keep.set(b, 'uses-ref');
-        }
+        addRefBlocks(keep, refs);
       }
-      // The proofs of the other results: faded with the rest, but with "Hide
-      // the rest" on they stay, folded to their first line (a click opens one).
-      for (const m of others) for (const p of m.proofs) {
-        if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
-        keep.set(p, 'uses-fade uses-proof');
-      }
-      const marked = markKeep(keep);
-      const stops = [el].concat(others.map((m) => m.el));
       const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
-      const k = at ? Math.max(0, stops.indexOf(at)) : 0;
-      focusState = { id: el.id, key: n.key || keyOfEl(el), dir, marked, stops, at: k, btn: el._usesBtn || null, name: n.name, count: others.length, counts, guessed: guessed.length };
-      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
-      showBar();
-      syncMaps();
-      if (scroll) opts.jump(stops[k]);
+      return { el, n, keep, stops: [el].concat(others.filter((m) => keep.has(m.el)).map((m) => m.el)), count: others.length, counts, guessed: guessed.length };
     }
 
-    // --- Search by use: light up every result that uses these, and none of those ---
+    const results = (k) => `${k} result${k > 1 ? 's' : ''}`;
+
+    /** Leave the view: forget it (the picker has taken it down, or is about to). */
+    function clearFocus() {
+      if (!focusState) return;
+      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'false');
+      focusState = null;
+      syncMaps();
+    }
+
+    /** Put a temporary set up in the picker; then it is what focusState describes. */
+    function putUp(view, state) {
+      const p = picker();
+      if (!p) return false;
+      hidePop();
+      view.onEnd = () => { if (focusState && focusState.view === view) clearFocus(); };
+      opening = true;
+      let ok = false;
+      try { ok = p.showTemp(view); } finally { opening = false; }
+      if (!ok) return false;
+      if (focusState && focusState.view !== view) clearFocus();
+      focusState = Object.assign(state, { view });
+      if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
+      syncMaps();
+      return true;
+    }
+
+    /**
+     * Show only what el uses (dir 'uses'), what uses it ('usedBy'), or both
+     * ('both'), as a temporary pin set in Show only these. at: one of those
+     * results to start at instead of el. (scroll and collapse are kept for the
+     * callers of the old mode: the view always goes to it, and hides the rest.)
+     */
+    function focus(el, dir, scroll, collapse, at) {
+      if (!el || !doc.contains(el) || !picker()) return false;
+      const key = keyOfEl(el);
+      const first = usesView(key, dir, el);
+      if (!first) return false;
+      const name = first.n.name || thmName(el);
+      const sel = first.n;
+      // what the view shows is worked out again from the paper each time it is drawn
+      // (after an edit in VS Code the page is new), from the key
+      const current = () => usesView(key, dir, el) || { keep: new Map(), stops: [], count: 0, guessed: 0, counts: null };
+      let last = first;
+      const view = {
+        title: `${name}${WITH[dir] || ''}`,
+        at: at && first.stops.includes(at) ? at : first.el,
+        items: () => { last = current(); return Array.from(last.keep.keys()); },
+        stops: () => last.stops,
+        marks: () => Array.from(last.keep).filter(([, c]) => c),
+        open: () => (sel.proofs || []).filter((p) => doc.contains(p)),
+        label: (shown) => {
+          const f = last;
+          if (view.edited) return `<strong>${esc(name)}</strong>${WITH[dir] || ''}, changed: ${shown} shown`;
+          const what = dir === 'uses'
+            ? (f.count ? `uses ${results(f.count)}` : 'uses no other numbered result')
+            : dir === 'usedBy'
+              ? (f.count ? `is used in ${results(f.count)}` : 'is not used in any numbered result')
+              : (f.count
+                ? `uses ${f.counts.up ? results(f.counts.up) : 'none'}, is used in ${f.counts.down ? results(f.counts.down) : 'none'}`
+                : 'neither uses nor is used in any numbered result');
+          const guess = f.guessed ? ` <span class="uses-guessed" title="Named in the text without a link (“the previous lemma”, “Lemma 2.3”), so TeXglass guessed which result is meant. These have a dashed outline.">(${f.guessed} guessed)</span>` : '';
+          return `<strong>${esc(name)}</strong> ${what}${guess}`;
+        },
+        controls: () =>
+          `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-act="dir" data-dir="uses" aria-pressed="${dir === 'uses'}" title="What it uses">Uses</button>` +
+          `<button type="button" data-act="dir" data-dir="usedBy" aria-pressed="${dir === 'usedBy'}" title="What uses it">Used in</button>` +
+          `<button type="button" data-act="dir" data-dir="both" aria-pressed="${dir === 'both'}" title="What it uses and what uses it">Both</button></span>`,
+        act: (name_, b) => {
+          if (name_ === 'dir' && b.dataset.dir && b.dataset.dir !== dir) focus(elOfKey(key) || el, b.dataset.dir);
+        },
+        editable: true,
+        save: (info) => {
+          if (!info.edited && key) return saveSet([[key, dir]], view.title);
+          return saveSet(pinsOfEls(info.els), `${view.title} (changed)`);
+        },
+        keep: (info) => {
+          if (!info.edited && key) {
+            if (pinMap().get(key) === dir) return 'Already in your pins';
+            setPin(key, dir);
+            return 'Added to your pins';
+          }
+          const k = addPins(pinsOfEls(info.els));
+          return k ? `Added ${k} to your pins` : 'Already in your pins';
+        },
+      };
+      return putUp(view, { id: el.id, key, dir, name, stops: first.stops, btn: el._usesBtn || null });
+    }
+
+    /** Pins for what a view shows: [[key, 'self']] for its results, equations, figures and proofs. */
+    function pinsOfEls(els) {
+      const out = [];
+      for (const x of els || []) {
+        const k = keyOfEl(x);
+        if (k && !out.some((e) => e[0] === k)) out.push([k, 'self']);
+      }
+      return out;
+    }
+
+    /** Keep pins ([[key, d]]) as a pin set named after base (a number added if taken): its name. The pins now stay. */
+    function saveSet(entries, base) {
+      if (!entries.length) return null;
+      base = String(base || 'Set').replace(/^equation /, 'Equation ').slice(0, 80);
+      const same = (e) => e && e.p && Object.keys(e.p).length === entries.length && entries.every(([k, d]) => e.p[k] === d);
+      let name = base;
+      for (let i = 2; edits.view[name] && setSize(edits.view[name]) && !same(edits.view[name]); i++) name = `${base} (${i})`;
+      setEdit('view', name, { p: Object.fromEntries(entries), x: [], o: entries.map((e) => e[0]) }, true);
+      editsChanged('view', { label: `Saved the pin set “${name}”` });
+      return name;
+    }
+
+    // --- Search by use: show every result that uses these, and none of those ---
 
     /** A search term from a result or displayed-equation element (or a key): a graph node, or { eq, el, key }. */
     function termOf(x) {
@@ -4409,142 +4455,85 @@
       return { results: found.map((n) => n.el), nodes: found, inc, exc, text };
     }
 
-    /** Light up the results a search by use finds, and fade the rest. at: the result to go to. */
-    function showUses(q, at, scroll, collapse) {
+    /** What a search by use shows: { keep: Map(element → class), stops: [el], res }, or null. */
+    function searchView(q) {
       const res = searchUses(q);
       if (!res) return null;
-      if (collapse) collapseRest = true;
-      if (!focusState && opts.onFocusStart) opts.onFocusStart();
-      clearMarks();
-      hidePop();
       const keep = new Map();
-      // what was searched for stays lit; what was searched against stays visible, not lit
-      for (const t of res.inc) if (doc.contains(t.el)) keep.set(t.el, 'uses-sel');
-      for (const t of res.exc) if (doc.contains(t.el) && !keep.has(t.el)) keep.set(t.el, 'uses-ref');
-      for (const n of res.nodes) if (!keep.has(n.el)) keep.set(n.el, 'uses-on');
-      for (const n of res.nodes) for (const p of n.proofs) {
-        if (keep.has(p) || !doc.contains(p) || Array.from(keep.keys()).some((k) => k.contains(p) || p.contains(k))) continue;
-        keep.set(p, 'uses-fade uses-proof');
+      // what was searched for is marked; what was searched against shows, not marked
+      for (const t of res.inc) if (doc.contains(t.el)) keep.set(t.el, 'pick-sel');
+      for (const t of res.exc) if (doc.contains(t.el) && !keep.has(t.el)) keep.set(t.el, '');
+      for (const n of res.nodes) if (!keep.has(n.el)) keep.set(n.el, '');
+      const refs = new Set();
+      for (const m of res.nodes) {
+        for (const r of m.refs.statement) refs.add(r);
+        for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
       }
-      addRefs(keep, res.nodes);
-      const marked = markKeep(keep);
-      const stops = res.nodes.map((n) => n.el);
-      let k = at ? stops.indexOf(at) : 0;
-      if (k < 0) k = 0;
-      focusState = {
-        id: null, key: null, dir: 'set', marked, stops, at: k, btn: null, name: '', count: stops.length, guessed: 0,
-        set: { inc: res.inc.map((t) => t.key), exc: res.exc.map((t) => t.key), any: !!q.any, direct: !!q.direct }, text: res.text,
+      addRefBlocks(keep, refs);
+      return { keep, stops: res.nodes.map((n) => n.el), res };
+    }
+
+    /** Show what a search by use finds, as a temporary pin set in Show only these. at: the result to go to. */
+    function showUses(q, at) {
+      const first = searchView(q);
+      if (!first || !picker()) return null;
+      const set = { inc: first.res.inc.map((t) => t.key), exc: first.res.exc.map((t) => t.key), any: !!q.any, direct: !!q.direct };
+      const text = first.res.text;
+      let last = first;
+      const view = {
+        title: `Results that ${text}`,
+        at: at && first.stops.includes(at) ? at : first.stops[0] || null,
+        items: () => { last = searchView(set) || { keep: new Map(), stops: [] }; return Array.from(last.keep.keys()); },
+        stops: () => last.stops,
+        marks: () => Array.from(last.keep).filter(([, c]) => c),
+        label: (shown) => {
+          if (view.edited) return `<strong>Results that ${esc(text)}</strong>, changed: ${shown} shown`;
+          const k = last.stops.length;
+          return `<strong>${k ? results(k) : 'No result'}</strong> ${esc(text)}`;
+        },
+        controls: () => (opts.onEditSearch ? '<button type="button" data-act="search" title="Change the search">Change search</button>' : ''),
+        act: (name) => { if (name === 'search' && opts.onEditSearch) opts.onEditSearch(set); },
+        editable: true,
+        save: (info) => saveSet(pinsOfEls(info.edited ? info.els : last.stops), view.title + (info.edited ? ' (changed)' : '')),
+        keep: (info) => {
+          const k = addPins(pinsOfEls(info.edited ? info.els : last.stops));
+          return k ? `Added ${k} to your pins` : 'Already in your pins';
+        },
       };
-      showBar();
-      syncMaps();
-      if (scroll && stops[k]) opts.jump(stops[k]);
-      return res;
+      if (!putUp(view, { id: null, key: null, dir: 'set', name: '', stops: first.stops, set, text, btn: null })) {
+        // nothing found: say so on the map, with nothing hidden
+        return Object.assign(first.res, { shown: false });
+      }
+      return first.res;
     }
 
+    /** Back to the whole document: the temporary set is thrown away, the reader's pins are as they were. */
     function unfocus() {
-      clearMarks();
-      focusState = null;
-      if (bar) bar.hidden = true;
-      syncMaps();
+      if (!focusState) return;
+      const v = focusState.view;
+      clearFocus();
+      const p = picker();
+      if (!opening && p && p.temp && p.temp() === v) p.stop();
     }
 
-    /** After a new render: light up the same result again, if it is still there. */
+    /** After a new render: keep the view if what it is about is still there (the picker draws it again). */
     function refocus() {
       if (!focusState) return;
-      const { id, dir, set } = focusState;
-      focusState = null;
-      if (set) {
-        if (!showUses(set)) {
-          doc.classList.remove('uses-focus');
-          if (bar) bar.hidden = true;
-          syncMaps();
-        }
-        return;
+      if (focusState.set) {
+        const s = searchView(focusState.set);
+        if (!s) return unfocus();
+        focusState.stops = s.stops;
+      } else {
+        const el = (focusState.key && elOfKey(focusState.key)) || document_.getElementById(focusState.id);
+        if (!el || !doc.contains(el) || !el.classList.contains('theorem')) return unfocus();
+        const u = usesView(focusState.key, focusState.dir, el);
+        focusState.id = el.id;
+        focusState.stops = u ? u.stops : [el];
+        focusState.btn = el._usesBtn || null;
+        if (focusState.btn) focusState.btn.setAttribute('aria-pressed', 'true');
       }
-      const el = document_.getElementById(id);
-      if (el && doc.contains(el) && el.classList.contains('theorem')) focus(el, dir);
-      else {
-        doc.classList.remove('uses-focus');
-        if (bar) bar.hidden = true;
-        syncMaps();
-      }
+      syncMaps();
     }
-
-    function showBar() {
-      if (!bar) {
-        bar = document_.createElement('div');
-        bar.className = 'uses-bar';
-        bar.setAttribute('role', 'status');
-        bar.addEventListener('click', (e) => {
-          const b = e.target.closest('button');
-          if (!b || !focusState) return;
-          if (b.dataset.act === 'done') return unfocus();
-          if (b.dataset.act === 'print') return opts.print();
-          if (b.dataset.act === 'edit') return opts.onEditSearch(focusState.set);
-          if (b.dataset.act === 'pin') {
-            setPin(focusState.key, pinMap().get(focusState.key) === focusState.dir ? '' : focusState.dir);
-            return showBar();
-          }
-          if (b.dataset.act === 'collapse') {
-            collapseRest = !collapseRest;
-            doc.classList.toggle('uses-collapse', collapseRest);
-            showBar();
-            // stay with the result being read
-            opts.jump(focusState.stops[focusState.at]);
-            return;
-          }
-          if (b.dataset.dir) {
-            const el = document_.getElementById(focusState.id);
-            return focus(el, b.dataset.dir);
-          }
-          const k = focusState.stops.length;
-          if (!k) return;
-          focusState.at = (focusState.at + (b.dataset.act === 'next' ? 1 : -1) + k) % k;
-          opts.jump(focusState.stops[focusState.at]);
-          showBar();
-        });
-        document_.body.appendChild(bar);
-      }
-      const f = focusState;
-      const results = (k) => `${k} result${k > 1 ? 's' : ''}`;
-      const step = f.stops.length > 1
-        ? `<button type="button" data-act="prev" aria-label="Previous" title="Previous">‹</button><span class="uses-step">${f.at + 1}/${f.stops.length}</span><button type="button" data-act="next" aria-label="Next" title="Next">›</button>`
-        : '';
-      const rest =
-        `<button type="button" data-act="collapse" aria-pressed="${collapseRest}" title="Fold away the text that has nothing to do with it, or bring it back faded">Hide the rest</button>` +
-        (opts.print ? '<button type="button" data-act="print" title="Print what is shown, or save it as a PDF (with Hide the rest on, only that; folded proofs are left out)">Print</button>' : '') +
-        '<button type="button" data-act="done" class="uses-done" title="Show the whole page again (Esc)">Done</button>';
-      if (f.set) {
-        const n = f.stops.length;
-        bar.innerHTML =
-          `<span class="uses-what"><strong>${n ? results(n) : 'No result'}</strong> ${esc(f.text)}</span>` +
-          (opts.onEditSearch ? '<button type="button" data-act="edit" title="Change the search">Change</button>' : '') +
-          step + rest;
-        bar.hidden = false;
-        return;
-      }
-      const what = f.dir === 'uses'
-        ? (f.count ? `uses ${results(f.count)}` : 'uses no other numbered result')
-        : f.dir === 'usedBy'
-          ? (f.count ? `is used in ${results(f.count)}` : 'is not used in any numbered result')
-          : (f.count
-            ? `uses ${f.counts.up ? results(f.counts.up) : 'none'}, is used in ${f.counts.down ? results(f.counts.down) : 'none'}`
-            : 'neither uses nor is used in any numbered result');
-      const guess = f.guessed ? ` <span class="uses-guessed" title="Named in the text without a link (“the previous lemma”, “Lemma 2.3”), so TeXglass guessed which result is meant. These have a dashed outline.">(${f.guessed} guessed)</span>` : '';
-      bar.innerHTML =
-        `<span class="uses-what"><strong>${esc(f.name)}</strong> ${what}${guess}</span>` +
-        `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-dir="uses" aria-pressed="${f.dir === 'uses'}">Uses</button>` +
-        `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button>` +
-        `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
-        step +
-        `<button type="button" data-act="pin" aria-pressed="${pinMap().get(f.key) === f.dir}" title="Pin ${esc(f.name)} with ${f.dir === 'uses' ? 'what it uses' : f.dir === 'usedBy' ? 'what uses it' : 'what it uses and what uses it'}, to show only these later (Show only these) or save them">${pinMap().get(f.key) === f.dir ? 'Pinned' : 'Pin'}</button>` +
-        rest;
-      bar.hidden = false;
-    }
-
-    document_.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && focusState && !e.defaultPrevented && !document_.querySelector('dialog[open]')) unfocus();
-    });
 
     // after the page changed: redraw what is showing
     let refreshTimer = null;
@@ -4581,8 +4570,9 @@
         if (Object.keys(feats).some((k) => before[k] !== feats[k])) refreshViews();
       },
       features: () => Object.assign({}, feats),
-      // o: { scroll, collapse, at } (collapse switches on "Hide the rest"; at: the lit result to start at)
-      focus: (el, dir, o) => focus(el, dir || 'uses', !!(o && o.scroll), !!(o && o.collapse), o && o.at),
+      // o: { at } (the result to start at; scroll and collapse are no longer needed:
+      // the view always goes to it and shows only what it uses)
+      focus: (el, dir, o) => focus(el, dir || 'uses', true, true, o && o.at),
       /**
        * What el uses and what uses it, directly or not (o.direct: only links
        * written in the result itself), or null if it is not a result:
@@ -4648,11 +4638,16 @@
        * → { results: [elements], text } (null if a term is not a result or equation).
        */
       searchUses: (q) => { const r = searchUses(q); return r && { results: r.results, text: r.text }; },
-      /** Light up what searchUses(q) finds and fade the rest; o: { at: element, scroll, collapse }. */
-      showUses: (q, o) => !!showUses(q, o && o.at, !!(o && o.scroll), !!(o && o.collapse)),
+      /** Show only what searchUses(q) finds, as a temporary pin set; o: { at: element }. */
+      showUses: (q, o) => { const r = showUses(q, o && o.at); return !!(r && r.shown !== false); },
       unfocus,
       repaint,
-      focused: () => (focusState ? { id: focusState.id, key: focusState.key || null, dir: focusState.dir, collapse: collapseRest, search: focusState.set ? Object.assign({ text: focusState.text }, focusState.set) : null } : null),
+      /** What "What does this use?" (or a search by use) shows now, or null. */
+      focused: () => (focusState ? { id: focusState.id, key: focusState.key || null, dir: focusState.dir, search: focusState.set ? Object.assign({ text: focusState.text }, focusState.set) : null } : null),
+      /** The picker (src/pick.js) that shows "What does this use?", if not given as opts.picker. */
+      setPicker: (p) => { opts.picker = p; },
+      /** Keep pins ([[key, d]]) as a pin set named after base, the pins now staying: its name. */
+      saveSet,
       graph: getGraph,
       index: getIndex,
       notesFor,

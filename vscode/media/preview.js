@@ -871,13 +871,13 @@
       scroller: pane,
       reveal,
       onJump: hidePopover,
-      // Uses tab: pick a result, see what it uses and what uses it, or light up one side
-      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { scroll: true, collapse: true, at: o && o.at }); },
+      // Uses tab: pick a result, see what it uses and what uses it, or show only one side
+      onFocus: (el, o) => { if (insight) insight.focus(el, (o && o.dir) || 'both', { at: o && o.at }); },
       pinSet: (el) => (insight && insight.pinAsSet ? insight.pinAsSet(el, 'uses') : null),
       related: (el, o) => (insight ? insight.related(el, o) : null),
-      // or search by use ("Lemma 2 but not Assumption A"), and light up what it finds
+      // or search by use ("Lemma 2 but not Assumption A"), and show only what it finds
       uses: (q) => (insight ? insight.searchUses(q) : null),
-      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el, scroll: true, collapse: true }); },
+      onUses: (q, el) => { if (insight) insight.showUses(q, { at: el }); },
     })
     : null;
 
@@ -1149,9 +1149,9 @@
       },
       onUsedPinned: (on) => vscode.postMessage({ type: 'side-pref', key: 'texglass:notation-used-pinned', value: on }),
       statusOf: (el) => (progress ? progress.statusOf(el) : null),
-      print: () => vscode.postMessage({ type: 'print-request' }),
-      onFocusStart: () => { if (picker) picker.stop(); },
-      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change" on a search by use
+      // "What does this use?" and a search by use show in Show only these, as a temporary pin set
+      picker: () => { try { return picker; } catch (e) { return null; } },
+      onEditSearch: () => { if (finder) finder.open('uses'); }, // "Change search" on a search by use
       // pins, hidden results, own links, layout and saved maps: kept by the
       // extension with the reader's notes (paper.texglass.json), synced with them
       edits: {
@@ -1189,7 +1189,7 @@
       // they rest on); the extension prints it in the browser, or saves the e-book
       print: () => handout('print'),
       epub: window.TeXglassEpub ? () => handout('epub') : undefined,
-      onStart: () => { if (insight) insight.unfocus(); hidePopover(); },
+      onStart: () => hidePopover(),
     })
     : null;
   /** Send the handout of Show only these to the extension: figures inside, diagrams drawn. */

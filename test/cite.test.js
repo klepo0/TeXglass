@@ -223,6 +223,7 @@ async function page(browser, r) {
     `<section class="pane" id="pane" style="height:100vh;overflow:auto"><article id="preview" class="document">${r.blocks.join('\n')}</article></section>`
   );
   await p.addScriptTag({ path: path.join(ROOT, 'src/insight.js') });
+  await p.addScriptTag({ path: path.join(ROOT, 'src/pick.js') });
   await p.addScriptTag({ path: path.join(ROOT, 'src/cite.js') });
   return p;
 }
@@ -356,7 +357,7 @@ test('bibliography entries on arXiv get an Open in TeXglass button; others are l
   }
 });
 
-test('"What does this use?" lights up what a result rests on and fades the rest', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('"What does this use?" shows only what a result rests on, as a temporary set in Show only these', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -364,7 +365,13 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     const p = await page(browser, r);
     await p.evaluate(() => {
       window.jumped = [];
-      window.insight = TeXglassInsight.attach({ root: document.getElementById('preview'), jump: (el) => window.jumped.push(el.id) });
+      const root = document.getElementById('preview');
+      window.pick = TeXglassPick.attach({
+        root,
+        jump: (el) => window.jumped.push(el.id),
+        proofsOf: (el) => { const n = window.insight.graph().byEl.get(el); return n ? n.proofs : null; },
+      });
+      window.insight = TeXglassInsight.attach({ root, jump: (el) => window.jumped.push(el.id), picker: () => window.pick });
     });
     // No button until the pointer comes near a result; then one by its heading.
     assert.equal(await p.locator('.uses-btn').count(), 0);
@@ -375,65 +382,75 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     assert.equal(await main.locator('.thm-name').textContent(), 'Theorem 2.1'); // the heading is left as it was
     await btn.click();
     const state = () => p.evaluate(() => {
-      // the element's own mark, or a faded block around it
-      const cls = (el) => ['uses-sel', 'uses-on', 'uses-ref', 'uses-fade'].find((c) => el.classList.contains(c)) || (el.closest('.uses-fade') ? 'uses-fade' : '');
+      // what the view does with each block: the result asked about, shown, hidden, a folded or open proof
+      const cls = (el) => {
+        if (el.closest('.pick-hide')) return 'hide';
+        if (el.classList.contains('pick-sel')) return 'sel';
+        if (el.classList.contains('pick-ref')) return 'ref';
+        if (el.classList.contains('pick-proof')) return el.classList.contains('pick-open') ? 'open' : 'folded';
+        if (el.classList.contains('pick-on')) return 'on';
+        return '';
+      };
       return {
         thms: Array.from(document.querySelectorAll('#preview .theorem')).map(cls),
         proofs: Array.from(document.querySelectorAll('#preview .proof')).map(cls),
-        eq: cls(document.querySelector('#preview .math-display')),
+        bib: Array.from(document.querySelectorAll('#preview .bibliography li')).map(cls),
         paras: Array.from(document.querySelectorAll('#preview > p, #preview section > p')).map(cls),
-        bar: document.querySelector('.uses-bar:not([hidden])') && document.querySelector('.uses-bar').textContent,
-        focus: document.getElementById('preview').classList.contains('uses-focus'),
+        heads: Array.from(document.querySelectorAll('#preview h2')).map((h) => !!h.offsetParent),
+        bar: document.querySelector('.uses-bar:not([hidden])') && document.querySelector('.uses-bar .uses-what').textContent,
+        view: document.getElementById('preview').classList.contains('pick-view'),
       };
     });
     let s = await state();
     // Theorem 2.1 uses Lemma 1.2, which uses Lemma 1.1; Lemma 1.3 has nothing to do with it.
-    assert.deepEqual(s.thms, ['uses-on', 'uses-on', 'uses-fade', 'uses-sel']);
-    assert.deepEqual(s.proofs, ['uses-fade', 'uses-sel']); // its own proof is lit, Lemma 1.2's is not
-    assert.ok(s.paras.every((c) => c === 'uses-fade'));
+    assert.equal(s.view, true);
+    assert.deepEqual(s.thms, ['on', 'on', 'hide', 'sel']);
+    assert.deepEqual(s.proofs, ['folded', 'open']); // its own proof is open, Lemma 1.2's folded (a click opens it)
+    assert.deepEqual(s.bib, ['ref', 'ref']); // the works Lemma 1.2's statement cites
+    assert.ok(s.paras.every((c) => c === 'hide'));
+    assert.ok(s.heads.every(Boolean)); // the section headings stay
     assert.match(s.bar, /Theorem 2\.1 uses 2 results/);
-    // "Hide the rest" folds away what is faded, and keeps the setting for the next result.
-    const shown = () => p.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem, #preview > p, #preview section > p')).filter((el) => el.offsetParent).length);
-    const before = await shown();
-    await p.click('.uses-bar [data-act="collapse"]');
-    assert.equal(await p.getAttribute('.uses-bar [data-act="collapse"]', 'aria-pressed'), 'true');
-    assert.equal(await shown(), 3); // Lemmas 1.1, 1.2 and Theorem 2.1; no paragraph, no Lemma 1.3
-    assert.ok(before > 3);
-    assert.ok(await p.evaluate(() => document.querySelector('#preview h2, #preview h1').offsetParent)); // headings stay
-    await p.click('.uses-bar [data-act="collapse"]');
-    assert.equal(await shown(), before);
-    assert.deepEqual(await p.evaluate(() => window.jumped.splice(0)), [await p.evaluate(() => document.querySelectorAll('#preview .theorem')[3].id), await p.evaluate(() => document.querySelectorAll('#preview .theorem')[3].id)]); // it stays with the result
-    // Step through them.
+    assert.equal(await btn.getAttribute('aria-pressed'), 'true');
+    // it starts at the result asked about, then steps through what it uses
+    const ids = await p.evaluate(() => Array.from(document.querySelectorAll('#preview .theorem'), (el) => el.id));
+    assert.deepEqual(await p.evaluate(() => window.jumped.splice(0)), [ids[3]]);
+    assert.equal(await p.textContent('.uses-bar .uses-step'), '1/3');
     await p.click('.uses-bar [data-act="next"]');
-    const firstId = await p.evaluate(() => document.querySelector('#preview .theorem').id);
-    assert.deepEqual(await p.evaluate(() => window.jumped), [firstId]); // Lemma 1.1 comes after Theorem 2.1 itself
+    assert.deepEqual(await p.evaluate(() => window.jumped.splice(0)), [ids[0]]); // Lemma 1.1 comes after Theorem 2.1 itself
+    // a folded proof opens on a click
+    await p.click('#preview .proof >> nth=0');
+    assert.deepEqual((await state()).proofs, ['open', 'open']);
+    // The reader's own pins are not touched (there are none here).
+    assert.equal(await p.evaluate(() => window.insight.pinCount()), 0);
     // What uses Lemma 1.1, directly or not.
+    await p.keyboard.press('Escape');
     const first = p.locator('#preview .theorem').first();
     await first.hover();
     await first.locator('.uses-btn').click();
     s = await state();
-    assert.deepEqual(s.thms, ['uses-sel', 'uses-fade', 'uses-fade', 'uses-fade']);
+    assert.deepEqual(s.thms, ['sel', 'hide', 'hide', 'hide']);
     assert.match(s.bar, /Lemma 1\.1 uses no other numbered result/);
     await p.click('.uses-bar [data-dir="usedBy"]');
     s = await state();
-    assert.deepEqual(s.thms, ['uses-sel', 'uses-on', 'uses-fade', 'uses-on']);
-    // Lemma 1.2's proof refers to equation (1.1), which sits inside Lemma 1.1 (lit already).
+    assert.deepEqual(s.thms, ['sel', 'on', 'hide', 'on']);
+    assert.equal(await p.getAttribute('.uses-bar [data-dir="usedBy"]', 'aria-pressed'), 'true');
     // Esc, or the button again, ends it.
     await p.keyboard.press('Escape');
     s = await state();
-    assert.equal(s.focus, false);
+    assert.equal(s.view, false);
     assert.deepEqual(s.thms, ['', '', '', '']);
     assert.equal(s.bar, null);
+    assert.equal(await p.evaluate(() => window.insight.focused()), null);
     // From the map: "Show what it uses".
     await p.evaluate(() => window.insight.open('deps'));
     await p.click('.dep-node[data-n="1"]');
     await p.click('.dep-focus');
     s = await state();
-    assert.deepEqual(s.thms, ['uses-on', 'uses-sel', 'uses-fade', 'uses-fade']);
-    // A new render of the same page keeps it lit.
-    await p.evaluate((html) => { document.getElementById('preview').innerHTML = html; window.insight.invalidate(); }, r.blocks.join('\n'));
+    assert.deepEqual(s.thms, ['on', 'sel', 'hide', 'hide']);
+    // A new render of the same page keeps it.
+    await p.evaluate((html) => { document.getElementById('preview').innerHTML = html; window.insight.invalidate(); window.pick.refresh(); }, r.blocks.join('\n'));
     s = await state();
-    assert.deepEqual(s.thms, ['uses-on', 'uses-sel', 'uses-fade', 'uses-fade']);
+    assert.deepEqual(s.thms, ['on', 'sel', 'hide', 'hide']);
 
     // The map, when shown, lights up the same: Lemma 1.2 and what it uses, not what uses it.
     const map = () => p.evaluate(() => ({
@@ -448,16 +465,16 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     assert.deepEqual(m.sel, ['Lemma 1.2']);
     assert.deepEqual(m.up, ['Lemma 1.1']);
     assert.deepEqual(m.down, []); // Theorem 2.1 uses it, but the text shows "uses" only
-    assert.match(m.detail, /lit up in the text/);
+    assert.match(m.detail, /shown in the text/);
     // Switching to "Used in" moves the map along.
     await p.evaluate(() => window.insight.focus(document.getElementById('preview').querySelectorAll('.theorem')[1], 'usedBy'));
     m = await map();
     assert.deepEqual(m.up, []);
     assert.deepEqual(m.down, ['Theorem 2.1']);
-    // Picking another result on the map moves the light in the text to it, same direction.
+    // Picking another result on the map moves the view to it, same direction.
     await p.click('.dep-node:has-text("Lemma 1.1")');
     s = await state();
-    assert.deepEqual(s.thms, ['uses-sel', 'uses-on', 'uses-fade', 'uses-on']);
+    assert.deepEqual(s.thms, ['sel', 'on', 'hide', 'on']);
     assert.match(s.bar, /Lemma 1\.1 is used in 2 results/);
     m = await map();
     assert.deepEqual(m.sel, ['Lemma 1.1']);
@@ -467,19 +484,20 @@ test('"What does this use?" lights up what a result rests on and fades the rest'
     await p.evaluate(() => window.insight.focus(document.getElementById('preview').querySelectorAll('.theorem')[2], 'uses'));
     m = await map();
     assert.equal(m.picked, false);
-    assert.match(m.detail, /Lemma 1\.3 is lit up in the text, but it is not on the map/);
+    assert.match(m.detail, /Lemma 1\.3 is shown in the text, but it is not on the map/);
     await p.click('.dep-node:has-text("Theorem 2.1")');
     await p.click('.dep-unfocus');
     s = await state();
-    assert.equal(s.focus, false);
+    assert.equal(s.view, false);
+    assert.equal(s.bar, null);
     m = await map();
     assert.equal(m.picked, false);
     assert.match(m.detail, /No result picked/);
-    // With nothing lit in the text, picking on the map only lights the map.
+    // With nothing shown on its own in the text, picking on the map only lights the map.
     await p.click('.dep-node:has-text("Lemma 1.2")');
     m = await map();
     assert.deepEqual(m.down, ['Theorem 2.1']); // both sides, as before
-    assert.equal((await state()).focus, false);
+    assert.equal((await state()).view, false);
   } finally {
     await browser.close();
   }

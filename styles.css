@@ -1565,15 +1565,13 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
   .tg-step-btn, .tg-step-bar, .tg-step-fold { display: none !important; }
   #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
-  .uses-focus .uses-fade { opacity: 1 !important; }
-  .uses-focus .uses-sel, .uses-focus .uses-on { outline: none !important; }
-  /* Print what the view shows: with "Hide the rest" or "Show selected results"
-     (src/pick.js), hidden blocks and folded proofs stay out. */
+  .pick-view :is(.pick-sel, .pick-guess) { outline: none !important; }
+  .pick-view .pick-ref { background: none !important; }
+  /* Print what the view shows: in Show only these (src/pick.js), hidden blocks
+     and folded proofs stay out. */
   .pick-box, .pick-bar { display: none !important; }
   .pick-mode .pick-able { outline: none !important; }
-  .pick-view .pick-proof:not(.pick-open),
-  .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof),
-  .uses-focus.uses-collapse .uses-proof:not(.uses-open) { display: none !important; }
+  .pick-view .pick-proof:not(.pick-open) { display: none !important; }
   /* a page printed from VS Code with a view applied (src/export.js) */
   .tg-view-hide { display: none !important; }
   :root {
@@ -2190,32 +2188,26 @@ figure.float:hover > .tg-pin-btn { opacity: 1; }
 .ref-popover .tg-pin-btn, .insight-popover .tg-pin-btn, .insight-dialog .dep-preview .tg-pin-btn { display: none !important; }
 @media (hover: none) { .tg-pin-btn { opacity: 0.6; } }
 
-.uses-focus .uses-fade { opacity: 0.22; transition: opacity 0.2s; }
-.uses-focus .uses-fade:is(h1, h2, h3, h4, h5, h6, .uses-head) { opacity: 0.5; }
-.uses-focus .uses-fade:hover { opacity: 0.6; }
-/* "Hide the rest": unrelated blocks fold away; headings of sections with something lit stay */
+/* Show only these (src/pick.js): the proofs of the results shown stay, folded
+   to their first line until clicked */
 @media screen {
-  .uses-focus.uses-collapse .uses-fade:not(.uses-head):not(.uses-proof) { display: none; }
-  /* the proofs of the results shown stay, folded to their first line until clicked
-     (also in "Show selected results", src/pick.js) */
-  .uses-focus.uses-collapse .uses-proof { opacity: 1; }
-  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > :not(:first-child) { display: none; }
-  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > p:first-child {
+  .pick-view .pick-proof:not(.pick-open) > :not(:first-child) { display: none; }
+  .pick-view .pick-proof:not(.pick-open) > p:first-child {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--muted);
     cursor: pointer;
   }
-  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) > p:first-child .qed { display: none; }
-  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) .fold-toggle { opacity: 1; color: var(--accent); }
-  :is(.uses-focus.uses-collapse .uses-proof:not(.uses-open), .pick-view .pick-proof:not(.pick-open)) .fold-toggle svg { transform: rotate(-90deg); }
+  .pick-view .pick-proof:not(.pick-open) > p:first-child .qed { display: none; }
+  .pick-view .pick-proof:not(.pick-open) .fold-toggle { opacity: 1; color: var(--accent); }
+  .pick-view .pick-proof:not(.pick-open) .fold-toggle svg { transform: rotate(-90deg); }
 }
-.uses-focus .uses-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
-.uses-focus .uses-on { outline: 1.5px solid var(--thm-border); outline-offset: 4px; border-radius: 2px; }
-.uses-focus .uses-ref { background: var(--accent-soft); border-radius: 4px; }
-/* reached only through a link guessed from the wording */
-.uses-focus .uses-on.uses-guess { outline-style: dashed; }
+/* "What does this use?" in Show only these: the result asked about, what it
+   refers to, and (dashed) what was reached through a link guessed from the wording */
+.pick-view .pick-sel { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+.pick-view .pick-guess { outline: 1.5px dashed var(--thm-border); outline-offset: 4px; border-radius: 2px; }
+.pick-view .pick-ref { background: var(--accent-soft); border-radius: 4px; }
 .uses-guessed { color: var(--muted); font-size: 0.9em; cursor: help; }
 .uses-bar {
   position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 12;
@@ -2246,6 +2238,13 @@ figure.float:hover > .tg-pin-btn { opacity: 1; }
 .uses-bar .pick-out-menu button { border: none; text-align: left; padding: 6px 10px; white-space: nowrap; }
 .uses-bar .pick-out-menu button:hover, .uses-bar .pick-out-menu button:focus-visible { background: var(--accent-soft); }
 .uses-done { font-weight: 600; }
+.pick-saved { color: var(--muted); }
+/* a phone: the bar spans the width, and its menus open across it (not off the screen) */
+@media (max-width: 600px) {
+  .uses-bar { left: 8px; right: 8px; bottom: 8px; transform: none; max-width: none; }
+  .uses-bar .pick-out { position: static; }
+  .uses-bar .pick-out-menu { left: 8px; right: 8px; min-width: 0; }
+}
 
 /* --- comparing versions (src/diff.js) -------------------------------------------
    Changed blocks get an amber bar and their new words underlined in green; the

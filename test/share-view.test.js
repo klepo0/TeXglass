@@ -287,7 +287,7 @@ test('Share keeps the reading order and the notes: the recipient sees the study 
   }
 });
 
-test('Share with What does this use? and Hide the rest opens the same focus', { skip: !playwright && 'Playwright is not installed' }, async (t) => {
+test('Share with What does this use? opens the same view, and old links (with or without Hide the rest) still open', { skip: !playwright && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await playwright.chromium.launch(); } catch (e) { return t.skip('no browser: ' + e.message.split('\n')[0]); }
   try {
@@ -300,24 +300,40 @@ test('Share with What does this use? and Hide the rest opens the same focus', { 
     await page.hover('#preview .theorem[data-label="thm:main"]');
     await page.waitForSelector('#preview .theorem[data-label="thm:main"] .uses-btn', { state: 'attached' });
     await page.evaluate(() => document.querySelector('#preview .theorem[data-label="thm:main"] .uses-btn').click());
-    await page.waitForFunction(() => document.getElementById('preview').classList.contains('uses-focus'));
-    await page.click('.uses-bar:not(.pick-bar) [data-act="collapse"]');
+    // it opens in Show only these, as a temporary set
+    await page.waitForFunction(() => document.getElementById('preview').classList.contains('pick-view'));
+    assert.match(await page.textContent('.pick-bar .uses-what'), /Theorem 3 uses/);
     await page.click('#share');
     await page.waitForFunction(() => window.__copied.length === 1);
     const link = (await page.evaluate(() => window.__copied))[0];
     assert.match(link, /&view=/);
     assert.match(await page.textContent('#status'), /what Theorem 3 uses/);
+    // Done: the reader's pins are as they were (none)
+    await page.click('.pick-bar [data-act="done"]');
+    assert.equal(await page.evaluate(() => document.getElementById('preview').classList.contains('pick-view')), false);
 
-    const other = await ctx.newPage();
-    other.on('pageerror', (e) => errors.push(e.message));
-    await other.goto(local(link));
-    await other.waitForFunction(() => document.getElementById('preview').classList.contains('uses-focus'), null, { timeout: 15000 });
-    const st = await other.evaluate(() => ({
-      collapse: document.getElementById('preview').classList.contains('uses-collapse'),
-      sel: document.querySelector('#preview .theorem[data-label="thm:main"]').classList.contains('uses-sel'),
-      a: document.querySelector('#preview .theorem[data-label="lem:a"]').classList.contains('uses-on'),
-    }));
-    assert.deepEqual(st, { collapse: true, sel: true, a: true });
+    const opened = async (url) => {
+      const other = await ctx.newPage();
+      other.on('pageerror', (e) => errors.push(e.message));
+      await other.goto(url);
+      await other.waitForFunction(() => document.getElementById('preview').classList.contains('pick-view'), null, { timeout: 15000 });
+      const st = await other.evaluate(() => ({
+        sel: document.querySelector('#preview .theorem[data-label="thm:main"]').classList.contains('pick-sel'),
+        a: document.querySelector('#preview .theorem[data-label="lem:a"]').classList.contains('pick-on'),
+        bar: document.querySelector('.pick-bar .uses-what').textContent,
+      }));
+      await other.close();
+      return st;
+    };
+    let st = await opened(local(link));
+    assert.equal(st.sel, true);
+    assert.equal(st.a, true);
+    assert.match(st.bar, /Theorem 3 uses/);
+    // A link made before (What does this use? without Hide the rest) opens the same way.
+    const old = await page.evaluate(() => TeXglassShare.encodeView({ m: 'u', f: 'label:thm:main', d: 'uses', h: 0 }));
+    st = await opened(local(link.replace(/&view=[^&]*/, '&view=' + encodeURIComponent(old))));
+    assert.equal(st.sel, true);
+    assert.equal(st.a, true);
     assert.deepEqual(errors, []);
     await ctx.close();
   } finally {

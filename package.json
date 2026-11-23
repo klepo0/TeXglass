@@ -41,6 +41,7 @@
     "src/find.js",
     "src/copytex.js",
     "src/insight.js",
+    "src/pick.js",
     "src/cite.js",
     "src/reader.js",
     "styles.css",

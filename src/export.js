@@ -220,6 +220,7 @@ ${print ? `<script>${PRINT_SCRIPT}</script>\n` : ''}</body>
     'src/find.js',
     'src/copytex.js',
     'src/insight.js',
+    'src/pick.js',
     'src/cite.js',
     'src/reader.js',
   ];
