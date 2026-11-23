@@ -449,7 +449,7 @@
   // On a phone the contents open as a drawer over the page: start closed, and
   // close it again on a tap outside it or Escape.
   document.addEventListener('pointerdown', (e) => {
-    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target)) { tocWanted = false; showToc(); }
+    if (narrow.matches && tocWanted && !tocPane.contains(e.target) && !tocToggle.contains(e.target) && !e.target.closest('#pins')) { tocWanted = false; showToc(); }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && narrow.matches && tocWanted) { tocWanted = false; showToc(); }
@@ -1649,12 +1649,13 @@
 
   // --- phones and tablets ---------------------------------------------------------
   // A narrow window keeps a few large buttons in the toolbar (Open,
-  // Navigate, Save for offline, Share, the theme, "…"); the others, Settings and the handwritten look too, move to the top of the "…" menu and back
+  // Navigate, the pin, Share, the theme, "…"); the others, Save for offline,
+  // Settings and the handwritten look too, move to the top of the "…" menu and back
   // again when the window widens. The side panel and the margin notes become
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#pins', '#gh-link', '#settings', '#hand-toggle']
+  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#save-offline', '#gh-link', '#settings', '#hand-toggle']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
@@ -2250,23 +2251,16 @@
 
   function updateLibraryButton() {
     updateShareButton();
-    const btn = $('library-save');
-    if (!btn) return;
+    const tb = $('save-offline');
+    if (!tb) return;
     const saved = !!(paper && libraryHere.has(paper.key));
-    btn.setAttribute('aria-checked', String(saved));
-    btn.textContent = saved ? 'Saved for offline' : 'Save for offline';
-    btn.title = saved
+    tb.setAttribute('aria-pressed', String(saved));
+    tb.disabled = !paper;
+    tb.title = saved
       ? 'This paper is kept on this device and opens with no connection. Click to remove it'
       : 'Keep this paper on this device, figures and all, to read it with no connection';
-    btn.disabled = !paper;
-    const tb = $('save-offline');
-    if (tb) {
-      tb.setAttribute('aria-pressed', String(saved));
-      tb.disabled = !paper;
-      tb.title = btn.title;
-      tb.setAttribute('aria-label', saved ? 'Saved for offline' : 'Save for offline');
-      tb.querySelector('.tb-label').textContent = saved ? 'Saved offline' : 'Save offline';
-    }
+    tb.setAttribute('aria-label', saved ? 'Saved for offline' : 'Save for offline');
+    tb.querySelector('.tb-label').textContent = saved ? 'Saved offline' : 'Save offline';
     if (saved && store.get('texglass:last-saved') !== paper.key) markOpened(paper.key);
     store.set('texglass:last-saved', saved ? paper.key : '');
   }
@@ -2561,7 +2555,6 @@
   }
 
   if (Library && NotesSync && libraryDialog) {
-    $('library-save').addEventListener('click', () => { saveForOffline(); setMenu(false); });
     $('save-offline').addEventListener('click', () => saveForOffline());
     $('library-open').addEventListener('click', () => { setMenu(false); showLibrary(); });
     $('arxiv-library').addEventListener('click', showLibrary);
@@ -2576,7 +2569,7 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncLibrary(); });
     setTimeout(syncLibrary, 1500);
   } else {
-    for (const id of ['library-save', 'library-open', 'save-offline']) if ($(id)) $(id).hidden = true;
+    for (const id of ['library-open', 'save-offline']) if ($(id)) $(id).hidden = true;
   }
 
   // --- share -----------------------------------------------------------------------
@@ -3161,14 +3154,22 @@
       showPinned: picker ? () => picker.show() : undefined,
       pinMore: picker ? () => picker.start() : undefined,
       onOpen: () => { setMenu(false); hidePopover(); },
+      // the pin opens the side panel's Pins tab (the list under the pin only when the panel cannot show)
+      openTab: TeXglassPins.tabOpener ? TeXglassPins.tabOpener({
+        get side() { return sideView; },
+        shown: () => !tocPane.hidden,
+        setShown: (on) => {
+          if (on && tocToggle.hidden) return false;
+          setMenu(false);
+          tocWanted = on;
+          showToc();
+          spyToc();
+          return !tocPane.hidden === on;
+        },
+      }) : undefined,
     })
     : null;
   if (!pinsButton && $('pins')) $('pins').hidden = true;
-  if ($('pick-results')) {
-    // with pins: show them; without: pin some first
-    if (picker) $('pick-results').addEventListener('click', () => { if (insight && insight.pinCount()) picker.show(); else picker.start(); });
-    else $('pick-results').hidden = true;
-  }
   // A result cited in a proof previews as its hypotheses and conclusion; the
   // reader's ticks are kept with their notes (and sync with them).
   const hypTicks = new Map(); // ticks while no paper is open to keep them with
@@ -3202,6 +3203,7 @@
       pinsTab: window.TeXglassPins && insight ? (body) => (pinsPanel = TeXglassPins.panel({
         body, insight, margin, jump: (el) => jumpTo(el),
         showPinned: picker ? () => picker.show() : undefined,
+        pinMore: picker ? () => picker.start() : undefined,
         onJump: () => { if (narrow.matches) { tocWanted = false; showToc(); } },
         // pins gathered from several papers
         collections: Collections ? {

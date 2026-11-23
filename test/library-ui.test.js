@@ -95,23 +95,24 @@ test('saving papers for offline reading, opening them offline, and the list on a
     await page.waitForFunction(() => /Kept offline/.test(document.getElementById('preview').textContent));
     await figureShown(page);
 
-    // Save it with the toolbar button (it fits in the phone's toolbar).
-    assert.equal(await page.isVisible('#save-offline'), true);
+    // On a phone the pin has the toolbar's place and Save for offline is at the top of the … menu.
+    assert.equal(await page.isVisible('#save-offline'), false);
+    assert.equal(await page.isVisible('.toolbar > #pins'), true);
     const bar = await page.evaluate(() => {
-      const b = document.getElementById('save-offline').getBoundingClientRect();
+      const b = document.getElementById('pins').getBoundingClientRect();
       return { right: b.right, width: innerWidth, scroll: document.querySelector('.toolbar').scrollWidth - document.querySelector('.toolbar').clientWidth };
     });
     assert.ok(bar.right <= bar.width && bar.scroll <= 0, 'the toolbar fits: ' + JSON.stringify(bar));
     assert.equal(await page.getAttribute('#save-offline', 'aria-pressed'), 'false');
     await page.screenshot({ path: process.env.LIBRARY_BAR_SHOT || path.join(require('os').tmpdir(), 'library-bar.png') });
+    await page.click('#more');
+    assert.equal(await page.isVisible('#more-compact #save-offline .tb-label'), true, 'with its name in the menu');
     await page.click('#save-offline');
     await page.waitForFunction(() => document.getElementById('save-offline').getAttribute('aria-pressed') === 'true');
     assert.match(await page.textContent('#status'), /Saved for offline reading \(\d+ B\)/);
-    // the … menu item says so too
-    await page.click('#more');
-    assert.equal(await page.getAttribute('#library-save', 'aria-checked'), 'true');
-    assert.equal(await page.textContent('#library-save'), 'Saved for offline');
-    await page.click('#more');
+    // the button says so (the … menu has no second Save for offline)
+    assert.equal(await page.getAttribute('#save-offline', 'aria-label'), 'Saved for offline');
+    assert.equal(await page.locator('#library-save').count(), 0);
 
     // The list goes up to the gist (not the paper).
     const t0 = Date.now();
@@ -179,7 +180,7 @@ test('saving papers for offline reading, opening them offline, and the list on a
     assert.match(await p2.textContent('#library-list .arxiv-result-meta'), /saved on another device/);
     await p2.click('#library-list .library-download');
     await p2.waitForFunction(() => /Kept offline/.test(document.getElementById('preview').textContent));
-    await p2.waitForFunction(() => document.getElementById('library-save').getAttribute('aria-checked') === 'true');
+    await p2.waitForFunction(() => document.getElementById('save-offline').getAttribute('aria-pressed') === 'true');
     await p2.click('#more');
     await p2.click('#library-open');
     await p2.waitForSelector('#library-list .library-item:not(.library-elsewhere)');

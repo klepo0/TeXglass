@@ -61,7 +61,7 @@ letters are ignored while you type in a text field.
 | <kbd>→</kbd> / <kbd>←</kbd> | While [stepping through a proof](#understanding-the-logic): the next / previous piece. <kbd>Space</kbd> and <kbd>Shift+Space</kbd>, <kbd>PageDown</kbd> and <kbd>PageUp</kbd> do the same; <kbd>Home</kbd> / <kbd>End</kbd> go to the first / last piece; <kbd>Esc</kbd> stops. |
 | <kbd>N</kbd> / <kbd>Shift+N</kbd> | Jump to the next / previous margin note (the author's and your own). |
 | <kbd>P</kbd> | [Pin](#everything-pinned-in-one-place) or unpin what is under the pointer (a result, proof, equation or figure), or the selected text. |
-| <kbd>J</kbd> / <kbd>K</kbd> | Go to the next / previous pin, in your reading order (the paper's order until you reorder). |
+| <kbd>J</kbd> / <kbd>K</kbd> | Go to the next / previous pin, in your reading order (the paper's order until you reorder). In **Show only these**, the next / previous item it shows (like **‹** **›** on its bar). |
 | <kbd>Ctrl+=</kbd> / <kbd>Ctrl+-</kbd> / <kbd>Ctrl+0</kbd> | Zoom the document in / out / back to 100%. Ctrl + mouse wheel or a pinch zooms too. |
 | Click a formula | Copy its LaTeX. |
 | <kbd>←</kbd> <kbd>→</kbd> on a divider | Resize the side panel, the margin column or the [text width](#looks-themes-handwritten-notes-zoom) from the keyboard. |
@@ -295,11 +295,12 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   until you have it) makes a set of the paper's theorems (or, without any, its
   propositions) with the definitions they rest on, in the paper's order; it is
   pinned at once when nothing else is, and you change it like any set. Under
-  them is the same list as the toolbar's
-  [pin](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
+  them is the [pin list](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
   <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
   unpin, **Save as set…** and **Update “name”**, **Show only these** and
-  **Clear all**. Click an item to go to it. Below them, **Across papers**
+  **Clear all** (with nothing pinned, **Pin results…** lets you tick results
+  and equations in the text). Click an item to go to it. The **pin** in the
+  toolbar opens this tab. Below them, **Across papers**
   holds your [collections](#collections-pins-from-several-papers). Not in the
   exported reader page.
 - **Notation**: an index of the paper's macros and defined symbols, with
@@ -342,7 +343,7 @@ kept per paper with your notes, so it is exported, imported and synced with them
   screen hold your finger still for a moment first, so a swipe still scrolls.
   <kbd>Alt</kbd> + arrow keys move the focused result. **Reset layout** puts
   everything back.
-- **Pin**: pick a result on the map and choose under **Pin**: **It** (just
+- **Pin**: pick a result on the map and choose under **Pin**: **Just this** (just
   the result), **+ uses** (with everything it uses, directly or not), **+ used
   in** (with everything that uses it) or **+ both**. Pinned results get a pin on
   the map; what a pin brings along gets a dashed outline. You can also pin from
@@ -352,26 +353,30 @@ kept per paper with your notes, so it is exported, imported and synced with them
   as a [pin set](#everything-pinned-in-one-place) of its own ("Lemma 2 with
   what it uses"); your other pins stay pinned.
 - **Pin an equation**: rest on a numbered equation and click the pin that
-  appears at its left (or tick it in **Show pinned results**). A pinned equation
+  appears at its left (or tick it after **Pin results…** or **Change**). A pinned equation
   shows on the map as a small round node, linked to the results that refer to
   it. Equations a result's statement or proof refers to come along with a
   **+ uses** pin anyway.
-- **Show pinned**: on the map, or **Show pinned results…** in the … menu
-  (VS Code: **TeXglass: Show Pinned Results…**), shows only what is pinned,
+- **Show only these**: on the map, or in the [Pins tab](#the-side-panel-contents-map-pins-notation)
+  (VS Code also: **TeXglass: Show Pinned Results…**), shows only what is pinned,
   with the headings of their sections and the title; the rest is hidden. Proofs
   come along folded to their first line; click one to open it. Under each
   pinned result, **Rests on** lists what it rests on, folded (see
-  [Handouts](#handouts-print-or-epub)). **Print** and **EPUB** make a handout of
-  the view. **Change** lets you pin or unpin by ticking results and
+  [Handouts](#handouts-print-or-epub)). **‹** and **›** on its bar (or
+  <kbd>J</kbd> and <kbd>K</kbd>) go to the next and previous pinned item, in
+  your reading order, with a count such as 2/5. **Print or share** opens a small
+  menu: **Print or save as PDF** and **EPUB e-book** make a handout of the view,
+  **Share a link** shares it. **Change** lets you pin or unpin by ticking results and
   equations in the text; **Done** or <kbd>Esc</kbd> shows the whole paper.
-  With nothing pinned, the menu item starts with the ticking.
 - **Save** the pins as a [pin set](#everything-pinned-in-one-place) (**Save as
-  set…** above the map; a name is suggested, such as "Theorem 2 with what it
+  set…** in the Pins tab, or above the larger map; a name is suggested, such as "Theorem 2 with what it
   uses", which you can type over): the sets are listed beside **Sets**; click
   one to pin exactly those again, **×** deletes it. The set whose pins are
   showing is highlighted; once you change those pins, **Update “name”** keeps
-  the new pins under the same name. **Unpin all** clears every pin (symbols
-  too), not the sets. **Reset map…** leaves the symbols you pinned and the sets alone.
+  the new pins under the same name. **Clear all** clears every pin (symbols
+  too), not the sets. In the side panel the Map tab keeps only the count,
+  **Show only these** and **Pins tab** (the sets and the rest are one click
+  away); the larger map has them all, since the side panel is out of reach there. **Reset map…** leaves the symbols you pinned and the sets alone.
 - **Hide**: **Hide from map** leaves a result off the map. **Hidden (n)**
   above the map draws the hidden ones faded, so you can pick one and **Show on
   map** again.
@@ -388,8 +393,11 @@ kept per paper with your notes, so it is exported, imported and synced with them
 
 The **pin** in the toolbar (web viewer, browser extension and the Overleaf
 panel; in VS Code it floats at the top right of the preview once something is
-pinned) shows how many things are pinned, and a click lists them all, grouped
-by kind (**By kind**) or in your own reading order (**In order**):
+pinned) shows how many things are pinned, and a click opens the side panel's
+**Pins** tab, which lists them all, grouped by kind (**By kind**) or in your
+own reading order (**In order**). A second click goes back to the tab you were
+on, or closes the panel if the pin opened it. A document with no sections has
+no side panel: there the list opens under the pin instead.
 
 - **Results** and **Equations** pinned on the map, from the text, or with the
   pin on a reference's preview (a result pinned with what it uses says so).
@@ -411,11 +419,12 @@ everything, after asking (your pin sets and notes stay, so a saved set brings
 them back; the reading order goes, so new pins start in the paper's order).
 <kbd>P</kbd> pins (or unpins) what is under the pointer, or the selected text;
 <kbd>J</kbd> and <kbd>K</kbd> go to the next and previous pin. **Show only these** shows only
-the pinned results, proofs, equations and figures (as **Show pinned** does) and the
+the pinned results, proofs, equations and figures and the
 paragraphs holding pinned text, with what each pinned result rests on folded
-under it; **Print** and **EPUB** on its bar make a handout of it. With nothing pinned
-the list says how to pin. <kbd>Esc</kbd> or a click outside closes it; on a phone
-it opens as a sheet at the bottom, from **Pinned** in the **…** menu.
+under it; **‹** **›** on its bar step from one pinned item to the next, and
+**Print or share** makes a handout of it or shares it. With nothing pinned
+the list says how to pin. On a phone the pin sits in the toolbar and opens the
+side panel as a drawer on the Pins tab.
 
 ### Collections: pins from several papers
 
@@ -501,8 +510,8 @@ and the definitions that one refers to); the notation from the
 
 #### Handouts (print or EPUB)
 
-**Print** and **EPUB** on the bar of **Show only these** turn the view into a
-short handout:
+**Print or share** on the bar of **Show only these** opens a small menu whose
+**Print or save as PDF** and **EPUB e-book** turn the view into a short handout:
 
 - the title, then your **Reading order** with the notes (when you made an order
   or wrote notes);
@@ -566,16 +575,18 @@ shared view makes the same handout.
     mark the pieces with `\tgstep`; a proof with such marks is cut only
     there.
   - Settings: **Step through proofs**. VS Code: `texglass.stepThroughProofs`.
-- **Show pinned results**: see only the results and numbered equations you
+- **Show only these**: see only the results and numbered equations you
   pinned (see [Pins and your own map](#pins-and-your-own-map)). Start it from
-  the map's **Show pinned**, the … menu (web viewer) or **TeXglass: Show
+  the Pins tab or the map's **Show only these**, or **TeXglass: Show
   Pinned Results…** (VS Code, also in the preview's `…` menu).
-  - With nothing pinned yet, every result and numbered equation gets a tick
-    box; click one to pin it, again to unpin it. **Show pinned** shows only
+  - With nothing pinned yet, **Pin results…** in the Pins tab gives every
+    result and numbered equation a tick box; click one to pin it, again to
+    unpin it. **Show only these** shows only
     those, with the headings of their sections and the paper's title.
   - The proof of a shown result comes along folded to its first line. Click
     it to open it; its fold arrow folds it again.
-  - **Print** on the bar prints exactly that view, to a printer or as a PDF:
+  - **‹** **›** (or <kbd>J</kbd> / <kbd>K</kbd>) go from one pinned item to the next.
+  - **Print or share** → **Print or save as PDF** on the bar prints exactly that view, to a printer or as a PDF:
     the pinned results and equations, and only the proofs you opened. For
     example, pin Theorem 1 with what it uses and (3.4), open the proof of
     Theorem 1, and print. <kbd>Ctrl+P</kbd> (web viewer) and **TeXglass:
@@ -805,8 +816,8 @@ install; after the first visit it opens and renders offline.
   same view instead of at a section: **Show only these** with your pinned
   results, equations, figures and text passages (and the proofs you opened in
   it), **What does this use?** (or what uses it), with **Hide the rest** or
-  without, or a search by use. The bar of **Show only these** has its own
-  **Share** button too. The view rides along in the link as `&view=…`.
+  without, or a search by use. The bar of **Show only these** has
+  **Share a link** under its **Print or share** button too. The view rides along in the link as `&view=…`.
 - Whoever opens such a link sees a **Shared view** bar. Their own pins stay as
   they are: **Keep these pins** adds the shared ones to theirs, **Dismiss** (or
   <kbd>Esc</kbd>) goes back to the whole paper. Sharing again from a shared view
@@ -815,8 +826,8 @@ install; after the first visit it opens and renders offline.
 
 **Saving papers for offline reading**
 
-- **Save offline** (the bookmark in the toolbar, also **Save for offline** in
-  the **…** menu) keeps the open paper on this device: its source, figures and
+- **Save offline** (the bookmark in the toolbar; on a phone, at the top of the
+  **…** menu) keeps the open paper on this device: its source, figures and
   where it came from. Once saved the bookmark fills in and reads **Saved
   offline**; press it again to remove the paper.
 - The **Open** dialog lists your five most recently saved or opened saved
@@ -847,8 +858,7 @@ install; after the first visit it opens and renders offline.
 
 **The … menu**, in groups:
 
-- **Papers**: **OAI preprints…**, **Saved papers…**, **Save for offline** (see
-  above) and **Compare versions…** (see [Comparing versions](#comparing-versions)).
+- **Papers**: **OAI preprints…**, **Saved papers…** (see above) and **Compare versions…** (see [Comparing versions](#comparing-versions)).
 - **Save and export**: **Save** (<kbd>Ctrl+S</kbd>, back to the file, with live
   reload when it changes on disk in Chrome and Edge), **Print or save as PDF**
   (<kbd>Ctrl+P</kbd>; prints what the page shows, so pinned results or **Hide the
@@ -857,9 +867,8 @@ install; after the first visit it opens and renders offline.
   notation on hover, the side panel and Navigate; see [Command line](#command-line)
   for what it holds) and **Export as EPUB** (an e-book for e-readers; see
   [E-books (EPUB)](#e-books-epub)).
-- **Reading**: **Show pinned results…** (see
-  [Understanding the logic](#understanding-the-logic)), **Highlights and notes**
-  and **Reading progress**.
+- **Reading**: **Highlights and notes** and **Reading progress**. (Show only
+  these is in the Pins tab, which the toolbar's pin opens.)
 - **Your notes**: **Sync notes with GitHub…** (**Syncing with GitHub…** once
   signed in), **Export notes** and **Import notes…**.
 - **For authors**: **Copy AI prompt for authors** (see
@@ -1108,17 +1117,17 @@ visit, like the web viewer anywhere.
 that opens the paper in TeXglass, at the section you are reading, or with the
 view you have on (**Show only these**, **What does this use?**).
 
-**Papers to read offline.** Before a trip, open each paper and tap the bookmark
-in the toolbar (**Save offline**). The **Open** dialog lists the recent ones and
+**Papers to read offline.** Before a trip, open each paper and tap **Save
+offline** (the bookmark) at the top of the **…** menu. The **Open** dialog lists the recent ones and
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
-large buttons: **Open**, **Navigate** (the magnifier), **Save offline** (the
-bookmark), **Share**, the theme toggle and **…**. The mode switch (Preview,
+large buttons: **Open**, **Navigate** (the magnifier), the **pin** (it opens
+the side panel on the Pins tab), **Share**, the theme toggle and **…**. The mode switch (Preview,
 Edit, Split), zoom, **Contents** (the side panel; a swipe in from the edge opens
 it too), **Hide proofs**,
-**Pinned**, **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
+**Save offline** (the bookmark), **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is
 wider.
 

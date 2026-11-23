@@ -3254,7 +3254,7 @@
       const what = el.classList.contains('math-display') ? 'equation' : el.classList.contains('proof') ? 'proof' : el.matches('figure.float') ? (figKeyOf(el) || 'fig:figure').slice(4).replace(/\s.*$/, '').toLowerCase() : 'result';
       b.setAttribute('aria-pressed', String(on));
       b.setAttribute('aria-label', on ? `Unpin this ${what}` : `Pin this ${what}`);
-      b.title = on ? `Pinned: click to unpin (Show pinned shows only what is pinned)` : `Pin this ${what}: Show pinned then shows only what you pinned, and it is marked on the map`;
+      b.title = on ? `Pinned: click to unpin (Show only these shows only what is pinned)` : `Pin this ${what}: Show only these then shows only what you pinned, and it is marked on the map`;
     }
     doc.addEventListener('mouseover', (e) => {
       if (!e.target.closest) return;
@@ -3391,16 +3391,28 @@
       const pins = pinMap();
       const saved = savedViews();
       const parts = [];
+      const showOnly = '<button type="button" data-show-pinned title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text">Show only these</button>';
+      // In the side panel the pin sets, Save as set… and Clear all are in the Pins tab, next door.
+      if (view.onPins) {
+        if (pins.size) {
+          parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
+          if (opts.showPinned) parts.push(showOnly);
+        } else {
+          parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text.</span>');
+        }
+        if (pins.size || saved.length) parts.push(`<button type="button" data-open-pins title="The pin list, your pin sets (Save as set…, switch sets) and Clear all">Pins tab${saved.length ? ` · ${saved.length} ${saved.length === 1 ? 'set' : 'sets'}` : ''}</button>`);
+        return `<div class="dep-pins">${parts.join('')}</div>`;
+      }
       if (pins.size) {
         parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
-        if (opts.showPinned) parts.push('<button type="button" data-show-pinned title="Show only the pinned results and equations in the text, the rest hidden">Show pinned</button>');
+        if (opts.showPinned) parts.push(showOnly);
         parts.push(view.naming
           ? `<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this pin set" aria-label="Name for the pin set" maxlength="80" value="${esc(suggestName())}"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>`
           : '<button type="button" data-save-view title="Keep everything pinned under a name, as a pin set to switch back to later (saved with your notes)">Save as set…</button>');
         // the set in use, changed since: one click keeps the new pins under its name
         const act = activeSet();
         if (act && !view.naming && !setIsOn(edits.view[act])) parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}" title="${esc(`Keep the pins now under “${act}”, instead of what it held`)}">Update “${esc(act)}”</button>`);
-        parts.push('<button type="button" data-unpin-all title="Take every pin away">Unpin all</button>');
+        parts.push('<button type="button" data-unpin-all title="Unpin everything (your pin sets and notes stay)">Clear all</button>');
       } else {
         parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text, to show only those later.</span>');
       }
@@ -3417,7 +3429,7 @@
       const d = pinMap().get(x.key) || '';
       const pinB = (dir, label, title) => `<button type="button" data-mpin="${dir}" aria-pressed="${d === dir}" title="${esc(title)}">${label}</button>`;
       let html = '<div class="dep-edit"><span class="insight-usedby-k">Pin</span> <span class="dep-pin-btns" role="group" aria-label="Pin">' +
-        pinB('self', 'It', 'Pin just this') +
+        pinB('self', 'Just this', 'Pin just this') +
         (x.eq || x.cite ? '' : pinB('uses', '+ uses', 'Pin it with everything it uses, directly or not') +
           pinB('usedBy', '+ used in', 'Pin it with everything that uses it, directly or not') +
           pinB('both', '+ both', 'Pin it with what it uses and what uses it')) +
@@ -3925,7 +3937,7 @@
     function mapClick(view, e) {
       const t = e.target.closest('[data-mpin], [data-mhide], [data-link], [data-link-cancel], [data-link-edit], [data-unlink], [data-relink], ' +
         '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout], ' +
-        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update], [data-mset]');
+        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update], [data-mset], [data-open-pins]');
       if (!t) return false;
       e.preventDefault();
       const cur = () => {
@@ -3962,6 +3974,7 @@
       else if (d.resetNo != null) { view.confirmReset = false; fillDeps(view); }
       else if (d.resetYes != null) { view.confirmReset = false; resetMap(); }
       else if (d.viewUpdate != null) saveView(d.viewUpdate);
+      else if (d.openPins != null) { if (view.onPins) view.onPins(); }
       return true;
     }
 
@@ -4169,6 +4182,7 @@
       const view = {
         body, tab: 'notation', selected: null, side: true, shown: false,
         leave: mopts.onJump || (() => {}),
+        onPins: mopts.onPins || null, // the side panel's Pins tab, which holds the pin sets
         isShown: () => view.shown,
       };
       wire(view);
@@ -4523,7 +4537,7 @@
         `<button type="button" data-dir="usedBy" aria-pressed="${f.dir === 'usedBy'}">Used in</button>` +
         `<button type="button" data-dir="both" aria-pressed="${f.dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
         step +
-        `<button type="button" data-act="pin" aria-pressed="${pinMap().get(f.key) === f.dir}" title="Pin ${esc(f.name)} with ${f.dir === 'uses' ? 'what it uses' : f.dir === 'usedBy' ? 'what uses it' : 'what it uses and what uses it'}, to show only these later (Show pinned) or save them">${pinMap().get(f.key) === f.dir ? 'Pinned' : 'Pin'}</button>` +
+        `<button type="button" data-act="pin" aria-pressed="${pinMap().get(f.key) === f.dir}" title="Pin ${esc(f.name)} with ${f.dir === 'uses' ? 'what it uses' : f.dir === 'usedBy' ? 'what uses it' : 'what it uses and what uses it'}, to show only these later (Show only these) or save them">${pinMap().get(f.key) === f.dir ? 'Pinned' : 'Pin'}</button>` +
         rest;
       bar.hidden = false;
     }
@@ -4762,7 +4776,8 @@
     body.className = 'side-insight';
     body.hidden = true;
     o.list.after(body);
-    const view = o.insight ? o.insight.mount(body, { onJump: o.onJump }) : null;
+    // the map's pin sets live in the Pins tab, when there is one (pinsTab below)
+    const view = o.insight ? o.insight.mount(body, { onJump: o.onJump, onPins: o.pinsTab ? () => show('pins', true) : null }) : null;
     if (!view) tabs.querySelectorAll('[data-side-tab="notation"], [data-side-tab="deps"]').forEach((b) => b.remove());
     // the Pins tab: the pin sets on top, the pin list under them
     const pinsBody = doc.createElement('div');

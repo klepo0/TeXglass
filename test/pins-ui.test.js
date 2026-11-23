@@ -14,6 +14,12 @@ let chromium = null;
 try { ({ chromium } = require('playwright')); } catch (e) { /* not installed */ }
 
 const ROOT = path.join(__dirname, '..');
+
+/** The pin opens the side panel's Pins tab; a second click would close it again. */
+async function openPins(page) {
+  if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
+  await page.waitForSelector('.side-pins', { state: 'visible' });
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Pins}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -64,10 +70,14 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
 
     // nothing pinned: no count, and the list says how to pin
     assert.equal(await badge(), '');
+    // the pin opens the side panel's Pins tab; a second click closes the panel it opened
     await page.click('#pins');
-    assert.match(await page.textContent('.tg-pins-menu'), /Nothing pinned yet/);
-    await page.keyboard.press('Escape');
-    assert.equal(await page.isVisible('.tg-pins-menu'), false);
+    assert.equal(await page.getAttribute('#toc-pane', 'data-tab'), 'pins');
+    assert.match(await page.textContent('.side-pins'), /Nothing pinned yet/);
+    assert.equal(await page.isVisible('.side-pins [data-pins-act="more"]'), true, 'Pin results… with nothing pinned');
+    assert.equal(await page.isVisible('.tg-pins-menu'), false, 'no second list under the pin');
+    await page.click('#pins');
+    assert.equal(await page.isVisible('.side-pins'), false);
 
     // a result from its reference's preview
     await page.locator('#preview .proof a.ref', { hasText: '1.1' }).first().hover();
@@ -103,13 +113,13 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     await page.click('#preview .proof:has-text("By Lemmas") .tg-pin-btn');
     assert.equal(await badge(), '4');
     await page.mouse.move(5, 500);
-    await page.click('#pins');
-    assert.match(await page.textContent('.tg-pins-menu'), /Proof of Theorem 1\.3/);
+    await openPins(page);
+    assert.match(await page.textContent('.side-pins'), /Proof of Theorem 1\.3/);
     await page.click('.tg-pins-actions [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     assert.equal(await page.$eval('#preview .proof:has-text("By Lemmas")', (p) => p.classList.contains('pick-on') && !p.classList.contains('pick-proof')), true, 'a pinned proof shows in full');
     await page.keyboard.press('Escape');
-    await page.click('#pins');
+    await openPins(page);
     await page.click('.tg-pins-row:has-text("Proof of") .tg-pins-x');
     await page.click('.tg-pins-row:has-text("Figure 1") .tg-pins-x');
     await page.keyboard.press('Escape');
@@ -140,30 +150,55 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
     assert.equal(await badge(), '4');
 
     // the list: grouped, jump on click, × unpins
-    await page.click('#pins');
-    const titles = await page.$$eval('.tg-pins-title', (els) => els.map((e) => e.textContent));
+    await openPins(page);
+    const titles = await page.$$eval('.side-pins .tg-pins-title', (els) => els.map((e) => e.textContent));
     assert.deepEqual(titles, ['Results', 'Equations', 'Notation', 'Text']);
-    const text = await page.textContent('.tg-pins-menu');
+    const text = await page.textContent('.side-pins');
     assert.match(text, /Lemma 1\.1/);
     assert.match(text, /\(2\)/);
     assert.match(text, /Middle words/);
     assert.equal(await page.isVisible('.tg-pins-actions [data-pins-act="show"]'), true, 'Show only these');
     await page.evaluate(() => { document.getElementById('preview-pane').scrollTop = 0; });
     await page.click('.tg-pins-row:has-text("Middle words") .tg-pins-go');
-    assert.equal(await page.isVisible('.tg-pins-menu'), false, 'a jump closes the list');
-    await page.click('#pins');
+    assert.equal(await page.isVisible('.side-pins'), true, 'on a wide window the Pins tab stays open after a jump');
     await page.click('.tg-pins-row:has-text("Lemma 1.1") .tg-pins-x');
     assert.equal(await badge(), '3');
-    assert.doesNotMatch(await page.textContent('.tg-pins-menu'), /Lemma 1\.1/, 'the list follows');
+    assert.doesNotMatch(await page.textContent('.side-pins'), /Lemma 1\.1/, 'the list follows');
     // Show only these keeps the paragraph holding the pinned text in view
-    await page.keyboard.press('Escape');
-    await page.click('#pins');
     await page.click('.tg-pins-actions [data-pins-act="show"]');
     await page.waitForSelector('#preview.pick-view');
     assert.equal(await page.isVisible('#preview p:has-text("Middle words")'), true, 'the pinned text\'s paragraph shows');
     assert.equal(await page.isVisible('#preview .math-display:has-text("(2)")'), true, 'the pinned equation shows');
     assert.equal(await page.isVisible('#preview .theorem:has-text("Second")'), false, 'the rest is hidden');
+    // ‹ › on the bar (and J / K) go from one pinned item to the next
+    const stepAt = () => page.textContent('.pick-bar .uses-step');
+    const n = (await stepAt()).split('/')[1];
+    assert.ok(+n >= 2, 'more than one pin to step through: ' + n);
+    assert.equal(await stepAt(), '1/' + n, 'starts at the first');
+    await page.click('.pick-bar [data-act="next"]');
+    assert.equal(await stepAt(), '2/' + n);
+    await page.click('.pick-bar [data-act="prev"]');
+    assert.equal(await stepAt(), '1/' + n);
+    await page.keyboard.press('k');
+    assert.equal(await stepAt(), n + '/' + n, 'K from the first goes round to the last');
+    await page.keyboard.press('j');
+    assert.equal(await stepAt(), '1/' + n);
+    // Print, EPUB and Share are one button, with a menu
+    assert.equal(await page.isVisible('.pick-bar [data-act="print"]'), false);
+    await page.click('.pick-bar [data-act="out"]');
+    assert.equal(await page.isVisible('.pick-bar [data-act="print"]'), true);
+    assert.equal(await page.isVisible('.pick-bar [data-act="epub"]'), true);
+    await page.mouse.click(5, 400);
+    assert.equal(await page.isVisible('.pick-bar [data-act="print"]'), false, 'a click elsewhere closes the menu');
     await page.keyboard.press('Escape');
+    // the side panel's map: the pin sets are in the Pins tab, one click away
+    await page.click('[data-side-tab="deps"]');
+    await page.waitForSelector('.side-insight [data-open-pins]');
+    assert.equal(await page.locator('.side-insight [data-save-view], .side-insight [data-unpin-all]').count(), 0, 'no second Save as set… or Clear all');
+    await page.click('.side-insight [data-open-pins]');
+    assert.equal(await page.getAttribute('#toc-pane', 'data-tab'), 'pins');
+    // the … menu has no Show pinned results… (the Pins tab and the map have Show only these)
+    assert.equal(await page.locator('#pick-results').count(), 0);
     // the text pin is a highlight marked pin, kept with the notes
     const pinned = await page.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join('\n'));
     assert.match(pinned, /"quote":"Middle words\."[^}]*\}[^}]*"pin":true/);
@@ -173,7 +208,7 @@ test('the pin lists everything pinned, from previews, the Notation tab and a sel
   }
 });
 
-test('on a phone the pin moves into the "…" menu and the list opens as a sheet', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+test('on a phone the pin takes Save for offline\'s place in the toolbar and opens the Pins tab as a drawer', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
   try {
@@ -181,25 +216,37 @@ test('on a phone the pin moves into the "…" menu and the list opens as a sheet
     await serve(page);
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    assert.equal(await page.isVisible('#pins'), false);
+    // the pin is in the toolbar, right after Navigate; Save for offline is in the "…" menu
+    assert.equal(await page.isVisible('.toolbar > #pins'), true);
+    assert.equal(await page.evaluate(() => document.getElementById('find').nextElementSibling.id), 'pins');
+    assert.equal(await page.isVisible('#save-offline'), false);
     // Contents is not in the phone toolbar either: it is in the "…" menu (and a swipe opens it)
     assert.equal(await page.isVisible('#toc-toggle'), false);
     await page.click('#more');
     assert.equal(await page.isVisible('#more-compact #toc-toggle .tb-label'), true);
+    assert.equal(await page.locator('#more-compact #save-offline').count(), 1, 'Save for offline in the menu');
     await page.click('#toc-toggle');
     await page.waitForTimeout(300);
     assert.equal(await page.isVisible('#toc-pane'), true, 'Contents opens the side panel');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
-    await page.click('#more');
-    assert.equal(await page.isVisible('#more-compact #pins'), true);
-    assert.equal(await page.isVisible('#more-compact #pins .tb-label'), true, 'with its name in the menu');
+    // the pin opens the side panel's drawer on the Pins tab (Escape, a tap outside or a swipe closes it)
+    await page.click('#pins');
+    await page.waitForTimeout(300);
+    assert.equal(await page.isVisible('.side-pins'), true);
+    assert.equal(await page.isVisible('.tg-pins-menu'), false);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert.equal(await page.isVisible('#toc-pane'), false);
+    const scroll = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    assert.equal(scroll, true, 'no sideways scrolling');
+    // a document with no sections has no side panel: the list opens under the pin, as a sheet
+    await page.setInputFiles('#file-input', { name: 'flat.tex', mimeType: 'text/x-tex', buffer: Buffer.from('\\documentclass{article}\\newtheorem{lemma}{Lemma}\\begin{document}\\begin{lemma}\\label{a} One.\\end{lemma}\\end{document}') });
+    await page.waitForFunction(() => document.querySelectorAll('#preview .theorem').length === 1);
     await page.click('#pins');
     assert.equal(await page.isVisible('.tg-pins-menu.tg-pins-sheet'), true);
     const box = await page.locator('.tg-pins-menu').boundingBox();
     assert.ok(Math.abs(box.y + box.height - 800) < 2, 'at the bottom of the screen');
-    const scroll = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-    assert.equal(scroll, true, 'no sideways scrolling');
   } finally {
     await browser.close();
   }

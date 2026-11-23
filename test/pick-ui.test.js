@@ -137,6 +137,7 @@ test('Show pinned results shows only the pinned items, proofs folded, and prints
     // The same view on a page rendered again (how VS Code prints).
     const view = await p.evaluate(() => window.pick.snapshot());
     assert.ok(view && view.keep.length > 0 && view.keep.length < view.n);
+    await p.click('.pick-bar [data-act="out"]');
     await p.click('.pick-bar [data-act="print"]');
     assert.equal(await p.evaluate(() => window.printed), 1);
 
