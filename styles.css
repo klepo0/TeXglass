@@ -1548,6 +1548,8 @@ pre.verbatim { background: var(--code-bg); padding: 0.8em 1em; border-radius: 6p
 @page { margin: 2.2cm 2.4cm 2.4cm; }
 
 @media print {
+  .pick-sheet-go { color: inherit; }
+  .pick-sheet, .pick-memo { break-inside: avoid; }
   .tg-step-btn, .tg-step-bar, .tg-step-fold { display: none !important; }
   #preview .proof.tg-stepping .tg-step-hidden, .proof.tg-stepping .tg-step-hidden.tg-step-hidden { display: revert !important; }
   .uses-btn, .uses-bar, .rp-marks, .tg-pin-btn { display: none !important; }
@@ -2351,10 +2353,54 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-pins-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 4px 2px; margin-top: 4px; border-top: 1px solid var(--rule); }
 .tg-pins-menu .tg-pins-actions button { border: 1px solid var(--rule); padding: 5px 12px; }
 .tg-pins-menu .tg-pins-actions button:hover { border-color: var(--accent); }
+/* list by kind or in the reading order */
+.tg-pins-views { margin-left: auto; display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.tg-pins-menu .tg-pins-views button { border-radius: 0; padding: 2px 8px; font-size: 12.5px; color: var(--muted); }
+.tg-pins-menu .tg-pins-views button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+/* pin sets */
+.tg-pins-sets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 0 8px 6px; font-size: 13px; }
+.tg-pins-sets-k { color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.tg-pins-set { display: inline-flex; }
+.tg-pins-menu .tg-pins-sets button { border: 1px solid var(--rule); padding: 2px 8px; }
+.tg-pins-menu .tg-pins-set button:first-child { border-radius: 5px 0 0 5px; }
+.tg-pins-menu .tg-pins-set .tg-pins-set-del { border-left: 0; border-radius: 0 5px 5px 0; padding: 2px 6px; color: var(--muted); }
+.tg-pins-menu .tg-pins-set-on button { border-color: var(--accent); }
+.tg-pins-menu .tg-pins-set-on button:first-child { background: var(--accent); color: var(--paper); }
+.tg-pins-menu .tg-pins-sets .tg-pins-set-update { border-color: var(--accent); color: var(--accent); }
+.tg-pins-menu .tg-pins-sets button:hover { border-color: var(--accent); }
+.tg-pins-set-new { display: inline-flex; gap: 4px; }
+.tg-pins-set-name, .tg-pins-memo-in { font: inherit; font-size: 13px; padding: 2px 6px; border: 1px solid var(--accent); border-radius: 5px; background: var(--paper); color: var(--ink); }
+.tg-pins-set-name { width: 11em; }
+/* a row: drag handle, the item and its note, pen, × */
+.tg-pins-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tg-pins-main .tg-pins-go { flex: none; }
+.tg-pins-menu .tg-pins-memo { text-align: left; padding: 0 8px 6px; margin-top: -3px; font-size: 12.5px; color: var(--accent); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-pins-memo-in { margin: 0 8px 6px; }
+.tg-pins-drag { flex: none; width: 22px; color: var(--muted); cursor: grab !important; touch-action: none; display: flex; align-items: center; justify-content: center; }
+.tg-pins-drag svg { width: 9px; height: 14px; }
+.tg-pins-dragging { background: var(--accent-soft); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+.tg-pins-dragging .tg-pins-drag { cursor: grabbing !important; }
+.tg-pins-pen { flex: none; width: 28px; color: var(--muted); opacity: 0; display: flex; align-items: center; justify-content: center; }
+.tg-pins-pen svg { width: 14px; height: 14px; }
+.tg-pins-row:hover .tg-pins-pen, .tg-pins-pen:focus-visible { opacity: 1; }
+.tg-pins-pen:hover { color: var(--ink); }
+.tg-pins-drag:focus-visible, .tg-pins-pen:focus-visible, .tg-pins-memo:focus-visible, .tg-pins-views button:focus-visible, .tg-pins-sets button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (hover: none) { .tg-pins-pen { opacity: 1; } }
 @media (max-width: 760px) {
   .tg-pins-go, .tg-pins-x { min-height: 44px; }
-  .tg-pins-x { width: 44px; }
+  .tg-pins-x, .tg-pins-pen { width: 44px; }
+  .tg-pins-drag { width: 36px; }
 }
+/* Show only these: the study sheet at the top, each pin's number and note above it */
+.pick-sheet { margin: 0 0 1.4em; padding: 10px 14px; border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--paper); font-size: 0.92em; }
+.pick-sheet-head { margin-bottom: 4px; }
+.pick-sheet ol { margin: 0; padding-left: 1.6em; }
+.pick-sheet li { margin: 2px 0; }
+.pick-sheet-go { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.pick-sheet-go:hover { text-decoration: underline; }
+.pick-sheet-note, .pick-memo-t { font-style: italic; color: var(--muted); }
+.pick-memo { display: flex; align-items: baseline; gap: 8px; margin: 1em 0 -0.4em; font-size: 0.9em; }
+.pick-memo-n { flex: none; min-width: 1.5em; height: 1.5em; line-height: 1.5em; border-radius: 0.75em; text-align: center; background: var(--accent); color: var(--paper); font-size: 0.85em; font-weight: 600; font-variant-numeric: tabular-nums; }
 .toolbar .more-compact #settings, .toolbar .more-compact #hand-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
 .more-compact #settings .tb-label, .more-compact #hand-toggle .tb-label { display: inline; }
 .toolbar .more-compact #settings svg, .toolbar .more-compact #hand-toggle svg { width: 18px; height: 18px; }

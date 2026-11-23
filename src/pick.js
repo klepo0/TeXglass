@@ -18,13 +18,17 @@
  *     isOn(el),           // whether a result or equation is pinned
  *     toggle(el),         // pin it, or unpin it
  *     clear(),            // unpin everything
+ *     sheet(),            // optional: the study sheet, the pins in the reader's order with
+ *                         //   their notes: [{ el, name, note }]; shown at the top of the
+ *                         //   view (and each note above its pin) once there is an order or a note
+ *     hasOrder(),         // optional: whether the reader put the pins in an order
  *   });
  *   pick.start();         // pin: click results and equations to pin them
  *   pick.show();          // show only the pinned ones
  *   pick.pinsChanged();   // the host's pins changed: show (or tick) them again
  *   pick.stop();          // the whole document again
  *   pick.refresh();       // after a new render: the same selection again
- *   pick.showShared({ items, keep, onEnd }); // a view from a link (src/share.js),
+ *   pick.showShared({ items, keep, onEnd, sheet, hasOrder }); // a view from a link (src/share.js),
  *                         //   shown without touching the reader's pins: Keep / Dismiss
  *
  * TeXglassPick.snapshot(root) tells which blocks are showing now (in any view,
@@ -43,7 +47,7 @@
   /** Blocks a view is made of; TeXglassExport counts the same ones (VIEW_BLOCKS there). */
   const BLOCKS = 'h1, h2, h3, h4, h5, h6, header, .theorem, .proof, .math-display, figure, table, li, p, blockquote, pre';
   /** Not part of the document: popovers, margin notes, the margin column. */
-  const OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar';
+  const OUTSIDE = '.ref-popover, .insight-popover, .insight-dialog, .mnote, .tg-margin, .tg-hlbar, .tg-note-pad, .tg-note-dock, .pick-bar, .uses-bar, .pick-sheet, .pick-memo';
   const HEADING = /^H([1-6])$/;
   const CLASSES = ['pick-on', 'pick-hide', 'pick-proof', 'pick-open', 'pick-head'];
 
@@ -136,7 +140,7 @@
     function clearMarks() {
       for (const el of marked) el.classList.remove(...CLASSES);
       marked = [];
-      for (const b of doc.querySelectorAll('.pick-box')) b.remove();
+      for (const b of doc.querySelectorAll('.pick-box, .pick-sheet, .pick-memo')) b.remove();
       for (const el of doc.querySelectorAll('.pick-able')) el.classList.remove('pick-able', 'pick-on');
       doc.classList.remove('pick-mode', 'pick-view');
     }
@@ -232,9 +236,48 @@
         }
       };
       walk(doc);
+      const sheet = drawSheet();
       doc.classList.add('pick-view');
       showBar();
-      if (opts.jump && !stay) opts.jump(els[0]);
+      if (opts.jump && !stay) opts.jump(sheet || els[0]);
+    }
+
+    // --- the study sheet: the pins in the reader's order, with their notes ---------
+
+    function drawSheet() {
+      const src = shared || opts;
+      let rows = [];
+      try { rows = src.sheet ? (src.sheet() || []).filter((r) => r && r.el && doc.contains(r.el)) : []; } catch (e) { rows = []; }
+      const ordered = !!(src.hasOrder && src.hasOrder());
+      if (!rows.length || (!ordered && !rows.some((r) => r.note))) return null;
+      const sheet = document_.createElement('nav');
+      sheet.className = 'pick-sheet';
+      sheet.setAttribute('aria-label', 'Study sheet');
+      sheet.innerHTML = `<div class="pick-sheet-head"><strong>${ordered ? 'Reading order' : 'Your notes on the pins'}</strong> <span class="insight-muted">click one to go to it</span></div><ol>` +
+        rows.map((r, i) => `<li><button type="button" class="pick-sheet-go" data-sheet-go="${i}">${esc(r.name || 'Pinned')}</button>${r.note ? ` <span class="pick-sheet-note">${esc(r.note)}</span>` : ''}</li>`).join('') + '</ol>';
+      sheet.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-sheet-go]');
+        const r = b && rows[+b.dataset.sheetGo];
+        if (r && opts.jump) { e.preventDefault(); opts.jump(r.el); }
+      });
+      // under the title, or at the top
+      const title = doc.querySelector('.title-block.pick-head');
+      if (title && title.parentNode) title.parentNode.insertBefore(sheet, title.nextSibling);
+      else {
+        const first = Array.from(doc.children).find((c) => !c.matches(OUTSIDE) && !c.classList.contains('pick-hide')) || doc.firstChild;
+        doc.insertBefore(sheet, first || null);
+      }
+      // each pin: its number in the order and its note, just above it
+      const done = new Set();
+      rows.forEach((r, i) => {
+        if (done.has(r.el) || (!ordered && !r.note)) return;
+        done.add(r.el);
+        const memo = document_.createElement('div');
+        memo.className = 'pick-memo';
+        memo.innerHTML = (ordered ? `<span class="pick-memo-n">${i + 1}</span>` : '') + (r.note ? `<span class="pick-memo-t">${esc(r.note)}</span>` : '');
+        if (r.el.parentNode) r.el.parentNode.insertBefore(memo, r.el);
+      });
+      return sheet;
     }
 
     function stop() {

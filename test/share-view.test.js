@@ -26,7 +26,7 @@ test('a view goes in a link and comes back, squeezed or not', async () => {
   };
   const code = await Share.encodeView(view);
   assert.match(code, /^[12][A-Za-z0-9_-]+$/);
-  assert.deepEqual(await Share.decodeView(code), view);
+  assert.deepEqual(await Share.decodeView(code), Object.assign({}, view, { r: [], n: {} }));
   // plain base64url when nothing can squeeze
   const plain = '1' + Buffer.from(JSON.stringify({ m: 'u', f: 'label:thm:main', d: 'both', h: 1 })).toString('base64url');
   assert.deepEqual(await Share.decodeView(plain), { m: 'u', f: 'label:thm:main', d: 'both', h: 1 });
@@ -46,10 +46,29 @@ test('a link can only carry a view, and nothing in it but keys', async () => {
   assert.equal(await Share.decodeView(enc({ m: 'p', p: [] })), null);
   assert.equal(await Share.decodeView(enc({ m: 'u', f: 'label:a', d: 'self' })), null);
   const v = await Share.decodeView(enc({ m: 'p', p: [['label:a', 'evil'], ['label:b', 'uses'], [{}, 'self'], 'eq:(1)'], t: [{ q: 'x'.repeat(500) }], extra: '<script>' }));
-  assert.deepEqual(v, { m: 'p', p: [['label:b', 'uses'], ['eq:(1)', 'self']], t: [], o: [] });
+  assert.deepEqual(v, { m: 'p', p: [['label:b', 'uses'], ['eq:(1)', 'self']], t: [], o: [], r: [], n: {} });
   assert.equal(Share.describeView(v), '2 pinned items');
   assert.equal(Share.describeView({ m: 'u', f: 'label:thm:main', d: 'uses' }, () => 'Theorem 3'), 'what Theorem 3 uses');
   assert.equal(await Share.encodeView(null), null);
+});
+
+test('a link carries the reading order, the notes and the pin set’s name', async () => {
+  const view = {
+    m: 'p',
+    p: [['label:lem:a', 'self'], ['eq:(2.1)', 'self']],
+    t: [{ q: 'a passage worth keeping', a: '', b: '' }],
+    o: [],
+    r: ['t0', 'eq:(2.1)', 'label:lem:a', 'label:gone', 't7'],
+    n: { 'eq:(2.1)': '  start   here ', t0: 'the key idea', 'label:gone': 'dropped', 'label:lem:a': 7 },
+    s: 'For the talk',
+  };
+  const back = await Share.decodeView(await Share.encodeView(view));
+  assert.deepEqual(back.r, ['t0', 'eq:(2.1)', 'label:lem:a'], 'only refs to what the view holds');
+  assert.deepEqual(back.n, { 'eq:(2.1)': 'start here', t0: 'the key idea' });
+  assert.equal(back.s, 'For the talk');
+  assert.equal(Share.describeView(back), 'the pin set “For the talk” (3 pinned items)');
+  const long = await Share.decodeView(await Share.encodeView({ m: 'p', p: [['label:a', 'self']], n: { 'label:a': 'x'.repeat(500) } }));
+  assert.equal(long.n['label:a'].length, 200, 'a note is one line');
 });
 
 function tar(files) {
@@ -195,6 +214,59 @@ test('Share with Show only these: the recipient sees the same pins, and keeps th
     assert.deepEqual({ main: kept.main, b: kept.b, view: kept.view }, { main: true, b: true, view: true });
     assert.match(await other.textContent('.pick-bar'), /pinned/);
     assert.doesNotMatch(await other.textContent('.pick-bar'), /Shared view/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    await ctx2.close();
+  } finally {
+    await browser.close();
+  }
+});
+
+test('Share keeps the reading order and the notes: the recipient sees the study sheet, and keeps the notes', { skip: !playwright && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await playwright.chromium.launch(); } catch (e) { return t.skip('no browser: ' + e.message.split('\n')[0]); }
+  try {
+    const ctx = await context(browser);
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto('http://texglass.test/index.html?arxiv=2301.00001');
+    await page.waitForFunction(() => !document.getElementById('share').disabled);
+    for (const label of ['thm:main', 'lem:a']) {
+      await page.hover(`#preview .theorem[data-label="${label}"]`);
+      await page.waitForSelector(`#preview .theorem[data-label="${label}"] .tg-pin-btn`, { state: 'attached' });
+      await page.evaluate((l) => document.querySelector(`#preview .theorem[data-label="${l}"] .tg-pin-btn`).click(), label);
+    }
+    await page.click('#pins');
+    await page.click('[data-pins-view="order"]');
+    await page.focus('[data-pins-drag="label:thm:main"]');
+    await page.keyboard.press('ArrowDown');
+    await page.click('.tg-pins-row[data-key="label:lem:a"] .tg-pins-pen');
+    await page.fill('.tg-pins-memo-in', 'the tool behind it');
+    await page.keyboard.press('Enter');
+    await page.click('[data-pins-act="show"]');
+    await page.waitForSelector('#preview .pick-sheet');
+    await page.click('#share');
+    await page.waitForFunction(() => window.__copied.length === 1);
+    const link = (await page.evaluate(() => window.__copied))[0];
+    const view = await Share.decodeView(new URL(link).searchParams.get('view'));
+    assert.deepEqual(view.r, ['label:lem:a', 'label:thm:main']);
+    assert.deepEqual(view.n, { 'label:lem:a': 'the tool behind it' });
+
+    const ctx2 = await context(browser);
+    const other = await ctx2.newPage();
+    other.on('pageerror', (e) => errors.push(e.message));
+    await other.goto(local(link));
+    await other.waitForSelector('#preview.pick-view .pick-sheet', { timeout: 15000 });
+    const sheet = await other.$$eval('.pick-sheet li', (li) => li.map((x) => x.textContent));
+    assert.equal(sheet.length, 2);
+    assert.match(sheet[0], /Lemma.*the tool behind it/);
+    assert.match(sheet[1], /Theorem/);
+    await other.click('.pick-bar [data-act="keep"]');
+    await other.waitForFunction(() => document.querySelector('#pins .tg-pins-badge').textContent === '2');
+    await other.click('#pins');
+    assert.deepEqual(await other.$$eval('.tg-pins-menu .tg-pins-row', (r) => r.map((x) => x.dataset.key)), ['label:lem:a', 'label:thm:main'], 'the order came along');
+    assert.equal(await other.textContent('.tg-pins-row[data-key="label:lem:a"] .tg-pins-memo'), 'the tool behind it');
     assert.deepEqual(errors, []);
     await ctx.close();
     await ctx2.close();
