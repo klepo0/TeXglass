@@ -930,7 +930,7 @@ with no build step.
 
 ## Browser extension
 
-For Chrome, Edge (111 or later) and Firefox (128 or later). Install steps:
+For Chrome, Edge (111 or later) and Firefox (140 or later). Install steps:
 [browser/README.md](../browser/README.md).
 
 - **Toolbar button** or <kbd>Alt+Shift+K</kbd>: on an arXiv abstract, PDF or

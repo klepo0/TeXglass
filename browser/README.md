@@ -75,8 +75,8 @@ renders their LaTeX source as a readable page: math, numbered theorems and equat
   Drag the panel's left edge to resize it; the page narrows to make room.
 
   How it reads the editor: `overleaf-page.js` runs in the page itself (a
-  `"world": "MAIN"` content script, hence Chrome 111 and Firefox 128 or
-  later) and finds Overleaf's CodeMirror 6 editor through CodeMirror's own
+  `"world": "MAIN"` content script, hence Chrome 111 or
+  later; Firefox needs 140 or later for its data-collection declaration) and finds Overleaf's CodeMirror 6 editor through CodeMirror's own
   handle on its DOM (`.cm-content`), or through the
   `UNSTABLE_editor:extensions` event Overleaf sends for extensions, rather
   than through Overleaf's page layout. It sends the text to the panel
