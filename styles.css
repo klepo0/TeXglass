@@ -1285,6 +1285,9 @@ body.text-resizing #preview { transition: none; }
 .diagram-row { display: inline-flex; align-items: center; gap: 0.25em; max-width: 100%; }
 .diagram-display::before { content: ''; flex: 1 1 0; }
 .diagram-row { flex: none; }
+.diagram-fraction { display: inline-grid; text-align: center; vertical-align: middle; }
+.diagram-fraction > span { padding: 0.2em 0.25em; }
+.diagram-fraction > span + span { border-top: 1px solid currentColor; }
 .diagram-tag { flex: 1 0 0; min-width: max-content; padding-left: 1em; text-align: right; }
 .tikz-wrap { display: inline-block; position: relative; vertical-align: middle; text-align: left; isolation: isolate; transform-origin: 0 0; }
 .tikz-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }

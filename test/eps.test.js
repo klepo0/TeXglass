@@ -168,3 +168,16 @@ StandardEncoding 65 get /A eq { 0 0 moveto 10 10 lineto stroke } if
   assert.ok(r && !r.partial, 'nothing failed');
   assert.equal((r.svg.match(/<path /g) || []).length, 2);
 });
+
+test('EPS subset-font control bytes do not make an image invalid SVG', () => {
+  const r = Eps.toSvg(String.raw`%!PS
+%%BoundingBox: 0 0 50 50
+/Helvetica findfont 10 scalefont setfont
+0 15 moveto (a\000b\001c\037d) show
+0 0 moveto 10 10 lineto stroke
+`);
+  assert.ok(r.partial);
+  assert.match(r.svg, />abcd<\/text>/);
+  assert.match(r.svg, /<path/);
+  assert.doesNotMatch(r.svg, /[\x00-\x08\x0b\x0c\x0e-\x1f]/);
+});

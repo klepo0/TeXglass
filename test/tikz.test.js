@@ -247,3 +247,15 @@ test('tikzpicture: font sizes, hatching patterns and braces', () => {
   assert.deepEqual(brace[3][3], [1, -0.141]); // the tip, 4pt below the middle (mirrored)
   assert.deepEqual(brace[7][3], [2, 0]);
 });
+
+test('diagram fractions keep both arguments and support math tags and uniform xymatrix spacing', () => {
+  const { html } = plain(String.raw`\[
+F=\dfrac{\xymatrix@!=0.5pc{A \ar[r] & B}}{\xymatrix@!{C}}
+\tag*{$\mathsf{R_{ab}}$}
+\]`);
+  assert.match(html, /class="diagram-fraction"/);
+  assert.match(html, /class="diagram-tag">\[I:\\mathsf\{R_\{ab\}\}\]/);
+  const diagrams = models(html, 'data-cd');
+  assert.equal(diagrams.length, 2);
+  assert.equal(diagrams[0].arrows[0].t, '1-2');
+});

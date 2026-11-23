@@ -258,3 +258,14 @@ test('an amsrefs .bbl (no .bib in the source) takes the place of \\bibliography'
   assert.match(html, /class="bibliography"/);
   assert.match(html, /<a href="#bib-[^"]+">Wri20<\/a>/);
 });
+
+test('imageResolver uses a unique case-insensitive match only after exact matches', () => {
+  const resolve = A.imageResolver({
+    'Upjk.png': 'blob:figure', 'a/FIG.PNG': 'blob:case', 'b/fig.png': 'blob:exact',
+    'c/Plot.png': 'blob:first', 'c/plot.PNG': 'blob:second', 'legacy.epsf': 'blob:eps',
+  }, String.raw`\graphicspath{{a/}{b/}{c/}}`);
+  assert.equal(resolve('UPjk.png'), 'blob:figure');
+  assert.equal(resolve('fig.png'), 'blob:exact');
+  assert.equal(resolve('PLOT.PNG'), null);
+  assert.equal(resolve('legacy'), 'blob:eps');
+});
