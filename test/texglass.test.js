@@ -915,3 +915,43 @@ A \vskip 2pt plus 1pt minus 1pt B \hskip-.5\parindent C \kern 3pt D \textheight 
   assert.match(html, /class="center"[^>]*>Centred line/);
   assert.deepEqual(unknownCommands, []);
 });
+
+test('listings leave percent signs, dollar signs and braces in code', () => {
+  const source = String.raw`\newtcblisting{example}{listing only}
+\begin{document}
+\lstinline[language=sh]|echo "$item" 100%| and \verb|a%b| and \lstinline{x%y}.
+\begin{example}
+  echo "$value" 42% {unmatched
+  \alpha
+\end{example}
+After the listing, $x+1$.
+\end{document}`;
+  const { html, blocks } = TeXglass.render(source, {
+    sourceMap: true,
+    renderMath: (tex) => katex.renderToString(tex),
+  });
+  assert.match(html, /<code>echo &quot;\$item&quot; 100%<\/code> and <code>a%b<\/code> and <code>x%y<\/code>\./);
+  assert.match(html, /<pre class="verbatim"><code>  echo &quot;\$value&quot; 42% \{unmatched\n  \\alpha<\/code>/);
+  assert.match(html, /After the listing/);
+  assert.equal((html.match(/class="katex"/g) || []).length, 1);
+  const listing = blocks.find((block) => block.includes('<pre'));
+  const [, start] = /data-s="(\d+)"/.exec(listing);
+  assert.equal(Number(start), source.indexOf('\\begin{example}'));
+});
+
+test('dashboard math renders braced delimiters, physics matrices and shifted TeX boxes', () => {
+  const { html } = strictKatex(String.raw`
+\def\shift{\lower\boxheight\hbox{$+$}}
+\font\smallSans=cmss8 scaled\magstep1
+\begin{document}
+\begin{equation}\label{display}
+\pmqty{a & b \\ c & d} \Bigg{|} f(x)$$
+$$\EuScript{F}\sp 2 \shift \mbox{\smallSans text}
+\end{equation}
+See \eqref{display}.
+\end{document}`);
+  noMathErrors(html);
+  assert.match(html, /class="ref"[^>]*>\(1\)<\/a>/);
+  assert.match(html, /text/);
+  assert.match(html, /<mtable/);
+});

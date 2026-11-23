@@ -234,44 +234,68 @@
     return upper ? s.toUpperCase() : s;
   }
 
+  const VERBATIM_ENVS = ['verbatim', 'verbatim*', 'Verbatim', 'lstlisting', 'minted'];
+
   /**
-   * Remove % comments, keeping \% and verbatim-like environments intact.
-   * Returns the stripped text and, for each of its characters, the index of
-   * that character in the original source (plus one final entry for the end).
+   * Read a delimiter-based inline code span without consuming the following
+   * line. \lstinline also takes {code}, closed by }.
+   */
+  function inlineCode(src, i, braces = false) {
+    i = skipWhite(src, i);
+    const delim = src[i];
+    if (!delim || /\s/.test(delim)) return { content: '', end: i };
+    const close = src.indexOf(braces && delim === '{' ? '}' : delim, i + 1);
+    const newline = src.indexOf('\n', i + 1);
+    const limit = newline < 0 ? src.length : newline;
+    const stop = close < 0 || close >= limit ? limit : close;
+    return { content: src.slice(i + 1, stop), end: stop < limit ? stop + 1 : stop };
+  }
+
+  /**
+   * Remove % comments, keeping \% and literal code intact.
+   * Returns the stripped text and, for each character, its original offset.
    */
   function stripCommentsMap(src) {
-    const verb = /\\begin\{(verbatim\*?|lstlisting|minted|comment)\}[\s\S]*?\\end\{\1\}/g;
+    const verbatim = new Set(VERBATIM_ENVS);
+    const commands = /\\(?:(begin)\s*\{([^{}]+)\}|(verb|lstinline)(?![A-Za-z@])\*?|(newtcblisting)(?![A-Za-z@]))/y;
     const out = [];
     const map = [];
     const copy = (from, to) => {
       for (let k = from; k < to; k++) { out.push(src[k]); map.push(k); }
     };
-    const plain = (from, to) => {
-      let i = from;
-      while (i < to) {
-        const c = src[i];
-        if (c === '\\' && i + 1 < to) { copy(i, i + 2); i += 2; continue; }
-        if (c === '%') {
-          // A comment also swallows the newline and the next line's indentation.
-          let j = src.indexOf('\n', i);
-          if (j < 0 || j >= to) { i = to; continue; }
-          j++;
-          while (j < to && (src[j] === ' ' || src[j] === '\t')) j++;
-          i = j;
-          continue;
+    for (let i = 0; i < src.length;) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < src.length) {
+        commands.lastIndex = i;
+        const m = commands.exec(src);
+        let end = i + 2;
+        if (m && m[1] && (verbatim.has(m[2]) || m[2] === 'comment')) {
+          const closing = '\\end{' + m[2] + '}';
+          const at = src.indexOf(closing, commands.lastIndex);
+          end = at < 0 ? src.length : at + closing.length;
+          if (m[2] === 'comment') { i = end; continue; }
+        } else if (m && m[3]) {
+          const start = skipWhite(src, commands.lastIndex);
+          const opt = m[3] === 'lstinline' ? readOpt(src, start) : null;
+          end = inlineCode(src, opt ? opt.end : start, m[3] === 'lstinline').end;
+        } else if (m && m[4]) {
+          const start = commands.lastIndex;
+          const opt = readOpt(src, start);
+          const name = readArg(src, opt ? opt.end : start).content.trim();
+          if (/^[\w*-]+$/.test(name)) verbatim.add(name);
         }
+        copy(i, end);
+        i = end;
+      } else if (c === '%') {
+        // A comment also swallows the newline and the next line's indentation.
+        const next = src.indexOf('\n', i);
+        i = next < 0 ? src.length : next + 1;
+        while (src[i] === ' ' || src[i] === '\t') i++;
+      } else {
         copy(i, i + 1);
         i++;
       }
-    };
-    let last = 0;
-    let m;
-    while ((m = verb.exec(src))) {
-      plain(last, m.index);
-      if (m[1] !== 'comment') copy(m.index, m.index + m[0].length);
-      last = m.index + m[0].length;
     }
-    plain(last, src.length);
     map.push(src.length);
     return { text: out.join(''), map };
   }
@@ -441,6 +465,22 @@
     // esint: the averaged integral ⨏
     '\\fint': '\\mathop{\\rlap{\\hspace{0.32em}\\raisebox{0.05em}{\\text{-}}}{\\int}}\\nolimits',
     '\\dashint': '\\fint',
+    '\\iiiint': '\\mathop{\\int\\!\\!\\int\\!\\!\\int\\!\\!\\int}\\nolimits',
+    '\\dprod': '\\displaystyle\\prod',
+    '\\pmqty': '\\begin{pmatrix}#1\\end{pmatrix}',
+    '\\bmqty': '\\begin{bmatrix}#1\\end{bmatrix}',
+    '\\vmqty': '\\begin{vmatrix}#1\\end{vmatrix}',
+    '\\mathlarger': '{\\displaystyle #1}',
+    '\\EuScript': '\\mathcal{#1}',
+    '\\sc': '', // KaTeX has no small capitals
+    '\\sp': '^',
+    '\\sb': '_',
+    '\\hfill': '\\quad',
+    '\\vspace': (ctx) => { optStar(ctx); ctx.consumeArgs(1); return ''; },
+    // \cline and \hhline draw partial rules, which KaTeX arrays cannot draw.
+    '\\cline': (ctx) => { ctx.consumeArgs(1); return ''; },
+    '\\hhline': (ctx) => { ctx.consumeArgs(1); return ''; },
+    '\\CancelColor': '\\color{black}',
     // a \label that reaches KaTeX through a user macro: drop it
     '\\label': (ctx) => {
       // cleveref's \label[type]{key}: drop the [type] too
@@ -583,10 +623,11 @@
   // the content at its own size (a formula too wide for the page scrolls instead).
   const boxedMath = (n) => (ctx) => {
     const args = ctx.consumeArgs(n);
-    // tokens come last-first; in a formula leave out the $ that switched the
-    // box to math (inside \hbox{…} the box is text, so the $ stays)
-    const toks = ctx.mode === 'text' ? args[n - 1] : args[n - 1].filter((t) => t.text !== '$');
-    return { tokens: toks, numArgs: 0 };
+    const content = tokText(args[n - 1]);
+    // Keep inner math shifts in text nested inside the box.
+    if (ctx.mode === 'text') return content;
+    const unwrapped = unwrapMathShift(content);
+    return unwrapped === content && content.includes('$') ? `\\text{${content}}` : unwrapped;
   };
   MATH_MACROS['\\resizebox'] = boxedMath(3);
   MATH_MACROS['\\scalebox'] = boxedMath(2);
@@ -946,6 +987,17 @@
    * stretch them, so they are drawn at their own size).
    */
   function plainTexMath(tex, display) {
+    // LaTeX accepts a braced delimiter argument; KaTeX expects a single token.
+    tex = tex.replace(/(?<!\\)(\\(?:[bB]ig(?:g)?[lmr]?|left|middle|right)(?![A-Za-z@]))\s*\{\s*(\\(?:[A-Za-z@]+|[{}|])|[()[\]|./<>])\s*\}/g, '$1 $2 ');
+    // Plain TeX moves an hbox by a size or a named length register. If the
+    // register's value is unavailable, keep drawing the box at its baseline.
+    tex = tex.replace(/\\(raise|lower)(?![A-Za-z@])\s*([+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)\s*(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex)|\\[A-Za-z@]+)\s*\\hbox(?![A-Za-z@])\s*(?=\{)/g,
+      (_, direction, size) => {
+        if (size[0] === '\\') return '\\hbox';
+        const length = size.replace(/\s/g, '');
+        if (direction === 'raise') return `\\raisebox{${length}}`;
+        return `\\raisebox{${length[0] === '-' ? length.slice(1) : '-' + length.replace(/^\+/, '')}}`;
+      });
     if (/\\l?eqno(?![A-Za-z@])/.test(tex)) {
       const tags = tex.match(/\\l?eqno(?![A-Za-z@])/g).length;
       tex = tex.replace(/\\l?eqno(?![A-Za-z@])\s*((?:[^\\]|\\(?!\\|cr(?![A-Za-z@])|end(?![A-Za-z@])))*)/g, (_, num) => {
@@ -1098,6 +1150,7 @@
       this.paired = Object.create(null); // \DeclarePairedDelimiter definitions
       this.triple = DEFAULT_TRIPLE.slice(); // delimiters drawn as three bars (\vvvert)
       this.envs = Object.create(null); // \newenvironment definitions
+      this.verbatim = new Set(VERBATIM_ENVS);
       this.theorems = Object.create(null);
       this.thmStyle = 'plain';
       this.counters = Object.create(null);
@@ -2015,12 +2068,11 @@
           const t = readArg(src, n.end);
           return res(`<a class="ref" href="#${escapeHtml(hyperId(n.content))}">${this.flow(t.content, true)}</a>`, t.end);
         }
-        case 'verb': {
+        case 'verb': case 'lstinline': {
           const s = readStar(src, i);
-          const delim = src[s.end];
-          const end = src.indexOf(delim, s.end + 1);
-          const stop = end < 0 ? src.length : end;
-          return res(`<code>${escapeHtml(src.slice(s.end + 1, stop))}</code>`, stop + 1);
+          const opt = name === 'lstinline' ? readOpt(src, s.end) : null;
+          const code = inlineCode(src, opt ? opt.end : s.end, name === 'lstinline');
+          return res(`<code>${escapeHtml(code.content)}</code>`, code.end);
         }
         case 'ensuremath': {
           const a = readArg(src, i);
@@ -2240,6 +2292,23 @@
           this.paired[nm.content.trim().replace(/^\\/, '')] = { nargs, pre, open, close, post, body };
           this._katexMacros = null;
           return res('', j);
+        }
+        case 'font': {
+          // Plain TeX font declarations used as text selectors in math boxes.
+          const font = /^\\([A-Za-z@]+)\s*=\s*(cmss\d+)(?![A-Za-z0-9])(?:\s+(?:at\s*[\d.]+\s*pt|scaled\s*(?:\\magstep\s*)?\d+))?/.exec(src.slice(i));
+          if (!font) break;
+          this.macros[font[1]] = { nargs: 0, def: null, body: '\\sf' };
+          this._katexMacros = null;
+          return res('', i + font[0].length);
+        }
+        case 'newtcblisting': {
+          const init = readOpt(src, i);
+          const listing = readArg(src, init ? init.end : i);
+          const nargs = readOpt(src, listing.end);
+          const def = nargs ? readOpt(src, nargs.end) : null;
+          const settings = readArg(src, def ? def.end : nargs ? nargs.end : listing.end);
+          this.verbatim.add(listing.content.trim());
+          return res('', settings.end);
         }
         case 'newenvironment': {
           const s = readStar(src, i);
@@ -2635,7 +2704,7 @@
     // --- environments ------------------------------------------------------
 
     environment(name, src, i, inline) {
-      const isVerbatim = /^(verbatim\*?|lstlisting|minted|Verbatim)$/.test(name);
+      const isVerbatim = this.verbatim.has(name);
       let body;
       let end;
       if (isVerbatim) {
@@ -2659,7 +2728,7 @@
       if (isVerbatim) {
         let code = body;
         if (name === 'minted') code = code.replace(/^\s*(\[[^\]]*\])?\s*\{[^}]*\}/, '');
-        if (name === 'lstlisting') code = code.replace(/^\s*\[[^\]]*\]/, '');
+        if (name === 'lstlisting' || name === 'Verbatim') code = code.replace(/^\s*\[[^\]]*\]/, '');
         return `<pre class="verbatim"><code>${escapeHtml(code.replace(/^\n/, '').replace(/\s+$/, ''))}</code></pre>`;
       }
       if (name === 'math') return this.inlineMath(body);
@@ -2966,9 +3035,10 @@
       if (DIAGRAM_RE.test(body) && tikz()) {
         // A diagram (with maybe some math around it and an equation number).
         const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
-        const t = /\\tag(\*?)\{(.*)\}$/.exec(r.tag);
+        const t = /\\tag(\*?)\{([\s\S]*)\}$/.exec(r.tag);
         // with no number, an empty tag still balances the spacer on the left, so the diagram is centred
-        const tag = `<span class="diagram-tag">${t ? this.renderMath(t[1] ? t[2] : `(${t[2]})`, false) : ''}</span>`;
+        const label = t ? unwrapMathShift(t[2]) : '';
+        const tag = `<span class="diagram-tag">${t ? this.renderMath(t[1] ? label : `(${label})`, false) : ''}</span>`;
         return `<div class="math math-display diagram-display" id="${id}"${src}><span class="diagram-row">${this.mathWithDiagrams(r.tex)}</span>${tag}</div>`;
       }
       const multiRow = /^(align|gather|flalign|alignat|eqnarray)$/.test(base);
@@ -2976,6 +3046,11 @@
       if (!multiRow) {
         const r = this.numberRow(body, !starred && base !== 'displaymath', id);
         let inner = r.tex;
+        if (base === 'equation' && inner.includes('$$')) {
+          // Some sources split one numbered equation with a plain-TeX display break.
+          const rows = splitTop(inner, (s, i) => s.startsWith('$$', i) ? /^\$\$\s*\$\$/.exec(s.slice(i))?.[0].length || 0 : 0);
+          if (rows.length > 1) inner = `\\begin{gathered}${rows.join(' \\\\ ')}\\end{gathered}`;
+        }
         if (base === 'multline') inner = `\\begin{gathered}${inner}\\end{gathered}`;
         tex = inner + r.tag;
       } else {
@@ -3123,12 +3198,33 @@
       rest = rest.replace(/\\xymatrix(col|row)sep\s*\{([^}]*)\}\s*([\s\S]*?)\\xymatrix(?![A-Za-z])/g, (m, w, v, between) =>
         `${between}\\xymatrix@${w === 'col' ? 'C' : 'R'}=${v}`);
       const piece = (t) => {
-        t = balanceMath(t).replace(/\\(?=[\n\r\t])/g, '\\ ').replace(/^\s+/, '').replace(/(?<!\\)\s+$/, '');
+        t = balanceMath(t).replace(/\\vcenter\s*$/, '').replace(/\\(?=[\n\r\t])/g, '\\ ').replace(/^\s+/, '').replace(/(?<!\\)\s+$/, '');
         if (t.trim()) out.push(`<span class="diagram-math">${this.renderMath(`\\displaystyle ${t}`, false)}</span>`);
       };
       for (let guard = 0; guard < 100; guard++) {
         const m = DIAGRAM_RE.exec(rest);
         if (!m) break;
+        // A diagram can be a numerator or denominator. Render each complete
+        // argument, so neither the fraction nor its diagrams are cut in half.
+        let fraction = null;
+        for (const f of rest.matchAll(/\\(?:frac|dfrac|tfrac)\s*(?=\{)/g)) {
+          if (f.index >= m.index) break;
+          const numerator = readGroup(rest, f.index + f[0].length);
+          const bottom = skipWhite(rest, numerator.end);
+          if (rest[bottom] !== '{') continue;
+          const denominator = readGroup(rest, bottom);
+          if (rest[denominator.end - 1] !== '}' || m.index >= denominator.end) continue;
+          fraction = { at: f.index, numerator, denominator };
+          break;
+        }
+        if (fraction) {
+          piece(rest.slice(0, fraction.at));
+          const top = this.mathWithDiagrams(fraction.numerator.content);
+          const bottom = this.mathWithDiagrams(fraction.denominator.content);
+          out.push(`<span class="diagram-fraction"><span>${top}</span><span>${bottom}</span></span>`);
+          rest = rest.slice(fraction.denominator.end);
+          continue;
+        }
         piece(rest.slice(0, m.index));
         if (m[1]) {
           const at = m.index + m[0].length;
@@ -3516,6 +3612,14 @@
     // Put a run-in heading ("Theorem 1.2.") inside the first paragraph.
     if (content.startsWith('<p>')) return '<p>' + head + content.slice(3);
     return `<p class="thm-head-only">${head}</p>${content}`;
+  }
+
+  function unwrapMathShift(src) {
+    const tex = src.trim();
+    if (tex[0] === '$' && tex.endsWith('$') && findMathEnd(tex, '$', 1) === tex.length - 1) {
+      return tex.slice(1, -1);
+    }
+    return src;
   }
 
   /**

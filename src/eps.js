@@ -250,13 +250,17 @@
       const fname = f.name || '';
       let text = '';
       for (const ch of s) text += /Symbol/.test(fname) ? (SYMBOL[ch] || ch) : (STD[ch] || ch);
+      // Subset fonts can use control bytes as glyph IDs. Omit glyphs that
+      // cannot be decoded so that the rest of the SVG remains valid XML.
+      const visible = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+      if (visible !== text) partial = true;
       const family = /Courier/.test(fname) ? 'monospace' : /Helvetica|Arial|Sans/.test(fname) ? 'sans-serif' : 'serif';
       const weight = /Bold/.test(fname) ? ';font-weight:bold' : '';
       const italic = /Italic|Oblique/.test(fname) ? ';font-style:italic' : '';
       // glyph space -> device: font matrix, then the CTM from the current point
       const m = mul(mul([1, 0, 0, -1, 0, 0], f.matrix), [gs.ctm[0], gs.ctm[1], gs.ctm[2], gs.ctm[3], gs.cp[0], gs.cp[1]]);
       const svgM = [m[0], -m[1], m[2], -m[3], m[4], -m[5]];
-      out.push(`<text transform="matrix(${svgM.map(f2).join(' ')})" style="font-family:${family};font-size:1px${weight}${italic};fill:${rgb(gs.color)}"${clipAttr()}>${esc(text)}</text>`);
+      if (visible) out.push(`<text transform="matrix(${svgM.map(f2).join(' ')})" style="font-family:${family};font-size:1px${weight}${italic};fill:${rgb(gs.color)}"${clipAttr()}>${esc(visible)}</text>`);
       // advance by an estimate of the width
       const w = textWidth(s, f);
       const d = dapply(f.matrix, w, 0);

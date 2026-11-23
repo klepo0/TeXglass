@@ -730,8 +730,13 @@
       i = skipWs(src, i);
       if (src[i] !== '@') break;
       i++;
+      // @!, @!R and @!C select uniform spacing. @!=... also sets its size.
+      const uniform = /^!(?:[RC](?!=)|0)?/.exec(src.slice(i));
+      if (uniform) {
+        i += uniform[0].length;
+        if (!/^[RC]?[=+-]/.test(src.slice(i))) continue;
+      }
       const m = /^([RCMWHL]?)([=+-]?)\s*(\{[^}]*\}|[+-]?\d*\.?\d+\s*[a-z]{2}|\d*\.?\d+)?/.exec(src.slice(i));
-      if (src[i] === '!') { i++; if (/[RC0=]/.test(src[i])) i++; continue; }
       if (src[i] === '*' && src[i + 1] === '[') { i = matchGroup(src, i + 1); continue; }
       if (!m || !m[0]) { i++; continue; }
       i += m[0].length;

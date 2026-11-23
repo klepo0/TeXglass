@@ -328,7 +328,7 @@
     // also uploaded the figure as a picture browsers can show)
     if (Eps) {
       for (const [path, data] of Object.entries(raw)) {
-        if (!/\.(eps|ps|epsi)$/i.test(path)) continue;
+        if (!/\.(eps|ps|epsi|epsf)$/i.test(path)) continue;
         const stem = path.replace(/\.[^.]+$/, '');
         if (['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'].some((e) => images[stem + e])) continue;
         let r = null;
@@ -361,15 +361,27 @@
     const dirs = [''];
     const gp = /\\graphicspath\s*\{((?:\s*\{[^}]*\})+)\s*\}/.exec(source || '');
     if (gp) for (const m of gp[1].matchAll(/\{([^}]*)\}/g)) dirs.push(m[1].replace(/\/?$/, '/'));
-    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.ps', '.pdf'];
+    const exts = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.eps', '.ps', '.pdf', '.epsi', '.epsf'];
+    const folded = new Map();
+    for (const path of Object.keys(urls)) {
+      const key = path.toLowerCase();
+      folded.set(key, folded.has(key) ? null : path);
+    }
     return (name) => {
       const clean = name.trim().replace(/^\.\//, '');
+      const candidates = [];
       for (const d of dirs) {
-        const p = normalize(d + clean);
-        for (const e of exts) if (urls[p + e]) return urls[p + e];
+        const path = normalize(d + clean);
+        for (const e of exts) candidates.push(path + e);
         // .pdf/.eps figures are often uploaded as .png too; try swapping the extension.
-        const noExt = p.replace(/\.(pdf|eps|ps)$/i, '');
-        if (noExt !== p) for (const e of exts.slice(1)) if (urls[noExt + e]) return urls[noExt + e];
+        const stem = path.replace(/\.(pdf|eps|ps|epsi|epsf)$/i, '');
+        if (stem !== path) for (const e of exts.slice(1)) candidates.push(stem + e);
+      }
+      for (const path of candidates) if (Object.hasOwn(urls, path) && urls[path]) return urls[path];
+      // Archives sometimes use different case in the source and the filename.
+      for (const path of candidates) {
+        const match = folded.get(path.toLowerCase());
+        if (match && urls[match]) return urls[match];
       }
       return null;
     };
