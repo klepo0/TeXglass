@@ -143,7 +143,8 @@ test('the manifests add the preview to Overleaf projects, reading the editor fro
     assert.ok(war.matches.every((p) => p.endsWith('/*') && p.includes('overleaf.com')));
   }
   assert.strictEqual(manifest('chrome').minimum_chrome_version, '111');
-  assert.strictEqual(manifest('firefox').browser_specific_settings.gecko.strict_min_version, '128.0');
+  assert.strictEqual(manifest('firefox').browser_specific_settings.gecko.strict_min_version, '140.0');
+  assert.strictEqual(manifest('firefox').browser_specific_settings.gecko_android.strict_min_version, '142.0');
 });
 
 test('overleaf.html loads only files that the extension ships', () => {

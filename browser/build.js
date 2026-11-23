@@ -119,11 +119,15 @@ function manifest(target) {
     m.background = { scripts: ['src/arxiv.js', 'background.js'] };
     m.browser_specific_settings = { gecko: {
         id: 'texglass-arxiv@klepo0.github.io',
-        // 128 runs content scripts in the page's world ("world": "MAIN"), for Overleaf.
-        strict_min_version: '128.0',
+        // 140 (the current ESR) is the first to read data_collection_permissions below;
+        // 128 already ran content scripts in the page's world ("world": "MAIN"), for Overleaf.
+        // With an older minimum, addons.mozilla.org warns that the key is not supported.
+        strict_min_version: '140.0',
         // addons.mozilla.org asks every new extension to declare what it collects: nothing here.
         data_collection_permissions: { required: ['none'] },
       },
+      // Firefox for Android reads data_collection_permissions from 142.
+      gecko_android: { strict_min_version: '142.0' },
     };
   } else {
     m.background = { service_worker: 'background.js' };

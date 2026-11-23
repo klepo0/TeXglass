@@ -191,7 +191,9 @@ jobs:
 
             node browser/build.js --release
 
-          The add-on is browser/dist/firefox/ (also zipped as browser/dist/texglass-arxiv-firefox-${TAG#v}.zip). vendor/katex and vendor/pdfjs are the unmodified KaTeX and pdf.js releases; everything else is unminified source."
+          The add-on is browser/dist/firefox/ (also zipped as browser/dist/texglass-arxiv-firefox-${TAG#v}.zip). vendor/katex is unmodified KaTeX 0.16.11 and vendor/pdfjs is unmodified pdf.js 4.10.38 (build/pdf.min.mjs and build/pdf.worker.min.mjs of pdfjs-dist, renamed .js); everything else is unminified source.
+
+          About the validator warnings: the Function constructor and dynamic import() are inside pdf.js. src/pdf.js loads it from the add-on's own vendor/pdfjs folder and calls it with isEvalSupported: false. The innerHTML assignments build the reader's own interface; text from papers and from the arXiv, DataCite and Crossref APIs is escaped first, math goes through KaTeX (trust off), and the default extension CSP blocks inline scripts."
           jq -n --arg notes "$notes" \
             --arg rel "Changes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" \
             '{version: {approval_notes: $notes, release_notes: {"en-US": $rel}}}' > "$RUNNER_TEMP/amo-metadata.json"
