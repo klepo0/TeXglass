@@ -659,6 +659,8 @@
       }
       break;
     }
+    const omitCurves = /^\\omit(?![A-Za-z])/.test(cell.slice(i));
+    if (omitCurves) i = skipWs(cell, i + '\\omit'.length);
     let alpha = null;
     if (cell[i] === '{') {
       const e = matchGroup(cell, i);
@@ -685,6 +687,9 @@
     };
     const up = kind === 'lower' ? straight(U) : curved(32, lab.up, U);
     const down = kind === 'upper' ? straight(D) : curved(-32, lab.down, D);
+    if (omitCurves) {
+      up.ph = down.ph = 1;
+    }
     arrows.push(up, down);
     if (alpha !== null && !/^\\omit\b/.test(alpha)) {
       const two = newArrow();

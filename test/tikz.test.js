@@ -90,6 +90,15 @@ Z \ar@{-->}[r]^-{u} \rtwocell^{p}_{q}{\alpha} & W
   assert.match(html, /column-gap:/);
 });
 
+test('xymatrix omits the curved arrows without losing the 2-cell or its label', () => {
+  const { html } = plain(String.raw`\[\xymatrix{A \drtwocell\omit{\alpha} & B\\ C & D}\]`);
+  const [cd] = models(html, 'data-cd');
+  assert.equal(cd.arrows.filter((a) => a.ph && a.bend).length, 2);
+  assert.ok(cd.arrows.some((a) => a.dbl === 1 && a.L.length));
+  assert.match(html, /\\alpha/);
+  assert.doesNotMatch(html, /\[I:[^\]]*\\omit/);
+});
+
 test('tikzpicture: paths, nodes, styles from \\tikzset and \\foreach', () => {
   const { html } = plain(String.raw`\tikzset{dot/.style={circle, fill, inner sep=1pt}}
 \begin{document}

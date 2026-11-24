@@ -287,6 +287,7 @@
     };
     function execToken(tok) {
       if (--budget < 0) throw new Quit('budget');
+      if (tok && tok.t === 'op') { tok.f(); return; }
       if (tok && tok.imm) { const v = lookup(tok); if (v === undefined) throw new Error('undefined ' + tok.v); os.push(v); return; }
       if (tok && tok.t === 'name' && !tok.lit) {
         const v = lookup(tok);
@@ -411,7 +412,21 @@
         : { name: 'nametype', str: 'stringtype', arr: 'arraytype', proc: 'arraytype', dict: 'dicttype', op: 'operatortype', mark: 'marktype', null: 'nulltype', font: 'fonttype' }[a && a.t] || 'nulltype';
       os.push(name(t));
     });
-    def('bind', () => {});
+    def('bind', () => {
+      const bind = (proc) => {
+        for (let i = 0; i < proc.v.length; i++) {
+          if (--budget < 0) throw new Quit('budget');
+          const token = proc.v[i];
+          if (token && token.t === 'proc') bind(token);
+          if (!token || token.t !== 'name' || token.lit) continue;
+          const value = lookup(token);
+          if (value && value.t === 'op') proc.v[i] = value;
+        }
+      };
+      const proc = pop();
+      if (proc && proc.t === 'proc') bind(proc);
+      os.push(proc);
+    });
     def('readonly', () => {}); def('executeonly', () => {}); def('noaccess', () => {});
 
     // arrays, strings, dictionaries
@@ -504,6 +519,13 @@
     });
     def('setcolor', () => { const n = os.length && typeof os[os.length - 1] === 'number' ? 1 : 0; if (n) { const g = num(); gs.color = [g, g, g]; } });
     def('currentrgbcolor', () => os.push(...gs.color));
+    def('currenthsbcolor', () => {
+      const [r, g, b] = gs.color;
+      const v = Math.max(r, g, b);
+      const delta = v - Math.min(r, g, b);
+      const hue = !delta ? 0 : v === r ? (g - b) / delta : v === g ? 2 + (b - r) / delta : 4 + (r - g) / delta;
+      os.push((hue / 6 + 1) % 1, v ? delta / v : 0, v);
+    });
     def('currentgray', () => os.push((gs.color[0] + gs.color[1] + gs.color[2]) / 3));
 
     // coordinates
@@ -841,7 +863,23 @@
     def('ashow', () => { const s = pop(); pop(); pop(); show(s.v); });
     def('widthshow', () => { const s = pop(); pop(); pop(); pop(); show(s.v); });
     def('awidthshow', () => { const s = pop(); for (let k = 0; k < 5; k++) pop(); show(s.v); });
-    def('xshow', () => { pop(); show(pop().v); });
+    for (const mode of ['xshow', 'yshow', 'xyshow']) {
+      def(mode, () => {
+        const offsets = pop().v;
+        const text = pop().v;
+        if (!Array.isArray(offsets)) { show(text); partial = true; return; }
+        for (let i = 0; i < text.length; i++) {
+          if (--budget < 0) throw new Quit('budget');
+          const at = gs.cp;
+          show(text[i]);
+          const x = mode === 'yshow' ? 0 : offsets[mode === 'xyshow' ? 2 * i : i];
+          const y = mode === 'xshow' ? 0 : offsets[mode === 'xyshow' ? 2 * i + 1 : i];
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { partial = true; continue; }
+          const [dx, dy] = dapply(gs.ctm, x, y);
+          gs.cp = [at[0] + dx, at[1] + dy];
+        }
+      });
+    }
     def('kshow', () => { const s = pop(); pop(); show(s.v); });
     def('stringwidth', () => {
       const s = pop(); const f = gs.font || { matrix: [10, 0, 0, 10, 0, 0], name: '' };

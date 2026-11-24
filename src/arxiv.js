@@ -368,7 +368,7 @@
       folded.set(key, folded.has(key) ? null : path);
     }
     return (name) => {
-      const clean = name.trim().replace(/^\.\//, '');
+      const clean = name.trim().replace(/^"([^"]+)"$/, '$1').replace(/^\.\//, '');
       const candidates = [];
       for (const d of dirs) {
         const path = normalize(d + clean);
@@ -381,6 +381,12 @@
       // Archives sometimes use different case in the source and the filename.
       for (const path of candidates) {
         const match = folded.get(path.toLowerCase());
+        if (match && urls[match]) return urls[match];
+      }
+      // Older arXiv archives can omit apostrophes from the uploaded filenames.
+      for (const path of candidates) {
+        if (!path.includes("'")) continue;
+        const match = folded.get(path.replace(/'/g, '').toLowerCase());
         if (match && urls[match]) return urls[match];
       }
       return null;
