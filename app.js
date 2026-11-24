@@ -129,7 +129,7 @@
   // seconds to convert, so the conversion runs in a worker where it can, and
   // the preview then replaces only the blocks whose HTML changed. Without a
   // worker (file:// pages, strict sandboxes) the same code runs here instead.
-  const convert = (() => {
+  const convertLatex = (() => {
     const katexScript = document.querySelector('script[src*="katex"]');
     let worker = null;
     let ready = Promise.resolve(false);
@@ -186,6 +186,35 @@
     };
   })();
 
+  // TeXmark (.tmd files): Markdown that's secretly LaTeX (vendor/texmark, from
+  // github.com/klepo0/texmark). The preview draws its LaTeX conversion, and each
+  // block's source range is moved back to the whole .tmd lines it came from, so
+  // clicking, editing in place and notes work on the .tmd text itself.
+  const isTeXmark = () => !!window.TeXmark && TeXmark.isTeXmarkFile(fileName.textContent);
+  let texmarkLast = null; // { source, result } of the last conversion
+  function texmarkOf(source) {
+    if (!texmarkLast || texmarkLast.source !== source) texmarkLast = { source, result: TeXmark.convert(source) };
+    return texmarkLast.result;
+  }
+  /** The LaTeX that TeXglass draws for a source: the source, or a .tmd file's conversion. */
+  function latexOf(source) {
+    return isTeXmark() ? texmarkOf(source).latex : source;
+  }
+  const BLOCK_RANGE = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
+  function convert(source, images) {
+    if (!isTeXmark()) return convertLatex(source, images);
+    const t = texmarkOf(source);
+    return convertLatex(t.latex, images).then((result) => {
+      if (result && result.blocks) {
+        result.blocks = result.blocks.map((html) => html.replace(BLOCK_RANGE, (m, a, b) => {
+          const [s, e] = t.sourceRange(Number(a), Number(b));
+          return `<div class="src-block" data-s="${s}" data-e="${e}">`;
+        }));
+      }
+      return result;
+    });
+  }
+
   let renderedDoc = null; // the source the preview shows now
   let texFallback = null; // the host's LaTeX for what TeXglass cannot draw (setTexFallback)
   let shown = []; // [{ html, nodes }] for each top-level block in the preview, except any in the inline editor
@@ -228,6 +257,7 @@
   }
 
   function showResult(result, source) {
+    if ($('convert-tex')) $('convert-tex').hidden = !isTeXmark();
     if (insight) insight.setDefinitions(result.defs);
     lastLabels = result.labels;
     lastToc = result.toc;
@@ -1298,7 +1328,7 @@
   // --- opening and saving files -------------------------------------------------
 
   const Local = window.TeXglassLocal;
-  const LATEX_TYPES = [{ description: 'LaTeX', accept: { 'text/x-tex': ['.tex', '.ltx', '.latex'] } }];
+  const LATEX_TYPES = [{ description: 'LaTeX or TeXmark', accept: { 'text/x-tex': ['.tex', '.ltx', '.latex', '.tmd'] } }];
 
   async function openWithPicker() {
     // The picker is not allowed inside an embedded frame; use the plain file input there.
@@ -1363,7 +1393,7 @@
   /** Several files (from a picker or an input): one .tex file opens alone, more as a folder. */
   async function openFiles(files) {
     files = Array.from(files);
-    const tex = files.filter((f) => /\.(tex|ltx|latex)$/i.test(f.name));
+    const tex = files.filter((f) => /\.(tex|ltx|latex|tmd)$/i.test(f.name));
     if (files.length === 1 || !Local || (tex.length === 1 && files.length === 1)) return openFile(files[0]);
     showStatus('Reading the files…');
     openRaw(await Local.readFileList(files), files.length + ' files');
@@ -1758,6 +1788,28 @@
   // Open: the Open dialog (arXiv, GitHub, or this computer); Shift+click opens a folder.
   $('open').addEventListener('click', (e) => (e.shiftKey ? openFolder() : showArxivDialog()));
   $('save').addEventListener('click', save);
+  if ($('convert-tex')) $('convert-tex').addEventListener('click', convertToTex);
+
+  /** Convert to .tex: a TeXmark file as an ordinary LaTeX file, with the standard preamble. */
+  function convertToTex() {
+    if (!isTeXmark()) return;
+    const tex = latexOf(doc);
+    const name = (fileName.textContent || 'document.tmd').replace(/\.tmd$/i, '') + '.tex';
+    if (inFrame) {
+      // Downloads are blocked in an embedded page; copy the LaTeX instead.
+      navigator.clipboard.writeText(tex).then(
+        () => flashStatus('LaTeX copied to the clipboard'),
+        () => flashStatus('Could not copy the LaTeX')
+      );
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([tex], { type: 'text/x-tex' }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    flashStatus('Downloaded ' + name);
+  }
   $('export').addEventListener('click', () => exportHtml(false));
   if ($('export-reader')) $('export-reader').addEventListener('click', () => exportHtml(true));
   if ($('export-epub')) $('export-epub').addEventListener('click', () => exportEpub(false));
@@ -2210,7 +2262,7 @@
 
   function exportNotes() {
     if (!paper) return;
-    const base = (fileName.textContent || 'paper.tex').replace(/\.(tex|ltx|latex)$/i, '');
+    const base = (fileName.textContent || 'paper.tex').replace(/\.(tex|ltx|latex|tmd)$/i, '');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([NotesSync.toFile(paper.record)], { type: 'application/json' }));
     a.download = `${base}.texglass.json`;
@@ -2437,7 +2489,7 @@
 
   /** The open paper as a record to keep. */
   function savedRecord() {
-    const title = Library.plainTitle(NotesSync.titleOf(doc)) || fileName.title || (fileName.textContent || '').replace(/\.(tex|ltx|latex)$/i, '');
+    const title = Library.plainTitle(NotesSync.titleOf(latexOf(doc))) || fileName.title || (fileName.textContent || '').replace(/\.(tex|ltx|latex|tmd)$/i, '');
     const arxiv = opened.arxiv || (paper.key.startsWith('arxiv:') ? paper.key.slice(6) : null);
     return { key: paper.key, title, name: fileName.textContent, nameTitle: fileName.title || '', source: doc, images: opened.images || {}, arxiv, gh: opened.gh, saved: new Date().toISOString() };
   }
@@ -2519,7 +2571,7 @@
   /** The open paper, as a collection names it. */
   function collectionHere() {
     if (!paper || !NotesSync) return null;
-    const title = (Library && Library.plainTitle(NotesSync.titleOf(doc))) || fileName.title || fileName.textContent || '';
+    const title = (Library && Library.plainTitle(NotesSync.titleOf(latexOf(doc)))) || fileName.title || fileName.textContent || '';
     const arxiv = opened.arxiv || (paper.key.startsWith('arxiv:') ? paper.key.slice(6) : null);
     const gh = opened.gh && opened.gh.links && opened.gh.links.view;
     return { paper: paper.key, title, arxiv: arxiv || undefined, gh: gh || undefined };
@@ -2875,7 +2927,7 @@
     // with a view, the link opens at the view; without, at the section being read
     const goto = view ? '' : sectionHere();
     const url = Share.link({ ...where, goto, view });
-    const title = Library ? Library.plainTitle(NotesSync.titleOf(doc)) : '';
+    const title = Library ? Library.plainTitle(NotesSync.titleOf(latexOf(doc))) : '';
     const how = await Share.share(url, title || (where.arxiv ? 'arXiv:' + where.arxiv : ''));
     if (how === 'copied') flashStatus(view ? `Link copied, opens with this view: ${Share.describeView(v, viewName)}` : goto ? `Link copied, opens at ${goto}` : 'Link copied');
     else if (how === 'failed') showStatus('Could not copy the link: ' + url, true);
@@ -3435,7 +3487,7 @@
   params = window.TeXglassParams
     ? TeXglassParams.attach({
       root: preview,
-      render: (piece, values) => Promise.resolve(TeXglass.renderLive(renderedDoc || doc, piece, values)),
+      render: (piece, values) => Promise.resolve(TeXglass.renderLive(latexOf(renderedDoc || doc), piece, values)),
     })
     : null;
 
@@ -4531,9 +4583,9 @@
     }
     texFallback = TeXglassTexFallback.create({
       root: preview,
-      preamble: () => TeXglassTexFallback.preamble(renderedDoc || '') || '',
+      preamble: () => TeXglassTexFallback.preamble(latexOf(renderedDoc || '')) || '',
       request: (pieces) => {
-        const preamble = TeXglassTexFallback.preamble(renderedDoc || '') || '';
+        const preamble = TeXglassTexFallback.preamble(latexOf(renderedDoc || '')) || '';
         return fn(pieces.map((p) => Object.assign({ preamble }, p)));
       },
       onChange: () => {

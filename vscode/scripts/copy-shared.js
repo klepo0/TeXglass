@@ -41,6 +41,7 @@ for (const [from, to] of [
   ['src/bib.js', 'bib.js'],
   ['src/eps.js', 'eps.js'],
   ['src/pdf.js', 'pdf.js'],
+  ['vendor/texmark/texmark.js', 'texmark.js'],
 ]) {
   const src = path.join(root, from);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(out, to));

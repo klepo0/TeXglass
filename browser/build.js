@@ -194,6 +194,7 @@ function build(target) {
   copy(path.join(ROOT, 'vscode/ink.js'), path.join(out, 'vscode/ink.js'));
   copyDir(path.join(ROOT, 'vscode/media/fonts'), path.join(out, 'vscode/media/fonts'), (name) => /^kalam-|OFL-kalam/.test(name));
   copyDir(KATEX, path.join(out, 'vendor/katex'));
+  copyDir(path.join(ROOT, 'vendor/texmark'), path.join(out, 'vendor/texmark'));
   copyDir(path.join(ROOT, 'vendor/pdfjs'), path.join(out, 'vendor/pdfjs'));
 
   const zip = path.join(DIST, `texglass-arxiv-${target}-${LABEL}.zip`);

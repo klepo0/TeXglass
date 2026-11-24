@@ -30,6 +30,18 @@ const TeXglassDiff = require('./shared/diff.js');
 const TeXglassTexFallback = require('./shared/texfallback.js');
 const NotesSync = require('./shared/notes-sync.js');
 const Features = require('./shared/features.js');
+const TeXmark = require('./shared/texmark.js');
+
+/**
+ * TeXmark (.tmd), Markdown that's secretly LaTeX (github.com/klepo0/texmark):
+ * the preview shows its LaTeX conversion. The compact form puts the whole
+ * preamble on line 1, so every line keeps its number and jumping between the
+ * preview and the .tmd file lands on the right line.
+ */
+const isTeXmarkPath = (p) => /\.tmd$/i.test(p || '');
+function asLatex(p, text) {
+  return text != null && isTeXmarkPath(p) ? TeXmark.convert(String(text), { compact: true }).latex : text;
+}
 
 /**
  * The reader's own LaTeX, for formulas and pictures TeXglass cannot draw
@@ -126,7 +138,7 @@ function citedPaper(converter, input) {
 const VIEW_TYPE = 'texglass.preview';
 
 function isTex(doc) {
-  return !!doc && (doc.languageId === 'latex' || doc.languageId === 'tex' || /\.(tex|ltx|latex)$/i.test(doc.fileName));
+  return !!doc && (doc.languageId === 'latex' || doc.languageId === 'tex' || doc.languageId === 'texmark' || /\.(tex|ltx|latex|tmd)$/i.test(doc.fileName));
 }
 
 // --- conversion -----------------------------------------------------------------
@@ -510,9 +522,9 @@ function openDocsLike(uri) {
 function readSource(p) {
   const want = normPath(p);
   const doc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && normPath(d.uri.fsPath) === want);
-  if (doc) return doc.getText();
+  if (doc) return asLatex(p, doc.getText());
   try {
-    return fs.readFileSync(p, 'utf8');
+    return asLatex(p, fs.readFileSync(p, 'utf8'));
   } catch (e) {
     return null;
   }
@@ -554,7 +566,7 @@ async function assembleDocument(uri, cache) {
   if (isVirtual(uri)) {
     const docs = openDocsLike(uri);
     const project = await withFiles(
-      (get) => assemble(uri.path, (p) => (docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
+      (get) => assemble(uri.path, (p) => asLatex(p, docs.has(p) ? docs.get(p).getText() : get(p)), path.posix),
       (p) => readText(uri.with({ path: p })),
       cache
     );
@@ -568,7 +580,7 @@ async function assembleDocument(uri, cache) {
     } catch (e) {
       return { error: `Could not open ${uri}: ${e.message || e}` };
     }
-    const text = doc.getText().replace(/\r\n?/g, '\n');
+    const text = asLatex(uri.path, doc.getText().replace(/\r\n?/g, '\n'));
     const key = uri.toString();
     return { text, files: [key], texts: { [key]: text }, segments: [{ start: 0, end: text.length, file: 0, at: 0 }], deps: [], warnings: [] };
   }
@@ -2142,6 +2154,29 @@ function activate(context) {
     // Print the document, or save it as a PDF, laid out like a paper. On the
     // desktop it opens in the browser (webviews cannot print); in vscode.dev and
     // github.dev, where the preview is a page of the browser, it prints the preview.
+    vscode.commands.registerCommand('texglass.convertToTex', async (uri) => {
+      // A TeXmark file as an ordinary LaTeX file, with the standard preamble, next to it.
+      if (!(uri instanceof vscode.Uri)) {
+        const ed = vscode.window.activeTextEditor;
+        if (ed && isTeXmarkPath(ed.document.uri.path)) uri = ed.document.uri;
+        else if (preview && isTeXmarkPath(preview.uri.path)) uri = preview.uri;
+      }
+      if (!(uri instanceof vscode.Uri) || !isTeXmarkPath(uri.path)) {
+        vscode.window.showInformationMessage('Open a TeXmark (.tmd) file to convert it to .tex.');
+        return null;
+      }
+      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      const text = open ? open.getText() : new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+      const target = await vscode.window.showSaveDialog({
+        defaultUri: uri.with({ path: uri.path.replace(/\.tmd$/i, '.tex') }),
+        filters: { LaTeX: ['tex'] },
+        saveLabel: 'Convert',
+      });
+      if (!target) return null;
+      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(TeXmark.convert(text).latex));
+      await vscode.window.showTextDocument(target, { preview: false });
+      return target;
+    }),
     vscode.commands.registerCommand('texglass.print', async (uri, out) => {
       if (WEB) {
         if (preview) preview.post({ type: 'print' });
