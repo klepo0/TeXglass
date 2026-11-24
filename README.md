@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/texglass"><img src="https://img.shields.io/npm/v/texglass?logo=npm" alt="TeXglass version on npm"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=klepo1.texglass"><img src="https://vsmarketplacebadges.dev/version-short/klepo1.texglass.svg" alt="VS Code Marketplace version"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=klepo1.texglass"><img src="https://vsmarketplacebadges.dev/installs-short/klepo1.texglass.svg" alt="VS Code Marketplace installs"></a>
   <a href="https://open-vsx.org/extension/klepo1/texglass"><img src="https://img.shields.io/open-vsx/dt/klepo1/texglass?label=Open%20VSX" alt="Open VSX downloads"></a>
@@ -56,9 +57,7 @@
 | **[VS Code extension](https://marketplace.visualstudio.com/items?itemName=klepo1.texglass)** | `ext install klepo1.texglass`, open a `.tex` file, press **Ctrl+K V**. Also on [Open VSX](https://open-vsx.org/extension/klepo1/texglass). | Writing LaTeX with a live preview |
 | **[Home Screen app](docs/GUIDE.md#on-phones-and-tablets)** | On a phone or tablet, open the [web viewer](https://klepo0.github.io/TeXglass/), then Share → **Add to Home Screen** (iPhone, iPad) or **Install TeXglass as an app** in the **…** menu (Android). | Reading on the go, offline too |
 | **[arXiv browser extension](browser/README.md)** | For **Chrome, Edge and Firefox**. Download the zips from the [latest release](https://github.com/klepo0/TeXglass/releases/latest) and follow the install steps. | One click from arXiv, alphaXiv, HAL, ResearchGate and Overleaf |
-
-There is also a command line tool: `npx texglass paper.tex -o paper.html`
-writes one standalone page.
+| **[npm package](https://www.npmjs.com/package/texglass)** | Run `npx texglass paper.tex -o paper.html` to create a standalone HTML page, or `npm install texglass` to use the library. | Command-line conversion and JavaScript projects |
 
 ## Features
 
