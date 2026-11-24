@@ -139,9 +139,15 @@
     let shared = null;
     let stops = []; // the pins to step through in the view (‹ › on the bar, J / K), in the reading order
     let at = -1; // the one stepped to last
+    let reading = false;
+    const readingMarks = new Set();
 
     const pickables = () => blocksOf(doc).filter((el) => (el.classList.contains('theorem') && el.id) || (isNumberedDisplay(el) && el.id));
     const isTemp = () => !!(shared && shared.kind === 'uses');
+    const canReadInOrder = () => {
+      const src = shared || opts;
+      return !!(src.hasOrder && src.hasOrder() && src.sheet && src.sheet().length);
+    };
     /** A temporary set's elements, with the reader's changes to it. */
     const tempEls = () => {
       let els = [];
@@ -176,9 +182,15 @@
     }
 
     function clearMarks() {
+      for (const el of readingMarks) {
+        el.classList.remove('pick-reading-shell');
+        el.style.removeProperty('--pick-order');
+      }
+      readingMarks.clear();
+      doc.classList.remove('pick-reading');
       for (const el of marked) el.classList.remove(...CLASSES);
       marked = [];
-      for (const b of doc.querySelectorAll('.pick-box, .pick-sheet, .pick-memo, .pick-context, .pick-handout')) b.remove();
+      for (const b of doc.querySelectorAll('.pick-box, .pick-sheet, .pick-memo, .pick-context, .pick-handout, .pick-branch')) b.remove();
       doc.classList.remove('pick-printing');
       for (const el of doc.querySelectorAll('.pick-able')) el.classList.remove('pick-able', 'pick-on');
       doc.classList.remove('pick-mode', 'pick-view');
@@ -214,6 +226,7 @@
 
     /** Pin and unpin (o.temp: add to and take away from the temporary set showing instead). */
     function start(o) {
+      reading = false;
       if (!(o && o.temp && isTemp())) endTemp();
       if (opts.onStart) opts.onStart();
       clearMarks();
@@ -311,6 +324,24 @@
       }
       const sheet = drawSheet();
       drawContexts(els, keep);
+      if (shared && shared.branches) {
+        for (const branch of shared.branches()) {
+          if (!keep.has(branch.el)) continue;
+          const b = document_.createElement('button');
+          b.type = 'button';
+          b.className = 'pick-branch';
+          b.textContent = branch.expanded ? 'Collapse branch' : 'Expand branch';
+          b.setAttribute('aria-label', b.textContent + ' for ' + branch.name);
+          b.setAttribute('aria-expanded', String(branch.expanded));
+          b.addEventListener('click', () => {
+            shared.expand(branch.key);
+            branch.el.querySelector(':scope > .pick-branch')?.focus({ preventScroll: true });
+          });
+          branch.el.appendChild(b);
+        }
+      }
+      if (reading && sheet && canReadInOrder()) drawReadingOrder(els, keep, sheet);
+      else reading = false;
       doc.classList.add('pick-view');
       const was = at >= 0 ? stops[at] : null;
       stops = stepOrder(els);
@@ -345,8 +376,17 @@
     function step(by) {
       if (mode !== 'view' || !stops.length) return false;
       const k = stops.length;
-      at = at < 0 ? (by > 0 ? 0 : k - 1) : (at + by + k) % k;
-      if (opts.jump) opts.jump(stops[at]);
+      return goTo(stops[at < 0 ? (by > 0 ? 0 : k - 1) : (at + by + k) % k]);
+    }
+
+    function goTo(el, key) {
+      if (mode !== 'view' || !stops.includes(el)) return false;
+      at = stops.indexOf(el);
+      if (!shared && opts.onVisit) {
+        const row = !key && opts.sheet && opts.sheet().find((r) => r.el === el);
+        opts.onVisit(el, key || (row && row.key));
+      }
+      if (opts.jump) opts.jump(el);
       showBar();
       return true;
     }
@@ -367,7 +407,7 @@
       sheet.addEventListener('click', (e) => {
         const b = e.target.closest('[data-sheet-go]');
         const r = b && rows[+b.dataset.sheetGo];
-        if (r && opts.jump) { e.preventDefault(); opts.jump(r.el); }
+        if (r && opts.jump) { e.preventDefault(); if (!goTo(r.el, r.key)) opts.jump(r.el); }
       });
       // under the title, or at the top
       const title = doc.querySelector('.title-block.pick-head');
@@ -489,16 +529,8 @@
       return n && t.startsWith(n) ? `§${n} ${t.slice(n.length).trim()}` : t;
     }
 
-    /**
-     * The view as a handout: { title, html }. The pins come in the reading
-     * order (else in the document's), each with its number and note, the
-     * section it is from, and its proofs that are open; then what the view
-     * brought along; then, once, the definitions and notation they rest on.
-     * o.ids keeps the blocks' ids, so that links work in an e-book.
-     */
-    async function handout(o) {
-      o = o || {};
-      const els = pickedEls();
+    /** The handout and on-screen study sheet use the same order and passage grouping. */
+    function readingItems(els) {
       const src = shared || opts;
       let rows = [];
       try { rows = src.sheet ? (src.sheet() || []).filter((r) => r && r.el && doc.contains(r.el)) : []; } catch (e) { rows = []; }
@@ -517,6 +549,52 @@
       for (const el of els) if (!covered(el)) { used.push(el); extra.push({ el, name: el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : '', note: '' }); }
       // no study sheet (VS Code without one, a plain list): everything in the document's order
       if (!items.length) { items.push(...extra.map((x) => Object.assign(x, { pin: true }))); extra.length = 0; }
+      return { items, extra, used, ordered };
+    }
+
+    function drawReadingOrder(els, keep, sheet) {
+      const { items, extra } = readingItems(els);
+      const blocks = new Set(items.concat(extra).flatMap((x) => [x.el, ...(x.more || [])]));
+      let rank = 0;
+      const put = (el) => {
+        if (!el || readingMarks.has(el)) return;
+        const parents = [];
+        for (let p = el.parentElement; p && p !== doc; p = p.parentElement) {
+          if (keep.has(p) || blocks.has(p)) return;
+          parents.push(p);
+        }
+        el.style.setProperty('--pick-order', String(++rank));
+        readingMarks.add(el);
+        for (const p of parents) {
+          p.classList.add('pick-reading-shell');
+          readingMarks.add(p);
+        }
+      };
+      put(doc.querySelector('.title-block.pick-head'));
+      put(sheet);
+      for (const item of items.concat(extra)) {
+        put(item.el.previousElementSibling?.matches('.pick-memo') ? item.el.previousElementSibling : null);
+        put(item.el);
+        for (const m of item.more || []) put(m);
+        if (item.el.classList.contains('theorem')) {
+          for (const proof of proofsOf(item.el)) if (keep.get(proof) === 'pick-proof') put(proof);
+        }
+        const context = item.el.nextElementSibling;
+        if (context?.matches('.pick-context')) put(context);
+      }
+      doc.classList.add('pick-reading');
+    }
+
+    /**
+     * The view as a handout: { title, html }. The pins come in the reading
+     * order (else in the document's), each with its number and note, the
+     * section it is from, and its proofs that are open; then what the view
+     * brought along; then, once, the definitions and notation they rest on.
+     * o.ids keeps the blocks' ids, so that links work in an e-book.
+     */
+    async function handout(o) {
+      o = o || {};
+      const { items, extra, used, ordered } = readingItems(pickedEls());
       const openProofs = new Set(marked.filter((m) => m.classList.contains('pick-proof') && m.classList.contains('pick-open')));
       const box = document_.createElement('div');
       const titleEl = doc.querySelector('.title-block');
@@ -634,6 +712,7 @@
       shared = null;
       clearMarks();
       mode = null;
+      reading = false;
       stops = [];
       at = -1;
       if (bar) bar.hidden = true;
@@ -697,6 +776,11 @@
           else if (act === 'epub') { if (opts.epub) opts.epub(); }
           else if (act === 'next') step(1);
           else if (act === 'prev') step(-1);
+          else if (act === 'reading') {
+            reading = !reading;
+            refresh(true);
+            bar.querySelector('[data-act="reading"]')?.focus({ preventScroll: true });
+          }
           else if (act === 'done') stop();
           else if (act && isTemp() && shared.act) shared.act(act, b); // the temporary set's own buttons
         });
@@ -737,6 +821,8 @@
         : '';
       const blockName = (el) => (el.classList.contains('theorem') || isNumberedDisplay(el) ? nameOf(el) : null);
       const label = () => { try { return shared.label(n); } catch (e) { return `<strong>${what(n)}</strong>`; } };
+      const readingButton = canReadInOrder()
+        ? `<button type="button" data-act="reading" aria-pressed="${reading}">Read in this order</button>` : '';
       if (mode === 'pick' && isTemp()) {
         // changing a temporary set: the reader's own pins stay as they are
         bar.innerHTML =
@@ -771,6 +857,7 @@
         bar.innerHTML =
           `<span class="uses-what"><strong>Shared view: ${what(n)}</strong> <span class="insight-muted">your own pins stay as they are; proofs fold: click one to open it</span></span>` +
           stepper +
+          readingButton +
           (shared.keep ? '<button type="button" data-act="keep" title="Add these to your own pins, keeping the ones you have">Keep these pins</button>' : '') +
           outMenu(false) +
           '<button type="button" data-act="done" class="uses-done" title="Leave the shared view: back to the whole document and your own pins (Esc)">Dismiss</button>';
@@ -778,6 +865,7 @@
         bar.innerHTML =
           `<span class="uses-what"><strong>Showing ${what(n)} pinned</strong> <span class="insight-muted">proofs fold: click one to open it</span></span>` +
           stepper +
+          readingButton +
           '<button type="button" data-act="edit" title="Pin or unpin results and equations">Change</button>' +
           outMenu(true) +
           '<button type="button" data-act="done" class="uses-done" title="Show the whole document again (Esc)">Done</button>';
@@ -801,6 +889,7 @@
     function showShared(view) {
       if (shared && shared !== view) endTemp();
       shared = view;
+      reading = false;
       if (!pickedEls().length) { shared = null; return false; }
       show();
       return true;
@@ -888,11 +977,12 @@
 
     return {
       start,
-      show: () => { endTemp(); show(); },
+      show: () => { endTemp(); reading = false; show(); },
       stop,
-      refresh: () => refresh(),
+      refresh,
       toggle,
       step,
+      goTo,
       pinsChanged,
       /** null, 'pick' or 'view' */
       mode: () => mode,

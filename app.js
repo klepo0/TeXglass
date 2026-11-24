@@ -2618,7 +2618,7 @@
     // What does this use? or a search by use: a temporary set (changed: its pins)
     const f = insight && insight.focused();
     const temp = picker && picker.temp && picker.temp();
-    if (f && temp && !temp.edited) {
+    if (f && temp && !temp.edited && !temp.partial) {
       if (f.search) return { m: 's', s: { inc: f.search.inc, exc: f.search.exc, any: f.search.any, direct: f.search.direct }, h: 1 };
       if (f.key) return { m: 'u', f: f.key, d: f.dir, h: 1 };
     }
@@ -2689,7 +2689,7 @@
     } else if (v.m === 'u') {
       const el = insight.elOfKey(v.f);
       // What does this use? (links made before it moved into Show only these too: h is not needed)
-      if (el) { insight.focus(el, v.d); ok = !!insight.focused(); }
+      if (el) { insight.focus(el, v.d, { depth: 'all' }); ok = !!insight.focused(); }
     } else if (v.m === 's') {
       ok = insight.showUses(v.s);
     }
@@ -2890,6 +2890,8 @@
     // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
     const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
     if (refPin) body.prepend(refPin);
+    const destination = insight && insight.setDestinationFor && insight.setDestinationFor(target);
+    if (destination) body.prepend(destination);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).
@@ -3115,6 +3117,7 @@
         get: () => (paper && NotesSync ? paper.record.map : looseMap()),
         set: mapEditsChanged,
       },
+      pinSetScope: () => paper ? paper.key : fileName.textContent,
       locked: store.get('texglass:map-locked') === '1',
       onLock: (on) => store.set('texglass:map-locked', on ? '1' : ''),
       showPinned: () => { if (picker) picker.show(); },
@@ -3135,6 +3138,7 @@
       // the study sheet: the pins in the reader's order, with their notes
       sheet: insight && window.TeXglassPins ? () => TeXglassPins.sheet(insight, margin) : undefined,
       hasOrder: insight ? () => insight.hasPinOrder() : undefined,
+      onVisit: insight ? (el, key) => insight.visitPin(key || insight.keyOfEl(el)) : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;

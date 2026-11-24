@@ -145,13 +145,13 @@ test('the dependency map can be edited, pinned and locked', { skip: !chromium &&
     assert.equal(saved.pin['label:main'].d, 'uses');
     assert.equal(saved.link['label:third > label:main'].s, 'add');
 
-    // Unpin all, then bring the saved map back.
+    // Unpin all in the draft, then bring the saved map back.
     await page.keyboard.press('m');
     await page.waitForSelector('.insight-dialog[open] .dep-map');
     assert.ok(await page.locator('.insight-dialog .dep-node.dep-eqnode', { hasText: '(2)' }).count(), 'the pinned equation is on the map');
     await page.click('.insight-dialog [data-unpin-all]');
     assert.equal(await page.locator('.insight-dialog .dep-pinned').count(), 0);
-    await page.click('.insight-dialog [data-view="Main proof"]');
+    await page.click('.insight-dialog [data-view-revert]');
     assert.ok(await node('Theorem 1').evaluate((g) => g.classList.contains('dep-pinned')));
     assert.equal(await page.getAttribute('.insight-dialog [data-view="Main proof"]', 'aria-pressed'), 'true', 'the saved map in use is marked');
 

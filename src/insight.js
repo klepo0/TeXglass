@@ -1593,19 +1593,22 @@
    * Everything n uses, directly or not (dir 'uses'), everything that uses it
    * ('usedBy'), or both ('both').
    */
-  function closure(n, dir) {
-    if (dir === 'both') return new Set([...closure(n, 'uses'), ...closure(n, 'usedBy')]);
+  function closure(n, dir, expand) {
+    if (dir === 'both') return new Set([...closure(n, 'uses', expand), ...closure(n, 'usedBy', expand)]);
     const out = new Set();
     const stack = [n];
     while (stack.length) {
-      for (const m of stack.pop()[dir]) if (!out.has(m) && m !== n) { out.add(m); stack.push(m); }
+      for (const m of stack.pop()[dir]) if (!out.has(m) && m !== n) {
+        out.add(m);
+        if (!expand || expand(m)) stack.push(m);
+      }
     }
     return out;
   }
 
   /** As closure(), but only along links written in the text, not guessed ones. */
-  function explicitClosure(n, dir) {
-    if (dir === 'both') return new Set([...explicitClosure(n, 'uses'), ...explicitClosure(n, 'usedBy')]);
+  function explicitClosure(n, dir, expand) {
+    if (dir === 'both') return new Set([...explicitClosure(n, 'uses', expand), ...explicitClosure(n, 'usedBy', expand)]);
     const out = new Set();
     const stack = [n];
     const sure = (a, b) => { const e = a.edges && a.edges.get(b); return e && !e.guessed; }; // a uses b
@@ -1615,7 +1618,7 @@
         if (out.has(m) || m === n) continue;
         if (!(dir === 'uses' ? sure(x, m) : sure(m, x))) continue;
         out.add(m);
-        stack.push(m);
+        if (!expand || expand(m)) stack.push(m);
       }
     }
     return out;
@@ -1678,6 +1681,7 @@
     // index, the "What does this use?" buttons and symbols introduced in words.
     const feats = { map: true, notation: true, uses: true, words: true };
     const symbolCache = new Map(); // tex -> html
+    let directDependencies = false;
 
     const getGraph = () => graph || (graph = applyLinks(dependencyGraph(doc), edits.link));
     const getIndex = () => index || (index = notationIndex(doc, defs, { words: feats.words }));
@@ -1810,6 +1814,8 @@
         if (n.kind === 'symbol') box.querySelector('.insight-note-what').appendChild(shownOf(n.s, n.group.map((d) => d.el)));
         const go = box.querySelector('a[data-go]');
         if (go) go._target = n.kind === 'symbol' ? n.s.el : n.e.first;
+        const pin = box.querySelector('[data-pop-pin]');
+        if (pin && opts.edits) box.appendChild(setDestination([pin.dataset.popPin]));
       });
       renderSymbols(body);
       if (pop.parentNode !== document_.body) document_.body.appendChild(pop);
@@ -1901,6 +1907,7 @@
         text.appendChild(sec);
       } else text.appendChild(copyOf(n.el));
       body.appendChild(text);
+      if (n.key && opts.edits) body.prepend(setDestination([n.key]));
       // a modal dialog sits above the page, so the preview goes inside it there
       const host = g.closest('dialog') || document_.body;
       if (pop.parentNode !== host) host.appendChild(pop);
@@ -2299,6 +2306,9 @@
       const on = allPins().has(key);
       return `<button type="button" class="insight-pin insight-pop-pin" data-pop-pin="${esc(key)}" data-what="${esc(what)}" aria-pressed="${on}" title="${on ? 'Pinned: click to unpin' : 'Pin it: it stays at the top of the Notation tab and joins the Pinned list'}" aria-label="${on ? 'Unpin' : 'Pin'} ${esc(what)}">${PIN_ICON}</button>`;
     }
+    function previewPinTarget(target) {
+      return target && target.closest && target.closest('.theorem, .math-display, figure.float, .proof, .bibliography li[id]');
+    }
     function setPinPressed(b, on, what) {
       b.setAttribute('aria-pressed', String(on));
       b.title = on ? 'Pinned: click to unpin' : 'Pin it';
@@ -2309,12 +2319,10 @@
      * `target` (as the map's pin does), or null if it is neither.
      */
     function pinButtonFor(target) {
-      if (!target || !target.closest) return null;
-      const el = target.closest('.theorem') || target.closest('.math-display') || target.closest('figure.float');
+      const el = previewPinTarget(target);
       const key = el && keyOfEl(el);
       if (!key) return null;
-      const n = key.startsWith('eq:') || key.startsWith('fig:') ? null : getGraph().byKey.get(key);
-      const what = n ? n.name : key.startsWith('fig:') ? key.slice(4) : eqNameOf(el);
+      const what = nameOfKey(key);
       const b = document_.createElement('button');
       b.type = 'button';
       b.className = 'insight-pin insight-pop-pin tg-ref-pin';
@@ -2654,7 +2662,7 @@
     };
     /** How many things a pin set holds: map pins, Notation rows, passages. */
     const setSize = (e) => (e && e.p ? Object.keys(e.p).length + (Array.isArray(e.x) ? e.x.length : 0) : 0);
-    const savedViews = () => Object.entries(edits.view).filter(([, e]) => setSize(e)).sort((a, b) => a[0].localeCompare(b[0]));
+    const savedViews = () => Object.entries(edits.view).filter(([, e]) => e && e.p).sort((a, b) => a[0].localeCompare(b[0]));
 
     /** The pinned equations, to draw on the map: [{ eq, key, el, name, order, usedBy }]. */
     function pinnedEqs(g) {
@@ -2788,7 +2796,7 @@
       if (part === 'hide') return e.h ? '1' : null;
       if (part === 'link') return e.s || null;
       if (part === 'note') return e.n || Number.isFinite(e.o) ? (e.n || '') + '|' + (Number.isFinite(e.o) ? e.o : '') : null;
-      return setSize(e) ? JSON.stringify([Object.entries(e.p).sort(), e.x || null, e.o || null]) : null;
+      return e.p ? JSON.stringify([Object.entries(e.p).sort(), e.x || null, e.o || null]) : null;
     };
     /** The entries two copies of the changes differ in: [[part, key]]. */
     function diff(a, b) {
@@ -3007,23 +3015,33 @@
     // passages (x: ids, through the host's textPins: { get() → ids, set(ids) }) and
     // the reading order (o). Maps saved before (no x) held only the map's pins.
     let textPins = opts.textPins || null;
+    let activeView = null;
+    let setScope = opts.pinSetScope && opts.pinSetScope();
+    const drafts = new Map();
+    const visits = new Map();
+    let recentSets = [];
+    const savedSet = (name) => Object.hasOwn(edits.view, name) ? edits.view[name] : null;
+    function useSet(name) {
+      recentSets = [name, ...recentSets.filter((n) => n !== name)];
+    }
     const textPinIds = () => { try { return textPins ? (textPins.get() || []).slice() : []; } catch (e) { return []; } };
     const isWholeSet = (e) => Array.isArray(e.x);
     /** Every pinned thing's key: pins, Notation rows among them, and passages ("text:<id>"). */
     const allPinKeys = () => Array.from(allPins().keys()).concat(textPinIds().map((id) => 'text:' + id));
     const orderOf = (k) => { const e = edits.note[k]; return e && Number.isFinite(e.o) ? e.o : null; };
     /** Keys in the reading order: ordered ones first, the rest after them as they come. */
-    function inReadingOrder(keys) {
+    function inReadingOrder(keys, paperOnly = false) {
       // the reader's order first; the rest as they come in the paper (not as they were pinned)
+      const rank = (k) => paperOnly ? null : orderOf(k);
       const els = new Map();
-      if (keys.some((k) => orderOf(k) == null)) for (const k of keys) els.set(k, orderOf(k) == null ? paperElOf(k) : null);
+      for (const k of keys) if (rank(k) == null) els.set(k, paperElOf(k));
       const byPaper = (a, b) => {
         const ea = els.get(a);
         const eb = els.get(b);
         if (!ea || !eb || ea === eb) return (ea ? -1 : 0) + (eb ? 1 : 0);
         return ea.compareDocumentPosition(eb) & 4 ? -1 : 1;
       };
-      return keys.map((k, i) => [k, orderOf(k), i])
+      return keys.map((k, i) => [k, rank(k), i])
         .sort((a, b) => (a[1] == null ? Infinity : a[1]) - (b[1] == null ? Infinity : b[1]) || (a[1] == null && b[1] == null ? byPaper(a[0], b[0]) : 0) || a[2] - b[2])
         .map((x) => x[0]);
     }
@@ -3070,30 +3088,221 @@
     }
     const pinNote = (key) => (edits.note[key] && edits.note[key].n) || '';
 
+    const hasPinOrder = () => allPinKeys().some((k) => orderOf(k) != null);
+    const workingSet = () => ({
+      p: Object.fromEntries(allPins()), x: textPinIds(),
+      o: hasPinOrder() ? inReadingOrder(allPinKeys()) : null,
+    });
+    const setKeys = (v) => Object.keys(v.p).concat((v.x || []).map((id) => 'text:' + id));
+    function orderedKeys(v) {
+      const keys = setKeys(v);
+      const order = (v.o || []).filter((k) => keys.includes(k));
+      return order.concat(inReadingOrder(keys.filter((k) => !order.includes(k)), true));
+    }
     /** Save everything pinned now under a name, to bring back later (synced with the notes). */
     function saveView(name) {
       name = String(name || '').trim().slice(0, 80);
-      const pins = allPins();
-      const x = textPinIds();
-      if (!name || !(pins.size + x.length)) return false;
+      const v = workingSet();
+      if (!name || (!setSize(v) && activeSet() !== name)) return false;
+      if (activeView !== name && visits.has(activeView)) visits.set(name, visits.get(activeView));
+      drafts.delete(activeView);
+      drafts.delete(name);
       activeView = name;
-      setEdit('view', name, { p: Object.fromEntries(pins), x, o: inReadingOrder(allPinKeys()) });
+      useSet(name);
+      setEdit('view', name, v);
       return true;
     }
-    /** Pin what a set pinned, instead of the pins now. */
-    function loadView(name) {
-      const v = edits.view[name];
-      if (!v || !v.p) return false;
+    function visitPin(key) {
+      if (key && (allPins().has(key) || (key.startsWith('text:') && textPinIds().includes(key.slice(5))))) visits.set(activeView, key);
+    }
+    function restoreVisit() {
+      const key = visits.get(activeView);
+      if (!key || !allPinKeys().includes(key)) return;
+      const el = paperElOf(key);
+      const p = picker();
+      if (el && p && p.goTo && p.goTo(el, key)) return;
+      if (key.startsWith('text:') && textPins && textPins.go) textPins.go(key.slice(5));
+      else if (el && opts.jump) opts.jump(el);
+    }
+    /** Switch the working pins, saving unsaved changes for the next visit to that set. */
+    function loadView(name, revert = false) {
+      const saved = name === null ? drafts.get(null) : savedSet(name);
+      if (!saved || !saved.p) return false;
+      const p = picker();
+      if (p && p.view && p.view()) p.stop();
+      if (activeView === name && !revert) { restoreVisit(); return true; }
+      const v = !revert && drafts.get(name) || saved;
+      if (revert) drafts.delete(name);
+      else if (activeView === null || (activeSet() && !setIsOn(savedSet(activeView)))) drafts.set(activeView, workingSet());
+      else drafts.delete(activeView);
       const want = new Map(Object.entries(v.p));
       // a map saved before sets held everything leaves the Notation rows and passages as they are
       const now = isWholeSet(v) ? allPins() : pinMap();
       for (const k of now.keys()) if (!want.has(k)) setEdit('pin', k, { d: '' }, true);
       for (const [k, d] of want) if (((edits.pin[k] && edits.pin[k].d) || '') !== d) setEdit('pin', k, { d }, true);
-      if (isWholeSet(v) && textPins) { try { textPins.set(v.x); } catch (e) { /* the passages stay as they are */ } }
-      if (Array.isArray(v.o)) setPinOrder(v.o, true);
       activeView = name;
-      editsChanged('all', { label: `Opened the pin set “${name}”` });
+      if (name !== null) useSet(name);
+      if (isWholeSet(v) && textPins) { try { textPins.set(v.x); } catch (e) { /* the passages stay as they are */ } }
+      for (const k of isWholeSet(v) ? allPinKeys() : want.keys()) {
+        if (orderOf(k) != null) setEdit('note', k, { n: pinNote(k), o: null }, true);
+      }
+      if (Array.isArray(v.o)) setPinOrder(v.o, true);
+      editsChanged('all', { label: revert ? `Reverted the draft of “${name}”` : name === null ? 'Opened My pins' : `Opened the pin set “${name}”` });
+      restoreVisit();
       return true;
+    }
+
+    const hasSetPin = (v, key) => key.startsWith('text:') ? (v.x || []).includes(key.slice(5)) : Object.hasOwn(v.p, key);
+    function appendSetPins(v, entries) {
+      const add = entries.filter(([k]) => !hasSetPin(v, k));
+      if (!add.length) return v;
+      const next = { p: { ...v.p }, o: orderedKeys(v).concat(add.map(([k]) => k)) };
+      if (isWholeSet(v)) next.x = v.x.slice();
+      for (const [k, d] of add) {
+        if (k.startsWith('text:')) {
+          next.x = next.x || textPinIds();
+          if (!next.x.includes(k.slice(5))) next.x.push(k.slice(5));
+        } else {
+          next.p[k] = d;
+          if (isNotationKey(k) && !next.x) next.x = textPinIds();
+        }
+      }
+      if (isWholeSet(next) && !isWholeSet(v)) {
+        for (const [k, d] of notationPins()) if (!Object.hasOwn(next.p, k)) next.p[k] = d;
+      }
+      return next;
+    }
+    /** Add destinations directly to a saved set, retaining the destination's draft if it has one. */
+    function addToSet(name, entries) {
+      const v = savedSet(name);
+      if (!v || !v.p) return null;
+      const pins = allPins();
+      const live = name === activeView ? workingSet() : drafts.get(name);
+      const saved = appendSetPins(v, entries);
+      const draft = live && appendSetPins(live, entries);
+      useSet(name);
+      if (saved !== v) setEdit('view', name, saved, true);
+      if (draft && draft !== live) {
+        if (name === activeView) {
+          for (const [k, d] of entries) if (!k.startsWith('text:') && !pins.has(k)) setEdit('pin', k, { d }, true);
+          if (textPins && draft.x.length !== live.x.length) textPins.set(draft.x);
+          setPinOrder(draft.o, true);
+        } else drafts.set(name, draft);
+      }
+      if (saved !== v || draft !== live) editsChanged(name === activeView ? 'all' : 'view');
+      return Math.max(setSize(saved) - setSize(v), live ? setSize(draft) - setSize(live) : 0);
+    }
+    function recentPinSets() {
+      const sets = savedViews().sort((a, b) => (Date.parse(b[1].t) || 0) - (Date.parse(a[1].t) || 0));
+      const names = new Set(sets.map(([name]) => name));
+      return Array.from(new Set(recentSets.filter((name) => names.has(name)).concat(Array.from(names))));
+    }
+    function createSetWithPins(name, entries, allWorkingPins) {
+      name = String(name || '').trim().slice(0, 80);
+      if (!name || !entries.length) return false;
+      if (savedSet(name)?.p) addToSet(name, entries);
+      else if (allWorkingPins) return saveView(name);
+      else {
+        const v = appendSetPins({ p: {}, x: [], o: [] }, entries);
+        useSet(name);
+        setEdit('view', name, v);
+      }
+      return true;
+    }
+    /** Choose a pin set, with collections offered by hosts that support them. */
+    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, allWorkingPins = false, onResult, collection } = {}) {
+      const wrap = document_.createElement('span');
+      wrap.className = 'tg-set-choice' + (compact ? ' tg-set-choice-compact' : '');
+      wrap.innerHTML = `<span class="tg-set-select"><span aria-hidden="true">+</span><select aria-label="${esc(label)}" title="${esc(label)}"><option value="">${esc(label)}</option></select></span>` +
+        '<span class="tg-set-create" hidden><input type="text" maxlength="80" aria-label="Set name" placeholder="Set name"><button type="button">Add</button><button type="button" aria-label="Cancel new set">×</button></span>' +
+        (compact ? '' : '<span class="tg-set-feedback" role="status"></span>');
+      const select = wrap.querySelector('select');
+      const create = wrap.querySelector('.tg-set-create');
+      const input = create.querySelector('input');
+      const feedback = wrap.querySelector('.tg-set-feedback');
+      const entries = () => {
+        const pins = selfOnly ? null : allPins();
+        const selected = allWorkingPins ? inReadingOrder(allPinKeys()) : keys;
+        return Array.from(new Set(selected), (k) => [k, pins?.get(k) || 'self']);
+      };
+      const announce = (message) => {
+        if (wrap.isConnected && feedback) feedback.textContent = message;
+        else if (onResult) onResult(message);
+      };
+      const destinations = [{
+        kind: 'set', title: 'Pin sets', newLabel: 'New set…', nameLabel: 'Set name',
+        names: recentPinSets,
+        save(name, create) {
+          if (create) return createSetWithPins(name, entries(), allWorkingPins) ? `Added to “${name}”` : '';
+          const added = addToSet(name, entries());
+          if (added === null) return 'This set is no longer available';
+          return added ? `Added to “${name}”` : `Already in “${name}”`;
+        },
+      }];
+      if (collection) destinations.push({
+        kind: 'collection', title: 'Collections', newLabel: 'New collection…', nameLabel: 'Collection name',
+        names: collection.names,
+        save: (name) => collection.add(name) ? `Added to collection “${name}”` : 'These pins are no longer available',
+      });
+      const choices = new Map();
+      let creating = null;
+      function fill() {
+        choices.clear();
+        select.replaceChildren(new Option(label, ''));
+        for (const dest of destinations) {
+          const group = collection ? document_.createElement('optgroup') : select;
+          if (collection) group.label = dest.title;
+          dest.names().forEach((name, i) => {
+            const value = `${dest.kind}:${i}`;
+            choices.set(value, { dest, name });
+            group.appendChild(new Option(name, value));
+          });
+          const value = `${dest.kind}:new`;
+          choices.set(value, { dest });
+          group.appendChild(new Option(dest.newLabel, value));
+          if (collection) select.appendChild(group);
+        }
+      }
+      select.addEventListener('focus', fill);
+      select.addEventListener('pointerdown', fill);
+      select.addEventListener('change', () => {
+        const choice = choices.get(select.value);
+        select.value = '';
+        if (!choice) return;
+        if (choice.name !== undefined) {
+          if (creating) close();
+          announce(choice.dest.save(choice.name));
+          return;
+        }
+        if (creating !== choice.dest) input.value = '';
+        creating = choice.dest;
+        input.setAttribute('aria-label', creating.nameLabel);
+        input.placeholder = creating.nameLabel;
+        create.children[2].setAttribute('aria-label', `Cancel new ${creating.kind}`);
+        create.hidden = false;
+        input.focus();
+      });
+      const close = () => {
+        creating = null;
+        input.value = '';
+        create.hidden = true;
+        select.focus();
+      };
+      const commit = () => {
+        const name = input.value.trim();
+        if (!name || !creating) { input.focus(); return; }
+        const message = creating.save(name, true);
+        if (!message) { input.focus(); return; }
+        announce(message);
+        close();
+      };
+      create.children[1].addEventListener('click', commit);
+      create.children[2].addEventListener('click', close);
+      create.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+      });
+      return wrap;
     }
     /**
      * One click: pin a result with what it uses (d), and keep that as a pin set of
@@ -3104,10 +3313,12 @@
       d = d || 'uses';
       const base = (nameOfKey(key) + (WITH[d] || '')).replace(/^equation /, 'Equation ');
       let name = base;
-      for (let i = 2; edits.view[name] && setSize(edits.view[name]) && !(Object.keys(edits.view[name].p).length === 1 && edits.view[name].p[key] === d); i++) name = `${base} (${i})`;
+      for (let i = 2; savedSet(name)?.p && !(Object.keys(edits.view[name].p).length === 1 && edits.view[name].p[key] === d); i++) name = `${base} (${i})`;
+      if (activeView !== name && (activeView === null || (activeSet() && !setIsOn(savedSet(activeView))))) drafts.set(activeView, workingSet());
       setEdit('pin', key, { d }, true);
       setEdit('view', name, { p: { [key]: d }, x: [], o: [key] }, true);
       activeView = name;
+      useSet(name);
       editsChanged('all', { label: `Pinned ${base}, kept as the set “${name}”` });
       return name;
     }
@@ -3144,16 +3355,19 @@
       const keys = starterKeys();
       if (!keys.length) return null;
       setEdit('view', STARTER, { p: Object.fromEntries(keys.map((k) => [k, 'self'])), x: [], o: keys }, true);
+      useSet(STARTER);
       editsChanged('view', { label: `Suggested the pin set “${STARTER}”` });
       if (!allPins().size && !textPinIds().length) loadView(STARTER);
       return STARTER;
     }
     function deleteView(name) {
       if (activeView === name) activeView = null;
-      if (edits.view[name]) setEdit('view', name, { p: null });
+      drafts.delete(name);
+      visits.delete(name);
+      recentSets = recentSets.filter((n) => n !== name);
+      if (savedSet(name)) setEdit('view', name, { p: null });
     }
     // the set last opened or saved, to offer "Update" once its pins change
-    let activeView = null;
     /** Whether the pins now are exactly a set's (its Notation rows and passages too, where it has them). */
     const setIsOn = (e) => {
       if (!e || !e.p) return false;
@@ -3161,9 +3375,12 @@
       const want = Object.entries(e.p);
       if (want.length !== pins.size || !want.every(([k, d]) => pins.get(k) === d)) return false;
       const ids = new Set(textPinIds());
-      return !isWholeSet(e) || (e.x.length === ids.size && e.x.every((k) => ids.has(k)));
+      if (isWholeSet(e) && (e.x.length !== ids.size || !e.x.every((k) => ids.has(k)))) return false;
+      const keys = setKeys(e);
+      const order = inReadingOrder(keys);
+      return orderedKeys(e).every((k, i) => k === order[i]);
     };
-    const activeSet = () => (activeView && setSize(edits.view[activeView]) ? activeView : null);
+    const activeSet = () => (activeView && savedSet(activeView) && savedSet(activeView).p ? activeView : null);
     /** A name to suggest for the pins now: "Theorem 2 with what it uses", or "Set 3". */
     function suggestName() {
       const pins = Array.from(pinMap());
@@ -3394,7 +3611,7 @@
       const saved = savedViews();
       const parts = [];
       const showOnly = '<button type="button" data-show-pinned title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text">Show only these</button>';
-      // In the side panel the pin sets, Save as set… and Clear all are in the Pins tab, next door.
+      // In the side panel the pin sets and their controls are in the Pins tab.
       if (view.onPins) {
         if (pins.size) {
           parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
@@ -3402,7 +3619,7 @@
         } else {
           parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text.</span>');
         }
-        if (pins.size || saved.length) parts.push(`<button type="button" data-open-pins title="The pin list, your pin sets (Save as set…, switch sets) and Clear all">Pins tab${saved.length ? ` · ${saved.length} ${saved.length === 1 ? 'set' : 'sets'}` : ''}</button>`);
+        if (pins.size || saved.length) parts.push(`<button type="button" data-open-pins title="Open the pin list and saved sets">Pins tab${saved.length ? ` · ${saved.length} ${saved.length === 1 ? 'set' : 'sets'}` : ''}</button>`);
         return `<div class="dep-pins">${parts.join('')}</div>`;
       }
       if (pins.size) {
@@ -3411,16 +3628,19 @@
         parts.push(view.naming
           ? `<span class="dep-view-new"><input type="text" class="dep-view-name" placeholder="Name this pin set" aria-label="Name for the pin set" maxlength="80" value="${esc(suggestName())}"><button type="button" data-save-ok>Save</button><button type="button" data-save-cancel>Cancel</button></span>`
           : '<button type="button" data-save-view title="Keep everything pinned under a name, as a pin set to switch back to later (saved with your notes)">Save as set…</button>');
-        // the set in use, changed since: one click keeps the new pins under its name
-        const act = activeSet();
-        if (act && !view.naming && !setIsOn(edits.view[act])) parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}" title="${esc(`Keep the pins now under “${act}”, instead of what it held`)}">Update “${esc(act)}”</button>`);
         parts.push('<button type="button" data-unpin-all title="Unpin everything (your pin sets and notes stay)">Clear all</button>');
       } else {
         parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text, to show only those later.</span>');
       }
+      const act = activeSet();
+      if (act && !view.naming && !setIsOn(savedSet(act))) {
+        parts.push(`<button type="button" class="dep-view-update" data-view-update="${esc(act)}">Update “${esc(act)}”</button>`);
+        parts.push('<button type="button" data-view-revert>Revert draft</button>');
+      }
       if (saved.length) {
-        parts.push('<span class="dep-views"><span class="insight-usedby-k">Sets</span> ' + saved.map(([name, e]) =>
-          `<span class="dep-view${setIsOn(e) ? ' dep-view-on' : ''}"><button type="button" data-view="${esc(name)}" aria-pressed="${setIsOn(e)}" title="${esc(setIsOn(e) ? `Pinned now: the ${setSize(e)} of “${name}”` : `Pin these ${setSize(e)} again, instead of the pins now`)}">${esc(name)}</button>` +
+        const myPins = drafts.has(null) ? `<button type="button" data-view-working aria-pressed="${activeView === null}">My pins</button> ` : '';
+        parts.push('<span class="dep-views"><span class="insight-usedby-k">Sets</span> ' + myPins + saved.map(([name, e]) =>
+          `<span class="dep-view${name === activeView || setIsOn(e) ? ' dep-view-on' : ''}"><button type="button" data-view="${esc(name)}" aria-pressed="${setIsOn(e)}"${name === activeView ? ' aria-current="true"' : ''}>${esc(name)}${(name === activeView ? !setIsOn(e) : drafts.has(name)) ? ' · Draft' : ''}</button>` +
           `<button type="button" class="dep-view-del" data-view-del="${esc(name)}" aria-label="${esc('Delete the pin set ' + name)}" title="Delete">×</button></span>`).join('') + '</span>');
       }
       return `<div class="dep-pins">${parts.join('')}</div>`;
@@ -3814,7 +4034,7 @@
      * Light up result k on a map and what it rests on and what rests on it, or,
      * with dir ('uses' | 'usedBy', from "What does this use?"), only that side.
      */
-    function select(view, k, dir) {
+    function select(view, k, dir, scope) {
       const body = view.body;
       const nodes = body._nodes;
       const n = nodes && nodes[k];
@@ -3831,11 +4051,12 @@
       view.selectedCite = null;
       view.selectedEq = null;
       view.synced = !!dir;
-      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses');
-      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy');
+      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses', scope && scope.expand);
+      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy', scope && scope.expand);
       // the works cited by what it rests on
       const cited = new Set();
       if (dir !== 'usedBy') for (const m of [n, ...up]) for (const c of m.cites.keys()) cited.add(c);
+      if (scope) for (const c of cited) if (!scope.keep.has(c.el)) cited.delete(c);
       const svg = body.querySelector('.dep-map');
       if (!svg) return;
       svg.classList.toggle('dep-synced', !!dir);
@@ -3938,8 +4159,8 @@
     /** Clicks on the map's editing controls (pins, hiding, links, saved maps). True if handled. */
     function mapClick(view, e) {
       const t = e.target.closest('[data-mpin], [data-mhide], [data-link], [data-link-cancel], [data-link-edit], [data-unlink], [data-relink], ' +
-        '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-del], [data-reset-layout], ' +
-        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update], [data-mset], [data-open-pins]');
+        '[data-show-pinned], [data-save-view], [data-save-ok], [data-save-cancel], [data-unpin-all], [data-view], [data-view-working], [data-view-del], [data-reset-layout], ' +
+        '[data-undo], [data-redo], [data-reset-map], [data-reset-yes], [data-reset-no], [data-view-update], [data-view-revert], [data-mset], [data-open-pins]');
       if (!t) return false;
       e.preventDefault();
       const cur = () => {
@@ -3968,6 +4189,7 @@
         else if (inp) inp.focus();
       } else if (d.unpinAll != null) unpinAll();
       else if (d.view != null) loadView(d.view);
+      else if (d.viewWorking != null) loadView(null);
       else if (d.viewDel != null) deleteView(d.viewDel);
       else if (d.resetLayout != null) resetLayout();
       else if (d.undo != null) undo();
@@ -3976,6 +4198,7 @@
       else if (d.resetNo != null) { view.confirmReset = false; fillDeps(view); }
       else if (d.resetYes != null) { view.confirmReset = false; resetMap(); }
       else if (d.viewUpdate != null) saveView(d.viewUpdate);
+      else if (d.viewRevert != null && activeSet()) loadView(activeView, true);
       else if (d.openPins != null) { if (view.onPins) view.onPins(); }
       return true;
     }
@@ -4038,7 +4261,10 @@
         fillDeps(view);
         return true;
       }
-      if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) select(view, n.order, focusState.dir);
+      if (n && view.body.querySelector(`.dep-node[data-n="${n.order}"]`)) {
+        const scope = focusState.view.partial ? focusState.view.dependencies() : null;
+        select(view, n.order, focusState.dir, scope);
+      }
       else clearPick(view, `${esc(focusState.name)} is shown in the text, but it is not on the map: it refers to no other result, and none refers to it.`);
       view.synced = true;
       return true;
@@ -4281,28 +4507,46 @@
      * { el, n, keep: Map(element → class), stops: [el], count, counts, guessed },
      * or null when it is not here. dir: 'uses', 'usedBy' or 'both'.
      */
-    function usesView(key, dir, elHint) {
+    function usesView(key, dir, elHint, expanded) {
       const el = (key && elOfKey(key)) || elHint;
       if (!el || !doc.contains(el)) return null;
       const g = getGraph();
       const n = g.byEl.get(el) || { el, name: thmName(el), proofs: [], refs: { statement: new Set(), proof: new Set() }, uses: new Set(), usedBy: new Set(), edges: new Map(), cites: new Map() };
-      const others = Array.from(closure(n, dir)).sort((a, b) => a.order - b.order);
+      const expand = expanded ? (m) => expanded.has(m.key) : null;
+      const up = dir === 'usedBy' ? new Set() : closure(n, 'uses', expand);
+      const down = dir === 'uses' ? new Set() : closure(n, 'usedBy', expand);
+      const others = Array.from(new Set([...up, ...down])).sort((a, b) => a.order - b.order);
       // reached only through a link guessed from the wording ("the previous lemma")
-      const sure = explicitClosure(n, dir);
+      const sure = explicitClosure(n, dir, expand);
       const guessed = others.filter((m) => !sure.has(m));
       const keep = new Map();
       keep.set(el, 'pick-sel');
       for (const m of others) if (m.el && doc.contains(m.el) && !keep.has(m.el)) keep.set(m.el, sure.has(m) ? '' : 'pick-guess');
       if (dir !== 'usedBy') {
-        const refs = new Set([...n.refs.statement, ...n.refs.proof]);
-        for (const m of others) for (const r of m.refs.statement) refs.add(r);
-        // the works it cites, and those cited in the statements of what it uses
-        for (const c of n.cites.keys()) if (c.el) refs.add(c.el);
-        for (const m of others) for (const [c, e] of m.cites) if (e.statement && c.el) refs.add(c.el);
+        const refs = new Set();
+        const addRefs = (m, proof) => {
+          for (const r of m.refs.statement) refs.add(r);
+          if (proof) for (const r of m.refs.proof) refs.add(r);
+          for (const [c, e] of m.cites) if ((proof || e.statement) && c.el) refs.add(c.el);
+        };
+        addRefs(n, true);
+        for (const m of others) if (!expand || expand(m)) addRefs(m, !!expand);
+        if (expand) {
+          for (const r of refs) {
+            const target = g.byEl.get(blockOf(r));
+            if (target && !target.cite) refs.delete(r);
+          }
+        }
         addRefBlocks(keep, refs);
       }
-      const counts = dir === 'both' ? { up: closure(n, 'uses').size, down: closure(n, 'usedBy').size } : null;
-      return { el, n, keep, stops: [el].concat(others.filter((m) => keep.has(m.el)).map((m) => m.el)), count: others.length, counts, guessed: guessed.length };
+      const counts = dir === 'both' ? { up: up.size, down: down.size } : null;
+      const branches = !expand ? [] : others.filter((m) => keep.has(m.el) && (
+        expand(m) ||
+        (up.has(m) && Array.from(m.uses).some((x) => x !== n)) ||
+        (down.has(m) && Array.from(m.usedBy).some((x) => x !== n)) ||
+        (dir !== 'usedBy' && [...m.refs.statement, ...m.refs.proof, ...Array.from(m.cites.keys(), (c) => c.el)].some((r) => r && !g.byEl.get(blockOf(r)) && !keep.has(blockOf(r))))
+      )).map((m) => ({ el: m.el, key: m.key, name: m.name, expanded: expand(m) }));
+      return { el, n, keep, expand, branches, stops: [el].concat(others.filter((m) => keep.has(m.el)).map((m) => m.el)), count: others.length, counts, guessed: guessed.length };
     }
 
     const results = (k) => `${k} result${k > 1 ? 's' : ''}`;
@@ -4338,23 +4582,36 @@
      * results to start at instead of el. (scroll and collapse are kept for the
      * callers of the old mode: the view always goes to it, and hides the rest.)
      */
-    function focus(el, dir, scroll, collapse, at) {
+    function focus(el, dir, scroll, collapse, at, depth) {
       if (!el || !doc.contains(el) || !picker()) return false;
       const key = keyOfEl(el);
-      const first = usesView(key, dir, el);
+      const expanded = new Set();
+      const partial = depth ? depth === 'direct' : directDependencies;
+      const first = usesView(key, dir, el, partial ? expanded : null);
       if (!first) return false;
       const name = first.n.name || thmName(el);
       const sel = first.n;
       // what the view shows is worked out again from the paper each time it is drawn
       // (after an edit in VS Code the page is new), from the key
-      const current = () => usesView(key, dir, el) || { keep: new Map(), stops: [], count: 0, guessed: 0, counts: null };
+      const current = () => usesView(key, dir, el, view.partial ? expanded : null) || { keep: new Map(), branches: [], stops: [], count: 0, guessed: 0, counts: null };
       let last = first;
+      const redraw = () => {
+        focusState.dir = dir;
+        focusState.stops = current().stops;
+        view.title = `${name}${WITH[dir] || ''}`;
+        view.note = '';
+        picker().refresh(true);
+        syncMaps();
+      };
       const view = {
         title: `${name}${WITH[dir] || ''}`,
         at: at && first.stops.includes(at) ? at : first.el,
         items: () => { last = current(); return Array.from(last.keep.keys()); },
         stops: () => last.stops,
         marks: () => Array.from(last.keep).filter(([, c]) => c),
+        dependencies: current,
+        branches: () => last.branches,
+        partial,
         open: () => (sel.proofs || []).filter((p) => doc.contains(p)),
         label: (shown) => {
           const f = last;
@@ -4372,17 +4629,32 @@
         controls: () =>
           `<span class="uses-dir" role="group" aria-label="Direction"><button type="button" data-act="dir" data-dir="uses" aria-pressed="${dir === 'uses'}" title="What it uses">Uses</button>` +
           `<button type="button" data-act="dir" data-dir="usedBy" aria-pressed="${dir === 'usedBy'}" title="What uses it">Used in</button>` +
-          `<button type="button" data-act="dir" data-dir="both" aria-pressed="${dir === 'both'}" title="What it uses and what uses it">Both</button></span>`,
+          `<button type="button" data-act="dir" data-dir="both" aria-pressed="${dir === 'both'}" title="What it uses and what uses it">Both</button></span>` +
+          `<span class="uses-dir" role="group" aria-label="Dependency depth"><button type="button" data-act="depth" data-depth="direct" aria-pressed="${view.partial}">Direct</button>` +
+          `<button type="button" data-act="depth" data-depth="all" aria-pressed="${!view.partial}">All levels</button></span>`,
         act: (name_, b) => {
-          if (name_ === 'dir' && b.dataset.dir && b.dataset.dir !== dir) focus(elOfKey(key) || el, b.dataset.dir);
+          if (name_ === 'dir' && b.dataset.dir !== dir) {
+            dir = b.dataset.dir;
+            expanded.clear();
+          } else if (name_ === 'depth' && (b.dataset.depth === 'direct') !== view.partial) {
+            view.partial = b.dataset.depth === 'direct';
+            directDependencies = view.partial;
+          } else return;
+          redraw();
+          document_.querySelector(`.pick-bar [data-${name_}="${b.dataset[name_]}"]`)?.focus({ preventScroll: true });
+        },
+        expand(branch) {
+          if (expanded.has(branch)) expanded.delete(branch);
+          else expanded.add(branch);
+          redraw();
         },
         editable: true,
         save: (info) => {
-          if (!info.edited && key) return saveSet([[key, dir]], view.title);
-          return saveSet(pinsOfEls(info.els), `${view.title} (changed)`);
+          if (!info.edited && !view.partial && key) return saveSet([[key, dir]], view.title);
+          return saveSet(pinsOfEls(info.els), `${view.title} (${info.edited ? 'changed' : 'selected branches'})`);
         },
         keep: (info) => {
-          if (!info.edited && key) {
+          if (!info.edited && !view.partial && key) {
             if (pinMap().get(key) === dir) return 'Already in your pins';
             setPin(key, dir);
             return 'Added to your pins';
@@ -4410,8 +4682,9 @@
       base = String(base || 'Set').replace(/^equation /, 'Equation ').slice(0, 80);
       const same = (e) => e && e.p && Object.keys(e.p).length === entries.length && entries.every(([k, d]) => e.p[k] === d);
       let name = base;
-      for (let i = 2; edits.view[name] && setSize(edits.view[name]) && !same(edits.view[name]); i++) name = `${base} (${i})`;
+      for (let i = 2; savedSet(name)?.p && !same(edits.view[name]); i++) name = `${base} (${i})`;
       setEdit('view', name, { p: Object.fromEntries(entries), x: [], o: entries.map((e) => e[0]) }, true);
+      useSet(name);
       editsChanged('view', { label: `Saved the pin set “${name}”` });
       return name;
     }
@@ -4526,7 +4799,7 @@
       } else {
         const el = (focusState.key && elOfKey(focusState.key)) || document_.getElementById(focusState.id);
         if (!el || !doc.contains(el) || !el.classList.contains('theorem')) return unfocus();
-        const u = usesView(focusState.key, focusState.dir, el);
+        const u = focusState.view.dependencies();
         focusState.id = el.id;
         focusState.stops = u ? u.stops : [el];
         focusState.btn = el._usesBtn || null;
@@ -4572,7 +4845,7 @@
       features: () => Object.assign({}, feats),
       // o: { at } (the result to start at; scroll and collapse are no longer needed:
       // the view always goes to it and shows only what it uses)
-      focus: (el, dir, o) => focus(el, dir || 'uses', true, true, o && o.at),
+      focus: (el, dir, o) => focus(el, dir || 'uses', true, true, o && o.at, o && o.depth),
       /**
        * What el uses and what uses it, directly or not (o.direct: only links
        * written in the result itself), or null if it is not a result:
@@ -4654,7 +4927,16 @@
       // --- the reader's changes to the map (pins, hidden results, own links, layout, saved maps)
       /** The host's copy changed (another device, an import): read it again and redraw. */
       refreshEdits() {
+        const scope = opts.pinSetScope && opts.pinSetScope();
+        if (scope !== setScope) {
+          setScope = scope;
+          activeView = null;
+          drafts.clear();
+          visits.clear();
+          recentSets = [];
+        }
         edits = readEdits();
+        if (activeView !== null && !activeSet()) activeView = null;
         migrateNotationPins();
         committed = edits;
         undoStack.length = 0;
@@ -4682,8 +4964,22 @@
       allPinCount: () => allPins().size,
       /** A pin button for the preview of a result or numbered equation (null for anything else). */
       pinButtonFor,
+      setDestination,
+      visitPin,
+      visitedPin: () => visits.get(activeView),
+      hasWorkingPins: () => drafts.has(null),
+      setDestinationFor(target) {
+        const key = keyOfEl(previewPinTarget(target));
+        return key ? setDestination([key]) : null;
+      },
       /** Unpin one item of pinnedList by its key. */
       unpinKey,
+      unpinKeys(keys) {
+        const pinned = allPins();
+        const remove = keys.filter((k) => pinned.has(k));
+        for (const key of remove) setEdit('pin', key, { d: '' }, true);
+        if (remove.length) editsChanged('pin');
+      },
       /** Hear of every change to the pins; returns a function that stops it. */
       onPins: (fn) => { pinListeners.add(fn); return () => pinListeners.delete(fn); },
       /** Fill elements carrying data-sym (TeX) with the rendered symbol, the document's macros known. */
@@ -4700,6 +4996,7 @@
       resetMap,
       saveView,
       loadView,
+      revertView: () => { if (activeSet()) loadView(activeView, true); },
       /** Whether a starter set can be suggested (the paper has theorems or propositions), and its name. */
       starterSet: () => (starterKeys().length ? STARTER : null),
       /** Keep the suggested starter set, main results and the definitions they rest on: its name. */
@@ -4710,11 +5007,15 @@
       savedViews: () => savedViews().map(([name]) => name),
       // --- pin sets, reading order and notes (src/pins.js shows them)
       /** The pin sets: [{ name, size, on (pinned now exactly), active (opened or saved last) }]. */
-      pinSets: () => savedViews().map(([name, e]) => ({ name, size: setSize(e), on: setIsOn(e), active: name === activeView })),
+      pinSets: () => savedViews().map(([name, e]) => {
+        const on = setIsOn(e);
+        const active = name === activeView;
+        return { name, size: setSize(e), on, active, draft: active ? !on : drafts.has(name) };
+      }),
       /** The set opened or saved last, if it still exists (to offer "Update"), else null. */
       activeSet,
       /** Whether the pins now are exactly the set's. */
-      setIsOn: (name) => setIsOn(edits.view[name]),
+      setIsOn: (name) => setIsOn(savedSet(name)),
       suggestSetName: suggestName,
       /** The host's pinned passages, for sets: { get() → ids, set(ids) }. */
       setTextPins: (o) => { textPins = o || null; },
@@ -4723,7 +5024,7 @@
       /** Put the pins in this reading order (keys). */
       setPinOrder: (keys) => setPinOrder(keys || []),
       /** Whether the reader put any pin in order. */
-      hasPinOrder: () => allPinKeys().some((k) => orderOf(k) != null),
+      hasPinOrder,
       pinNote,
       setPinNote,
       /** Notes on pins: { key: note } for those that have one. */

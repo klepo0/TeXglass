@@ -19,6 +19,15 @@ async function openPins(page) {
   if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
   await page.waitForSelector('.side-pins', { state: 'visible' });
 }
+
+async function saveAllPins(panel, name) {
+  const destination = panel.getByRole('combobox', { name: /^Add all to( set)?…$/ });
+  await destination.focus();
+  await destination.selectOption({ label: 'New set…' });
+  const input = panel.getByRole('textbox', { name: 'Set name', exact: true });
+  await input.fill(name);
+  await input.press('Enter');
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Tab}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -77,9 +86,9 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click('.tg-pins-row[data-key="label:main"] .tg-pins-pen');
     await page.fill('.tg-pins-memo-in', 'the point of it all');
     await page.keyboard.press('Enter');
-    await page.click('[data-pins-act="save"]');
-    await page.fill('.tg-pins-set-name', 'Talk');
-    await page.keyboard.press('Enter');
+    const panel = page.locator('.side-pins');
+    assert.equal(await panel.getByRole('button', { name: 'Save as set…' }).count(), 0);
+    await saveAllPins(panel, 'Talk');
     await page.keyboard.press('Escape');
 
     // the Pins tab: the sets on top, the pin list under them, as the toolbar's pin shows it
@@ -112,9 +121,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click(P + '.tg-pins-row[data-key="label:first"] .tg-pins-x');
     assert.equal(await badge(), '1');
     assert.deepEqual(await rowsIn(), ['label:main']);
-    await page.click(P + '[data-pins-act="save"]');
-    await page.fill(P + '.tg-pins-set-name', 'Main only');
-    await page.keyboard.press('Enter');
+    await saveAllPins(panel, 'Main only');
     assert.deepEqual(await page.$$eval(P + '[data-pins-set]', (b) => b.map((x) => x.dataset.pinsSet)), ['Main only', 'Talk']);
     await page.click(P + '[data-pins-set="Talk"]');
     assert.equal(await badge(), '2');
@@ -132,15 +139,18 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click(P + '[data-pins-act="clear-ok"]');
     assert.equal(await badge(), '');
     assert.equal(await page.locator(P + '[data-pins-set]').count(), 2);
-    // and in the toolbar's list too
+    // The draft can be reopened empty, and reverting it restores the saved pins.
+    await page.click(P + '[data-pins-set="Main only"]');
     await page.click(P + '[data-pins-set="Talk"]');
+    assert.equal(await badge(), '');
+    await page.click(P + '[data-pins-act="revert"]');
     assert.equal(await badge(), '2');
     await openPins(page);
     await page.click('.side-pins [data-pins-act="clear"]');
     await page.click('.side-pins [data-pins-act="clear-ok"]');
     assert.equal(await badge(), '');
     await page.keyboard.press('Escape');
-    await page.click(P + '[data-pins-set="Talk"]');
+    await page.click(P + '[data-pins-act="revert"]');
     assert.equal(await badge(), '2');
     // Show only these from the tab
     await page.click(P + '[data-pins-act="show"]');
@@ -204,9 +214,15 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     await page.waitForSelector('#preview .theorem[data-label="first"] .tg-pin-btn', { state: 'attached' });
     await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"] .tg-pin-btn').click());
     await openPins(page);
-    await page.click('.side-pins [data-pins-act="save"]');
-    await page.fill('.side-pins .tg-pins-set-name', 'My set');
-    await page.keyboard.press('Enter');
+    const pins = page.locator('.side-pins');
+    await saveAllPins(pins, 'My set');
+    const savedSet = (name) => pins.locator(`[data-pins-set="${name}"]`);
+    const toReview = pins.locator('[data-key="label:first"]').getByLabel('Add to set…');
+    await toReview.focus();
+    await toReview.selectOption({ label: 'New set…' });
+    const reviewName = pins.getByRole('textbox', { name: 'Set name' });
+    await reviewName.fill('Review');
+    await reviewName.press('Enter');
     const head = () => page.evaluate(() => {
       const h = document.querySelector('.side-pins .tg-pins-panel .tg-pins-head');
       return h && Array.from(h.children).filter((c) => !c.matches('.tg-pins-views')).map((c) => c.textContent.trim()).join(' ');
@@ -222,6 +238,17 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     const rows = () => page.$$eval('.side-pins .tg-pins-panel .tg-pins-go', (bs) => bs.map((b) => b.textContent));
     assert.deepEqual(await rows(), ['Lemma 1.1', 'Theorem 1.2']);
     assert.match(await page.textContent('.side-pins .tg-pins-viewnote'), /your 1 pin comes back/);
+    const addAll = pins.getByRole('combobox', { name: 'Add all to…' });
+    assert.equal(await pins.getByRole('button', { name: 'Add to my pins' }).count(), 0);
+    assert.equal(await pins.getByRole('button', { name: 'Save as pin set' }).count(), 0);
+    await addAll.focus();
+    await addAll.selectOption({ label: 'Review' });
+    assert.equal(await savedSet('Review').locator('.tg-sets-size').textContent(), '2');
+    assert.match(await pins.locator('.tg-pins-actions .tg-set-feedback').textContent(), /Added to “Review”/);
+    assert.deepEqual(await rows(), ['Lemma 1.1', 'Theorem 1.2']);
+    await addAll.selectOption({ label: 'Review' });
+    assert.equal(await savedSet('Review').locator('.tg-sets-size').textContent(), '2');
+    assert.match(await pins.locator('.tg-pins-actions .tg-set-feedback').textContent(), /Already in “Review”/);
     // switching to "Used in" moves the tab along
     await page.click('.pick-bar [data-dir="usedBy"]');
     await page.waitForFunction(() => /what uses it/.test(document.querySelector('.side-pins .tg-pins-head').textContent));
@@ -232,15 +259,33 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     await page.waitForFunction(() => document.querySelectorAll('.side-pins .tg-pins-panel .tg-pins-go').length === 1);
     assert.equal(await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"]').offsetParent), null);
     assert.match(await page.textContent('.pick-bar .uses-what'), /changed/);
-    // Save as pin set from the tab
-    await page.click('.side-pins [data-pins-act="view-save"]');
-    await page.waitForFunction(() => /Saved as/.test(document.querySelector('.side-pins .tg-pins-viewnote').textContent));
-    assert.match(await page.textContent('.side-pins .tg-sets-stuck'), /Theorem 1\.2 with what it uses \(changed\)/);
+    await addAll.focus();
+    await addAll.selectOption({ label: 'New collection…' });
+    const collectionName = pins.getByRole('textbox', { name: 'Collection name' });
+    await collectionName.fill('Review');
+    await collectionName.press('Enter');
+    const reviewCollection = pins.locator('details[data-coll="Review"]');
+    assert.match(await reviewCollection.locator('summary').textContent(), /1 from 1 paper/);
+    assert.match(await reviewCollection.locator('.tg-coll-row').textContent(), /Theorem 1\.2/);
+    const reviewOptions = addAll.locator('option').filter({ hasText: /^Review$/ });
+    assert.deepEqual(await reviewOptions.evaluateAll((options) => options.map((opt) => opt.parentElement.label)), ['Pin sets', 'Collections']);
+    await addAll.selectOption(await reviewOptions.nth(1).getAttribute('value'));
+    assert.match(await pins.locator('.tg-pins-actions .tg-set-feedback').textContent(), /Added to collection “Review”/);
+    assert.equal(await savedSet('Review').locator('.tg-sets-size').textContent(), '2');
+    await addAll.selectOption({ label: 'New set…' });
+    const subsetName = pins.getByRole('textbox', { name: 'Set name' });
+    await subsetName.fill('Filtered dependencies');
+    await subsetName.press('Enter');
+    assert.equal(await savedSet('Filtered dependencies').locator('.tg-sets-size').textContent(), '1');
     // Done: back to the reader's pins, with the set's name
     await page.click('.side-pins [data-pins-act="view-done"]');
     await page.waitForFunction(() => !document.querySelector('.side-pins .tg-pins-head-view'));
     assert.equal(await head(), 'Pinned 1 My set');
     assert.equal(await page.evaluate(() => document.getElementById('preview').classList.contains('pick-view')), false);
+    await savedSet('Review').click();
+    assert.deepEqual(await rows(), ['Lemma 1.1 (Bound)', 'Theorem 1.2']);
+    await savedSet('Filtered dependencies').click();
+    assert.deepEqual(await rows(), ['Theorem 1.2']);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

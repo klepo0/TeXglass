@@ -801,6 +801,8 @@
     // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
     const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
     if (refPin) body.prepend(refPin);
+    const destination = insight && insight.setDestinationFor && insight.setDestinationFor(target);
+    if (destination) body.prepend(destination);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up by the extension now.
@@ -1183,6 +1185,7 @@
       clear: insight ? () => insight.unpinAll() : undefined,
       sheet: insight && window.TeXglassPins ? () => TeXglassPins.sheet(insight, margin) : undefined,
       hasOrder: insight ? () => insight.hasPinOrder() : undefined,
+      onVisit: insight ? (el, key) => insight.visitPin(key || insight.keyOfEl(el)) : undefined,
       proofsOf: (el) => {
         const n = insight && insight.graph().byEl.get(el);
         return n ? n.proofs : null;

@@ -587,6 +587,8 @@
     // a result or numbered equation can be pinned from its preview (it joins the Pinned list)
     const refPin = insight && insight.pinButtonFor && insight.pinButtonFor(target);
     if (refPin) body.prepend(refPin);
+    const destination = insight && insight.setDestinationFor && insight.setDestinationFor(target);
+    if (destination) body.prepend(destination);
     const used = insight && insight.usedByNote(target);
     if (used) body.appendChild(used);
     // A citation: the cited paper's title and abstract, looked up now (never while rendering).

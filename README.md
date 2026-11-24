@@ -77,7 +77,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 ### Understand
 
 - **Dependency map** of which results each theorem uses, read from the paper's own references; double-click a result to jump to it.
-- **What does this use?** lights up everything a result rests on, or everything that uses it.
+- **What does this use?** shows direct links or all levels, and lets you expand individual branches.
 - **Search by structure**: every result that uses a lemma, an assumption or an equation, and not another ("Theorem 1 but not Assumption A").
 - **Hypothesis checker**: a cited lemma's hypotheses split out, each with a box to tick.
 - **Step through a proof** one sentence, equation or list item at a time, like a slide reveal.
@@ -91,7 +91,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Handwritten notes look**: ink on squared paper, or chalk on a board in dark mode.
 - **Write with a pen** in the margin on a tablet.
 - **Pin** results and equations on an **editable dependency map**, show only the pinned ones, and **print** exactly that view.
-- **Everything pinned in one place**: results, equations, symbols and passages of text you pin (from the map, the Notation tab, any preview or a selection) gather behind the pin in the toolbar; put them in a reading order with a one-line note each for a **study sheet**, and keep **pin sets** ("For the talk") to switch between.
+- **Pins** lets you search and select results, equations, symbols and passages. Add items to named sets from previews and pin rows, switch sets and resume your drafts, or open an on-screen **study sheet** in your reading order.
 - **Save for offline**: keep papers on your device and find them under **Saved papers**.
 - **Share** a link that opens the paper in TeXglass at the section you are reading, or with the view you have on (your pins under **Show only these**, **What does this use?**).
 - **Show me around**: a short first-run tour of the controls, on phones too, replayable from Settings or the **…** menu.
