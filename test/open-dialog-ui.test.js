@@ -81,6 +81,7 @@ test('one Open button; "github <words>" searches GitHub and a result opens', { s
     await page.click('#arxiv-results .preprint-open');
     await page.waitForFunction(() => /From GitHub/.test(document.getElementById('preview').textContent));
     assert.equal(await page.evaluate(() => document.getElementById('arxiv-dialog').open), false);
+    assert.equal(await page.isVisible('#original-pdf'), false);
 
     // "github" alone asks for words.
     await page.click('#open');
@@ -88,6 +89,132 @@ test('one Open button; "github <words>" searches GitHub and a result opens', { s
     await page.press('#arxiv-input', 'Enter');
     assert.match(await page.textContent('#arxiv-message'), /after github/);
     await page.keyboard.press('Escape');
+  } finally {
+    await browser.close();
+  }
+});
+
+test('render warnings jump to the affected content and arXiv imports keep a PDF link', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
+    await serve(page);
+    const tex = String.raw`\documentclass{article}
+\begin{document}
+\section{Broken examples}
+See \ref{missing-result}.
+
+$\frac{a}$ and $\unknowncommand$ and $\eqref{missing-equation}$.
+
+\includegraphics{missing.png}
+\end{document}`;
+    await page.route('https://arxiv.org/src/**', (route) => {
+      const pdfOnly = route.request().url().endsWith('2401.00001v3');
+      return route.fulfill({ headers: CORS, contentType: pdfOnly ? 'application/pdf' : 'text/plain', body: pdfOnly ? '%PDF-' : tex });
+    });
+    await page.goto('http://texglass.test/index.html?arxiv=math/0601001v2');
+    await page.waitForSelector('#more[data-render-warnings="5"]');
+    await page.click('#preview .section .fold-toggle');
+    assert.equal(await page.isVisible('.graphic-placeholder'), false);
+    await page.click('#more');
+    assert.equal(await page.textContent('#render-warnings'), '5 render warnings');
+    assert.equal(await page.getAttribute('#original-pdf', 'href'), 'https://arxiv.org/pdf/math/0601001v2');
+    const pdfBounds = await page.locator('#original-pdf').boundingBox();
+    assert.ok(pdfBounds.x >= 0 && pdfBounds.x + pdfBounds.width <= 390, 'the PDF link fits on a phone');
+
+    await page.click('#render-warnings');
+    const dialog = page.getByRole('dialog', { name: 'Rendering warnings' });
+    assert.equal(await dialog.getByRole('button', { name: 'Undefined reference "missing-result".' }).count(), 1);
+    assert.equal(await dialog.getByRole('button', { name: 'Undefined math command \\unknowncommand' }).count(), 1);
+    assert.equal(await dialog.getByRole('button', { name: 'Undefined reference "missing-equation".' }).count(), 1);
+    assert.equal(await dialog.getByRole('button', { name: /^Math could not be rendered/ }).count(), 1);
+    await dialog.getByRole('button', { name: 'Missing figure: missing.png' }).click();
+    assert.equal(await dialog.isVisible(), false);
+    assert.equal(await page.locator('.graphic-placeholder').evaluate((el) => el === document.activeElement), true);
+    assert.equal(await page.isVisible('.graphic-placeholder'), true);
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.waitForSelector('.toolbar > #render-actions #original-pdf');
+    assert.equal(await page.getByRole('button', { name: '5 render warnings' }).isVisible(), true);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.waitForSelector('#more-compact #render-actions', { state: 'attached' });
+
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#original-pdf:not([hidden])', { state: 'attached' });
+    assert.equal(await page.getAttribute('#original-pdf', 'href'), 'https://arxiv.org/pdf/math/0601001v2');
+    await page.evaluate(() => localStorage.removeItem('texglass:last-arxiv'));
+    await page.reload();
+    await page.waitForSelector('#original-pdf:not([hidden])', { state: 'attached' });
+    assert.equal(await page.getAttribute('#original-pdf', 'href'), 'https://arxiv.org/pdf/math/0601001v2');
+
+    await page.click('#open');
+    await page.fill('#arxiv-input', '2401.00001v3');
+    await page.press('#arxiv-input', 'Enter');
+    await page.waitForSelector('#arxiv-original-pdf:not([hidden])');
+    assert.match(await page.textContent('#arxiv-message'), /only a PDF/);
+    assert.equal(await page.getAttribute('#arxiv-original-pdf', 'href'), 'https://arxiv.org/pdf/2401.00001v3');
+    await page.fill('#arxiv-input', '2401.00002');
+    assert.equal(await page.isVisible('#arxiv-original-pdf'), false);
+    await page.click('#arxiv-cancel');
+    await page.waitForSelector('#arxiv-dialog', { state: 'hidden' });
+    await page.setInputFiles('#file-input', [
+      { name: 'local.tex', mimeType: 'text/plain', buffer: Buffer.from(String.raw`\documentclass{article}\begin{document}\includegraphics{broken.svg}\end{document}`) },
+      { name: 'broken.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('broken image') },
+    ]);
+    await page.waitForSelector('#preview img.graphic');
+    await page.waitForSelector('#more[data-render-warnings="1"]');
+    await page.click('#more');
+    assert.equal(await page.isVisible('#original-pdf'), false);
+    await page.click('#render-warnings');
+    await dialog.getByRole('button', { name: 'Figure could not load: broken.svg' }).click();
+    assert.equal(await page.locator('img.graphic').evaluate((el) => el === document.activeElement), true);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('edits that leave every warning as it was do not rebuild the warning list', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await serve(page);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview .src-block');
+    await page.click('#mode-split');
+    const doc = (clean, broken) => String.raw`\documentclass{article}
+\begin{document}
+${clean}
+
+${broken}
+\end{document}`;
+    const shows = (text) => page.waitForFunction((t) => document.getElementById('preview').textContent.includes(t), text);
+    await page.fill('#source', doc('Clean text.', String.raw`Broken $\unknowncommand$.`));
+    await page.waitForSelector('#render-warnings:has-text("1 render warning")');
+    // The list's text node is kept as long as the list is not built again.
+    await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
+    const rebuilt = () => page.evaluate(() => document.getElementById('render-warnings').firstChild !== window.listedText);
+
+    // An edit away from the warning: nothing to build.
+    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken $\unknowncommand$.`));
+    await shows('Clean text, edited.');
+    assert.equal(await rebuilt(), false);
+
+    // An edit to the block with the warning: built again.
+    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken again $\unknowncommand$.`));
+    await shows('Broken again');
+    assert.equal(await rebuilt(), true);
+    assert.equal(await page.textContent('#render-warnings'), '1 render warning');
+
+    // An edit that makes a new warning elsewhere: built again.
+    await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
+    await page.fill('#source', doc(String.raw`Clean text, $\alsounknown$.`, String.raw`Broken again $\unknowncommand$.`));
+    await page.waitForSelector('#render-warnings:has-text("2 render warnings")');
+    assert.equal(await rebuilt(), true);
+
+    // Fixing both: no warnings left.
+    await page.fill('#source', doc('Clean text.', 'Fixed.'));
+    await page.waitForSelector('#render-warnings', { state: 'hidden' });
   } finally {
     await browser.close();
   }

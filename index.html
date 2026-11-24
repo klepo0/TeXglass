@@ -122,6 +122,10 @@
     <span id="file-name" class="file-name"></span>
     <a id="gh-link" class="gh-link" target="_blank" rel="noopener" hidden title="Make your changes on GitHub, where you can commit them">Edit on GitHub</a>
     <span id="status" class="status" role="status"></span>
+    <div class="render-actions" id="render-actions" hidden>
+      <button id="render-warnings" type="button" aria-haspopup="dialog" aria-controls="render-warnings-dialog" hidden></button>
+      <a id="original-pdf" target="_blank" rel="noopener" hidden>Open original PDF</a>
+    </div>
     <button id="settings" class="icon-button" type="button" aria-haspopup="dialog" aria-label="Settings" title="Settings: switch reading aids on or off (previews, notation, map, notes…)">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.4A7.6 7.6 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.6-1.5l2.4.9 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="tb-label">Settings</span>
     </button>
@@ -159,12 +163,21 @@
     </section>
   </main>
 
+  <dialog id="render-warnings-dialog" class="arxiv-dialog" aria-labelledby="render-warnings-title">
+    <h2 id="render-warnings-title" tabindex="-1" autofocus>Rendering warnings</h2>
+    <ul id="render-warnings-list" class="render-warnings-list"></ul>
+    <form method="dialog" class="arxiv-actions">
+      <button type="submit">Close</button>
+    </form>
+  </dialog>
+
   <dialog id="arxiv-dialog" class="arxiv-dialog" aria-labelledby="arxiv-title">
     <form id="arxiv-form" method="dialog">
       <h2 id="arxiv-title">Open a document</h2>
       <label for="arxiv-input">Search arXiv, or start with <code>github</code> to search GitHub. Paste an arXiv id or a GitHub link to open it.</label>
       <input id="arxiv-input" type="search" autocomplete="off" spellcheck="false" placeholder="rough paths signature, github thesis template, 2301.00001">
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
+      <a id="arxiv-original-pdf" class="arxiv-original-pdf" target="_blank" rel="noopener" hidden>Open original PDF</a>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
       <div id="library-recent" class="library-recent" hidden>
         <div class="library-recent-head"><span>Saved papers</span><button type="button" id="arxiv-library" class="link-button">All saved papers</button></div>
