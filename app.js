@@ -4510,6 +4510,35 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
   else begin();
 
+  // --- an API for apps that host the viewer -----------------------------------
+  // FlexTeX (a desktop editor built around this page) opens files from disk,
+  // saves them and makes slides from the pins and notes through this. Each
+  // handle is a File System Access file handle, or anything with getFile()
+  // and createWritable(): it is watched for changes and saved in place.
+  window.TeXglassViewer = Object.freeze({
+    version: 1,
+    openHandle: (handle) => openHandle(handle),
+    save: () => save(),
+    dirty: () => dirty,
+    source: () => doc,
+    name: () => fileName.textContent,
+    /** Show this source in place of the open one, keeping the scroll (as live reload does). */
+    reshow: (text) => reshow(String(text)),
+    setMode: (m) => setMode(m),
+    insight: () => insight,
+    margin: () => margin,
+    /** The document's labels: { key: { num, kindName } }, as \ref shows them. */
+    labels: () => lastLabels,
+    /** The open paper's highlights and notes (src/margin.js records). */
+    notes: () => (paper ? paper.record.notes.slice() : []),
+    /** Render a piece of LaTeX with the document's preamble: a promise of HTML. */
+    renderTex: (tex) => {
+      const at = doc.indexOf('\\begin{document}');
+      const preamble = at >= 0 ? doc.slice(0, at) : '';
+      return Promise.resolve(TeXglass.render(`${preamble}\\begin{document}\n${String(tex)}\n\\end{document}`).html);
+    },
+  });
+
   // Keep the viewer's files and KaTeX in the browser's cache (sw.js), so the
   // site opens and renders offline after one visit. Only on a web page: the
   // arXiv extension bundles the viewer and is offline already.
