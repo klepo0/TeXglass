@@ -145,3 +145,139 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     await browser.close();
   }
 });
+
+test('capture a pin into another set, resume a draft, and read and collect selected pins', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await serve(page);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview h1, #preview h2, #preview .section');
+    const source = DOC.replace('Last.', 'By Lemma~\\ref{second}.');
+    await page.setInputFiles('#file-input', { name: 'study.tex', mimeType: 'text/x-tex', buffer: Buffer.from(source) });
+    const theorem = (key) => page.locator(`#preview .theorem[data-label="${key}"]`);
+    for (const el of [theorem('first'), theorem('main'), page.locator('#preview .math-display').first()]) {
+      await el.hover();
+      await el.locator('.tg-pin-btn').evaluate((pin) => pin.click());
+    }
+    await openPins(page);
+    const panel = page.locator('.side-pins');
+    const row = (key) => panel.locator(`.tg-pins-row[data-key="${key}"]`);
+    const act = (name) => panel.locator(`[data-pins-act="${name}"]`);
+    const set = (name) => panel.locator(`[data-pins-set="${name}"]`);
+    const keys = (selector = '.tg-pins-row') => panel.locator(selector).evaluateAll((rows) => rows.map((r) => r.dataset.key));
+    const badge = () => page.locator('#pins .tg-pins-badge').textContent();
+
+    await act('save').click();
+    await panel.locator('.tg-pins-set-name').fill('Talk');
+    await act('save-ok').click();
+    await panel.locator('[data-pins-view="order"]').click();
+    await row('label:main').locator('[data-pins-drag]').press('ArrowUp');
+    await row('label:main').locator('[data-pins-drag]').press('ArrowUp');
+    await row('eq:(1)').locator('[data-pins-unpin]').click();
+    await row('label:main').locator('[data-pins-go]').click();
+    const rowDestination = row('label:main').getByLabel('Add to set…');
+    await rowDestination.focus();
+    await rowDestination.selectOption({ label: 'New set…' });
+    await row('label:main').getByLabel('Set name').fill('Referee');
+    await row('label:main').getByLabel('Set name').press('Enter');
+    assert.deepEqual(await keys(), ['label:main', 'label:first']);
+    await set('Referee').click();
+    assert.equal(await badge(), '1');
+
+    await theorem('main').locator('a.ref').first().hover();
+    const previewDestination = page.locator('#ref-popover').getByLabel('Add to set…');
+    await previewDestination.waitFor();
+    await previewDestination.focus();
+    const destinations = () => previewDestination.locator('option').allTextContents();
+    assert.equal((await destinations())[1], 'Referee');
+    await previewDestination.selectOption({ label: 'Talk' });
+    assert.equal(await badge(), '1', 'the reader stays with the current set');
+    await previewDestination.blur();
+    await previewDestination.focus();
+    assert.equal((await destinations())[1], 'Talk');
+    await set('Talk').click();
+    assert.deepEqual(await keys(), ['label:main', 'label:first', 'label:second']);
+    assert.match(await set('Talk').textContent(), /Draft/);
+    await page.keyboard.press('j');
+    assert.equal(await theorem('first').evaluate((el) => el.classList.contains('flash')), true);
+    await act('update').click();
+    assert.doesNotMatch(await set('Talk').textContent(), /Draft/);
+
+    await row('label:first').locator('.tg-pins-pen').click();
+    await row('label:first').locator('.tg-pins-memo-in').fill('Talk rehearsal');
+    await row('label:first').locator('.tg-pins-memo-in').press('Enter');
+    const search = panel.getByRole('searchbox', { name: 'Search pins' });
+    await search.fill('rehearsal');
+    assert.deepEqual(await keys('.tg-pins-row:not([hidden])'), ['label:first']);
+    await act('select-matching').click();
+    await search.fill('Theorem 1.3');
+    assert.deepEqual(await keys('.tg-pins-row:not([hidden])'), ['label:main']);
+    await act('select-matching').click();
+    await act('collect-selected').click();
+    await panel.locator('.tg-coll-name').fill('Literature review');
+    await panel.locator('.tg-coll-name').press('Enter');
+    assert.match(await panel.locator('details[data-coll="Literature review"] summary').textContent(), /2 from 1 paper/);
+    await act('unpin-selected').click();
+    assert.deepEqual(await keys(), ['label:second']);
+    await act('revert').click();
+    await search.fill('');
+
+    await act('show').click();
+    const bar = page.locator('.pick-bar');
+    const read = bar.getByRole('button', { name: 'Read in this order' });
+    const top = (el) => el.evaluate((x) => x.getBoundingClientRect().top);
+    assert.ok(await top(theorem('first')) < await top(theorem('main')));
+    await read.click();
+    assert.ok(await top(theorem('main')) < await top(theorem('first')));
+    assert.ok(await top(theorem('first')) < await top(theorem('second')));
+    await read.click();
+    assert.ok(await top(theorem('first')) < await top(theorem('main')));
+    await bar.locator('[data-act="done"]').click();
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('a direct dependency view expands one branch and saves the visible subset', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await serve(page);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview h1, #preview h2, #preview .section');
+    const source = DOC.replace('Second.\\end{lemma}\\begin{proof} Clear.', 'Second.\\end{lemma}\\begin{proof} By Lemma~\\ref{first}.')
+      .replace('By Lemmas~\\ref{first} and~\\ref{second}.', 'By Lemma~\\ref{second}.');
+    await page.setInputFiles('#file-input', { name: 'branches.tex', mimeType: 'text/x-tex', buffer: Buffer.from(source) });
+    const theorem = (key) => page.locator(`#preview .theorem[data-label="${key}"]`);
+    await theorem('main').hover();
+    await theorem('main').getByRole('button', { name: 'What does this use?' }).click();
+    const bar = page.locator('.pick-bar');
+    const direct = bar.getByRole('button', { name: 'Direct', exact: true });
+    assert.equal(await theorem('first').isVisible(), true);
+    await direct.click();
+    assert.equal(await theorem('first').isVisible(), false);
+    assert.equal(await theorem('second').isVisible(), true);
+    await theorem('second').getByRole('button', { name: /Expand branch/ }).click();
+    assert.equal(await theorem('first').isVisible(), true);
+    await theorem('second').getByRole('button', { name: /Collapse branch/ }).click();
+    assert.equal(await theorem('first').isVisible(), false);
+    await bar.locator('[data-act="keep-menu"]').click();
+    await bar.getByRole('menuitem', { name: 'Save as pin set' }).click();
+    await bar.locator('[data-act="done"]').click();
+    await openPins(page);
+    const set = page.locator('.side-pins [data-pins-set]').filter({ hasText: 'selected branches' });
+    await set.click();
+    assert.deepEqual(await page.locator('.side-pins .tg-pins-row').evaluateAll((rows) => rows.map((r) => r.dataset.key).sort()), ['label:main', 'label:second']);
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});

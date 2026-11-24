@@ -132,15 +132,18 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click(P + '[data-pins-act="clear-ok"]');
     assert.equal(await badge(), '');
     assert.equal(await page.locator(P + '[data-pins-set]').count(), 2);
-    // and in the toolbar's list too
+    // The draft can be reopened empty, and reverting it restores the saved pins.
+    await page.click(P + '[data-pins-set="Main only"]');
     await page.click(P + '[data-pins-set="Talk"]');
+    assert.equal(await badge(), '');
+    await page.click(P + '[data-pins-act="revert"]');
     assert.equal(await badge(), '2');
     await openPins(page);
     await page.click('.side-pins [data-pins-act="clear"]');
     await page.click('.side-pins [data-pins-act="clear-ok"]');
     assert.equal(await badge(), '');
     await page.keyboard.press('Escape');
-    await page.click(P + '[data-pins-set="Talk"]');
+    await page.click(P + '[data-pins-act="revert"]');
     assert.equal(await badge(), '2');
     // Show only these from the tab
     await page.click(P + '[data-pins-act="show"]');

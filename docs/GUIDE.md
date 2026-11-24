@@ -456,6 +456,13 @@ under it; **‹** **›** on its bar step from one pinned item to the next, and
 the list says how to pin. On a phone the pin sits in the toolbar and opens the
 side panel as a drawer on the Pins tab.
 
+**Add to set…** on a preview or pin row sends the item directly to a named
+set. Recent sets appear first, and **New set…** starts a set from that item.
+To find pins in the **Pins** tab, type a theorem number, symbol or note into
+**Search pins**. Check individual rows or use **Select matches** to select
+them together. Send the selection to a set or collection, or choose **Unpin
+selected**. Checked rows stay selected as you change the search.
+
 ### Collections: pins from several papers
 
 A collection gathers results from several papers in one list, for a talk or a
@@ -467,6 +474,8 @@ another). It lives under **Across papers** at the bottom of the side panel's
   a name (or pick one you have) and **Add**. Results, equations, figures and
   proofs go in, with their pin notes; symbols and text passages stay out.
   Open the next paper and do the same with the same name.
+- To collect a subset, check those rows in the **Pins** tab and use **Add to
+  collection…** beside the selection count.
 - Click a collection to open it: its items are grouped by paper, the open paper
   marked "open". Click an item to go to it, in this paper or in its own (from
   your [saved copy](#web-viewer) if you have one, else from
@@ -496,9 +505,10 @@ the first time the paper is opened.
   The note shows under the item; click it to change it.
 - **Show only these** then opens with a **Reading order** box at the top,
   listing the pins in your order with their notes (click one to go to it), and
-  each pin's number and note just above it in the text. The paper's own order
-  of the blocks stays as it is on screen; the [handout](#handouts-print-or-epub)
-  follows your order. With notes but no order, the box lists the notes.
+  each pin's number and note just above it in the text. Use **Read in this
+  order** to arrange the blocks on screen in the same sequence as the
+  [handout](#handouts-print-or-epub). Click it again for the paper's order.
+  With notes and no custom order, the box lists the notes.
 
 
 **Pin sets.** A set is a named group of pins to switch between, such as "For
@@ -506,10 +516,13 @@ the talk" and "For the referee report".
 
 - **Save as set…** keeps everything pinned now (results, equations, figures,
   proofs, symbols and passages) with its order under a name; a name is suggested.
-- The sets are listed beside **Sets**: click one to pin exactly what it held,
-  in its order, instead of the pins now. The set showing is highlighted; once
-  you change its pins, **Update “name”** keeps the new pins under the same name.
-  **×** deletes a set (the pins stay).
+- Open any saved set to work with its pins. **My pins** takes you back to the
+  pins you had when you first opened a set. When you switch, TeXglass remembers
+  membership and order changes for this visit, along with the last pin you
+  jumped to. Return to a set marked **Draft** to pick up where you left off.
+- **Update “name”** saves the draft under the same name. **Revert draft**
+  reloads the saved membership and order. Use **Save as set…** to save the
+  draft under a new name. **×** deletes a set (the pins stay).
 - Sets are the same thing as the map's saved maps: they are listed above the
   map too (**Sets**, **Save as set…**). Maps saved before sets held only the
   map's pins; opening one leaves your symbols and passages as they are.
@@ -569,6 +582,10 @@ shared view makes the same handout.
   - Switch to **Used in** (or **Both**) for the other direction, and step
     through the results with **‹** **›** in the bar (or <kbd>J</kbd> /
     <kbd>K</kbd>).
+  - Choose **Direct** to start with one level of links. **Expand branch**
+    beside a result shows the next level for that result, and **Collapse
+    branch** folds it back. **All levels** shows the full dependency chain.
+    TeXglass uses your last choice when you open another dependency view.
   - Results reached only through a guessed link get a dashed outline.
   - **Change** lets you take results away from the view or add others
     (click them), without touching your own pins.

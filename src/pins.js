@@ -51,17 +51,19 @@
   function setsHtml(sets, o) {
     o = o || {};
     let html = '<div class="tg-pins-sets" role="group" aria-label="Pin sets">';
-    if (sets.length) {
+    if (sets.length || o.working) {
+      if (o.working) html += `<button type="button" data-pins-working aria-pressed="${!!o.myPins}">My pins</button>`;
       html += '<span class="tg-pins-sets-k">Sets</span>' + sets.map((x) =>
-        `<span class="tg-pins-set${x.on ? ' tg-pins-set-on' : ''}"><button type="button" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}" title="${esc(x.on ? `Pinned now: the ${x.size} of “${x.name}”` : `Pin the ${x.size} of “${x.name}” instead of the pins now`)}">${esc(x.name)}</button>` +
+        `<span class="tg-pins-set${x.active || x.on ? ' tg-pins-set-on' : ''}"><button type="button" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}"${x.active ? ' aria-current="true"' : ''}>${esc(x.name)}${x.draft ? ' · Draft' : ''}</button>` +
         `<button type="button" class="tg-pins-set-del" data-pins-setdel="${esc(x.name)}" title="Delete this pin set (the pins stay)" aria-label="${esc('Delete the pin set ' + x.name)}">&times;</button></span>`).join('');
     }
     if (o.naming) {
       html += `<span class="tg-pins-set-new"><input type="text" class="tg-pins-set-name" maxlength="80" placeholder="Name this pin set" aria-label="Name for the pin set" value="${esc(o.suggest || '')}">` +
         '<button type="button" data-pins-act="save-ok">Save</button><button type="button" data-pins-act="save-cancel">Cancel</button></span>';
-    } else if (o.any) {
-      if (o.update) html += `<button type="button" class="tg-pins-set-update" data-pins-act="update" title="${esc(`Keep the pins now under “${o.update}”, instead of what it held`)}">Update “${esc(o.update)}”</button>`;
-      html += '<button type="button" data-pins-act="save" title="Keep everything pinned now, with its order, under a name: a pin set to switch back to later (saved with your notes)">Save as set…</button>';
+    } else {
+      if (o.update) html += `<button type="button" class="tg-pins-set-update" data-pins-act="update" title="${esc(`Save the draft of “${o.update}”`)}">Update “${esc(o.update)}”</button>` +
+        '<button type="button" data-pins-act="revert">Revert draft</button>';
+      if (o.any) html += '<button type="button" data-pins-act="save" title="Keep everything pinned now, with its order, under a name: a pin set to switch back to later (saved with your notes)">Save as set…</button>';
     }
     return html + '</div>';
   }
@@ -87,6 +89,7 @@
     const memo = x.memo || '';
     const editing = o.editing === x.key;
     return `<div class="tg-pins-row${o.order ? ' tg-pins-ordered' : ''}" data-key="${esc(x.key)}">` +
+      (o.tools ? `<input type="checkbox" class="tg-pins-check" data-pins-check aria-label="${esc('Select ' + what)}">` : '') +
       (o.order ? `<button type="button" class="tg-pins-drag" data-pins-drag="${esc(x.key)}" title="Drag to change the reading order (or ↑ ↓ on the keyboard)" aria-label="${esc(`Move ${what} in the reading order: arrow keys up or down`)}">${DRAG}</button>` : '') +
       '<div class="tg-pins-main">' +
       `<button type="button" class="tg-pins-go" data-pins-go="${esc(x.key)}"${x.el || x.placed ? '' : ' disabled'} title="${x.el || x.placed ? 'Go to it' : 'Not in this version of the document'}">${labelHtml(x)}</button>` +
@@ -94,6 +97,7 @@
         ? `<input type="text" class="tg-pins-memo-in" data-pins-memo-in="${esc(x.key)}" maxlength="200" placeholder="A one-line note" aria-label="${esc('Note on ' + what)}" value="${esc(memo)}">`
         : memo ? `<button type="button" class="tg-pins-memo" data-pins-memo="${esc(x.key)}" title="Your note: click to change it">${esc(memo)}</button>` : '') +
       '</div>' +
+      (o.destination ? '<span data-pins-destination></span>' : '') +
       `<button type="button" class="tg-pins-pen" data-pins-memo="${esc(x.key)}" title="${memo ? 'Change the note' : 'Add a one-line note'}" aria-label="${esc((memo ? 'Change the note on ' : 'Add a note on ') + what)}">${PEN}</button>` +
       `<button type="button" class="tg-pins-x" data-pins-unpin="${esc(x.key)}" title="Unpin" aria-label="Unpin ${esc(what)}">&times;</button></div>`;
   }
@@ -108,9 +112,10 @@
   function listHtml(items, o) {
     o = o || {};
     const sets = o.sets || [];
+    const setOptions = { naming: o.naming, suggest: o.suggest, update: o.update, any: !!items.length, working: !o.noSets && o.working, myPins: o.myPins };
     if (!items.length) {
       return '<div class="tg-pins-head"><strong>Nothing pinned yet</strong></div>' +
-        (sets.length && !o.noSets ? setsHtml(sets, {}) : '') +
+        setsHtml(o.noSets ? [] : sets, setOptions) +
         '<p class="tg-pins-empty">Pin a result or a numbered equation with the pin by its corner on the <b>Map</b> (or the pin at an equation’s left, or a figure’s top right), ' +
         'a symbol with the pin on its row in the <b>Notation</b> tab, or anything with the pin on its preview. ' +
         'Select some text to pin it too. Pinned things gather here.</p>' +
@@ -123,7 +128,9 @@
       `<button type="button" data-pins-view="kind" aria-pressed="${!o.order}" title="Grouped: results, equations, symbols…">By kind</button>` +
       `<button type="button" data-pins-view="order" aria-pressed="${!!o.order}" title="One list in your reading order: drag to reorder">In order</button></span></div>`;
     // in the side panel's Pins tab the sets are listed above: here only Save as set… and Update
-    html += setsHtml(o.noSets ? [] : sets, { naming: o.naming, suggest: o.suggest, update: o.update, any: true });
+    html += setsHtml(o.noSets ? [] : sets, setOptions);
+    if (o.tools) html += '<div class="tg-pins-tools"><input type="search" data-pins-search aria-label="Search pins" placeholder="Search pins"><div class="tg-pins-selection" data-pins-selection></div></div>' +
+      '<p class="tg-pins-empty" data-pins-no-matches role="status" hidden>No pins match this search.</p>';
     html += `<div class="tg-pins-list"${o.order ? ' role="list" aria-label="Reading order"' : ''}>`;
     if (o.order) {
       for (const x of items) html += rowHtml(x, o);
@@ -161,6 +168,7 @@
     html += '<div class="tg-pins-list" role="list" aria-label="Shown now">';
     v.items.forEach((x, i) => {
       html += `<div class="tg-pins-row" role="listitem"><div class="tg-pins-main"><button type="button" class="tg-pins-go" data-pins-vgo="${i}" title="Go to it">${esc(x.name)}</button></div>` +
+        (x.key ? `<span data-pins-destination="${esc(x.key)}"></span>` : '') +
         (temp ? `<button type="button" class="tg-pins-x" data-pins-vx="${i}" title="Take it out of this view (your pins stay as they are)" aria-label="Take ${esc(x.name)} out of this view">&times;</button>` : '') + '</div>';
     });
     html += '</div><div class="tg-pins-actions">' +
@@ -207,6 +215,40 @@
     let naming = false; // the name of a new pin set is being typed
     let editing = null; // the key whose note is being written
     let clearing = false; // asking whether to unpin everything
+    let query = '';
+    let shownSet;
+    const selected = new Set();
+    const selectedItems = () => items.filter((x) => selected.has(x.key));
+    const normalize = (str) => str.normalize('NFKC').toLowerCase();
+    function fillSelection() {
+      const tools = el.querySelector('[data-pins-selection]');
+      if (!tools) return;
+      const visible = el.querySelectorAll('.tg-pins-row:not([hidden])');
+      const allSelected = visible.length && Array.from(visible).every((row) => selected.has(row.dataset.key));
+      const picked = selectedItems();
+      tools.innerHTML = (visible.length ? `<button type="button" data-pins-act="select-matching">${allSelected ? 'Deselect' : 'Select'} ${query.trim() ? 'matches' : 'all'}</button>` : '') +
+        (picked.length ? `<span role="status">${picked.length} selected</span><button type="button" data-pins-act="unpin-selected">Unpin selected</button>` : '') +
+        (o.canCollect && o.canCollect(picked) ? '<button type="button" data-pins-act="collect-selected">Add to collection…</button>' : '');
+      if (picked.length && has('setDestination')) tools.appendChild(insight.setDestination(picked.map((x) => x.key)));
+    }
+    function filterRows() {
+      const rows = el.querySelectorAll('.tg-pins-row');
+      const terms = normalize(query.trim()).split(/\s+/);
+      const matching = new Set(items.filter((x) => {
+        const fields = normalize([x.name, x.key, x.tex, x.code, x.note, x.memo].filter(Boolean).join(' '));
+        return terms.every((term) => fields.includes(term));
+      }).map((x) => x.key));
+      rows.forEach((row) => {
+        row.hidden = !matching.has(row.dataset.key);
+        const check = row.querySelector('[data-pins-check]');
+        if (check) check.checked = selected.has(row.dataset.key);
+      });
+      for (const group of el.querySelectorAll('.tg-pins-group')) group.hidden = !group.querySelector('.tg-pins-row:not([hidden])');
+      const empty = el.querySelector('[data-pins-no-matches]');
+      if (empty) empty.hidden = !!el.querySelector('.tg-pins-row:not([hidden])');
+      el.classList.toggle('tg-pins-filtering', !!query.trim());
+      fillSelection();
+    }
 
     /** The view on screen when it is not the reader's pins (o.view(): the host's picker), or null. */
     let view = null;
@@ -218,16 +260,20 @@
     /** The name of the pin set the pins are now: { text, title }, or null. */
     function setNameOf(sets) {
       const on = sets.find((x) => x.on && x.active) || sets.find((x) => x.on);
-      if (on) return { text: on.name, title: `Your pins now are the pin set “${on.name}”` };
       const act = has('activeSet') ? insight.activeSet() : null;
-      return act ? { text: `${act} (changed)`, title: `Opened from the pin set “${act}”, then changed: Update “${act}” keeps the change` } : null;
+      if (act && !insight.setIsOn(act)) return { text: `${act} (draft)`, title: `Update “${act}” saves this draft` };
+      return on ? { text: on.name, title: `Your pins now are the pin set “${on.name}”` } : null;
     }
 
     function fill() {
       view = viewNow();
       if (view) {
         items = [];
-        el.innerHTML = viewHtml(Object.assign({ pins: count() }, view));
+        const rows = has('setDestination') && has('keyOfEl')
+          ? view.items.map((x) => ({ ...x, key: insight.keyOfEl(x.el) }))
+          : view.items;
+        el.innerHTML = viewHtml({ ...view, pins: count(), items: rows });
+        fillDestinations();
         return;
       }
       items = allItems();
@@ -235,12 +281,26 @@
       if (!items.length) clearing = false;
       const sets = has('pinSets') ? insight.pinSets() : [];
       const act = has('activeSet') ? insight.activeSet() : null;
+      if (shownSet !== act) { shownSet = act; query = ''; selected.clear(); }
+      const keys = new Set(items.map((x) => x.key));
+      for (const k of selected) if (!keys.has(k)) selected.delete(k);
       el.innerHTML = listHtml(items, {
         showPinned: !!o.showPinned, pinMore: !!o.pinMore, order: inOrder(), sets, naming, noSets: !!o.noSets,
         suggest: naming && has('suggestSetName') ? insight.suggestSetName() : '',
         update: act && !insight.setIsOn(act) ? act : null, editing, clearing, setName: setNameOf(sets),
+        working: has('hasWorkingPins') && insight.hasWorkingPins(), myPins: !act,
+        tools: true, destination: has('setDestination'),
       });
+      fillDestinations();
+      const search = el.querySelector('[data-pins-search]');
+      if (search) { search.value = query; filterRows(); }
       if (insight.renderSymbols) insight.renderSymbols(el);
+    }
+    function fillDestinations() {
+      for (const dest of el.querySelectorAll('[data-pins-destination]')) {
+        const k = dest.dataset.pinsDestination || dest.parentElement.dataset.key;
+        dest.replaceWith(insight.setDestination([k], true));
+      }
     }
     /** Fill again, keeping the focus where it was (by what it does). */
     function refill(focusSel) {
@@ -323,6 +383,33 @@
       } finally { quiet = false; }
       refill('[data-pins-act="save"], button');
     }
+    function unpin(keys) {
+      quiet = true;
+      try {
+        const text = keys.filter((k) => k.startsWith('text:')).map((k) => k.slice(5));
+        if (text.length && margin) {
+          const removed = new Set(text);
+          if (margin.setPinnedTexts) margin.setPinnedTexts(texts().map((x) => x.id).filter((id) => !removed.has(id)));
+          else for (const id of text) margin.unpinText(id);
+        }
+        const other = keys.filter((k) => !k.startsWith('text:'));
+        if (has('unpinKeys')) insight.unpinKeys(other);
+        else for (const k of other) insight.unpinKey(k);
+      } finally { quiet = false; }
+      refill('[data-pins-search], .tg-pins-x, button');
+    }
+    el.addEventListener('input', (e) => {
+      if (!e.target.matches('[data-pins-search]')) return;
+      query = e.target.value;
+      filterRows();
+    });
+    el.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-pins-check]')) return;
+      const key = e.target.closest('.tg-pins-row').dataset.key;
+      if (e.target.checked) selected.add(key);
+      else selected.delete(key);
+      fillSelection();
+    });
 
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-pins-drag]')) return;
@@ -342,6 +429,7 @@
       const go = e.target.closest('[data-pins-go]');
       if (go) {
         const x = items.find((it) => it.key === go.dataset.pinsGo);
+        if (x && has('visitPin')) insight.visitPin(x.key);
         if (x && x.kind === 'text') { done(); margin.goTo(x.id); } else if (x && x.el) { done(); o.jump(x.el); }
         return;
       }
@@ -360,15 +448,27 @@
       if (v) { listView = v.dataset.pinsView; refill(sel('data-pins-view', listView)); return; }
       const set = e.target.closest('[data-pins-set]');
       if (set) { insight.loadView(set.dataset.pinsSet); refill(sel('data-pins-set', set.dataset.pinsSet)); return; }
+      if (e.target.closest('[data-pins-working]')) { insight.loadView(null); refill('[data-pins-working]'); return; }
       const del = e.target.closest('[data-pins-setdel]');
       if (del) { insight.deleteView(del.dataset.pinsSetdel); refill('[data-pins-act="save"]'); return; }
       const act = e.target.closest('[data-pins-act]');
       if (act) {
         const a = act.dataset.pinsAct;
+        if (a === 'select-matching') {
+          const keys = Array.from(el.querySelectorAll('.tg-pins-row:not([hidden])')).map((row) => row.dataset.key);
+          const allSelected = keys.every((k) => selected.has(k));
+          for (const k of keys) { if (allSelected) selected.delete(k); else selected.add(k); }
+          filterRows();
+          el.querySelector('[data-pins-act="select-matching"]').focus({ preventScroll: true });
+          return;
+        }
+        if (a === 'unpin-selected') { unpin(Array.from(selected)); return; }
+        if (a === 'collect-selected') { o.collect(selectedItems()); return; }
         if (a === 'save') { naming = true; refill('.tg-pins-set-name'); return; }
         if (a === 'save-cancel') { naming = false; refill('[data-pins-act="save"]'); return; }
         if (a === 'save-ok') { saveSet(); return; }
         if (a === 'update') { const name = insight.activeSet(); if (name) insight.saveView(name); refill(sel('data-pins-set', name)); return; }
+        if (a === 'revert') { insight.revertView(); refill('[data-pins-act="save"], button'); return; }
         if (a === 'clear') { clearing = true; refill('[data-pins-act="clear-cancel"]'); return; }
         if (a === 'clear-cancel') { clearing = false; refill('[data-pins-act="clear"]'); return; }
         if (a === 'clear-ok') { clearAll(); return; }
@@ -413,11 +513,19 @@
       if (quiet) return;
       const inp = el.querySelector('.tg-pins-memo-in');
       const keep = inp && doc.activeElement === inp ? { key: inp.dataset.pinsMemoIn, value: inp.value } : null;
+      const search = doc.activeElement && doc.activeElement.matches('[data-pins-search]') ? doc.activeElement : null;
       fill();
       if (o.placed) o.placed();
       if (keep) {
         const again = el.querySelector(sel('data-pins-memo-in', keep.key));
         if (again) { again.value = keep.value; again.focus({ preventScroll: true }); }
+      }
+      if (search) {
+        const again = el.querySelector('[data-pins-search]');
+        if (again) {
+          again.focus({ preventScroll: true });
+          again.setSelectionRange(search.selectionStart, search.selectionEnd);
+        }
       }
     }
     return {
@@ -457,7 +565,7 @@
     const has = (f) => typeof insight[f] === 'function';
     // pin sets carry the pinned passages too
     if (margin && margin.pinnedTextIds && margin.setPinnedTexts && has('setTextPins')) {
-      insight.setTextPins({ get: () => margin.pinnedTextIds(), set: (ids) => margin.setPinnedTexts(ids), el: (id) => (margin.textElOf ? margin.textElOf(id) : null) });
+      insight.setTextPins({ get: () => margin.pinnedTextIds(), set: (ids) => margin.setPinnedTexts(ids), el: (id) => (margin.textElOf ? margin.textElOf(id) : null), go: (id) => margin.goTo(id) });
     }
     const list = controller(menu, {
       insight, margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore,
@@ -533,14 +641,15 @@
     }
     const typing = (el) => !!el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName) ||
       (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|range|color|file|image)$/i.test(el.type)));
-    let atKey = null; // the pin J / K went to last
+    let atKey = null; // fallback for hosts without pin set navigation
     function step(by) {
       const all = list.items().filter((x) => x.el || x.kind === 'text');
       if (!all.length) return false;
-      const i = all.findIndex((x) => x.key === atKey);
+      const i = all.findIndex((x) => x.key === (insight.visitedPin ? insight.visitedPin() : atKey));
       const at = i < 0 ? (by > 0 ? 0 : all.length - 1) : (i + by + all.length) % all.length;
       const x = all[at];
       atKey = x.key;
+      if (insight.visitPin) insight.visitPin(atKey);
       if (x.kind === 'text') { if (margin && margin.goTo) margin.goTo(x.id); } else opts.jump(x.el);
       if (opts.onStep) opts.onStep(x, at, all.length);
       return true;
@@ -615,7 +724,7 @@
   // --- the Pins tab of the side panel: the pin sets on top, the pin list under them ----
 
   /** The sets at the top of the Pins tab: click one to pin it, × to delete it. sets: insight.pinSets(). */
-  function panelSetsHtml(sets, starter) {
+  function panelSetsHtml(sets, starter, working, myPins) {
     let html = '<div class="tg-sets-title">Saved sets</div>';
     // a starter set to suggest: the main results with the definitions they rest on
     const suggest = starter && !sets.some((x) => x.name === starter)
@@ -624,10 +733,10 @@
       return html + '<p class="tg-sets-empty">No pin sets yet. Pin things, then <b>Save as set…</b> below keeps them, with their order and notes, under a name.</p>' + suggest;
     }
     return html + '<div class="tg-sets-list" role="group" aria-label="Saved pin sets">' +
-      sets.map((x) => `<span class="tg-sets-item"><button type="button" class="tg-sets-set" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}" ` +
-        `title="${esc(x.on ? `Pinned now: the ${x.size} of “${x.name}”` : `Pin the ${x.size} of “${x.name}” instead of the pins now`)}">` +
+      (working ? `<button type="button" class="tg-sets-set" data-pins-working aria-pressed="${myPins}">My pins</button>` : '') +
+      sets.map((x) => `<span class="tg-sets-item"><button type="button" class="tg-sets-set" data-pins-set="${esc(x.name)}" aria-pressed="${x.on}"${x.active ? ' aria-current="true"' : ''}>` +
         `<span class="tg-sets-name">${esc(x.name)}</span>` +
-        (x.on ? '<span class="tg-sets-now">pinned</span>' : '') +
+        (x.draft ? '<span class="tg-sets-now">Draft</span>' : x.on ? '<span class="tg-sets-now">pinned</span>' : '') +
         `<span class="tg-sets-size" aria-label="${x.size} ${x.size === 1 ? 'thing' : 'things'}">${x.size}</span></button>` +
         `<button type="button" class="tg-sets-del" data-pins-setdel="${esc(x.name)}" title="Delete this pin set (the pins stay)" aria-label="${esc('Delete the pin set ' + x.name)}">&times;</button></span>`).join('') +
       '</div>' + suggest;
@@ -696,6 +805,12 @@
       insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore, noSets: true,
       view: opts.view, viewAct: opts.viewAct,
       done: () => { if (opts.onJump) opts.onJump(); },
+      canCollect: (items) => !!(C && Coll && C.here() && items.some(isCollectable)),
+      collect: (items) => {
+        adding = items.filter(isCollectable).map((x) => x.key);
+        fillColl();
+        collEl.querySelector('.tg-coll-name')?.scrollIntoView({ block: 'nearest' });
+      },
     });
 
     function fillSets() {
@@ -703,10 +818,15 @@
       try { sets = insight.pinSets(); } catch (e) { sets = []; }
       let starter = null;
       try { starter = insight.starterSet ? insight.starterSet() : null; } catch (e) { starter = null; }
-      top.innerHTML = panelSetsHtml(sets, starter);
+      top.innerHTML = panelSetsHtml(sets, starter, insight.hasWorkingPins && insight.hasWorkingPins(), !insight.activeSet());
     }
     const sel = (attr, v) => `[${attr}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
     top.addEventListener('click', (e) => {
+      if (e.target.closest('[data-pins-working]')) {
+        insight.loadView(null);
+        top.querySelector('[data-pins-working]')?.focus({ preventScroll: true });
+        return;
+      }
       const set = e.target.closest('[data-pins-set]');
       if (set) {
         const name = set.dataset.pinsSet;
@@ -738,7 +858,8 @@
     let adding = false;
     const openColl = new Set();
     /** The pins here that can go in a collection: results, equations, figures, proofs. */
-    const collectable = () => list.items().filter((x) => x.el && x.kind !== 'notation' && x.kind !== 'text');
+    const isCollectable = (x) => x.el && x.kind !== 'notation' && x.kind !== 'text';
+    const collectable = () => list.items().filter((x) => isCollectable(x) && (!Array.isArray(adding) || adding.includes(x.key)));
     function fillColl() {
       if (!C || !Coll) return;
       const here = C.here();
@@ -748,7 +869,7 @@
       if (!count && adding) adding = false;
       collEl.innerHTML = collectionsHtml({
         names: Coll.names(cur), items: (n) => Coll.items(cur, n), here: here && here.paper,
-        adding, count, open: openColl, saved: (k) => !!(C.saved && C.saved(k)),
+        adding: !!adding, count, open: openColl, saved: (k) => !!(C.saved && C.saved(k)),
       });
       if (adding) {
         const input = collEl.querySelector('.tg-coll-name');
@@ -768,6 +889,7 @@
         const here = C.here();
         if (!name || !here) return;
         const items = collectable().map((x) => Object.assign({ key: x.key, name: x.note ? `${x.name} (${x.note})` : x.name, note: x.memo || '' }, here));
+        if (!items.length) return;
         C.write(Coll.add(C.read(), name, items));
         adding = false;
         openColl.add(name.replace(/\s+/g, ' ').slice(0, 80));
