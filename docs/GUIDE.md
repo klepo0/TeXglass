@@ -319,7 +319,7 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   pinned at once when nothing else is, and you change it like any set. Under
   them is the [pin list](#everything-pinned-in-one-place): **By kind** or **In order** (drag or
   <kbd>↑</kbd> <kbd>↓</kbd> to reorder), the pencil for a one-line note, **×** to
-  unpin, **Save as set…** and **Update “name”**, **Show only these** and
+  unpin, **Add all to…** and **Update “name”**, **Show only these** and
   **Clear all** (with nothing pinned, **Pin results…** lets you tick results
   and equations in the text). Click an item to go to it. Next to the count
   ("Pinned 11"), the name of the pin set your pins are now shows ("Set 2"; with
@@ -517,15 +517,15 @@ the first time the paper is opened.
 **Pin sets.** A set is a named group of pins to switch between, such as "For
 the talk" and "For the referee report".
 
-- **Save as set…** keeps everything pinned now (results, equations, figures,
-  proofs, symbols and passages) with its order under a name; a name is suggested.
+- With the search clear and no rows selected, **Add all to…** → **New set…**
+  saves everything pinned now with its order under a name and opens that set.
 - Open any saved set to work with its pins. **My pins** takes you back to the
   pins you had when you first opened a set. When you switch, TeXglass remembers
   membership and order changes for this visit, along with the last pin you
   jumped to. Return to a set marked **Draft** to pick up where you left off.
 - **Update “name”** saves the draft under the same name. **Revert draft**
-  reloads the saved membership and order. Use **Save as set…** to save the
-  draft under a new name. **×** deletes a set (the pins stay).
+  reloads the saved membership and order. Use **Add all to…** → **New set…**
+  to save the draft under a new name. **×** deletes a set (the pins stay).
 - Sets are the same thing as the map's saved maps: they are listed above the
   map too (**Sets**, **Save as set…**). Maps saved before sets held only the
   map's pins; opening one leaves your symbols and passages as they are.

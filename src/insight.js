@@ -3197,10 +3197,11 @@
       const names = new Set(sets.map(([name]) => name));
       return Array.from(new Set(recentSets.filter((name) => names.has(name)).concat(Array.from(names))));
     }
-    function createSetWithPins(name, entries) {
+    function createSetWithPins(name, entries, allWorkingPins) {
       name = String(name || '').trim().slice(0, 80);
       if (!name || !entries.length) return false;
       if (savedSet(name)?.p) addToSet(name, entries);
+      else if (allWorkingPins) return saveView(name);
       else {
         const v = appendSetPins({ p: {}, x: [], o: [] }, entries);
         useSet(name);
@@ -3209,7 +3210,7 @@
       return true;
     }
     /** Choose a pin set, with collections offered by hosts that support them. */
-    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, onResult, collection } = {}) {
+    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, allWorkingPins = false, onResult, collection } = {}) {
       const wrap = document_.createElement('span');
       wrap.className = 'tg-set-choice' + (compact ? ' tg-set-choice-compact' : '');
       wrap.innerHTML = `<span class="tg-set-select"><span aria-hidden="true">+</span><select aria-label="${esc(label)}" title="${esc(label)}"><option value="">${esc(label)}</option></select></span>` +
@@ -3221,7 +3222,8 @@
       const feedback = wrap.querySelector('.tg-set-feedback');
       const entries = () => {
         const pins = selfOnly ? null : allPins();
-        return Array.from(new Set(keys), (k) => [k, pins?.get(k) || 'self']);
+        const selected = allWorkingPins ? inReadingOrder(allPinKeys()) : keys;
+        return Array.from(new Set(selected), (k) => [k, pins?.get(k) || 'self']);
       };
       const announce = (message) => {
         if (wrap.isConnected && feedback) feedback.textContent = message;
@@ -3231,7 +3233,7 @@
         kind: 'set', title: 'Pin sets', newLabel: 'New set…', nameLabel: 'Set name',
         names: recentPinSets,
         save(name, create) {
-          if (create) return createSetWithPins(name, entries()) ? `Added to “${name}”` : '';
+          if (create) return createSetWithPins(name, entries(), allWorkingPins) ? `Added to “${name}”` : '';
           const added = addToSet(name, entries());
           if (added === null) return 'This set is no longer available';
           return added ? `Added to “${name}”` : `Already in “${name}”`;
@@ -3609,7 +3611,7 @@
       const saved = savedViews();
       const parts = [];
       const showOnly = '<button type="button" data-show-pinned title="Hide the rest of the document: only the pinned results and equations (their proofs folded) and the paragraphs holding pinned text">Show only these</button>';
-      // In the side panel the pin sets, Save as set… and Clear all are in the Pins tab, next door.
+      // In the side panel the pin sets and their controls are in the Pins tab.
       if (view.onPins) {
         if (pins.size) {
           parts.push(`<span class="dep-pins-count"><svg width="14" height="14" aria-hidden="true"><g class="dep-pin-mark" transform="translate(7,7)"><circle r="6.5"/><path d="${PIN_PATH}" transform="scale(0.8)"/></g></svg> ${pins.size} pinned</span>`);
@@ -3617,7 +3619,7 @@
         } else {
           parts.push('<span class="insight-muted">Pick a result and pin it (below the map), or click the pin by a result’s heading or beside an equation in the text.</span>');
         }
-        if (pins.size || saved.length) parts.push(`<button type="button" data-open-pins title="The pin list, your pin sets (Save as set…, switch sets) and Clear all">Pins tab${saved.length ? ` · ${saved.length} ${saved.length === 1 ? 'set' : 'sets'}` : ''}</button>`);
+        if (pins.size || saved.length) parts.push(`<button type="button" data-open-pins title="Open the pin list and saved sets">Pins tab${saved.length ? ` · ${saved.length} ${saved.length === 1 ? 'set' : 'sets'}` : ''}</button>`);
         return `<div class="dep-pins">${parts.join('')}</div>`;
       }
       if (pins.size) {

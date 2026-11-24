@@ -19,6 +19,15 @@ async function openPins(page) {
   if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
   await page.waitForSelector('.side-pins', { state: 'visible' });
 }
+
+async function saveAllPins(panel, name) {
+  const destination = panel.getByRole('combobox', { name: /^Add all to( set)?…$/ });
+  await destination.focus();
+  await destination.selectOption({ label: 'New set…' });
+  const input = panel.getByRole('textbox', { name: 'Set name', exact: true });
+  await input.fill(name);
+  await input.press('Enter');
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Tab}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -77,9 +86,9 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click('.tg-pins-row[data-key="label:main"] .tg-pins-pen');
     await page.fill('.tg-pins-memo-in', 'the point of it all');
     await page.keyboard.press('Enter');
-    await page.click('[data-pins-act="save"]');
-    await page.fill('.tg-pins-set-name', 'Talk');
-    await page.keyboard.press('Enter');
+    const panel = page.locator('.side-pins');
+    assert.equal(await panel.getByRole('button', { name: 'Save as set…' }).count(), 0);
+    await saveAllPins(panel, 'Talk');
     await page.keyboard.press('Escape');
 
     // the Pins tab: the sets on top, the pin list under them, as the toolbar's pin shows it
@@ -112,9 +121,7 @@ test('the Pins tab, the proof pin by its title, and text pinned over paragraphs'
     await page.click(P + '.tg-pins-row[data-key="label:first"] .tg-pins-x');
     assert.equal(await badge(), '1');
     assert.deepEqual(await rowsIn(), ['label:main']);
-    await page.click(P + '[data-pins-act="save"]');
-    await page.fill(P + '.tg-pins-set-name', 'Main only');
-    await page.keyboard.press('Enter');
+    await saveAllPins(panel, 'Main only');
     assert.deepEqual(await page.$$eval(P + '[data-pins-set]', (b) => b.map((x) => x.dataset.pinsSet)), ['Main only', 'Talk']);
     await page.click(P + '[data-pins-set="Talk"]');
     assert.equal(await badge(), '2');
@@ -207,10 +214,8 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     await page.waitForSelector('#preview .theorem[data-label="first"] .tg-pin-btn', { state: 'attached' });
     await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"] .tg-pin-btn').click());
     await openPins(page);
-    await page.click('.side-pins [data-pins-act="save"]');
-    await page.fill('.side-pins .tg-pins-set-name', 'My set');
-    await page.keyboard.press('Enter');
     const pins = page.locator('.side-pins');
+    await saveAllPins(pins, 'My set');
     const savedSet = (name) => pins.locator(`[data-pins-set="${name}"]`);
     const toReview = pins.locator('[data-key="label:first"]').getByLabel('Add to set…');
     await toReview.focus();

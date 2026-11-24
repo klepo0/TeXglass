@@ -19,6 +19,15 @@ async function openPins(page) {
   if (!(await page.isVisible('.side-pins'))) await page.click('#pins');
   await page.waitForSelector('.side-pins', { state: 'visible' });
 }
+
+async function saveAllPins(panel, name) {
+  const destination = panel.getByRole('combobox', { name: /^Add all to( set)?…$/ });
+  await destination.focus();
+  await destination.selectOption({ label: 'New set…' });
+  const input = panel.getByRole('textbox', { name: 'Set name', exact: true });
+  await input.fill(name);
+  await input.press('Enter');
+}
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 
 const DOC = '\\documentclass{article}\n\\title{Sets}\n\\newtheorem{lemma}{Lemma}[section]\n\\newtheorem{theorem}[lemma]{Theorem}\n\\newcommand{\\R}{\\mathbb{R}}\n\\begin{document}\n\\maketitle\n\\section{Start}\n' +
@@ -98,16 +107,14 @@ test('pin sets, a reading order and notes in the Pinned list, and the study shee
     assert.equal(await page.isVisible('.side-pins'), true, 'Enter keeps the list open');
 
     // save as a set; change the pins; Update and switching back
-    await page.click('[data-pins-act="save"]');
-    await page.fill('.tg-pins-set-name', 'For the talk');
-    await page.keyboard.press('Enter');
+    const panel = page.locator('.side-pins');
+    await saveAllPins(panel, 'For the talk');
+    assert.equal(await page.getAttribute('[data-pins-set="For the talk"]', 'aria-current'), 'true');
     assert.equal(await page.getAttribute('[data-pins-set="For the talk"]', 'aria-pressed'), 'true');
     await page.click('.tg-pins-row[data-key="label:first"] .tg-pins-x');
     assert.equal(await page.getAttribute('[data-pins-set="For the talk"]', 'aria-pressed'), 'false');
     assert.match(await page.textContent('.tg-pins-set-update'), /Update “For the talk”/);
-    await page.click('[data-pins-act="save"]');
-    await page.fill('.tg-pins-set-name', 'Short');
-    await page.click('[data-pins-act="save-ok"]');
+    await saveAllPins(panel, 'Short');
     assert.equal(await page.getAttribute('[data-pins-set="Short"]', 'aria-pressed'), 'true');
     await page.click('[data-pins-set="For the talk"]');
     assert.equal(await badge(), '3');
@@ -171,9 +178,7 @@ test('capture a pin into another set, resume a draft, and read and collect selec
     const keys = (selector = '.tg-pins-row') => panel.locator(selector).evaluateAll((rows) => rows.map((r) => r.dataset.key));
     const badge = () => page.locator('#pins .tg-pins-badge').textContent();
 
-    await act('save').click();
-    await panel.locator('.tg-pins-set-name').fill('Talk');
-    await act('save-ok').click();
+    await saveAllPins(panel, 'Talk');
     await panel.locator('[data-pins-view="order"]').click();
     await row('label:main').locator('[data-pins-drag]').press('ArrowUp');
     await row('label:main').locator('[data-pins-drag]').press('ArrowUp');
