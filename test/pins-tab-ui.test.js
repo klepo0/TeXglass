@@ -233,7 +233,7 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     const rows = () => page.$$eval('.side-pins .tg-pins-panel .tg-pins-go', (bs) => bs.map((b) => b.textContent));
     assert.deepEqual(await rows(), ['Lemma 1.1', 'Theorem 1.2']);
     assert.match(await page.textContent('.side-pins .tg-pins-viewnote'), /your 1 pin comes back/);
-    const addAll = pins.getByRole('combobox', { name: 'Add all to set…' });
+    const addAll = pins.getByRole('combobox', { name: 'Add all to…' });
     assert.equal(await pins.getByRole('button', { name: 'Add to my pins' }).count(), 0);
     assert.equal(await pins.getByRole('button', { name: 'Save as pin set' }).count(), 0);
     await addAll.focus();
@@ -255,6 +255,18 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     assert.equal(await page.evaluate(() => document.querySelector('#preview .theorem[data-label="first"]').offsetParent), null);
     assert.match(await page.textContent('.pick-bar .uses-what'), /changed/);
     await addAll.focus();
+    await addAll.selectOption({ label: 'New collection…' });
+    const collectionName = pins.getByRole('textbox', { name: 'Collection name' });
+    await collectionName.fill('Review');
+    await collectionName.press('Enter');
+    const reviewCollection = pins.locator('details[data-coll="Review"]');
+    assert.match(await reviewCollection.locator('summary').textContent(), /1 from 1 paper/);
+    assert.match(await reviewCollection.locator('.tg-coll-row').textContent(), /Theorem 1\.2/);
+    const reviewOptions = addAll.locator('option').filter({ hasText: /^Review$/ });
+    assert.deepEqual(await reviewOptions.evaluateAll((options) => options.map((opt) => opt.parentElement.label)), ['Pin sets', 'Collections']);
+    await addAll.selectOption(await reviewOptions.nth(1).getAttribute('value'));
+    assert.match(await pins.locator('.tg-pins-actions .tg-set-feedback').textContent(), /Added to collection “Review”/);
+    assert.equal(await savedSet('Review').locator('.tg-sets-size').textContent(), '2');
     await addAll.selectOption({ label: 'New set…' });
     const subsetName = pins.getByRole('textbox', { name: 'Set name' });
     await subsetName.fill('Filtered dependencies');

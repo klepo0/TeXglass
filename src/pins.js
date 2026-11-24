@@ -172,7 +172,7 @@
         (temp ? `<button type="button" class="tg-pins-x" data-pins-vx="${i}" title="Take it out of this view (your pins stay as they are)" aria-label="Take ${esc(x.name)} out of this view">&times;</button>` : '') + '</div>';
     });
     html += '</div><div class="tg-pins-actions">' +
-      (temp && v.items.some((x) => x.key) ? '<span data-pins-destination-all></span>' : '') +
+      (temp && v.items.some((x) => x.key) ? '<span data-pins-destination-bulk></span>' : '') +
       (!temp && v.keep ? '<button type="button" data-pins-act="view-keep" title="Pin these too, with the pins you have">Keep these pins</button>' : '') +
       `<button type="button" data-pins-act="view-done" title="Leave this view: back to the whole document and your own pins">${temp ? 'Done' : 'Dismiss'}</button></div>`;
     return html;
@@ -220,6 +220,23 @@
     const selected = new Set();
     const selectedItems = () => items.filter((x) => selected.has(x.key));
     const normalize = (str) => str.normalize('NFKC').toLowerCase();
+    function fillBulkDestination(place, rows, all) {
+      if (!place || !has('setDestination')) return;
+      const collection = o.collectionDestination && o.collectionDestination(rows);
+      const base = all ? 'Add all to' : 'Add to';
+      place.appendChild(insight.setDestination(rows.map((row) => row.key).filter(Boolean), {
+        label: collection ? `${base}…` : `${base} set…`,
+        selfOnly: all,
+        collection,
+        onResult(message) {
+          // A save can redraw the Pins tab. Announce the result in its new picker.
+          const current = el.querySelector('[data-pins-destination-bulk]');
+          if (!current) return;
+          current.querySelector('.tg-set-feedback').textContent = message;
+          current.querySelector('select').focus({ preventScroll: true });
+        },
+      }));
+    }
     function fillSelection() {
       const tools = el.querySelector('[data-pins-selection]');
       if (!tools) return;
@@ -227,9 +244,8 @@
       const allSelected = visible.length && Array.from(visible).every((row) => selected.has(row.dataset.key));
       const picked = selectedItems();
       tools.innerHTML = (visible.length ? `<button type="button" data-pins-act="select-matching">${allSelected ? 'Deselect' : 'Select'} ${query.trim() ? 'matches' : 'all'}</button>` : '') +
-        (picked.length ? `<span role="status">${picked.length} selected</span><button type="button" data-pins-act="unpin-selected">Unpin selected</button>` : '') +
-        (o.canCollect && o.canCollect(picked) ? '<button type="button" data-pins-act="collect-selected">Add to collection…</button>' : '');
-      if (picked.length && has('setDestination')) tools.appendChild(insight.setDestination(picked.map((x) => x.key)));
+        (picked.length ? `<span role="status">${picked.length} selected</span><button type="button" data-pins-act="unpin-selected">Unpin selected</button><span data-pins-destination-bulk></span>` : '');
+      fillBulkDestination(tools.querySelector('[data-pins-destination-bulk]'), picked, false);
     }
     function filterRows() {
       const rows = el.querySelectorAll('.tg-pins-row');
@@ -274,21 +290,7 @@
           : view.items;
         el.innerHTML = viewHtml({ ...view, pins: count(), items: rows });
         fillDestinations();
-        const bulk = el.querySelector('[data-pins-destination-all]');
-        if (bulk) {
-          const keys = rows.map((row) => row.key).filter(Boolean);
-          bulk.appendChild(insight.setDestination(keys, {
-            label: 'Add all to set…',
-            selfOnly: true,
-            onResult(message) {
-              // Saving redraws the Pins tab. Announce the result in its new picker.
-              const current = el.querySelector('[data-pins-destination-all]');
-              if (!current) return;
-              current.querySelector('.tg-set-feedback').textContent = message;
-              current.querySelector('select').focus({ preventScroll: true });
-            },
-          }));
-        }
+        fillBulkDestination(el.querySelector('[data-pins-destination-bulk]'), rows, true);
         return;
       }
       items = allItems();
@@ -478,7 +480,6 @@
           return;
         }
         if (a === 'unpin-selected') { unpin(Array.from(selected)); return; }
-        if (a === 'collect-selected') { o.collect(selectedItems()); return; }
         if (a === 'save') { naming = true; refill('.tg-pins-set-name'); return; }
         if (a === 'save-cancel') { naming = false; refill('[data-pins-act="save"]'); return; }
         if (a === 'save-ok') { saveSet(); return; }
@@ -820,12 +821,7 @@
       insight, margin: opts.margin, jump: opts.jump, showPinned: opts.showPinned, pinMore: opts.pinMore, noSets: true,
       view: opts.view, viewAct: opts.viewAct,
       done: () => { if (opts.onJump) opts.onJump(); },
-      canCollect: (items) => !!(C && Coll && C.here() && items.some(isCollectable)),
-      collect: (items) => {
-        adding = items.filter(isCollectable).map((x) => x.key);
-        fillColl();
-        collEl.querySelector('.tg-coll-name')?.scrollIntoView({ block: 'nearest' });
-      },
+      collectionDestination,
     });
 
     function fillSets() {
@@ -873,8 +869,30 @@
     let adding = false;
     const openColl = new Set();
     /** The pins here that can go in a collection: results, equations, figures, proofs. */
-    const isCollectable = (x) => x.el && x.kind !== 'notation' && x.kind !== 'text';
-    const collectable = () => list.items().filter((x) => isCollectable(x) && (!Array.isArray(adding) || adding.includes(x.key)));
+    const isCollectable = (x) => x.key && x.el && x.kind !== 'notation' && x.kind !== 'text';
+    const collectable = () => list.items().filter(isCollectable);
+    function collectionDestination(rows) {
+      const here = C && Coll && C.here();
+      const items = rows.filter(isCollectable);
+      if (!here || !items.length) return null;
+      return {
+        names: () => Coll.names(C.read()).map((entry) => entry.name),
+        add: (name) => C.here()?.paper === here.paper && addCollection(name, items),
+      };
+    }
+    function addCollection(name, rows) {
+      const here = C.here();
+      if (!name || !here || !rows.length) return false;
+      const items = rows.map((x) => Object.assign({
+        key: x.key, name: x.note ? `${x.name} (${x.note})` : x.name,
+        note: x.memo ?? insight.pinNote?.(x.key) ?? '',
+      }, here));
+      C.write(Coll.add(C.read(), name, items));
+      adding = false;
+      openColl.add(name.replace(/\s+/g, ' ').slice(0, 80));
+      fillColl();
+      return true;
+    }
     function fillColl() {
       if (!C || !Coll) return;
       const here = C.here();
@@ -884,7 +902,7 @@
       if (!count && adding) adding = false;
       collEl.innerHTML = collectionsHtml({
         names: Coll.names(cur), items: (n) => Coll.items(cur, n), here: here && here.paper,
-        adding: !!adding, count, open: openColl, saved: (k) => !!(C.saved && C.saved(k)),
+        adding, count, open: openColl, saved: (k) => !!(C.saved && C.saved(k)),
       });
       if (adding) {
         const input = collEl.querySelector('.tg-coll-name');
@@ -900,15 +918,7 @@
       collEl.addEventListener('submit', (e) => {
         e.preventDefault();
         const input = collEl.querySelector('.tg-coll-name');
-        const name = input ? input.value.trim() : '';
-        const here = C.here();
-        if (!name || !here) return;
-        const items = collectable().map((x) => Object.assign({ key: x.key, name: x.note ? `${x.name} (${x.note})` : x.name, note: x.memo || '' }, here));
-        if (!items.length) return;
-        C.write(Coll.add(C.read(), name, items));
-        adding = false;
-        openColl.add(name.replace(/\s+/g, ' ').slice(0, 80));
-        fillColl();
+        if (input) addCollection(input.value.trim(), collectable());
       });
       collEl.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && adding) { e.stopPropagation(); adding = false; fillColl(); }

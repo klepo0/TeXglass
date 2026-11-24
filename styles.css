@@ -2463,7 +2463,7 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .tg-pins-along { font-size: 12.5px; }
 .tg-pins-sym .katex { font-size: 1.05em; }
 .tg-pins-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 4px 2px; margin-top: 4px; border-top: 1px solid var(--rule); }
-.tg-pins-actions:has([data-pins-destination-all]) { flex-wrap: wrap; align-items: center; }
+.tg-pins-actions:has([data-pins-destination-bulk]) { flex-wrap: wrap; align-items: center; }
 :is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions button { border: 1px solid var(--rule); padding: 5px 12px; }
 :is(.tg-pins-menu, .tg-pins-panel) .tg-pins-actions button:hover { border-color: var(--accent); }
 /* list by kind or in the reading order */

@@ -327,8 +327,9 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   While [What does this use?](#understanding-the-logic), a search by use or a
   shared view is on, the tab follows it: **Showing** lists what is on screen,
   with its name ("Theorem 2.1 with what it uses"); **×** takes one out of the
-  view. **Add all to set…** adds the listed pins to the set you choose. Select
-  **New set…** to create a destination. **Done** shows your own pins again.
+  view. **Add all to…** sends the listed pins to a pin set or collection.
+  Choose an existing destination or create one under **Pin sets** or
+  **Collections**. **Done** shows your own pins again.
   The **pin** in the toolbar opens this tab. Below them, **Across papers**
   holds your [collections](#collections-pins-from-several-papers). Not in the
   exported reader page.
@@ -460,8 +461,9 @@ side panel as a drawer on the Pins tab.
 set. Recent sets appear first, and **New set…** starts a set from that item.
 To find pins in the **Pins** tab, type a theorem number, symbol or note into
 **Search pins**. Check individual rows or use **Select matches** to select
-them together. Send the selection to a set or collection, or choose **Unpin
-selected**. Checked rows stay selected as you change the search.
+them together. Use **Add to…** to send the selection to a pin set or
+collection, or choose **Unpin selected**. Checked rows stay selected as you
+change the search.
 
 ### Collections: pins from several papers
 
@@ -474,8 +476,9 @@ another). It lives under **Across papers** at the bottom of the side panel's
   a name (or pick one you have) and **Add**. Results, equations, figures and
   proofs go in, with their pin notes; symbols and text passages stay out.
   Open the next paper and do the same with the same name.
-- To collect a subset, check those rows in the **Pins** tab and use **Add to
-  collection…** beside the selection count.
+- To collect a subset, check those rows in the **Pins** tab, open **Add to…**,
+  and pick a destination under **Collections**. **New collection…** starts one
+  from the selection.
 - Click a collection to open it: its items are grouped by paper, the open paper
   marked "open". Click an item to go to it, in this paper or in its own (from
   your [saved copy](#web-viewer) if you have one, else from

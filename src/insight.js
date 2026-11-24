@@ -3208,8 +3208,8 @@
       }
       return true;
     }
-    /** One destination picker shared by previews and pin rows. */
-    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, onResult } = {}) {
+    /** Choose a pin set, with collections offered by hosts that support them. */
+    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, onResult, collection } = {}) {
       const wrap = document_.createElement('span');
       wrap.className = 'tg-set-choice' + (compact ? ' tg-set-choice-compact' : '');
       wrap.innerHTML = `<span class="tg-set-select"><span aria-hidden="true">+</span><select aria-label="${esc(label)}" title="${esc(label)}"><option value="">${esc(label)}</option></select></span>` +
@@ -3227,34 +3227,71 @@
         if (wrap.isConnected && feedback) feedback.textContent = message;
         else if (onResult) onResult(message);
       };
-      let names = [];
+      const destinations = [{
+        kind: 'set', title: 'Pin sets', newLabel: 'New set…', nameLabel: 'Set name',
+        names: recentPinSets,
+        save(name, create) {
+          if (create) return createSetWithPins(name, entries()) ? `Added to “${name}”` : '';
+          const added = addToSet(name, entries());
+          if (added === null) return 'This set is no longer available';
+          return added ? `Added to “${name}”` : `Already in “${name}”`;
+        },
+      }];
+      if (collection) destinations.push({
+        kind: 'collection', title: 'Collections', newLabel: 'New collection…', nameLabel: 'Collection name',
+        names: collection.names,
+        save: (name) => collection.add(name) ? `Added to collection “${name}”` : 'These pins are no longer available',
+      });
+      const choices = new Map();
+      let creating = null;
       function fill() {
-        names = recentPinSets();
-        select.replaceChildren(
-          new Option(label, ''),
-          ...names.map((name, i) => new Option(name, String(i))),
-          new Option('New set…', 'new'),
-        );
+        choices.clear();
+        select.replaceChildren(new Option(label, ''));
+        for (const dest of destinations) {
+          const group = collection ? document_.createElement('optgroup') : select;
+          if (collection) group.label = dest.title;
+          dest.names().forEach((name, i) => {
+            const value = `${dest.kind}:${i}`;
+            choices.set(value, { dest, name });
+            group.appendChild(new Option(name, value));
+          });
+          const value = `${dest.kind}:new`;
+          choices.set(value, { dest });
+          group.appendChild(new Option(dest.newLabel, value));
+          if (collection) select.appendChild(group);
+        }
       }
       select.addEventListener('focus', fill);
       select.addEventListener('pointerdown', fill);
       select.addEventListener('change', () => {
-        if (select.value === 'new') {
-          create.hidden = false;
-          input.focus();
-        } else if (select.value) {
-          const name = names[Number(select.value)];
-          const added = addToSet(name, entries());
-          announce(added === null ? 'This set is no longer available' : added ? `Added to “${name}”` : `Already in “${name}”`);
-        }
+        const choice = choices.get(select.value);
         select.value = '';
+        if (!choice) return;
+        if (choice.name !== undefined) {
+          if (creating) close();
+          announce(choice.dest.save(choice.name));
+          return;
+        }
+        if (creating !== choice.dest) input.value = '';
+        creating = choice.dest;
+        input.setAttribute('aria-label', creating.nameLabel);
+        input.placeholder = creating.nameLabel;
+        create.children[2].setAttribute('aria-label', `Cancel new ${creating.kind}`);
+        create.hidden = false;
+        input.focus();
       });
-      const close = () => { create.hidden = true; select.focus(); };
+      const close = () => {
+        creating = null;
+        input.value = '';
+        create.hidden = true;
+        select.focus();
+      };
       const commit = () => {
         const name = input.value.trim();
-        if (!createSetWithPins(name, entries())) { input.focus(); return; }
-        announce(`Added to “${name}”`);
-        input.value = '';
+        if (!name || !creating) { input.focus(); return; }
+        const message = creating.save(name, true);
+        if (!message) { input.focus(); return; }
+        announce(message);
         close();
       };
       create.children[1].addEventListener('click', commit);
