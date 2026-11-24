@@ -56,6 +56,8 @@
   let statusTimer = null;
   let parserWarnings = [];
   let renderWarnings = [];
+  let listedParserWarnings = null; // the parser warnings the list was last built from
+  let patched = null; // what the last patch of the preview took out and put in: { removed, added }
   let lastLabels = {};
   let lastToc = [];
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
@@ -279,8 +281,30 @@
     return text.startsWith('[image: ') ? `Missing figure: ${text.slice(8, -1)}` : text;
   }
 
+  const WARNING_SELECTOR = '.math-error, .katex-error, .katex-html .mord.text[style*="color:#cc0000"], .ref-missing, [data-math-ref-missing], .cite-key, .graphic-placeholder, .tikz-note, img.graphic, .render-error';
+
+  /** Whether an edit's patch can change the list: it took out a block with a listed
+   *  warning, or put in a block with a warning of its own. Kept blocks render the same,
+   *  so their warnings stay as they were. */
+  function patchTouchesWarnings({ removed, added }) {
+    if (renderWarnings.some(({ target }) => target && removed.some((n) => n === target || n.contains(target)))) return true;
+    for (const n of added) {
+      if (n.nodeType !== 1) continue;
+      if (n.matches(WARNING_SELECTOR) && warningFor(n)) return true;
+      for (const el of n.querySelectorAll(WARNING_SELECTOR)) if (warningFor(el)) return true;
+    }
+    return false;
+  }
+
+  /** Build the warning list again, unless the last edit left every warning as it was. */
   function updateRenderWarnings() {
-    const elements = preview.querySelectorAll('.math-error, .katex-error, .katex-html .mord.text[style*="color:#cc0000"], .ref-missing, [data-math-ref-missing], .cite-key, .graphic-placeholder, .tikz-note, img.graphic, .render-error');
+    const patch = patched;
+    patched = null;
+    const sameParser = listedParserWarnings && listedParserWarnings.length === parserWarnings.length &&
+      listedParserWarnings.every((text, i) => text === parserWarnings[i]);
+    if (patch && !comparing && sameParser && !patchTouchesWarnings(patch)) return;
+    listedParserWarnings = parserWarnings;
+    const elements = preview.querySelectorAll(WARNING_SELECTOR);
     const located = new Set();
     const warnings = [];
     for (const el of elements) {
@@ -428,8 +452,10 @@
     for (let k = 0; k < p; k++) keep(old[k], outside[k]);
     for (let k = 1; k <= q; k++) keep(old[old.length - k], outside[outside.length - k]);
     // Replace the rest.
-    for (const entry of old.slice(p, old.length - q)) entry.nodes.forEach((n) => n.remove());
+    const removed = old.slice(p, old.length - q).flatMap((entry) => entry.nodes);
+    removed.forEach((n) => n.remove());
     const fresh = toEntries(outside.slice(p, outside.length - q));
+    const added = fresh.flatMap((entry) => entry.nodes);
     const tail = old.slice(old.length - q);
     const firstNode = (entries) => (entries.length ? entries[0].nodes[0] || null : null);
     if (!editing) {
@@ -448,17 +474,21 @@
       const insideHtml = inside.join('\n');
       if (insideHtml !== editing.insideHtml) {
         editing.insideHtml = insideHtml;
+        removed.push(...editing.previewEl.childNodes);
         editing.inside = toEntries(inside);
+        added.push(...editing.inside.flatMap((e) => e.nodes));
         editing.previewEl.replaceChildren(...editing.inside.flatMap((e) => e.nodes));
       }
     }
     shown = old.slice(0, p).concat(fresh, tail);
+    patched = { removed, added };
   }
 
   /** Forget the preview, e.g. before showing another document. */
   function clearPreview() {
     preview.replaceChildren();
     shown = [];
+    patched = null;
     renderedDoc = null;
   }
 

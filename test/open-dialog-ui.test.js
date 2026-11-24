@@ -173,6 +173,53 @@ $\frac{a}$ and $\unknowncommand$ and $\eqref{missing-equation}$.
   }
 });
 
+test('edits that leave every warning as it was do not rebuild the warning list', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await serve(page);
+    await page.goto('http://texglass.test/index.html');
+    await page.waitForSelector('#preview .src-block');
+    await page.click('#mode-split');
+    const doc = (clean, broken) => String.raw`\documentclass{article}
+\begin{document}
+${clean}
+
+${broken}
+\end{document}`;
+    const shows = (text) => page.waitForFunction((t) => document.getElementById('preview').textContent.includes(t), text);
+    await page.fill('#source', doc('Clean text.', String.raw`Broken $\unknowncommand$.`));
+    await page.waitForSelector('#render-warnings:has-text("1 render warning")');
+    // The list's text node is kept as long as the list is not built again.
+    await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
+    const rebuilt = () => page.evaluate(() => document.getElementById('render-warnings').firstChild !== window.listedText);
+
+    // An edit away from the warning: nothing to build.
+    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken $\unknowncommand$.`));
+    await shows('Clean text, edited.');
+    assert.equal(await rebuilt(), false);
+
+    // An edit to the block with the warning: built again.
+    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken again $\unknowncommand$.`));
+    await shows('Broken again');
+    assert.equal(await rebuilt(), true);
+    assert.equal(await page.textContent('#render-warnings'), '1 render warning');
+
+    // An edit that makes a new warning elsewhere: built again.
+    await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
+    await page.fill('#source', doc(String.raw`Clean text, $\alsounknown$.`, String.raw`Broken again $\unknowncommand$.`));
+    await page.waitForSelector('#render-warnings:has-text("2 render warnings")');
+    assert.equal(await rebuilt(), true);
+
+    // Fixing both: no warnings left.
+    await page.fill('#source', doc('Clean text.', 'Fixed.'));
+    await page.waitForSelector('#render-warnings', { state: 'hidden' });
+  } finally {
+    await browser.close();
+  }
+});
+
 test('Save, Export and Print sit in the "…" menu', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
