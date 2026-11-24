@@ -187,6 +187,7 @@
   })();
 
   let renderedDoc = null; // the source the preview shows now
+  let texFallback = null; // the host's LaTeX for what TeXglass cannot draw (setTexFallback)
   let shown = []; // [{ html, nodes }] for each top-level block in the preview, except any in the inline editor
   let busy = false;
   let waiters = [];
@@ -254,6 +255,7 @@
     if (params) params.refresh(); // sliders by what uses a \tgparam; moved values stay
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
     if (comparing) markChanges(blocks, source); // comparing two versions: what changed since the older one
+    if (texFallback) texFallback.refresh(); // the host's LaTeX, for what TeXglass could not draw
     updateRenderWarnings();
   }
 
@@ -486,6 +488,7 @@
 
   /** Forget the preview, e.g. before showing another document. */
   function clearPreview() {
+    if (texFallback) texFallback.reset();
     preview.replaceChildren();
     shown = [];
     patched = null;
@@ -4515,6 +4518,32 @@
   // saves them and makes slides from the pins and notes through this. Each
   // handle is a File System Access file handle, or anything with getFile()
   // and createWritable(): it is watched for changes and saved in place.
+  // A host with TeX on the reader's computer (FlexTeX) draws the pieces TeXglass cannot.
+  function setTexFallback(fn) {
+    if (texFallback) texFallback.reset();
+    texFallback = null;
+    if (typeof fn !== 'function' || !window.TeXglassTexFallback) {
+      if (renderedDoc !== null && preview.querySelector('[data-tg-texfallback]')) {
+        clearPreview(); // TeXglass's own rendering again
+        render();
+      }
+      return;
+    }
+    texFallback = TeXglassTexFallback.create({
+      root: preview,
+      preamble: () => TeXglassTexFallback.preamble(renderedDoc || '') || '',
+      request: (pieces) => {
+        const preamble = TeXglassTexFallback.preamble(renderedDoc || '') || '';
+        return fn(pieces.map((p) => Object.assign({ preamble }, p)));
+      },
+      onChange: () => {
+        if (insight) insight.invalidate();
+        updateRenderWarnings();
+      },
+    });
+    texFallback.refresh();
+  }
+
   window.TeXglassViewer = Object.freeze({
     version: 1,
     openHandle: (handle) => openHandle(handle),
@@ -4531,6 +4560,14 @@
     labels: () => lastLabels,
     /** The open paper's highlights and notes (src/margin.js records). */
     notes: () => (paper ? paper.record.notes.slice() : []),
+    /**
+     * Let the host draw what TeXglass cannot (src/texfallback.js): fn(pieces) is
+     * called after each render with the formulas and pictures that failed,
+     * [{ key, tex, display, kind, preamble }], and resolves to one result per
+     * piece ({ pdf, page, depth, fontSize } or null), for example from
+     * src/texfallback-node.js's draw() in a desktop app. null turns it off.
+     */
+    setTexFallback: (fn) => setTexFallback(fn),
     /** Render a piece of LaTeX with the document's preamble: a promise of HTML. */
     renderTex: (tex) => {
       const at = doc.indexOf('\\begin{document}');

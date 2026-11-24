@@ -9,6 +9,8 @@
  *
  *   TeXglassPdf.isPdf(blob)          is this a PDF (by type or by its first bytes)?
  *   await TeXglassPdf.toImage(blob)  an image/svg+xml Blob, or null if it cannot be drawn
+ *   await TeXglassPdf.toImage(blob, { page: 2, transparent: true })
+ *                                    another page, without the white paper behind it
  *
  * Works in browser pages (the web viewer and the browser extension).
  */
@@ -71,7 +73,8 @@
       `<image width="${w}" height="${h}" href="${png}"/></svg>`;
   }
 
-  async function toImage(blob) {
+  async function toImage(blob, opts) {
+    opts = opts || {};
     if (!VENDOR) return null;
     const pdfjs = await load();
     const doc = await pdfjs.getDocument({
@@ -81,7 +84,7 @@
       verbosity: 0,
     }).promise;
     try {
-      const page = await doc.getPage(1);
+      const page = await doc.getPage(opts.page || 1);
       const size = page.getViewport({ scale: 1 }); // points
       if (!size.width || !size.height) return null;
       const scale = Math.min(SHARPNESS * 96 / 72, MAX_SIDE / Math.max(size.width, size.height));
@@ -89,7 +92,9 @@
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.ceil(viewport.width));
       canvas.height = Math.max(1, Math.ceil(viewport.height));
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      const task = { canvasContext: canvas.getContext('2d'), viewport };
+      if (opts.transparent) task.background = 'rgba(0,0,0,0)';
+      await page.render(task).promise;
       const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!png) return null;
       return new Blob([svgAround(await dataUrl(png), size.width, size.height)], { type: 'image/svg+xml' });

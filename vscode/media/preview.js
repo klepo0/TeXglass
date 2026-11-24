@@ -644,6 +644,31 @@
       }),
     })
     : null;
+  // Formulas and pictures TeXglass could not draw, drawn by the reader's own LaTeX:
+  // the extension compiles them (texglass.localTex) and sends PDFs, shown as images.
+  const pendingTex = new Map();
+  let texId = 0;
+  let texPreamble = ''; // the document's preamble, from the extension with each render
+  const texFallback = window.TeXglassTexFallback
+    ? window.TeXglassTexFallback.create({
+      root: preview,
+      preamble: () => texPreamble,
+      request: (pieces) => new Promise((resolve) => {
+        const id = ++texId;
+        pendingTex.set(id, resolve);
+        vscode.postMessage({ type: 'tex-fallback', id, pieces });
+      }),
+      onChange: () => { if (insight) insight.invalidate(); },
+    })
+    : null;
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || m.type !== 'tex-fallback' || !pendingTex.has(m.id)) return;
+    const resolve = pendingTex.get(m.id);
+    pendingTex.delete(m.id);
+    const pdfs = m.pdfs || [];
+    resolve((m.results || []).map((r) => (r && pdfs[r.pdf] ? Object.assign({}, r, { pdf: pdfs[r.pdf] }) : null)));
+  });
   // .pdf and .eps figures, which the webview cannot show as they are: drawn (PDF
   // with pdf.js, EPS with the PostScript interpreter) and kept per file version.
   const drawnFigures = new Map(); // figure URL -> Promise of an object URL, or null
@@ -902,6 +927,7 @@
         const sameDoc = (vscode.getState() || {}).uri === m.uri;
         if (!sameDoc) {
           if (viewHistory) viewHistory.clear();
+          if (texFallback) texFallback.reset();
           shown = [];
           allAnchors = [];
           anchors = [];
@@ -915,8 +941,16 @@
         sourceFiles = m.files || [];
         if (insight && m.defs !== undefined) insight.setDefinitions(m.defs);
         if (diffView) diffView.clear(); // marks come off before the blocks change
+        if (texFallback && !m.texFallback && preview.querySelector('[data-tg-texfallback]')) {
+          // the reader's LaTeX was turned off: TeXglass's own rendering again, everywhere
+          texFallback.reset();
+          shown = [];
+          preview.replaceChildren();
+        }
         show(m.blocks, m.lines);
         drawFigures();
+        texPreamble = m.texPreamble || '';
+        if (texFallback && m.texFallback) texFallback.refresh();
         if (insight) insight.invalidate();
         if (picker) picker.refresh();
         if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv

@@ -16,6 +16,8 @@ for (const [from, to] of [
   ['src/diagrams.js', 'diagrams.js'],
   ['styles.css', 'styles.css'],
   ['src/find.js', 'find.js'],
+  ['src/texfallback.js', 'texfallback.js'],
+  ['src/texfallback-node.js', 'texfallback-node.js'],
   ['src/zoom.js', 'zoom.js'],
   ['src/scroll.js', 'scroll.js'],
   ['src/popover.js', 'popover.js'],
