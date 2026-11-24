@@ -235,6 +235,7 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     assert.match(await page.textContent('.side-pins .tg-pins-viewnote'), /your 1 pin comes back/);
     const addAll = pins.getByRole('combobox', { name: 'Add all to set…' });
     assert.equal(await pins.getByRole('button', { name: 'Add to my pins' }).count(), 0);
+    assert.equal(await pins.getByRole('button', { name: 'Save as pin set' }).count(), 0);
     await addAll.focus();
     await addAll.selectOption({ label: 'Review' });
     assert.equal(await savedSet('Review').locator('.tg-sets-size').textContent(), '2');
@@ -259,10 +260,6 @@ test('the Pins tab follows the view on screen: What does this use? lists its set
     await subsetName.fill('Filtered dependencies');
     await subsetName.press('Enter');
     assert.equal(await savedSet('Filtered dependencies').locator('.tg-sets-size').textContent(), '1');
-    // Save as pin set from the tab
-    await page.click('.side-pins [data-pins-act="view-save"]');
-    await page.waitForFunction(() => /Saved as/.test(document.querySelector('.side-pins .tg-pins-viewnote').textContent));
-    assert.match(await page.textContent('.side-pins .tg-sets-stuck'), /Theorem 1\.2 with what it uses \(changed\)/);
     // Done: back to the reader's pins, with the set's name
     await page.click('.side-pins [data-pins-act="view-done"]');
     await page.waitForFunction(() => !document.querySelector('.side-pins .tg-pins-head-view'));

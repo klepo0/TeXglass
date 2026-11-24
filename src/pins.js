@@ -23,8 +23,8 @@
  *     keys,               // false: no P / J / K
  *     view(),             // optional: the view on screen when it is not the pins (What does
  *                         //   this use?, a shared view): { kind, title, note, items: [{ name, el }],
- *                         //   save, keep }, or null; the list then shows it (refresh() when it changes)
- *     viewAct(a, el),     // optional: its buttons: 'save', 'keep', 'done', 'away' (take el out)
+ *                         //   keep }, or null; the list then shows it (refresh() when it changes)
+ *     viewAct(a, el),     // optional: its buttons: 'keep', 'done', 'away' (take el out)
  *   });
  *   pins.open(); pins.close(); pins.toggle(); pins.refresh();
  *
@@ -157,7 +157,7 @@
   /**
    * The list's HTML while a view is on screen that is not the reader's pins
    * (What does this use?, a search by use, a shared view): what it shows, and
-   * its Keep buttons. v: { kind, title, note, items: [{ name, el }], save, keep, pins }.
+   * its actions. v: { kind, title, note, items: [{ name, el, key }], keep, pins }.
    */
   function viewHtml(v) {
     const temp = v.kind === 'uses';
@@ -172,7 +172,6 @@
         (temp ? `<button type="button" class="tg-pins-x" data-pins-vx="${i}" title="Take it out of this view (your pins stay as they are)" aria-label="Take ${esc(x.name)} out of this view">&times;</button>` : '') + '</div>';
     });
     html += '</div><div class="tg-pins-actions">' +
-      (v.save ? '<button type="button" data-pins-act="view-save" title="Keep these as a pin set of their own, to open later; your pins now stay as they are">Save as pin set</button>' : '') +
       (temp && v.items.some((x) => x.key) ? '<span data-pins-destination-all></span>' : '') +
       (!temp && v.keep ? '<button type="button" data-pins-act="view-keep" title="Pin these too, with the pins you have">Keep these pins</button>' : '') +
       `<button type="button" data-pins-act="view-done" title="Leave this view: back to the whole document and your own pins">${temp ? 'Done' : 'Dismiss'}</button></div>`;
@@ -1059,11 +1058,10 @@
     };
     return Object.assign({}, v, { items: v.els.filter(named).map((el) => ({ el, name: nameOf(el) })) });
   }
-  /** The view's buttons in the pin list: 'save', 'keep', 'done', 'away' (take el out). */
+  /** The view's buttons in the pin list: 'keep', 'done', 'away' (take el out). */
   function viewAct(picker, a, el) {
     if (!picker) return;
-    if (a === 'save') picker.saveView();
-    else if (a === 'keep') picker.keepView();
+    if (a === 'keep') picker.keepView();
     else if (a === 'done') picker.stop();
     else if (a === 'away') picker.takeAway(el);
   }
