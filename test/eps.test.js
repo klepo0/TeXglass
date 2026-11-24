@@ -181,3 +181,17 @@ test('EPS subset-font control bytes do not make an image invalid SVG', () => {
   assert.match(r.svg, /<path/);
   assert.doesNotMatch(r.svg, /[\x00-\x08\x0b\x0c\x0e-\x1f]/);
 });
+
+test('bound printer operators survive dictionary changes, preserving colors and glyph offsets', () => {
+  const r = Eps.toSvg(String.raw`
+%%BoundingBox: 0 0 100 50
+10 dict begin
+/m /moveto load def
+/paint { 0 0 1 setrgbcolor currenthsbcolor sethsbcolor 10 20 m
+  /Courier 10 selectfont (ab) [8 2 9 0] xyshow } bind def
+currentdict end /paint get exec
+`);
+  assert.equal(r.partial, false);
+  assert.match(r.svg, /matrix\(10 0 0 10 10 -20\)[^>]+fill:rgb\(0,0,255\)[^>]*>a</);
+  assert.match(r.svg, /matrix\(10 0 0 10 18 -22\)[^>]*>b</);
+});

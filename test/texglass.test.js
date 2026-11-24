@@ -955,3 +955,36 @@ See \eqref{display}.
   assert.match(html, /text/);
   assert.match(html, /<mtable/);
 });
+
+test('dashboard formulas preserve scripts, delimiters and citations inside math', () => {
+  const { html } = strictKatex(String.raw`
+\DeclareMathOperator{\op}{\hspace{-0.2em}^{\mathsf{op}}}
+\newcommand{\restr}[1]{\left.\kern-\nulldelimiterspace #1\right|}
+\begin{document}
+$x\, '$, $X\op$, $\restr{f}$ and $\text{see \cite[Ch.~2]{ref}}$.
+$\arraycolsep=1.5pt\begin{array}{c}a\\
+% blank lines before an inner math shift
+
+\text{for $b$}\end{array}$.
+\begin{thebibliography}{9}\bibitem{ref} A reference.\end{thebibliography}
+\end{document}`);
+  noMathErrors(html);
+  assert.match(text(html), /see\s*\[1,\s*Ch/);
+  assert.match(html, /<mtable/);
+});
+
+test('proof.sty and mathpartir rules render their premises and conclusions', () => {
+  const { html } = strictKatex(String.raw`
+\def\infer{\@infer}
+\def\@infer#1#2{\global\setbox0=\hbox{#2}}
+\def\mpr@inferrule#1#2{\setbox0=\hbox{#1}}
+\let\inferrule\mpr@inferrule
+\begin{document}
+$\infer[\text{rule}]{C}{A & B}$
+\begin{mathpar}
+\inferrule{P \\ Q}{R} \and \inferrule{H}{I}
+\end{mathpar}
+\end{document}`);
+  noMathErrors(html);
+  assert.equal((html.match(/<mfrac>/g) || []).length, 3);
+});

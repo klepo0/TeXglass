@@ -423,6 +423,7 @@
   /** KaTeX macros for commands from common packages that KaTeX lacks. */
   const MATH_MACROS = {
     '\\hdots': '\\ldots',
+    '\\boxbar': '\\mathbin{\\text{◫}}',
     // symbols from fdsymbol/MnSymbol and amsmath spacing that KaTeX lacks
     '\\shortleftarrow': '\\mathrel{\\scriptstyle\\leftarrow}',
     '\\shortrightarrow': '\\mathrel{\\scriptstyle\\rightarrow}',
@@ -663,6 +664,20 @@
   const optBracket = (ctx) => (peekText(ctx) === '[' ? (ctx.popToken(), tokText(ctx.consumeArg([']']).tokens)) : null);
   const group = (ctx) => tokText(ctx.consumeArgs(1)[0]);
   const optGroup = (ctx) => (peekText(ctx) === '{' ? group(ctx) : null);
+  function inferenceRule(ctx, mathpartir) {
+    const mark = peekText(ctx);
+    if (mark === '*' || (!mathpartir && (mark === '=' || mark === '-'))) ctx.popToken();
+    const label = optBracket(ctx);
+    const first = group(ctx);
+    const second = group(ctx);
+    const upper = mathpartir ? first : second;
+    const lower = mathpartir ? second : first;
+    const premises = splitTop(upper, mathpartir ? rowSep : cellSep).join('\\qquad ');
+    const rule = mark === '='
+      ? `\\begin{array}{c}${premises}\\\\[-.5ex]\\hline\\hline ${lower}\\end{array}`
+      : `\\dfrac{${premises}}{${lower}}`;
+    return label ? `{${rule}\\;{\\scriptstyle ${label}}}` : rule;
+  }
   /** Read up to the matching `close` (for \qty(…), \qty|…|), nesting on `open`. */
   const until = (ctx, open, close) => {
     const out = [];
@@ -1020,7 +1035,12 @@
     }
     // a superscript or subscript on a space (\fix^{k} with \newcommand{\fix}{\theta\,}):
     // TeX puts it on an empty box, KaTeX stops with an error
-    tex = tex.replace(/(?<!\\)(\\(?:[,;:!>]|(?:q?quad|thinspace|medspace|thickspace|enspace|negthinspace|negmedspace|negthickspace)(?![A-Za-z@])))(\s*)(?=[\^_]|$)/g, '$1{}$2');
+    tex = tex.replace(/(?<!\\)(\\(?:[,;:!>]|(?:q?quad|thinspace|medspace|thickspace|enspace|negthinspace|negmedspace|negthickspace)(?![A-Za-z@])))(\s*)(?=[\^_']|$)/g, '$1{}$2');
+    tex = tex.replace(/(?<!\\)(\\hspace\*?\s*\{[^{}]*\})(\s*)(?=[\^_'])/g, '$1{}$2');
+    // KaTeX already inserts no space for a null delimiter.
+    tex = tex.replace(/(?<!\\)\\kern\s*[+-]?\s*\\nulldelimiterspace(?![A-Za-z@])/g, '');
+    // The table still has KaTeX's default column padding.
+    tex = tex.replace(/(?<!\\)\\arraycolsep\s*=?\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:pt|em|ex|cm|mm|in|bp|pc|sp|dd|cc)\b/g, '');
     // \uppercase\expandafter{\romannumeral 2} (II) and \romannumeral 2 (ii)
     if (/\\romannumeral/.test(tex)) {
       tex = tex.replace(/\\uppercase\s*(?:\\expandafter\s*)?\{\s*\\romannumeral\s*(\d+)\s*\}/g, (_, n) => `\\mathrm{${roman(+n).toUpperCase()}}`)
@@ -1074,6 +1094,7 @@
     'DeclareFontEncoding', 'DeclareFontSubstitution', 'DeclareSymbolFont', 'SetSymbolFont', 'DeclareFontFamily',
     'DeclareFontShape', 'DeclareMathAlphabet', 'SetMathAlphabet', 'DeclareSymbolFontAlphabet',
     'setuptodonotes', 'presetkeys',
+    'ProvidesPackage', 'ProvidesClass', 'hyphenation', 'typeout',
     // imsart / elsarticle front matter: running heads, e-mail labels, affiliations
     'runtitle', 'runauthor', 'affiliation', 'ead', 'printead', 'printaddresses', 'ead_',
   ]);
@@ -1352,6 +1373,16 @@
     katexMacros(tex) {
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS, CONDITIONAL_MACROS);
+        m['\\cite'] = (ctx) => {
+          const note = optBracket(ctx);
+          const cites = this.known ? this.known.cites : this.cites;
+          const labels = group(ctx).split(',').map((key) => {
+            const id = key.trim();
+            return (cites[id] ? cites[id].label : id).replace(/([{}\\#$%&_^~])/g, '\\$1');
+          });
+          const citation = '[' + labels.join(', ') + (note ? ', ' + note : '') + ']';
+          return ctx.mode === 'text' ? citation : '\\text{' + citation + '}';
+        };
         for (const [flag, value] of this.flags) {
           m['\\' + flag] = value ? '\\iftrue' : '\\iffalse';
           m['\\' + flag.slice(2) + 'true'] = '';
@@ -1396,7 +1427,10 @@
           const body = plainTexMath(this.sizeDoubles(mac.body).replace(/\}\s+(?=\{)/g, '}'), false);
           if (body !== mac.body) mac = Object.assign({}, mac, { body });
           const own = mac.nargs || mac.delims ? userMathMacro(mac) : mac.body;
-          m['\\' + name] = isLowLevel(name, 0) ? lowLevelMacro('\\' + name, own) : own;
+          const low = isLowLevel(name, 0);
+          if (low && name === 'infer' && this.macros['@infer']) m['\\infer'] = (ctx) => inferenceRule(ctx, false);
+          else if (name === 'inferrule' && this.macros['mpr@inferrule']) m['\\inferrule'] = (ctx) => inferenceRule(ctx, true);
+          else m['\\' + name] = low ? lowLevelMacro('\\' + name, own) : own;
         }
         // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
         if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
@@ -2045,6 +2079,11 @@
         case 'thanks': {
           const a = readArg(src, i);
           return res(this.footnote(a.content), a.end);
+        }
+        case 'texorpdfstring': {
+          const tex = readArg(src, i);
+          const pdf = readArg(src, tex.end);
+          return res(this.flow(tex.content, inline), pdf.end);
         }
         case 'url': case 'nolinkurl': {
           const a = readArg(src, i);
@@ -2745,6 +2784,13 @@
         return `<pre class="verbatim"><code>${escapeHtml(code.replace(/^\n/, '').replace(/\s+$/, ''))}</code></pre>`;
       }
       if (name === 'math') return this.inlineMath(body);
+      if (name === 'mathpar' && this.macros['mpr@inferrule']) {
+        const o = readOpt(body, 0);
+        const content = o ? body.slice(o.end) : body;
+        const and = commandSep('and');
+        return splitTop(content, (src, i) => and(src, i) || (src[i] === '\n' ? (/^\n[ \t]*\n/.exec(src.slice(i)) || [''])[0].length : 0))
+          .filter((rule) => rule.trim()).map((rule) => this.displayMath('displaymath', rule)).join('\n');
+      }
       if (MATH_ENVS.has(name)) return this.displayMath(name, body);
       if ((name === 'equ' || name === 'equs') && !this.envs[name]) return this.mhequ(name, body);
 
@@ -2994,7 +3040,7 @@
       return `<section class="bibliography"><h2>${heading}</h2><ol>${out.join('')}</ol></section>`;
     }
 
-    tabular(name, body) {
+    tabular(name, body, mathCells) {
       let j = 0;
       if (name === 'tabular*' || name === 'tabularx') j = readArg(body, 0).end;
       const o = readOpt(body, j);
@@ -3012,7 +3058,7 @@
       }
       const content = body.slice(spec.end).replace(/\\(hline|toprule|midrule|bottomrule|endhead|endfirsthead|endfoot|endlastfoot)\b/g, '').replace(/\\(cline|cmidrule)(\([^)]*\))?\{[^}]*\}/g, '');
       const rows = splitTop(content, rowSep).filter((r) => r.trim());
-      if (name === 'array') {
+      if (name === 'array' && !mathCells) {
         return this.displayMath('displaymath', `\\begin{array}{${spec.content}}${body.slice(spec.end)}\\end{array}`);
       }
       const trs = rows.map((r) => {
@@ -3029,7 +3075,8 @@
             text = readArg(text, mc[0].length).content;
           }
           col += span;
-          return `<td${span > 1 ? ` colspan="${span}"` : ''} style="text-align:${align}">${this.flow(text, true)}</td>`;
+          const html = mathCells && !/\\begin\s*\{minipage\}/.test(text) ? this.inlineMath(text) : this.flow(text, true);
+          return `<td${span > 1 ? ` colspan="${span}"` : ''} style="text-align:${align}">${html}</td>`;
         });
         return `<tr>${tds.join('')}</tr>`;
       });
@@ -3039,6 +3086,8 @@
     // --- display math with equation numbering -----------------------------
 
     displayMath(name, body) {
+      const psbox = /^\s*(?:\\hspace\*?\s*\{[^{}]*\}\s*)?(?:\\psannotate\s*\{\s*)?\\psboxto\s*\([^()]*\)\s*\{([^{}]+)\}\s*(?:\}\s*\{\s*\})?\s*$/.exec(body);
+      if (name === 'displaymath' && psbox) return `<div class="math-display">${this.flow(`\\includegraphics{${psbox[1]}}`, true)}</div>`;
       const starred = name.endsWith('*') || name === 'displaymath';
       const base = name.replace(/\*$/, '');
       const id = this.newId('eq');
@@ -3046,6 +3095,10 @@
       // where its rows need it (align, gather, ...).
       const src = texAttr(/^(align|gather|flalign|alignat|eqnarray|multline)$/.test(base) ? `\\begin{${name}}${body}\\end{${name}}` : body);
       if (DIAGRAM_RE.test(body) && tikz()) {
+        if (name === 'displaymath' && /\\begin\s*\{minipage\}/.test(body)) {
+          const array = /^\s*\\begin\s*\{array\}([\s\S]*)\\end\s*\{array\}\s*$/.exec(body);
+          if (array) return this.tabular('array', array[1], true);
+        }
         // A diagram (with maybe some math around it and an equation number).
         const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
         const t = /\\tag(\*?)\{([\s\S]*)\}$/.exec(r.tag);
@@ -3207,6 +3260,7 @@
       const math = (t, display) => this.renderMath(t, display);
       const out = [];
       let rest = unwrapDiagrams(tex.replace(/\\index\s*\{[^}]*\}|\\SelectTips\s*\{[^}]*\}\s*\{[^}]*\}/g, ''));
+      rest = rest.replace(/\\begin\s*\{xy\}(\s*\\xymatrix[\s\S]*?)\\end\s*\{xy\}/g, '$1');
       // \xymatrixcolsep{…} and \xymatrixrowsep{…} apply to the next \xymatrix
       rest = rest.replace(/\\xymatrix(col|row)sep\s*\{([^}]*)\}\s*([\s\S]*?)\\xymatrix(?![A-Za-z])/g, (m, w, v, between) =>
         `${between}\\xymatrix@${w === 'col' ? 'C' : 'R'}=${v}`);
@@ -3642,13 +3696,20 @@
    */
   function findMathEnd(src, token, from) {
     let depth = 0;
+    let environments = 0;
     for (let i = from; i < src.length; i++) {
       const c = src[i];
-      if (c === '\\') { i++; continue; }
+      if (c === '\\') {
+        if (src.startsWith('\\begin{', i)) environments++;
+        else if (src.startsWith('\\end{', i)) environments--;
+        i++;
+        continue;
+      }
       if (c === '{') depth++;
       else if (c === '}') { if (--depth < 0) break; }
       else if (depth === 0 && src.startsWith(token, i)) return i;
-      else if (c === '\n' && /^\n[ \t]*\n/.test(src.slice(i, i + 40))) break;
+      // Comment-only lines in a multiline array can leave blank lines.
+      else if (c === '\n' && depth === 0 && environments === 0 && token === '$' && /^\n[ \t]*\n/.test(src.slice(i, i + 40))) break;
     }
     return findUnescaped(src, token, from);
   }

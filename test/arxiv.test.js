@@ -268,4 +268,6 @@ test('imageResolver uses a unique case-insensitive match only after exact matche
   assert.equal(resolve('fig.png'), 'blob:exact');
   assert.equal(resolve('PLOT.PNG'), null);
   assert.equal(resolve('legacy'), 'blob:eps');
+  assert.equal(resolve('"legacy.epsf"'), 'blob:eps');
+  assert.equal(resolve("legacy'.epsf"), 'blob:eps');
 });
