@@ -38,6 +38,10 @@ lists every feature, command, setting and shortcut.
 - **Diagrams and figures**: `tikz-cd`, `xymatrix` and TikZ pictures are drawn;
   figures in PNG, JPEG, SVG, GIF, WebP, PDF and EPS are shown, with
   `\graphicspath`.
+- **Your own LaTeX as a backup**: with TeX installed, formulas and pictures
+  TeXglass can't draw are compiled in the background with your `pdflatex`
+  and the document's preamble, and shown in their place (only those pieces,
+  kept between sessions). `texglass.localTex.*` settings.
 - **Margin notes**: `\marginpar`, `\marginnote` and `\todo` sit in a margin
   column level with their line, as on paper. **N** / **Shift+N** jump from
   note to note.

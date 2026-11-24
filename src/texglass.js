@@ -43,6 +43,16 @@
     return t ? ` data-tex="${escapeHtml(t)}"` : '';
   };
 
+  /**
+   * A picture drawn only in part, or not at all, keeps its LaTeX source in
+   * data-tg-source, so a host with a TeX installation can draw it instead
+   * (src/texfallback.js). Pictures drawn in full carry nothing extra.
+   */
+  const withSource = (html, env, body) =>
+    /class="(?:tikz-note|graphic-placeholder)|tikz-fallback/.test(html)
+      ? html.replace(/^<(span|div)\b/, (m) => `${m} data-tg-source="${escapeHtml(`\\begin{${env}}${body}\\end{${env}}`)}"`)
+      : html;
+
   const escapeHtml = (s) =>
     String(s)
       .replace(/&/g, '&amp;')
@@ -2858,9 +2868,9 @@
           if (tikz()) return tikz().tikzcd(body, (t, display) => this.renderMath(t, display));
           return `<div class="graphic-placeholder">[tikzcd diagram]</div>`;
         case 'tikzpicture':
-          return this.tikzpicture(body);
+          return withSource(this.tikzpicture(body), name, body);
         case 'picture': case 'pgfpicture': case 'axis':
-          return `<div class="graphic-placeholder">[${escapeHtml(name)} diagram]</div>`;
+          return withSource(`<div class="graphic-placeholder">[${escapeHtml(name)} diagram]</div>`, name, body);
         default:
           return `<div class="env env-${escapeHtml(name.replace(/\*/g, ''))}">${this.flow(body.replace(/^\s*\[[^\]]*\]/, ''), false)}</div>`;
       }

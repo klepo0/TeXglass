@@ -2989,3 +2989,12 @@ p > .tg-sliders, li > .tg-sliders, td > .tg-sliders, dd > .tg-sliders { margin-b
 /* the pointed-at result shows its own buttons (pin, What does this use?, Step through) */
 .tg-coach-hot .uses-btn, .tg-coach-hot .tg-pin-btn, .tg-coach-hot .tg-step-btn { opacity: 1 !important; }
 @media (prefers-reduced-motion: reduce) { .tg-coach-spot { transition: none; } }
+
+/* Formulas and pictures drawn by the reader's own LaTeX (src/texfallback.js),
+   where TeXglass could not draw them: black ink on no paper, so dark themes
+   turn it light. */
+.tg-texfallback-img { max-width: 100%; height: auto; }
+.math-display.tg-texfallback, div.tg-texfallback-picture { text-align: center; }
+div.tg-texfallback-picture { margin: 0.8em 0; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tg-texfallback-img { filter: invert(1) hue-rotate(180deg); } }
+@media screen { :root[data-theme="dark"] .tg-texfallback-img { filter: invert(1) hue-rotate(180deg); } }

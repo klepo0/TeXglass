@@ -619,6 +619,34 @@
           "default": true,
           "description": "Highlight text and write notes in the preview's margin: select text for the highlighter bar, or drag the note pad (bottom right) onto a line. They are saved next to the .tex file, as name.texglass.json; the .tex itself is never changed. Export and import them with the TeXglass: Export/Import Highlights and Notes commands, and sync them between machines with TeXglass: Sync Highlights and Notes with GitHub (a private gist on your account; run it once and it syncs automatically from then on); with VS Code's Settings Sync on, they also follow you to your other machines."
         },
+        "texglass.localTex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When TeXglass cannot draw a formula or a picture (a KaTeX error, a command it does not know, TikZ features or pgfplots it does not draw), draw it with the LaTeX installed on this computer: just those pieces, with the document's preamble, in the background. Results are kept, so a piece is compiled again only when it or the preamble changes. Without TeX installed nothing changes. Only in trusted workspaces, and only for files on disk (not in VS Code for the Web)."
+        },
+        "texglass.localTex.engine": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "pdflatex",
+            "xelatex",
+            "lualatex"
+          ],
+          "enumDescriptions": [
+            "pdflatex, or xelatex/lualatex when the preamble loads fontspec, unicode-math or Lua packages",
+            "Always pdflatex",
+            "Always xelatex",
+            "Always lualatex"
+          ],
+          "default": "auto",
+          "markdownDescription": "The TeX engine for `#texglass.localTex.enabled#`."
+        },
+        "texglass.localTex.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "The folder with the TeX programs (pdflatex.exe and the others), if they are not on your PATH. For example `C:\\Program Files\\MiKTeX\\miktex\\bin\\x64` or `/Library/TeX/texbin`. Leave empty to find them on the PATH."
+        },
         "texglass.readingProgress": {
           "type": "boolean",
           "default": true,
@@ -817,7 +845,13 @@
   "capabilities": {
     "virtualWorkspaces": true,
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "In a workspace you have not trusted, formulas and pictures TeXglass cannot draw are not compiled with your installed LaTeX (texglass.localTex).",
+      "restrictedConfigurations": [
+        "texglass.localTex.enabled",
+        "texglass.localTex.engine",
+        "texglass.localTex.path"
+      ]
     }
   }
 }

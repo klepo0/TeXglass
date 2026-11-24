@@ -27,8 +27,38 @@ const TeXglassExport = require('./shared/export.js');
 const TeXglassEpub = require('./shared/epub.js');
 const TeXglassFeatures = require('./shared/features.js');
 const TeXglassDiff = require('./shared/diff.js');
+const TeXglassTexFallback = require('./shared/texfallback.js');
 const NotesSync = require('./shared/notes-sync.js');
 const Features = require('./shared/features.js');
+
+/**
+ * The reader's own LaTeX, for formulas and pictures TeXglass cannot draw
+ * (shared/texfallback-node.js; the webview swaps them in with shared/texfallback.js).
+ * Desktop only, in a trusted workspace, with texglass.localTex.enabled on.
+ */
+let localTex = null;
+let localTexKey = '';
+let localTexWarned = false; // told the reader once that their TeX lacks a package
+function localTexSettings() {
+  const config = vscode.workspace.getConfiguration('texglass.localTex');
+  return {
+    enabled: config.get('enabled', true) !== false,
+    engine: config.get('engine', 'auto'),
+    texPath: String(config.get('path', '') || '').trim(),
+  };
+}
+function localTexCompiler(context) {
+  if (WEB || !vscode.workspace.isTrusted) return null;
+  const s = localTexSettings();
+  if (!s.enabled) return null;
+  const key = `${s.engine}|${s.texPath}`;
+  if (!localTex || key !== localTexKey) {
+    const { createCompiler } = require('./shared/texfallback-node.js');
+    localTex = createCompiler({ cacheDir: path.join(context.globalStorageUri.fsPath, 'local-tex'), engine: s.engine, texPath: s.texPath });
+    localTexKey = key;
+  }
+  return localTex;
+}
 
 /** Hosts the citation previews may ask (see shared/cite.js). */
 const LOOKUP_HOSTS = new Set(['api.datacite.org', 'api.crossref.org']);
@@ -907,6 +937,7 @@ ${INK_FILTERS}
 <script nonce="${nonce}" src="${res('shared', 'diff.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'eps.js')}"></script>
 <script nonce="${nonce}" src="${res('shared', 'pdf.js')}"></script>
+<script nonce="${nonce}" src="${res('shared', 'texfallback.js')}"></script>
 <script nonce="${nonce}" src="${res('media', 'preview.js')}"></script>
 </body>
 </html>`;
@@ -972,7 +1003,10 @@ ${INK_FILTERS}
         this.defsJson = defsJson;
         this.defs = r.defs || null;
         const compare = this.compareWith(r.blocks, text);
-        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs, files, compare });
+        // with the reader's LaTeX on, the webview finds what failed and asks for it ('tex-fallback')
+        const texPreamble = isFile && localTexCompiler(this.context) ? TeXglassTexFallback.preamble(text) : null;
+        const texFallback = !!texPreamble;
+        this.post({ type: 'render', blocks: r.blocks, lines, toc: r.toc, warnings: project.warnings.concat(r.warnings), defs, files, compare, texFallback, texPreamble });
         this.flushLine();
         if (r.title) this.panel.title = `Preview ${r.title.length > 40 ? r.title.slice(0, 39) + '…' : r.title}`;
       }
@@ -1273,6 +1307,13 @@ ${INK_FILTERS}
       case 'open-link':
         if (/^https?:|^mailto:/.test(m.href)) vscode.env.openExternal(vscode.Uri.parse(m.href));
         break;
+      case 'tex-fallback':
+        // Pieces TeXglass could not draw: compiled with the reader's LaTeX and the document's preamble.
+        this.drawWithTex(m.pieces || []).then(
+          (results) => this.post(Object.assign({ type: 'tex-fallback', id: m.id }, results)),
+          () => this.post({ type: 'tex-fallback', id: m.id, results: [], pdfs: [] })
+        );
+        break;
       case 'fetch-json':
         // Citation previews: the webview asks, the extension fetches (only from the paper databases).
         fetchJson(m.url).then(
@@ -1411,6 +1452,35 @@ ${INK_FILTERS}
     this.lastPreviewScroll = Date.now();
     const l = Math.max(0, Math.min(Math.floor(line), ed.document.lineCount - 1));
     ed.revealRange(new vscode.Range(l, 0, l, 0), vscode.TextEditorRevealType.AtTop);
+  }
+
+  /**
+   * Draw pieces with the reader's LaTeX (shared/texfallback-node.js). The PDFs
+   * go once each, as base64; each result names its PDF by number.
+   */
+  async drawWithTex(pieces) {
+    const tex = localTexCompiler(this.context);
+    if (!tex || !this.project || this.uri.scheme !== 'file' || !Array.isArray(pieces)) return { results: pieces.map(() => null), pdfs: [] };
+    const clean = pieces.slice(0, 200).map((p) => ({ tex: String((p && p.tex) || ''), display: !!(p && p.display), kind: p && p.kind === 'picture' ? 'picture' : 'math' }));
+    const info = await tex.available(TeXglassTexFallback.preamble(this.project.text) || '');
+    if (info && info.missing && !localTexWarned) {
+      localTexWarned = true;
+      vscode.window.showInformationMessage(
+        `TeXglass can draw what it can't render with your ${info.engine}, but your TeX has no ${info.missing}. Install the "preview" package (in TeX Live: tlmgr install preview; on Debian/Ubuntu: texlive-latex-extra).`
+      );
+    }
+    const results = await tex.draw({ source: this.project.text, dir: path.dirname(this.uri.fsPath), pieces: clean });
+    const pdfs = [];
+    const index = new Map();
+    const out = results.map((r) => {
+      if (!r) return null;
+      if (!index.has(r.pdf)) {
+        index.set(r.pdf, pdfs.length);
+        pdfs.push(r.pdf.toString('base64'));
+      }
+      return { pdf: index.get(r.pdf), page: r.page, depth: r.depth, fontSize: r.fontSize };
+    });
+    return { results: out, pdfs };
   }
 
   dispose() {
@@ -2094,6 +2164,13 @@ function activate(context) {
       }
       return vscode.commands.executeCommand('texglass.exportHtml', uri, out, true);
     }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      // a trusted folder may use the reader's LaTeX (texglass.localTex)
+      if (preview) {
+        preview.renderedText = null;
+        preview.update();
+      }
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (preview && e.affectsConfiguration('texglass.contentsPosition')) {
         preview.post({ type: 'toc-side', value: contentsPosition() });
@@ -2115,6 +2192,10 @@ function activate(context) {
       }
       if (preview && (e.affectsConfiguration('texglass.previewStyle') || e.affectsConfiguration('texglass.notes'))) {
         preview.post({ type: 'look', ...previewLook() });
+      }
+      if (preview && e.affectsConfiguration('texglass.localTex')) {
+        preview.renderedText = null; // render again, with or without the reader's LaTeX
+        preview.update();
       }
       if (preview && e.affectsConfiguration('texglass.previewTheme')) {
         preview.post({ type: 'theme', value: vscode.workspace.getConfiguration('texglass').get('previewTheme', 'auto') });

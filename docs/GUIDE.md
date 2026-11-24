@@ -1025,6 +1025,20 @@ any GitHub repository, preview, edit, commit. Prefer a file? Every
   document (`% !TEX root`, subfiles, or the file that includes it).
 - **Bibliographies** from `.bib`, `.bbl` or amsrefs; **figures** in PNG, JPEG,
   SVG, GIF, WebP, PDF and EPS, with `\graphicspath`.
+- **Your own LaTeX for what TeXglass can't draw**: if TeX is installed
+  (TeX Live, MiKTeX, MacTeX), formulas KaTeX can't render (an error, or a
+  command it doesn't know) and pictures drawn only in part (TikZ features or
+  pgfplots it doesn't draw) are compiled in the background with your
+  `pdflatex` (or `xelatex`/`lualatex` when the preamble needs them) and the
+  document's preamble, and shown in their place. Only those pieces are
+  compiled, all at once, and kept, so a piece compiles again only when it or
+  the preamble changes. Your own `.sty` files and figures in the document's
+  folder are found. Hover one to see "Drawn by the LaTeX on this computer". Without
+  TeX nothing changes. It needs the `preview` package (in MiKTeX and full TeX
+  Live; on Debian/Ubuntu `texlive-latex-extra`); VS Code tells you if it's missing. TeX runs without shell escape, only in trusted
+  workspaces, and not in VS Code for the Web. Settings
+  `texglass.localTex.enabled`, `texglass.localTex.engine` and
+  `texglass.localTex.path` (the TeX folder, if it isn't on your PATH).
 - **Export to HTML**: one standalone page that works offline
   (`texglass.exportEmbedFonts`). **Export to EPUB**: an e-book (see
   [E-books (EPUB)](#e-books-epub)). **Print / Save as PDF**, laid out like a paper.
@@ -1112,6 +1126,9 @@ All in the Command Palette under **TeXglass:**.
 | `texglass.notes.realisticInk` | `true` | Ragged, pooling ink; off for flat strokes. |
 | `texglass.contentsPosition` | `left` | Side of the contents: `left` or `right`. |
 | `texglass.exportEmbedFonts` | `true` | Put KaTeX fonts inside exported HTML (off: load from a CDN). |
+| `texglass.localTex.enabled` | `true` | Draw formulas and pictures TeXglass can't with your installed LaTeX. |
+| `texglass.localTex.engine` | `auto` | `auto`, `pdflatex`, `xelatex` or `lualatex`. |
+| `texglass.localTex.path` | (empty) | The folder with `pdflatex` and the others, if not on your PATH. |
 
 ## Command line
 
@@ -1316,7 +1333,9 @@ text still works as usual.
   drawn inside formulas. Heavier TikZ shows its source.
 
 Anything unknown is skipped gracefully. There is no TeX install and no compile
-step, and long papers stay fast.
+step, and long papers stay fast. In VS Code (and FlexTeX), if you do have TeX
+installed, what TeXglass can't draw is drawn by your own LaTeX instead (see
+[VS Code extension](#vs-code-extension)).
 
 ## Hints for TeXglass in your own papers
 
