@@ -35,6 +35,7 @@ section says so. On a Mac, read <kbd>Cmd</kbd> for <kbd>Ctrl</kbd> throughout.
 - [Command line](#command-line)
 - [On phones and tablets](#on-phones-and-tablets)
 - [Offline and privacy](#offline-and-privacy)
+- [TeXmark: LaTeX without the preamble](#texmark-latex-without-the-preamble)
 - [What LaTeX it understands](#what-latex-it-understands)
 - [Hints for TeXglass in your own papers](#hints-for-texglass-in-your-own-papers)
 - [Render dashboard](#render-dashboard)
@@ -848,7 +849,8 @@ install; after the first visit it opens and renders offline.
     or paste a link to a public file, folder or repository (`github
     owner/repo` works too);
   - or pick a file or folder from this computer.
-- <kbd>Ctrl+O</kbd> opens a `.tex` file; <kbd>Ctrl+Shift+O</kbd> (or Shift+click
+- <kbd>Ctrl+O</kbd> opens a `.tex` file (or a [TeXmark](#texmark-latex-without-the-preamble)
+  `.tmd` file); <kbd>Ctrl+Shift+O</kbd> (or Shift+click
   **Open**) a folder, so its `\input` files, local packages, bibliography and
   figures come too. Several files at once work as well, and so does dropping
   a file or folder on the page. TeXglass finds the main file. In Chrome and
@@ -1290,6 +1292,53 @@ text still works as usual.
   It stores nothing on your device and is skipped when your browser sends Do
   Not Track or Global Privacy Control. Local copies, the browser extension, the
   VS Code extension and the command line count nothing.
+
+## TeXmark: LaTeX without the preamble
+
+[TeXmark](https://github.com/klepo0/texmark) is Markdown that's secretly
+LaTeX. A `.tmd` file has no preamble and no `\begin{document}`: Markdown
+shortcuts cover the boilerplate, and every LaTeX command, macro, package and
+environment still works anywhere.
+
+```markdown
+---
+title: Heat flow on a toy surface
+author: A. N. Author
+---
+
+\newcommand{\R}{\mathbb{R}}
+
+# Introduction {#sec:intro}
+
+Let $u : [0,T] \times M \to \R$ solve the *heat equation*
+$$ \partial_t u = \Delta u . $$ {#eq:heat}
+
+::: theorem [Convergence] {#thm:main}
+If $M$ is compact, then $u(t) \to \bar u$.
+:::
+
+::: proof
+Multiply @eq:heat by $u$ and integrate, as in [@evans2010, Ch. 7].
+:::
+```
+
+- `#` headings (`{#label}` names them, `{-}` leaves them unnumbered),
+  `*emphasis*`, `**bold**`, `` `code` ``, `-` and `1.` lists, `>` quotes,
+  `^[footnotes]`, `[links](https://…)` and `![figures](file.pdf){#fig:x}`.
+- `$…$` and `$$…$$` maths, untouched; `$$…$$ {#eq:x}` is a numbered equation.
+- `::: theorem [Title] {#thm:x}` … `:::` for theorems, lemmas, definitions,
+  remarks, proofs and the rest. They are declared for you.
+- `@thm:x` gives "Theorem 1.1" (`\cref`); `[@key, p. 3]` cites.
+- An optional header at the top sets the title, authors, abstract, extra
+  packages and the `.bib` file.
+
+The web viewer opens `.tmd` files like `.tex` files: with **Open**,
+<kbd>Ctrl+O</kbd> or by dropping one on the page. Everything works on them:
+previews, the map, pins, notes and editing in place (which edits the `.tmd`
+text). **Convert to .tex** in the **…** menu (shown for `.tmd` files)
+downloads an ordinary LaTeX file with a standard preamble, ready for arXiv
+or a journal. The full syntax is in the
+[TeXmark spec](https://github.com/klepo0/texmark/blob/main/SPEC.md).
 
 ## What LaTeX it understands
 

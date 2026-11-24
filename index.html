@@ -20,6 +20,7 @@
   <script defer src="vendor/katex/katex.min.js"></script>
   <script defer src="src/tikz.js"></script>
   <script defer src="src/texglass.js"></script>
+  <script defer src="vendor/texmark/texmark.js"></script>
   <script defer src="src/diagrams.js"></script>
   <script defer src="src/editor.js"></script>
   <script defer src="src/bib.js"></script>
@@ -70,7 +71,7 @@
       <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
     <button id="open" type="button" class="tb-iconic" title="Open a paper from arXiv, a repository from GitHub, or a .tex file from this computer (Ctrl+K). Ctrl+O picks a .tex file; Shift+click or Ctrl+Shift+O, a folder" aria-label="Open" aria-keyshortcuts="Control+K Meta+K"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 18.5V6a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H18A1.5 1.5 0 0 1 19.5 8.2V10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M3.5 18.5l2.6-7.1a1.5 1.5 0 0 1 1.4-1h13.1a1 1 0 0 1 .9 1.3l-2.3 6.1a1.5 1.5 0 0 1-1.4.9H3.5Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Open</span></button>
-    <input id="file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" multiple hidden>
+    <input id="file-input" type="file" accept=".tex,.ltx,.latex,.tmd,text/x-tex,text/plain" multiple hidden>
     <input id="folder-input" type="file" webkitdirectory hidden>
     <input id="notes-file" type="file" accept=".json,application/json" hidden>
     <div class="more-group">
@@ -85,6 +86,7 @@
         <div class="more-sep" role="separator"></div>
         <div class="more-head" role="presentation">Save and export</div>
         <button id="save" type="button" role="menuitem" title="Save your changes (Ctrl+S)">Save<kbd>Ctrl+S</kbd></button>
+        <button id="convert-tex" type="button" role="menuitem" title="Download this TeXmark (.tmd) file as an ordinary LaTeX .tex file, with a standard preamble, ready for arXiv or a journal" hidden>Convert to .tex</button>
         <button id="print" type="button" role="menuitem" title="Print the document, or save it as a PDF, laid out like a paper (Ctrl+P)">Print or save as PDF<kbd>Ctrl+P</kbd></button>
         <button id="export" type="button" role="menuitem" title="Download the document as a standalone HTML page, math and numbering included">Export as HTML</button>
         <button id="export-reader" type="button" role="menuitem" title="Download the document as a standalone HTML page with the reading tools: reference previews, notation on hover, contents, map, notation index and Navigate">Export with reading tools</button>
@@ -224,7 +226,7 @@
         </div>
       </div>
       <p class="local-note" id="compare-local-note">Compare the open document with another <code>.tex</code> file, for example an earlier draft: <button type="button" id="compare-file" class="link-button">choose the earlier file</button>.</p>
-      <input id="compare-file-input" type="file" accept=".tex,.ltx,.latex,text/x-tex,text/plain" hidden>
+      <input id="compare-file-input" type="file" accept=".tex,.ltx,.latex,.tmd,text/x-tex,text/plain" hidden>
       <p id="compare-message" class="arxiv-message" role="status"></p>
       <div class="arxiv-actions">
         <button type="button" id="compare-cancel">Cancel</button>

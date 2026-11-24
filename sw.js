@@ -37,6 +37,8 @@ const PRECACHE = [
   'vscode/ink.js',
   ...['kalam-latin-400-normal', 'kalam-latin-ext-400-normal', 'kalam-latin-700-normal', 'kalam-latin-ext-700-normal']
     .map((f) => `vscode/media/fonts/${f}.woff2`),
+  // TeXmark (.tmd files), Markdown that's secretly LaTeX
+  'vendor/texmark/texmark.js',
   'vendor/katex/katex.min.js',
   'vendor/katex/katex.min.css',
   ...KATEX_FONTS,
