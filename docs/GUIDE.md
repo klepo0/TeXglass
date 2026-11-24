@@ -327,8 +327,9 @@ Contents to the Other Side**, `texglass.contentsPosition`).
   While [What does this use?](#understanding-the-logic), a search by use or a
   shared view is on, the tab follows it: **Showing** lists what is on screen,
   with its name ("Theorem 2.1 with what it uses"); **×** takes one out of the
-  view (not out of your pins), and **Save as pin set**, **Add to my pins** and
-  **Done** work as on the bar. On **Done** the tab shows your own pins again.
+  view. **Add all to set…** adds the listed pins to the set you choose. Select
+  **New set…** to create a destination. **Save as pin set** saves the view
+  under a suggested name, and **Done** shows your own pins again.
   The **pin** in the toolbar opens this tab. Below them, **Across papers**
   holds your [collections](#collections-pins-from-several-papers). Not in the
   exported reader page.

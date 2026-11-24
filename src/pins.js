@@ -173,7 +173,8 @@
     });
     html += '</div><div class="tg-pins-actions">' +
       (v.save ? '<button type="button" data-pins-act="view-save" title="Keep these as a pin set of their own, to open later; your pins now stay as they are">Save as pin set</button>' : '') +
-      (v.keep ? `<button type="button" data-pins-act="view-keep" title="Pin these too, with the pins you have">${temp ? 'Add to my pins' : 'Keep these pins'}</button>` : '') +
+      (temp && v.items.some((x) => x.key) ? '<span data-pins-destination-all></span>' : '') +
+      (!temp && v.keep ? '<button type="button" data-pins-act="view-keep" title="Pin these too, with the pins you have">Keep these pins</button>' : '') +
       `<button type="button" data-pins-act="view-done" title="Leave this view: back to the whole document and your own pins">${temp ? 'Done' : 'Dismiss'}</button></div>`;
     return html;
   }
@@ -274,6 +275,21 @@
           : view.items;
         el.innerHTML = viewHtml({ ...view, pins: count(), items: rows });
         fillDestinations();
+        const bulk = el.querySelector('[data-pins-destination-all]');
+        if (bulk) {
+          const keys = rows.map((row) => row.key).filter(Boolean);
+          bulk.appendChild(insight.setDestination(keys, {
+            label: 'Add all to set…',
+            selfOnly: true,
+            onResult(message) {
+              // Saving redraws the Pins tab. Announce the result in its new picker.
+              const current = el.querySelector('[data-pins-destination-all]');
+              if (!current) return;
+              current.querySelector('.tg-set-feedback').textContent = message;
+              current.querySelector('select').focus({ preventScroll: true });
+            },
+          }));
+        }
         return;
       }
       items = allItems();
@@ -299,7 +315,7 @@
     function fillDestinations() {
       for (const dest of el.querySelectorAll('[data-pins-destination]')) {
         const k = dest.dataset.pinsDestination || dest.parentElement.dataset.key;
-        dest.replaceWith(insight.setDestination([k], true));
+        dest.replaceWith(insight.setDestination([k], { compact: true }));
       }
     }
     /** Fill again, keeping the focus where it was (by what it does). */

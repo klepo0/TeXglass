@@ -3173,11 +3173,10 @@
       return next;
     }
     /** Add destinations directly to a saved set, retaining the destination's draft if it has one. */
-    function addToSet(name, keys) {
+    function addToSet(name, entries) {
       const v = savedSet(name);
       if (!v || !v.p) return null;
       const pins = allPins();
-      const entries = Array.from(new Set(keys)).map((k) => [k, pins.get(k) || 'self']);
       const live = name === activeView ? workingSet() : drafts.get(name);
       const saved = appendSetPins(v, entries);
       const draft = live && appendSetPins(live, entries);
@@ -3198,34 +3197,41 @@
       const names = new Set(sets.map(([name]) => name));
       return Array.from(new Set(recentSets.filter((name) => names.has(name)).concat(Array.from(names))));
     }
-    function createSetWithPins(name, keys) {
+    function createSetWithPins(name, entries) {
       name = String(name || '').trim().slice(0, 80);
-      if (!name || !keys.length) return false;
-      if (savedSet(name)?.p) addToSet(name, keys);
+      if (!name || !entries.length) return false;
+      if (savedSet(name)?.p) addToSet(name, entries);
       else {
-        const pins = allPins();
-        const v = appendSetPins({ p: {}, x: [], o: [] }, Array.from(new Set(keys)).map((k) => [k, pins.get(k) || 'self']));
+        const v = appendSetPins({ p: {}, x: [], o: [] }, entries);
         useSet(name);
         setEdit('view', name, v);
       }
       return true;
     }
     /** One destination picker shared by previews and pin rows. */
-    function setDestination(keys, compact) {
+    function setDestination(keys, { compact = false, label = 'Add to set…', selfOnly = false, onResult } = {}) {
       const wrap = document_.createElement('span');
       wrap.className = 'tg-set-choice' + (compact ? ' tg-set-choice-compact' : '');
-      wrap.innerHTML = '<span class="tg-set-select"><span aria-hidden="true">+</span><select aria-label="Add to set…" title="Add to set…"><option value="">Add to set…</option></select></span>' +
+      wrap.innerHTML = `<span class="tg-set-select"><span aria-hidden="true">+</span><select aria-label="${esc(label)}" title="${esc(label)}"><option value="">${esc(label)}</option></select></span>` +
         '<span class="tg-set-create" hidden><input type="text" maxlength="80" aria-label="Set name" placeholder="Set name"><button type="button">Add</button><button type="button" aria-label="Cancel new set">×</button></span>' +
         (compact ? '' : '<span class="tg-set-feedback" role="status"></span>');
       const select = wrap.querySelector('select');
       const create = wrap.querySelector('.tg-set-create');
       const input = create.querySelector('input');
       const feedback = wrap.querySelector('.tg-set-feedback');
+      const entries = () => {
+        const pins = selfOnly ? null : allPins();
+        return Array.from(new Set(keys), (k) => [k, pins?.get(k) || 'self']);
+      };
+      const announce = (message) => {
+        if (wrap.isConnected && feedback) feedback.textContent = message;
+        else if (onResult) onResult(message);
+      };
       let names = [];
       function fill() {
         names = recentPinSets();
         select.replaceChildren(
-          new Option('Add to set…', ''),
+          new Option(label, ''),
           ...names.map((name, i) => new Option(name, String(i))),
           new Option('New set…', 'new'),
         );
@@ -3238,16 +3244,16 @@
           input.focus();
         } else if (select.value) {
           const name = names[Number(select.value)];
-          const added = addToSet(name, keys);
-          if (feedback) feedback.textContent = added === null ? 'This set is no longer available' : added ? `Added to “${name}”` : `Already in “${name}”`;
+          const added = addToSet(name, entries());
+          announce(added === null ? 'This set is no longer available' : added ? `Added to “${name}”` : `Already in “${name}”`);
         }
         select.value = '';
       });
       const close = () => { create.hidden = true; select.focus(); };
       const commit = () => {
         const name = input.value.trim();
-        if (!createSetWithPins(name, keys)) { input.focus(); return; }
-        if (feedback) feedback.textContent = `Added to “${name}”`;
+        if (!createSetWithPins(name, entries())) { input.focus(); return; }
+        announce(`Added to “${name}”`);
         input.value = '';
         close();
       };
