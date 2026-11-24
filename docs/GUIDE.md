@@ -1034,7 +1034,8 @@ any GitHub repository, preview, edit, commit. Prefer a file? Every
   compiled, all at once, and kept, so a piece compiles again only when it or
   the preamble changes. Your own `.sty` files and figures in the document's
   folder are found. Hover one to see "Drawn by the LaTeX on this computer". Without
-  TeX nothing changes. TeX runs without shell escape, only in trusted
+  TeX nothing changes. It needs the `preview` package (in MiKTeX and full TeX
+  Live; on Debian/Ubuntu `texlive-latex-extra`); VS Code tells you if it's missing. TeX runs without shell escape, only in trusted
   workspaces, and not in VS Code for the Web. Settings
   `texglass.localTex.enabled`, `texglass.localTex.engine` and
   `texglass.localTex.path` (the TeX folder, if it isn't on your PATH).

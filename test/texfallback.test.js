@@ -149,6 +149,7 @@ test('TeX draws the pieces in one run, keeps them, and skips what fails', { skip
     const tex = createCompiler({ cacheDir });
     const info = await tex.available('');
     assert.equal(info.engine, 'pdflatex');
+    assert.equal(info.missing, undefined, 'preview.sty is installed');
     const r = await tex.draw({ source, dir, pieces });
     assert.equal(r.length, 4);
     assert.ok(r[0] && r[1] && r[3], 'drawn, with the document folder\'s own package');

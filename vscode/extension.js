@@ -38,6 +38,7 @@ const Features = require('./shared/features.js');
  */
 let localTex = null;
 let localTexKey = '';
+let localTexWarned = false; // told the reader once that their TeX lacks a package
 function localTexSettings() {
   const config = vscode.workspace.getConfiguration('texglass.localTex');
   return {
@@ -1461,6 +1462,13 @@ ${INK_FILTERS}
     const tex = localTexCompiler(this.context);
     if (!tex || !this.project || this.uri.scheme !== 'file' || !Array.isArray(pieces)) return { results: pieces.map(() => null), pdfs: [] };
     const clean = pieces.slice(0, 200).map((p) => ({ tex: String((p && p.tex) || ''), display: !!(p && p.display), kind: p && p.kind === 'picture' ? 'picture' : 'math' }));
+    const info = await tex.available(TeXglassTexFallback.preamble(this.project.text) || '');
+    if (info && info.missing && !localTexWarned) {
+      localTexWarned = true;
+      vscode.window.showInformationMessage(
+        `TeXglass can draw what it can't render with your ${info.engine}, but your TeX has no ${info.missing}. Install the "preview" package (in TeX Live: tlmgr install preview; on Debian/Ubuntu: texlive-latex-extra).`
+      );
+    }
     const results = await tex.draw({ source: this.project.text, dir: path.dirname(this.uri.fsPath), pieces: clean });
     const pdfs = [];
     const index = new Map();

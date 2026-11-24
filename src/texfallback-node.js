@@ -9,7 +9,9 @@
  *     engine: 'auto',      // or 'pdflatex', 'xelatex', 'lualatex'
  *     texPath: '',         // a folder with the TeX programs, if they are not on PATH
  *   });
- *   await tex.available()  // { engine, path, distribution } or null: no TeX
+ *   await tex.available()  // { engine, path, distribution, missing } or null: no TeX;
+ *                          // missing: 'preview.sty' when TeX lacks the preview package
+ *                          // (then nothing is drawn: say so to the reader)
  *   await tex.draw({ source, dir, pieces })
  *       source: the whole document (its preamble is used), or preamble: '…'
  *       dir: the document's folder, where its own .sty files and figures are
@@ -114,7 +116,14 @@ function createCompiler(options) {
         if (!file) return null;
         const v = await run(file, ['--version'], { timeout: 15000 });
         if (v.error && !v.stdout) return null;
-        return { engine, path: file, distribution: /MiKTeX/i.test(v.stdout) ? 'MiKTeX' : /TeX Live/i.test(v.stdout) ? 'TeX Live' : 'TeX' };
+        const info = { engine, path: file, distribution: /MiKTeX/i.test(v.stdout) ? 'MiKTeX' : /TeX Live/i.test(v.stdout) ? 'TeX Live' : 'TeX' };
+        // every piece is cropped by the preview package (texlive-latex-extra on Debian and Ubuntu)
+        const kpse = which('kpsewhich', path.dirname(file));
+        if (kpse) {
+          const k = await run(kpse, ['preview.sty'], { timeout: 15000 });
+          if (!k.stdout.trim()) info.missing = 'preview.sty';
+        }
+        return info;
       })().catch(() => null));
     }
     return found.get(engine);
@@ -215,7 +224,7 @@ function createCompiler(options) {
     const pre = job.preamble || F.preamble(job.source || '');
     if (!pre || !pieces.length) return pieces.map(() => null);
     const tex = await find(engineOf(pre));
-    if (!tex) return pieces.map(() => null);
+    if (!tex || tex.missing) return pieces.map(() => null);
     const own = ownFiles(pre, job.dir);
     const keys = pieces.map((p) => hash('piece', VERSION, tex.engine, pre, own, job.dir || '', p.kind, p.display ? 1 : 0, p.tex));
     const todo = [];
