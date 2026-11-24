@@ -4351,6 +4351,8 @@
     setMode: (m) => setMode(m),
     insight: () => insight,
     margin: () => margin,
+    /** The document's labels: { key: { num, kindName } }, as \ref shows them. */
+    labels: () => lastLabels,
     /** The open paper's highlights and notes (src/margin.js records). */
     notes: () => (paper ? paper.record.notes.slice() : []),
     /** Render a piece of LaTeX with the document's preamble: a promise of HTML. */
