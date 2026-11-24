@@ -247,6 +247,7 @@ body {
 .arxiv-dialog input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 .arxiv-message { min-height: 1.4em; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
 .arxiv-message.warn { color: var(--warn); }
+.arxiv-original-pdf:not([hidden]) { display: inline-block; margin-bottom: 12px; color: var(--accent); font-size: 14px; }
 .bookmarklet-hint { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
 .bookmarklet {
   display: inline-block;
@@ -469,6 +470,14 @@ img.graphic { max-width: 100%; height: auto; }
 .file-name { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .status { margin-left: auto; font-size: 13px; color: var(--muted); cursor: default; }
 .status.warn { color: var(--warn); }
+.render-actions:not([hidden]) { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.toolbar .render-actions [hidden] { display: none; }
+.render-actions a { color: var(--accent); font-size: 13px; }
+.toolbar .render-actions button { color: var(--warn); font-size: 13px; }
+.render-warnings-list { max-height: 55dvh; overflow: auto; margin: 0 0 14px; padding: 0; list-style: none; }
+.render-warnings-list li { border-top: 1px solid var(--rule); padding: 8px 6px; font-size: 14px; overflow-wrap: anywhere; }
+.render-warnings-list button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
+.document .render-warning-target:focus { outline: 2px solid var(--warn); outline-offset: 3px; }
 
 /* --- panes --------------------------------------------------------------- */
 
@@ -2554,6 +2563,9 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
 .more-compact .mode-switch, .more-compact .zoom-group { flex: 1 0 100%; display: flex; }
 .more-compact .mode-switch button, .more-compact .zoom-group button { flex: 1; }
 .more-compact .gh-link { padding: 8px 4px; }
+.more-compact .render-actions { flex: 1 0 100%; gap: 8px; }
+.toolbar .more-compact .render-actions button { width: auto; border: 1px solid var(--rule); }
+.more-compact .render-actions a:not([hidden]) { display: inline-flex; align-items: center; min-height: 44px; }
 
 @media (max-width: 760px) {
   .toolbar {
@@ -2575,6 +2587,18 @@ del.diff-del { background: var(--diff-del-bg); text-decoration: line-through; te
   .toolbar .more-compact #save-offline .tb-icon { width: 18px; height: 18px; }
   #toc-toggle, #find, #save-offline, #share { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
   .toolbar .more-button { padding: 6px 12px; font-size: 18px; line-height: 1; }
+  .toolbar .more-button[data-render-warnings]::after {
+    content: attr(data-render-warnings);
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 16px;
+    padding: 2px 3px;
+    border-radius: 12px;
+    background: var(--warn);
+    color: var(--paper);
+    font-size: 10px;
+  }
   .more-group { order: 10; }
   .file-name { flex: 1 1 0; font-size: 13px; }
   .status { position: absolute; right: 12px; top: 100%; margin-top: 4px; padding: 2px 8px; border-radius: 10px; background: var(--toolbar); font-size: 12px; pointer-events: none; }

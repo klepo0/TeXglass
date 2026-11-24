@@ -33,6 +33,11 @@
   const source = $('source');
   const sourcePane = $('source-pane');
   const status = $('status');
+  const renderActions = $('render-actions');
+  const warningButton = $('render-warnings');
+  const warningDialog = $('render-warnings-dialog');
+  const warningList = $('render-warnings-list');
+  const originalPdf = $('original-pdf');
   const fileName = $('file-name');
   const popover = $('ref-popover');
   const inFrame = window.self !== window.top;
@@ -49,7 +54,8 @@
   let renderTimer = null;
   let saveTimer = null;
   let statusTimer = null;
-  let warningsText = '';
+  let parserWarnings = [];
+  let renderWarnings = [];
   let lastLabels = {};
   let lastToc = [];
   let imageUrls = []; // object URLs for the figures of an imported arXiv paper
@@ -194,13 +200,17 @@
   function runRender() {
     busy = true;
     const source = doc;
+    const opening = opened;
     const done = waiters;
     waiters = [];
     const slow = setTimeout(() => { if (!statusTimer) showStatus('Rendering…'); }, 300);
     convert(source, imageMap)
       .then(
-        (result) => showResult(result, source),
+        (result) => { if (opened === opening) showResult(result, source); },
         (e) => {
+          if (opened !== opening) return;
+          parserWarnings = [];
+          status.removeAttribute('title');
           showStatus('Render failed', true);
           showBlocks([`<pre class="render-error">${TeXglass.escapeHtml(e.stack || e.message || String(e))}</pre>`], source);
         }
@@ -219,10 +229,9 @@
     lastLabels = result.labels;
     lastToc = result.toc;
     document.title = result.title ? `${result.title} — TeXglass` : fileName.textContent && fileName.textContent !== 'welcome.tex' ? `${fileName.textContent} — TeXglass` : 'TeXglass';
-    const n = result.warnings.length;
-    warningsText = n ? `${n} warning${n > 1 ? 's' : ''}` : '';
-    status.title = result.warnings.join('\n');
-    if (!statusTimer) showStatus(warningsText, n > 0);
+    parserWarnings = result.warnings;
+    status.title = parserWarnings.join('\n');
+    if (!statusTimer) showStatus('');
     const blocks = result.blocks.length ? result.blocks : ['<p class="empty-doc">This document is empty. Switch to Edit and click “Add text”.</p>'];
     showBlocks(blocks, source);
   }
@@ -243,7 +252,116 @@
     if (params) params.refresh(); // sliders by what uses a \tgparam; moved values stay
     if (cites) cites.decorate(preview); // "Open in TeXglass" on bibliography entries on arXiv
     if (comparing) markChanges(blocks, source); // comparing two versions: what changed since the older one
+    updateRenderWarnings();
   }
+
+  function warningFor(el) {
+    if (el.matches('.math-error, .katex-error')) {
+      return el.title ? `Math could not be rendered: ${el.title}` : 'Math could not be rendered';
+    }
+    if (el.matches('.katex-html .mord.text')) {
+      const command = el.textContent.trim();
+      if (/^\\[A-Za-z@]+\*?$/.test(command)) return `Undefined math command ${command}`;
+      return null;
+    }
+    if (el.matches('.ref-missing')) return `Undefined reference "${el.title.slice('Undefined label: '.length)}".`;
+    if (el.hasAttribute('data-math-ref-missing')) return `Undefined reference "${el.dataset.mathRefMissing}".`;
+    if (el.matches('.cite-key')) {
+      const text = `Undefined citation "${el.textContent}".`;
+      return parserWarnings.includes(text) ? text : null;
+    }
+    if (el.matches('img.graphic')) {
+      if (!document.documentElement.dataset.pdfFigures && el.complete && !el.naturalWidth) return `Figure could not load: ${el.alt}`;
+      return null;
+    }
+    if (el.matches('.render-error')) return 'TeXglass could not render this document';
+    const text = el.textContent.trim();
+    return text.startsWith('[image: ') ? `Missing figure: ${text.slice(8, -1)}` : text;
+  }
+
+  function updateRenderWarnings() {
+    const elements = preview.querySelectorAll('.math-error, .katex-error, .katex-html .mord.text[style*="color:#cc0000"], .ref-missing, [data-math-ref-missing], .cite-key, .graphic-placeholder, .tikz-note, img.graphic, .render-error');
+    const located = new Set();
+    const warnings = [];
+    for (const el of elements) {
+      if (el.closest('.diff-old')) continue;
+      const text = warningFor(el);
+      if (!text) continue;
+      const target = el.closest('.math, .tg-diagram') || (el.hidden ? el.parentElement : el);
+      warnings.push({ text, target });
+      located.add(text);
+    }
+    for (const text of parserWarnings) {
+      if (!located.has(text)) warnings.push({ text, target: null });
+    }
+    const n = warnings.length;
+    const changed = n !== renderWarnings.length || warnings.some(({ text, target }, i) => text !== renderWarnings[i].text || target !== renderWarnings[i].target);
+    renderWarnings = warnings;
+    warningButton.hidden = !n;
+    warningButton.textContent = `${n} render warning${n === 1 ? '' : 's'}`;
+    if (n) {
+      moreBtn.dataset.renderWarnings = n > 99 ? '99+' : n;
+      moreBtn.setAttribute('aria-describedby', warningButton.id);
+    } else {
+      delete moreBtn.dataset.renderWarnings;
+      moreBtn.removeAttribute('aria-describedby');
+    }
+    renderActions.hidden = warningButton.hidden && originalPdf.hidden;
+    if (changed && warningDialog.open) showWarningList();
+  }
+
+  function showWarningList() {
+    const rows = renderWarnings.map(({ text, target }, i) => {
+      const li = document.createElement('li');
+      if (target) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.warning = i;
+        button.textContent = text;
+        li.append(button);
+      } else li.textContent = text;
+      return li;
+    });
+    if (!rows.length) {
+      const li = document.createElement('li');
+      li.textContent = 'No rendering warnings.';
+      rows.push(li);
+    }
+    warningList.replaceChildren(...rows);
+  }
+
+  warningButton.addEventListener('click', () => {
+    if (narrow.matches) {
+      setMenu(false);
+      moreBtn.focus();
+    }
+    showWarningList();
+    warningDialog.showModal();
+  });
+  warningList.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-warning]');
+    if (!button) return;
+    const { target } = renderWarnings[Number(button.dataset.warning)];
+    if (!preview.contains(target)) return;
+    warningDialog.close();
+    if (picker && target.closest('.pick-hide, .pick-proof:not(.pick-open)')) picker.stop();
+    if (steps && target.closest('.tg-step-hidden, .tg-step-folded')) steps.stop();
+    jumpTo(target);
+    if (!target.hasAttribute('tabindex')) target.tabIndex = -1;
+    target.classList.add('render-warning-target');
+    target.focus({ preventScroll: true });
+  });
+  // Broken figures are only known when the browser has tried loading them.
+  let figureWarningFrame = 0;
+  function figureSettled(e) {
+    if (!e.target.matches('img.graphic') || figureWarningFrame) return;
+    figureWarningFrame = requestAnimationFrame(() => {
+      figureWarningFrame = 0;
+      updateRenderWarnings();
+    });
+  }
+  preview.addEventListener('load', figureSettled, true);
+  preview.addEventListener('error', figureSettled, true);
 
   const BLOCK_HEAD = /^<div class="src-block" data-s="(\d+)" data-e="(\d+)">/;
   /** A block's HTML without its source range, which shifts with every edit above it. */
@@ -524,7 +642,7 @@
     showStatus(text, false);
     statusTimer = setTimeout(() => {
       statusTimer = null;
-      showStatus(warningsText, !!warningsText);
+      showStatus('');
     }, 2500);
   }
 
@@ -573,11 +691,14 @@
         swapPdfFigures();
       }
     } finally {
-      if (run === pdfRun) delete root.dataset.pdfFigures;
+      if (run === pdfRun) {
+        delete root.dataset.pdfFigures;
+        updateRenderWarnings();
+      }
     }
   }
 
-  function load(text, name, images, gh) {
+  function load(text, name, images, gh, arxiv) {
     stopCompare();
     closeEditor(false);
     watcher = null;
@@ -589,7 +710,8 @@
     pdfSwaps.clear();
     pdfRun++;
     delete document.documentElement.dataset.pdfFigures;
-    opened = { images: images || null, gh: gh || null, arxiv: null };
+    opened = { images: images || null, gh: gh || null, arxiv: arxiv || null };
+    setPdfLink(originalPdf, opened.arxiv);
     if (images && Object.keys(images).length && window.TeXglassArxiv) {
       imageMap = {};
       for (const [path, blob] of Object.entries(images)) imageUrls.push((imageMap[path] = URL.createObjectURL(blob)));
@@ -602,11 +724,15 @@
     updateLibraryButton();
     setDirty(false);
     clearPreview();
+    parserWarnings = [];
+    status.removeAttribute('title');
+    updateRenderWarnings();
     const shown = render();
     previewPane.scrollTop = 0;
     if (viewHistory) viewHistory.clear(); // a new document: nowhere to go back to
     store.set('texglass:last', doc);
     store.set('texglass:last-name', name || '');
+    store.set('texglass:last-arxiv', opened.arxiv || '');
     return shown;
   }
 
@@ -622,6 +748,13 @@
       if (++n < 4) requestAnimationFrame(step);
     };
     step();
+  }
+
+  function setPdfLink(link, id) {
+    const paper = id && window.TeXglassArxiv && TeXglassArxiv.parseId(id);
+    link.hidden = !paper;
+    if (paper) link.href = `https://arxiv.org/pdf/${paper}`;
+    else link.removeAttribute('href');
   }
 
   // Where the open document came from on GitHub: { links: { view, edit, dev }, path }.
@@ -1343,7 +1476,7 @@
   /** When the extension may not read a file:// address: say how to allow it. */
   function showFileAccessHelp(name) {
     const chromium = location.protocol === 'chrome-extension:';
-    showStatus(warningsText);
+    showStatus('');
     showFolderHint(chromium
       ? `TeXglass could not read ${name}. To open .tex files from this computer directly, turn on "Allow access to file URLs" for TeXglass in your browser's extension settings (chrome://extensions or edge://extensions, then Details). Or choose the file here.`
       : `This browser does not let extensions read ${name} from its address. Choose the file (or its folder) here instead.`,
@@ -1655,7 +1788,7 @@
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#save-offline', '#gh-link', '#settings', '#hand-toggle']
+  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#save-offline', '#gh-link', '#settings', '#hand-toggle', '#render-actions']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
@@ -1664,6 +1797,10 @@
       for (const m of COMPACT_MOVES) compact.appendChild(m.el);
     } else {
       for (const m of COMPACT_MOVES.slice().reverse()) m.parent.insertBefore(m.el, m.next && m.next.parentNode === m.parent ? m.next : null);
+    }
+    for (const action of [warningButton, originalPdf]) {
+      if (on) action.setAttribute('role', 'menuitem');
+      else action.removeAttribute('role');
     }
     compact.hidden = !on || !COMPACT_MOVES.some((m) => !m.el.hidden);
     document.body.classList.toggle('compact', on);
@@ -2310,8 +2447,7 @@
   function openSaved(rec, quiet) {
     fileHandle = null;
     markOpened(rec.key);
-    const shown = load(rec.source, rec.name, rec.images, rec.gh || null);
-    opened.arxiv = rec.arxiv || null;
+    const shown = load(rec.source, rec.name, rec.images, rec.gh, rec.arxiv);
     if (rec.nameTitle) fileName.title = rec.nameTitle;
     updateLibraryButton();
     if (!quiet) flashStatus(navigator.onLine === false ? 'Offline: opened your saved copy' : 'Opened your saved copy');
@@ -3509,14 +3645,16 @@
   const arxivDialog = $('arxiv-dialog');
   const arxivInput = $('arxiv-input');
   const arxivMessage = $('arxiv-message');
+  const arxivOriginalPdf = $('arxiv-original-pdf');
   const arxivGo = $('arxiv-go');
   const arxivResults = $('arxiv-results');
   let arxivBusy = false;
   let ghBusy = false; // opening from GitHub, in the same dialog
 
-  function arxivSay(text, warn) {
+  function arxivSay(text, warn, pdfId) {
     arxivMessage.textContent = text;
     arxivMessage.classList.toggle('warn', !!warn);
+    setPdfLink(arxivOriginalPdf, pdfId);
   }
 
   async function importArxiv(input) {
@@ -3539,9 +3677,7 @@
     try {
       const paper = await TeXglassArxiv.importPaper(id);
       fileHandle = null;
-      load(paper.source, paper.name, paper.images);
-      opened.arxiv = id;
-      updateLibraryButton();
+      load(paper.source, paper.name, paper.images, null, id);
       if (arxivDialog.open) arxivDialog.close();
       flashStatus(`Imported ${id} from arXiv`);
       return true;
@@ -3554,8 +3690,8 @@
       const blocked = e instanceof TypeError || /Failed to fetch|NetworkError|Load failed|Could not reach/.test(e.message);
       arxivSay(blocked
         ? `Could not download ${id}. This page may not be allowed to reach arxiv.org here. Download arxiv.org/src/${id}, unpack it and open the .tex file instead.`
-        : e.message, true);
-      showStatus(warningsText);
+        : e.message, true, id);
+      showStatus('');
       if (!arxivDialog.open) openArxivDialog(input);
       return false;
     } finally {
@@ -3957,7 +4093,10 @@
     showArxivDialog();
   });
   $('arxiv-cancel').addEventListener('click', () => arxivDialog.close());
-  arxivInput.addEventListener('input', updateArxivButton);
+  arxivInput.addEventListener('input', () => {
+    setPdfLink(arxivOriginalPdf, null);
+    updateArxivButton();
+  });
   $('arxiv-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const v = arxivInput.value.trim();
@@ -4014,7 +4153,7 @@
       return true;
     } catch (e) {
       ghSay(e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message, true);
-      showStatus(warningsText);
+      showStatus('');
       if (!arxivDialog.open) openArxivDialog(input);
       return false;
     } finally {
@@ -4200,7 +4339,7 @@
       flashStatus(`Opened ${file.path.split('/').pop()} from openai/math${more}`);
     } catch (e) {
       failed = e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message;
-      showStatus(warningsText);
+      showStatus('');
     } finally {
       ppBusy = false;
       if (btn) btn.disabled = false;
@@ -4277,8 +4416,15 @@
     setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
     let lastGh = null;
     try { lastGh = JSON.parse(store.get('texglass:last-gh') || 'null'); } catch (e) { /* ignore */ }
-    const loadLast = () => load(last, store.get('texglass:last-name'), null, lastGh);
     const last = store.get('texglass:last');
+    const lastName = store.get('texglass:last-name');
+    let lastArxiv = store.get('texglass:last-arxiv');
+    // Older versions kept the imported filename but did not store the arXiv ID.
+    if (lastArxiv === null && !lastGh && window.TeXglassArxiv) {
+      const legacy = /^arXiv-(.+)\.tex$/i.exec(lastName || '');
+      if (legacy) lastArxiv = TeXglassArxiv.parseId(legacy[1].replace(/-(?=\d{7}(?:v\d+)?$)/i, '/'));
+    }
+    const loadLast = () => load(last, lastName, null, lastGh, lastArxiv);
     // ?arxiv=2301.00001 opens that paper (a bare ?arxiv, the arXiv dialog); ?gh=<GitHub link> opens that file;
     // ?preprint=<folder> opens that manuscript from github.com/openai/math.
     const params = new URLSearchParams(location.search);

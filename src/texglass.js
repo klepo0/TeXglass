@@ -1273,9 +1273,10 @@
     }
 
     /** Resolve \ref-like commands inside math to plain text. */
-    mathRefs(tex) {
+    mathRefs(tex, missing) {
       return tex.replace(/\\(eqref|ref|cref|Cref|autoref)\s*\{([^}]*)\}/g, (_, cmd, key) => {
         const info = this.lookup(key);
+        if (!info && missing) missing.add(key.trim());
         let num = info ? info.num : '??';
         if (cmd === 'eqref') num = `(${num})`;
         return `\\text{${num.replace(/([{}\\#$%&_^~])/g, '\\$1')}}`;
@@ -1284,7 +1285,9 @@
 
     renderMath(tex, display) {
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
-      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex)), this.triple));
+      const missing = this.options.sourceMap && this.known ? new Set() : null;
+      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
+      const refs = missing ? Array.from(missing, (key) => `<span hidden data-math-ref-missing="${escapeHtml(key)}"></span>`).join('') : '';
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       // a formula that uses a \tgparam: a mark with its TeX, to draw it again when a slider moves
       const live = this.params.size && !this.inPicture ? this.liveMark(tex, display ? ' data-tg-display=""' : '') : '';
@@ -1292,9 +1295,9 @@
       tex = plainTexMath(tex, display);
       try {
         const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
-        return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + live;
+        return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + refs + live;
       } catch (e) {
-        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + live;
+        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
       }
     }
 

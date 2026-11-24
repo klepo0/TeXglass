@@ -133,6 +133,10 @@ Rebind any of them in **Keyboard Shortcuts** (Ctrl+K Ctrl+S) by searching for
   figures and tables numbered the way LaTeX numbers them; `\ref`, `\eqref`,
   `\cref`, `\autoref`, `\nameref` resolve and are links; bibliographies from
   `.bbl`, `.bib` (BibTeX and biblatex) or amsrefs.
+- **Render warnings** open a list of issues. Select one to jump to its equation,
+  figure or reference. For arXiv papers, **Open original PDF** appears beside the
+  warnings and in the Open dialog if an import fails. On a phone, use the **…**
+  menu for both controls.
 - **Click a formula** to copy its LaTeX, as written (labels left out).
   "Copied LaTeX" shows by the pointer. VS Code: `texglass.clickToCopyMath`.
 - **Fold** a section or a proof with the arrow beside it, or by clicking a
