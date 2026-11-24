@@ -43,11 +43,19 @@
   "activationEvents": [
     "onLanguage:latex",
     "onLanguage:tex",
+    "onLanguage:texmark",
     "onWebviewPanel:texglass.preview",
     "onCommand:texglass.exportHtml",
     "onCommand:texglass.exportEpub"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "texmark",
+        "aliases": ["TeXmark", "texmark"],
+        "extensions": [".tmd"]
+      }
+    ],
     "commands": [
       {
         "command": "texglass.openPreviewToSide",
@@ -239,6 +247,11 @@
         "icon": "$(book)"
       },
       {
+        "command": "texglass.convertToTex",
+        "title": "Convert TeXmark to .tex",
+        "category": "TeXglass"
+      },
+      {
         "command": "texglass.print",
         "title": "Print / Save as PDF",
         "category": "TeXglass",
@@ -287,7 +300,7 @@
       "editor/title": [
         {
           "command": "texglass.openPreviewToSide",
-          "when": "resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "when": "resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation"
         },
         {
@@ -352,17 +365,22 @@
         },
         {
           "command": "texglass.exportHtml",
-          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex || resourceExtname == .tmd",
           "group": "1_texglass"
         },
         {
           "command": "texglass.exportEpub",
-          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex || resourceExtname == .tmd",
           "group": "1_texglass"
         },
         {
           "command": "texglass.print",
-          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex",
+          "when": "activeWebviewPanelId == 'texglass.preview' || resourceLangId == latex || resourceLangId == tex || resourceExtname == .tex || resourceExtname == .tmd",
+          "group": "1_texglass"
+        },
+        {
+          "command": "texglass.convertToTex",
+          "when": "resourceExtname == .tmd",
           "group": "1_texglass"
         },
         {
@@ -419,26 +437,30 @@
       "explorer/context": [
         {
           "command": "texglass.openPreview",
-          "when": "resourceExtname == .tex",
+          "when": "resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation"
         },
         {
           "command": "texglass.exportHtml",
-          "when": "resourceExtname == .tex",
+          "when": "resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation"
         },
         {
           "command": "texglass.exportEpub",
-          "when": "resourceExtname == .tex",
+          "when": "resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation"
         },
         {
           "command": "texglass.print",
-          "when": "resourceExtname == .tex",
+          "when": "resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation"
         }
       ],
       "commandPalette": [
+        {
+          "command": "texglass.convertToTex",
+          "when": "resourceExtname == .tmd || activeWebviewPanelId == 'texglass.preview'"
+        },
         {
           "command": "texglass.disableScrollSync",
           "when": "false"
@@ -501,13 +523,13 @@
         },
         {
           "command": "texglass.showCursor",
-          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex"
+          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex || resourceExtname == .tmd"
         }
       ],
       "editor/context": [
         {
           "command": "texglass.showCursor",
-          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex",
+          "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex || resourceExtname == .tmd",
           "group": "navigation@90"
         }
       ]
@@ -517,13 +539,13 @@
         "command": "texglass.openPreviewToSide",
         "key": "ctrl+k v",
         "mac": "cmd+k v",
-        "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex"
+        "when": "editorLangId == latex || editorLangId == tex || resourceExtname == .tex || resourceExtname == .tmd"
       },
       {
         "command": "texglass.showCursor",
         "key": "ctrl+k j",
         "mac": "cmd+k j",
-        "when": "editorTextFocus && (editorLangId == latex || editorLangId == tex || resourceExtname == .tex)"
+        "when": "editorTextFocus && (editorLangId == latex || editorLangId == tex || resourceExtname == .tex || resourceExtname == .tmd)"
       },
       {
         "command": "texglass.find",

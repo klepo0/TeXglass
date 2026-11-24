@@ -1041,6 +1041,10 @@ any GitHub repository, preview, edit, commit. Prefer a file? Every
   workspaces, and not in VS Code for the Web. Settings
   `texglass.localTex.enabled`, `texglass.localTex.engine` and
   `texglass.localTex.path` (the TeX folder, if it isn't on your PATH).
+- **TeXmark files**: `.tmd` files ([TeXmark](#texmark-latex-without-the-preamble))
+  preview like `.tex` files, with scroll sync and jump to source on the
+  `.tmd` lines, and their `.bib` file. **Convert TeXmark to .tex** (title-bar
+  `…` menu or the Command Palette) saves an ordinary LaTeX file beside it.
 - **Export to HTML**: one standalone page that works offline
   (`texglass.exportEmbedFonts`). **Export to EPUB**: an e-book (see
   [E-books (EPUB)](#e-books-epub)). **Print / Save as PDF**, laid out like a paper.
@@ -1092,6 +1096,7 @@ All in the Command Palette under **TeXglass:**.
 | Show Pinned Results… | Show only the pinned results and equations, with what each rests on; **Print** and **EPUB** on its bar make a handout. With none pinned, tick some first. |
 | Export to HTML | A standalone page. |
 | Export to EPUB | An e-book for e-readers; with the preview open, its diagrams and PDF and EPS figures come along everywhere. |
+| Convert TeXmark to .tex | Save a `.tmd` file as an ordinary `.tex` file with a standard preamble. |
 | Print / Save as PDF | Laid out like a paper, in the browser; prints the preview, or under **Show only these** (and **What does this use?**) its handout. |
 | Zoom In | <kbd>Ctrl+=</kbd>. |
 | Zoom Out | <kbd>Ctrl+-</kbd>. |
@@ -1337,7 +1342,8 @@ The web viewer opens `.tmd` files like `.tex` files: with **Open**,
 previews, the map, pins, notes and editing in place (which edits the `.tmd`
 text). **Convert to .tex** in the **…** menu (shown for `.tmd` files)
 downloads an ordinary LaTeX file with a standard preamble, ready for arXiv
-or a journal. The full syntax is in the
+or a journal. In VS Code, `.tmd` files get the live preview too, and
+**TeXglass: Convert TeXmark to .tex** saves the `.tex` file beside them. The full syntax is in the
 [TeXmark spec](https://github.com/klepo0/texmark/blob/main/SPEC.md).
 
 ## What LaTeX it understands
