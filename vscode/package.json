@@ -2,7 +2,7 @@
   "name": "texglass",
   "displayName": "TeXglass Preview",
   "description": "Read LaTeX like a paper: a live preview with rendered math, numbered theorems and working references, plus a dependency map, notation on hover, citation previews and margin notes. No TeX installation needed.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "klepo1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -52,8 +52,13 @@
     "languages": [
       {
         "id": "texmark",
-        "aliases": ["TeXmark", "texmark"],
-        "extensions": [".tmd"]
+        "aliases": [
+          "TeXmark",
+          "texmark"
+        ],
+        "extensions": [
+          ".tmd"
+        ]
       }
     ],
     "commands": [
