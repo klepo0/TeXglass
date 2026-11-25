@@ -54,7 +54,9 @@ test('the visitor counter may reach its GoatCounter site', () => {
   assert.ok((policy['connect-src'] || []).includes(`https://${site}.goatcounter.com`));
 });
 
-test('the browser extension drops the web policy', () => {
-  const build = fs.readFileSync(path.join(ROOT, 'browser/build.js'), 'utf8');
-  assert.match(build, /Content-Security-Policy/);
+test('the browser extension drops the web policy (it would refuse file:// reads)', () => {
+  const { viewerHtml } = require('../browser/build.js');
+  const out = viewerHtml();
+  assert.match(out, /src="app\.js"/, 'still the viewer page');
+  assert.doesNotMatch(out, /Content-Security-Policy/);
 });

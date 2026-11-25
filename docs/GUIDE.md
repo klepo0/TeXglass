@@ -1315,10 +1315,11 @@ text still works as usual.
   It stores nothing on your device and is skipped when your browser sends Do
   Not Track or Global Privacy Control. Local copies, the browser extension, the
   VS Code extension and the command line count nothing.
-- The public website runs only its own scripts and talks only to the services
-  listed above (arXiv, GitHub, DataCite, Crossref, OpenAlex, Semantic Scholar
-  and GoatCounter): its Content-Security-Policy makes the browser refuse
-  anything else. In VS Code, notes sync uses VS Code's own GitHub sign-in, so
+- The public website runs only its own scripts, and its Content-Security-Policy
+  lets it fetch data only from the services listed above (arXiv, GitHub,
+  DataCite, Crossref, OpenAlex, Semantic Scholar and GoatCounter). Images are
+  the exception: a paper's figures and previews may load from any `https`
+  address. In VS Code, notes sync uses VS Code's own GitHub sign-in, so
   TeXglass keeps no token there.
 
 ## TeXmark: LaTeX without the preamble
