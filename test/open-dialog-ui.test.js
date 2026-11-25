@@ -23,6 +23,80 @@ async function serve(page) {
   });
 }
 
+test('browse a private repository and open an included chapter from a pinned commit', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    await serve(page);
+    const token = 'github_pat_mock_private_browse';
+    const headers = { ...CORS, 'access-control-allow-headers': 'authorization' };
+    const files = [];
+    let publicRaw = 0;
+    await page.route('https://raw.githubusercontent.com/**', (route) => {
+      publicRaw++;
+      return route.abort();
+    });
+    await page.route('https://api.github.com/**', (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const json = (data) => route.fulfill({ json: data, headers });
+      const bytes = (body, contentType = 'text/plain') => route.fulfill({ body, contentType, headers });
+      if (req.headers().authorization !== 'Bearer ' + token) return route.fulfill({ status: 401, headers });
+      if (url.pathname === '/user/repos') return json([{ full_name: 'ada/private-notes', private: true, default_branch: 'main' }]);
+      const endpoint = url.pathname.replace('/repos/ada/private-notes', '');
+      if (endpoint === '/branches') return json([{ name: 'main', commit: { sha: 'main-commit' } }, { name: 'draft/review', commit: { sha: 'review-commit' } }]);
+      if (endpoint === '/git/commits/main-commit') return json({ tree: { sha: 'main-tree' } });
+      if (endpoint === '/git/commits/review-commit') return json({ tree: { sha: 'review-tree' } });
+      if (endpoint === '/git/trees/main-tree') return json({ tree: [] });
+      if (endpoint === '/git/trees/review-tree') {
+        return json({ tree: [{ type: 'tree', path: 'drafts', sha: 'draft-folder' }] });
+      }
+      if (endpoint === '/git/trees/draft-folder') return json({ tree: [{ type: 'blob', path: 'chapter 1.tex' }, { type: 'blob', path: 'paper.tex' }, { type: 'blob', path: 'notes.md' }] });
+      if (endpoint.startsWith('/contents/')) {
+        const path = decodeURIComponent(endpoint.slice('/contents/'.length));
+        files.push([path, url.searchParams.get('ref'), req.headers().accept]);
+        if (path === 'drafts/chapter 1.tex') return bytes('% !TEX root = paper.tex\n\\section{Private Chapter}A private paragraph.');
+        if (path === 'drafts/paper.tex') return bytes('\\documentclass{article}\\begin{document}\n\\input{chapter 1}\\includegraphics{figure.png}\\bibliography{paper}\\end{document}');
+        if (path === 'drafts/paper.bbl') return bytes('\\begin{thebibliography}{9}\\bibitem{private}Private citation.\\end{thebibliography}');
+        if (path === 'drafts/figure.png') return bytes(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+rNioAAAAASUVORK5CYII=', 'base64'), 'image/png');
+      }
+      return route.fulfill({ status: 404, headers });
+    });
+    await page.goto('http://texglass.test/index.html');
+    await page.click('#open');
+    await page.getByRole('button', { name: 'Browse my GitHub repositories' }).click();
+    await page.locator('#github-repo-token').fill(token);
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.selectOption('#github-repo-select', { label: 'ada/private-notes (private)' });
+    await page.getByText('No TeX files or subfolders in this folder.').waitFor();
+    await page.selectOption('#github-branch-select', { label: 'draft/review' });
+    await page.getByRole('button', { name: 'drafts/', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'notes.md' }).count(), 0);
+    await page.getByRole('button', { name: 'Up a folder' }).click();
+    await page.getByRole('button', { name: 'drafts/', exact: true }).click();
+    await page.getByRole('button', { name: 'chapter 1.tex', exact: true }).click();
+    await page.locator('#preview').getByText('A private paragraph.').waitFor();
+    await page.locator('#preview').getByText('Private citation.').waitFor();
+    assert.equal(await page.locator('#preview img[src^="blob:"]').count(), 1);
+    assert.equal(await page.locator('#github-browser-dialog').evaluate((dialog) => dialog.open), false);
+    assert.equal(publicRaw, 0);
+    assert.deepEqual(files.map(([path]) => path).sort(), ['drafts/chapter 1.tex', 'drafts/figure.png', 'drafts/paper.bbl', 'drafts/paper.tex']);
+    assert.ok(files.every(([, commit, accept]) => commit === 'review-commit' && accept === 'application/vnd.github.raw+json'));
+    const persisted = await page.evaluate(() => JSON.stringify(localStorage));
+    for (const secret of [token, 'private-notes', 'A private paragraph.']) assert.ok(!persisted.includes(secret));
+    await page.click('#open');
+    await page.getByRole('button', { name: 'Browse my GitHub repositories' }).click();
+    await page.getByRole('button', { name: 'Disconnect' }).click();
+    await page.locator('#github-connect-form').waitFor();
+    assert.equal(await page.locator('#github-repo-token').inputValue(), '');
+    await page.locator('#preview').getByText('Welcome to TeXglass').waitFor({ state: 'attached' });
+  } finally {
+    await browser.close();
+  }
+});
+
 test('one Open button; "github <words>" searches GitHub and a result opens', { skip: !chromium && 'Playwright is not installed' }, async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch (e) { t.skip('no browser: ' + e.message.split('\n')[0]); return; }

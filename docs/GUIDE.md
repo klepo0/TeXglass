@@ -859,6 +859,15 @@ install; after the first visit it opens and renders offline.
     signing in has run out, or a very large repository (such as openai/math)
     is listed only in part, it looks at the files the README links to and the
     usual names (`main.tex`, `paper/main.tex`, …) instead;
+  - choose **Browse my GitHub repositories** to open a TeX file from a private
+    repository. Create a [fine-grained GitHub token](https://github.com/settings/personal-access-tokens/new)
+    for the repositories you want to read, with **Contents: read**. Connect
+    with the token, then pick a repository, branch, folder and TeX file. GitHub
+    scopes each token to one account or organization. To switch owners,
+    disconnect and connect with a token for the other owner. TeXglass fetches
+    the project directly from GitHub and keeps the token and private source
+    in the current tab. Private papers use the web viewer’s reading tools
+    with automatic restore, offline saving and notes sync disabled.
   - or pick a file or folder from this computer.
 - <kbd>Ctrl+O</kbd> opens a `.tex` file (or a [TeXmark](#texmark-latex-without-the-preamble)
   `.tmd` file); <kbd>Ctrl+Shift+O</kbd> (or Shift+click

@@ -24,6 +24,54 @@ function fakeFetch(files) {
 
 const RAW = 'https://raw.githubusercontent.com/o/r';
 
+test('authenticated browsing paginates, filters folders and reads project assets from one commit', async () => {
+  const api = 'https://api.github.com';
+  const base = api + '/repos/o/r';
+  const repo = { full_name: 'o/r', private: true };
+  const branch = { name: 'draft/review', commit: { sha: 'pinned-commit' } };
+  const fixture = fakeFetch({
+    [api + '/user/repos?sort=full_name&per_page=100&page=1']: Array.from({ length: 100 }, (_, i) => ({ full_name: 'o/repo-' + i })),
+    [api + '/user/repos?sort=full_name&per_page=100&page=2']: [repo],
+    [base + '/branches?per_page=100&page=1']: [branch],
+    [base + '/git/commits/pinned-commit']: { tree: { sha: 'root-tree' } },
+    [base + '/git/trees/root-tree']: { tree: [{ type: 'tree', path: 'drafts', sha: 'draft-tree' }] },
+    [base + '/git/trees/draft-tree']: { tree: [{ type: 'blob', path: 'paper.tex' }, { type: 'blob', path: 'README.md' }] },
+    [base + '/contents/drafts/paper.tex?ref=pinned-commit']: '\\documentclass{article}\\begin{document}\\input{chapter 1}\\includegraphics{figure.png}\\bibliography{refs}\\end{document}',
+    [base + '/contents/drafts/chapter%201.tex?ref=pinned-commit']: 'An included chapter.',
+    [base + '/contents/drafts/paper.bbl?ref=pinned-commit']: '\\begin{thebibliography}{9}\\bibitem{c}A bibliography entry.\\end{thebibliography}',
+    [base + '/contents/drafts/figure.png?ref=pinned-commit']: 'a figure',
+  });
+  const signal = new AbortController().signal;
+  const session = G.connect('github_pat_mock', { fetch: (url, options) => {
+    assert.equal(new URL(url).origin, api);
+    assert.equal(options.headers.Authorization, 'Bearer github_pat_mock');
+    assert.equal(options.headers.Accept, url.includes('/contents/') ? 'application/vnd.github.raw+json' : 'application/vnd.github+json');
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.signal, signal);
+    return fixture(url);
+  } });
+  const repos = await session.repositories(signal);
+  assert.equal(repos.length, 101);
+  assert.deepEqual(repos.at(-1), repo);
+  const branches = await session.branches(repo, signal);
+  const snapshot = await session.snapshot(repo, branches[0], signal);
+  const root = await session.folder(repo, snapshot.tree, signal);
+  const folder = await session.folder(repo, root.entries[0].sha, signal);
+  assert.deepEqual(folder.entries.map((entry) => entry.path), ['paper.tex']);
+  const file = await session.open(repo, snapshot, 'drafts/paper.tex', signal);
+  assert.match(file.source, /An included chapter\./);
+  assert.match(file.source, /A bibliography entry\./);
+  assert.equal(await file.images['figure.png'].text(), 'a figure');
+  assert.equal(file.ref, 'draft/review');
+});
+
+test('authenticated browsing explains rejected credentials', async () => {
+  assert.throws(() => G.connect('ghp_classic'), /fine-grained/);
+  const session = G.connect('github_pat_expired', { fetch: async () => new Response(null, { status: 401 }) });
+  await assert.rejects(session.repositories(), /Reconnect with a valid token/);
+});
+
 test('parseUrl reads file, folder, repo and raw links', () => {
   assert.deepEqual(G.parseUrl('https://github.com/o/r/blob/main/paper/main.tex'), { owner: 'o', repo: 'r', kind: 'file', rest: ['main', 'paper', 'main.tex'] });
   assert.deepEqual(G.parseUrl('github.com/o/r'), { owner: 'o', repo: 'r', kind: 'repo', rest: [] });
