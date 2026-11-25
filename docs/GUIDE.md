@@ -1354,7 +1354,18 @@ Multiply @eq:heat by $u$ and integrate, as in [@evans2010, Ch. 7].
   remarks, proofs and the rest. They are declared for you.
 - `@thm:x` gives "Theorem 1.1" (`\cref`); `[@key, p. 3]` cites.
 - An optional header at the top sets the title, authors, abstract, extra
-  packages and the `.bib` file.
+  packages and the `.bib` file. Each author can have one or more institutes,
+  an email, an ORCID iD and a `thanks` footnote; institutes shared by several
+  authors are listed once.
+
+```yaml
+author:
+  - name: Ann Smith
+    affiliation: [University of Leeds, University of Oxford]
+    email: ann@example.org
+  - name: Bob Jones
+    affiliation: University of Leeds
+```
 
 The web viewer opens `.tmd` files like `.tex` files: with **Open**,
 <kbd>Ctrl+O</kbd> or by dropping one on the page. Everything works on them:
