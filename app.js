@@ -1214,8 +1214,13 @@
   let driver = null;
   let driverTimer = null;
 
-  function buildAnchors() {
-    const blocks = Array.from(preview.querySelectorAll(':scope > .src-block')).filter((b) => b.offsetParent);
+  let srcMarks = null; // where each block starts in the wrapped source, kept until the text or width changes
+
+  /** The y of each block's start in the source pane (null where the blocks run backwards). */
+  function measureSource(blocks) {
+    const width = source.clientWidth;
+    if (srcMarks && srcMarks.doc === doc && srcMarks.width === width && srcMarks.blocks.length === blocks.length &&
+      srcMarks.blocks.every((b, k) => b === blocks[k])) return srcMarks.ys;
     // Measure where offsets fall in the wrapped textarea with an invisible copy of it.
     if (!mirror) {
       mirror = document.createElement('div');
@@ -1225,7 +1230,7 @@
     const cs = getComputedStyle(source);
     Object.assign(mirror.style, {
       position: 'fixed', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
-      boxSizing: 'border-box', width: source.clientWidth + 'px', padding: cs.padding, font: cs.font,
+      boxSizing: 'border-box', width: width + 'px', padding: cs.padding, font: cs.font,
       lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
       whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak,
     });
@@ -1242,11 +1247,19 @@
       pos = at;
     }
     mirror.append(doc.slice(pos) + '\n');
+    const ys = marks.map((m) => (m ? m.offsetTop : null));
+    srcMarks = { doc, width, blocks, ys };
+    return ys;
+  }
+
+  function buildAnchors() {
+    const blocks = Array.from(preview.querySelectorAll(':scope > .src-block')).filter((b) => b.offsetParent);
+    const ys = measureSource(blocks);
     const paneTop = previewPane.getBoundingClientRect().top - previewPane.scrollTop;
     const list = [{ src: 0, pre: 0 }];
     blocks.forEach((b, k) => {
-      if (!marks[k]) return;
-      const src = marks[k].offsetTop;
+      const src = ys[k];
+      if (src == null) return;
       const pre = b.getBoundingClientRect().top - paneTop;
       const last = list[list.length - 1];
       if (src >= last.src && pre >= last.pre) list.push({ src, pre });
@@ -1291,6 +1304,24 @@
   source.addEventListener('scroll', onScroll('src'), { passive: true });
   previewPane.addEventListener('scroll', onScroll('pre'), { passive: true });
   window.addEventListener('resize', () => { anchors = null; });
+  // The preview changes height as blocks come into view (content-visibility draws them
+  // late, so a long block stands in at 120px until then), as figures load and after
+  // edits. Measure again then, and line the panes up again from the side the reader
+  // is using: otherwise a long block measured at 120px holds the preview still while
+  // the source scrolls on, and the browser's scroll anchoring then drags the source.
+  let readerSide = null;
+  for (const [el, side] of [[source, 'src'], [previewPane, 'pre']]) {
+    for (const type of ['wheel', 'pointerdown', 'keydown', 'touchstart']) {
+      el.addEventListener(type, () => { readerSide = side; }, { passive: true, capture: true });
+    }
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => {
+      if (mode !== 'split' || !anchors) return;
+      anchors = null;
+      syncFrom(readerSide || 'pre');
+    }).observe(preview);
+  }
   if (document.fonts) document.fonts.ready.then(() => { anchors = null; });
 
   // In Split mode, clicking the preview puts the cursor at that block's source.
@@ -1313,6 +1344,7 @@
     clearTimeout(renderTimer);
     renderTimer = setTimeout(() => {
       render().then(() => {
+        anchors = null; // the blocks changed
         if (mode === 'split') requestAnimationFrame(() => syncFrom('src'));
       });
     }, 150);
