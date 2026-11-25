@@ -182,7 +182,6 @@ test('edits that leave every warning as it was do not rebuild the warning list',
     await serve(page);
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview .src-block');
-    await page.click('#mode-split');
     const doc = (clean, broken) => String.raw`\documentclass{article}
 \begin{document}
 ${clean}
@@ -190,31 +189,39 @@ ${clean}
 ${broken}
 \end{document}`;
     const shows = (text) => page.waitForFunction((t) => document.getElementById('preview').textContent.includes(t), text);
-    await page.fill('#source', doc('Clean text.', String.raw`Broken $\unknowncommand$.`));
+    await page.evaluate((text) => window.TeXglassViewer.reshow(text),
+      doc('Clean text.', String.raw`Broken $\unknowncommand$.`));
+    await page.click('#mode-edit');
+    const edit = async (before, after) => {
+      await page.locator('#preview .src-block > p', { hasText: before }).click();
+      await page.fill('#inline-source', after);
+      await page.press('#inline-source', 'Escape');
+    };
     await page.waitForSelector('#render-warnings:has-text("1 render warning")');
     // The list's text node is kept as long as the list is not built again.
     await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
     const rebuilt = () => page.evaluate(() => document.getElementById('render-warnings').firstChild !== window.listedText);
 
     // An edit away from the warning: nothing to build.
-    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken $\unknowncommand$.`));
+    await edit('Clean text.', 'Clean text, edited.');
     await shows('Clean text, edited.');
     assert.equal(await rebuilt(), false);
 
     // An edit to the block with the warning: built again.
-    await page.fill('#source', doc('Clean text, edited.', String.raw`Broken again $\unknowncommand$.`));
+    await edit('Broken', String.raw`Broken again $\unknowncommand$.`);
     await shows('Broken again');
     assert.equal(await rebuilt(), true);
     assert.equal(await page.textContent('#render-warnings'), '1 render warning');
 
     // An edit that makes a new warning elsewhere: built again.
     await page.evaluate(() => { window.listedText = document.getElementById('render-warnings').firstChild; });
-    await page.fill('#source', doc(String.raw`Clean text, $\alsounknown$.`, String.raw`Broken again $\unknowncommand$.`));
+    await edit('Clean text, edited.', String.raw`Clean text, $\alsounknown$.`);
     await page.waitForSelector('#render-warnings:has-text("2 render warnings")');
     assert.equal(await rebuilt(), true);
 
     // Fixing both: no warnings left.
-    await page.fill('#source', doc('Clean text.', 'Fixed.'));
+    await edit('Clean text,', 'Clean text.');
+    await edit('Broken again', 'Fixed.');
     await page.waitForSelector('#render-warnings', { state: 'hidden' });
   } finally {
     await browser.close();

@@ -45,8 +45,9 @@ test('Ctrl+K and Cmd+K open the arXiv dialog; a bare ?arxiv opens it on load', {
     await page.keyboard.press('Escape');
 
     // From the source editor too.
-    await page.click('#mode-split');
-    await page.focus('#source');
+    await page.click('#mode-edit');
+    await page.locator('#preview .src-block p').first().click();
+    await page.waitForSelector('#inline-source');
     await page.keyboard.press('Control+k');
     assert.equal(await isOpen(page), true);
     await page.keyboard.press('Escape');

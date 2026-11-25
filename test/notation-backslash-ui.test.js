@@ -56,10 +56,8 @@ test('Notation and Map tabs work on a paper with \\| in its macros', { skip: !ch
     });
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    await page.click('#mode-split');
-    await page.fill('#source', DOC);
+    await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
     await page.waitForFunction(() => document.querySelectorAll('#preview .theorem').length >= 2);
-    await page.click('#mode-preview');
 
     await page.click('[data-side-tab="notation"]');
     await page.waitForSelector('.side-insight .insight-group');

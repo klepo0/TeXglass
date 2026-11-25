@@ -97,11 +97,9 @@ letters are ignored while you type in a text field.
 | <kbd>Ctrl+S</kbd> | Save back to the file. |
 | <kbd>Ctrl+P</kbd> | Print, or save as PDF. |
 | <kbd>Ctrl+E</kbd> | Switch between **Preview** and **Edit**. |
-| <kbd>Ctrl+Shift+E</kbd> | Switch between **Preview** and **Split**. |
 | <kbd>Ctrl+Space</kbd> | In the editor: show autocomplete. |
 | <kbd>Tab</kbd> | In the editor: next snippet field, or step out of brackets. |
 | <kbd>Esc</kbd> or <kbd>Ctrl+Enter</kbd> | In Edit mode: finish editing a paragraph. <kbd>↑</kbd> at its start or <kbd>↓</kbd> at its end moves to the neighbouring one. |
-| <kbd>←</kbd> <kbd>→</kbd>, <kbd>Home</kbd>, <kbd>End</kbd>, <kbd>Enter</kbd> | On the Split divider: move it (with <kbd>Shift</kbd> in bigger steps), to either end, or back to the middle (double-click too). |
 
 ### Browser extension
 
@@ -927,11 +925,9 @@ install; after the first visit it opens and renders offline.
 
 **Editing**
 
-- **Preview**, **Edit** and **Split** modes (<kbd>Ctrl+E</kbd>,
-  <kbd>Ctrl+Shift+E</kbd>). In Edit, click any paragraph, theorem or equation
-  to edit its LaTeX in place; **+ Add text at the end** adds a new one. Split
-  shows the source beside the preview, scrolling together, with a draggable
-  divider.
+- <kbd>Ctrl+E</kbd> switches between **Preview** and **Edit**. In Edit, click
+  any paragraph, theorem or equation to edit its LaTeX in place. Use
+  **+ Add text at the end** to add a new block.
 - The editor colours LaTeX, autocompletes commands, snippets, environments
   (your `\newtheorem`s too) and labels with their numbers
   (<kbd>Ctrl+Space</kbd>), closes `$`, `\(` and `\[` for you, and
@@ -1242,7 +1238,7 @@ screen and point at the compact toolbar (see
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
 large buttons: **Settings** (the gear, where **Open** is on a wider screen), **Navigate** (the magnifier), the **pin** (it opens
 the side panel on the Pins tab), **Share**, the theme toggle and **…**. The mode switch (Preview,
-Edit, Split), zoom, **Contents** (the side panel; a swipe in from the edge opens
+Edit), zoom, **Contents** (the side panel; a swipe in from the edge opens
 it too), **Hide proofs**,
 **Save offline** (the bookmark), **Edit on GitHub**, **Open** (<kbd>Ctrl+K</kbd> still opens it) and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is

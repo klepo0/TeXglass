@@ -30,8 +30,6 @@
       onCollapse: (on) => store.set('texglass:margin-collapsed', on ? '1' : ''),
     })
     : null;
-  const source = $('source');
-  const sourcePane = $('source-pane');
   const status = $('status');
   const renderActions = $('render-actions');
   const warningButton = $('render-warnings');
@@ -74,13 +72,8 @@
   let sideView = null; // the side panel's tabs (TeXglassInsight.sidePanel)
   let comparing = null; // comparing with an older version: { source, blocks, urls, labels, view } (src/diff.js)
 
-  // Syntax colouring and completion for both source editors.
+  // Syntax colouring and completion for the inline editor.
   const editorOptions = { labels: () => lastLabels, source: () => doc };
-  const sourceAids = window.TeXglassEditor ? TeXglassEditor.attach(source, editorOptions) : { refresh() {}, close() {} };
-  const setSource = (text) => {
-    source.value = text;
-    sourceAids.refresh();
-  };
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -572,10 +565,10 @@
   /** The sidebar shows in Preview and Edit when the document has headings and it is switched on. */
   function showToc() {
     const has = lastToc.length > 0;
-    const on = tocWanted && has && mode !== 'split';
+    const on = tocWanted && has;
     tocPane.hidden = !on;
     document.body.classList.toggle('toc-open', on);
-    tocToggle.hidden = !has || mode === 'split';
+    tocToggle.hidden = !has;
     tocToggle.setAttribute('aria-pressed', String(tocWanted));
   }
 
@@ -773,7 +766,6 @@
 
   function load(text, name, images, gh, arxiv) {
     stopCompare();
-    stopSplitExitScroll?.();
     closeEditor(false);
     watcher = null;
     showFolderHint(null);
@@ -792,7 +784,6 @@
       drawPdfFigures(images, imageMap);
     }
     doc = text.replace(/\r\n?/g, '\n');
-    setSource(doc);
     fileName.textContent = name || 'untitled.tex';
     openNotes(gh && gh.path, name, doc);
     updateLibraryButton();
@@ -917,7 +908,6 @@
     fp.title = proofs === 0 ? 'This document has no proofs' : allFolded ? 'Show proofs: unfold every proof' : 'Hide proofs: fold every proof to its first line';
     fp.setAttribute('aria-pressed', String(allFolded));
     fp.disabled = proofs === 0;
-    anchors = null; // folding moves things around
   }
 
   function setFold(key, on) {
@@ -974,42 +964,17 @@
 
   // --- in-place editing ------------------------------------------------------
 
-  let stopSplitExitScroll = null;
-
-  function setMode(m) {
-    const enteringSplit = m === 'split' && mode !== 'split';
-    const leavingSplit = m !== 'split' && mode === 'split';
-    const scroll = window.TeXglassScroll;
-    const place = (enteringSplit || leavingSplit) && previewPane.scrollTop > 0 ? scroll?.placeOf(previewPane) : null;
-    stopSplitExitScroll?.();
-    mode = m;
-    document.body.classList.toggle('mode-edit', m === 'edit');
-    document.body.classList.toggle('editing', m === 'split');
-    if (copier) copier.setEnabled(m !== 'edit' && featureOn('copyMath'));
+  function setMode(requestedMode) {
+    mode = requestedMode === 'edit' ? 'edit' : 'preview';
+    const isEditing = mode === 'edit';
+    document.body.classList.toggle('mode-edit', isEditing);
+    if (copier) copier.setEnabled(!isEditing && featureOn('copyMath'));
     updateStudy();
     updateProgress();
-    if (steps) steps.setEnabled(featureOn('proofSteps') && m !== 'edit');
-    for (const k of ['preview', 'edit', 'split']) $('mode-' + k).setAttribute('aria-pressed', String(m === k));
-    store.set('texglass:mode', m);
-    if (m !== 'edit') closeEditor(true);
-    sourcePane.hidden = m !== 'split';
-    $('splitter').hidden = m !== 'split';
-    showToc();
-    if (enteringSplit) {
-      setSource(doc);
-      anchors = null;
-      // Keep the visible block in place as Split lays out the preview at its new width.
-      if (place?.el?.isConnected) {
-        previewPane.scrollTop += place.el.getBoundingClientRect().top - previewPane.getBoundingClientRect().top - place.off;
-      }
-      requestAnimationFrame(() => syncFrom('pre'));
-    } else if (leavingSplit && place?.el?.isConnected) {
-      // Keep aiming at the block as the full-width preview lays out nearby blocks.
-      stopSplitExitScroll = scroll.to(previewPane, place.el, {
-        offset: place.off, smooth: false, history: false,
-        done: () => { stopSplitExitScroll = null; },
-      });
-    }
+    if (steps) steps.setEnabled(featureOn('proofSteps') && !isEditing);
+    for (const k of ['preview', 'edit']) $('mode-' + k).setAttribute('aria-pressed', String(mode === k));
+    store.set('texglass:mode', mode);
+    if (!isEditing) closeEditor(true);
   }
 
   function makeEditor() {
@@ -1102,7 +1067,6 @@
         }
       }
     }
-    if (document.activeElement !== source) setSource(doc);
     setDirty(true);
     autosize();
     rememberSoon();
@@ -1200,7 +1164,6 @@
     const before = doc.slice(0, pos).replace(/\s*$/, '');
     const sep = before ? '\n\n' : '';
     doc = before + sep + '\n\n' + doc.slice(pos);
-    setSource(doc);
     openEditor(before.length + sep.length, before.length + sep.length, 0);
     editing.el.scrollIntoView({ block: 'center' });
   }
@@ -1225,170 +1188,7 @@
 
   $('mode-preview').addEventListener('click', () => setMode('preview'));
   $('mode-edit').addEventListener('click', () => setMode('edit'));
-  $('mode-split').addEventListener('click', () => setMode('split'));
   $('add-block').addEventListener('click', addBlockAtEnd);
-
-  // --- the whole-file source pane ---------------------------------------------
-
-  // --- Split mode: source and preview side by side, scrolling together ---------
-
-  // Pairs of matching vertical positions {src, pre}: where each rendered block
-  // starts in the source text and in the preview. Scrolling one side maps its
-  // position between the two nearest pairs onto the other side.
-  let anchors = null;
-  let mirror = null;
-  let driver = null;
-  let driverTimer = null;
-  let readerSide = null;
-
-  let srcMarks = null; // where each block starts in the wrapped source, kept until the text or width changes
-
-  /** The y of each block's start in the source pane (null where the blocks run backwards). */
-  function measureSource(blocks) {
-    const width = source.clientWidth;
-    if (srcMarks && srcMarks.doc === doc && srcMarks.width === width && srcMarks.blocks.length === blocks.length &&
-      srcMarks.blocks.every((b, k) => b === blocks[k])) return srcMarks.ys;
-    // Measure where offsets fall in the wrapped textarea with an invisible copy of it.
-    if (!mirror) {
-      mirror = document.createElement('div');
-      mirror.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(mirror);
-    }
-    const cs = getComputedStyle(source);
-    Object.assign(mirror.style, {
-      position: 'fixed', visibility: 'hidden', pointerEvents: 'none', top: '0', left: '-10000px',
-      boxSizing: 'border-box', width: width + 'px', padding: cs.padding, font: cs.font,
-      lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize,
-      whiteSpace: 'pre-wrap', overflowWrap: 'break-word', wordBreak: cs.wordBreak,
-    });
-    mirror.textContent = '';
-    const marks = [];
-    let pos = 0;
-    for (const b of blocks) {
-      const at = Math.min(Number(b.dataset.s), doc.length);
-      if (at < pos) { marks.push(null); continue; }
-      mirror.append(doc.slice(pos, at));
-      const mark = document.createElement('span');
-      mirror.append(mark);
-      marks.push(mark);
-      pos = at;
-    }
-    mirror.append(doc.slice(pos) + '\n');
-    const ys = marks.map((m) => (m ? m.offsetTop : null));
-    srcMarks = { doc, width, blocks, ys };
-    return ys;
-  }
-
-  function buildAnchors() {
-    const blocks = Array.from(preview.querySelectorAll(':scope > .src-block')).filter((b) => b.offsetParent);
-    const ys = measureSource(blocks);
-    const paneTop = previewPane.getBoundingClientRect().top - previewPane.scrollTop;
-    const end = {
-      src: Math.max(0, source.scrollHeight - source.clientHeight),
-      pre: Math.max(0, previewPane.scrollHeight - previewPane.clientHeight),
-    };
-    const list = [{ src: 0, pre: 0 }];
-    // Blocks below either pane's last scroll position cannot be reached at the top.
-    blocks.forEach((b, k) => {
-      const src = ys[k];
-      if (src == null || src >= end.src) return;
-      const pre = b.getBoundingClientRect().top - paneTop;
-      const last = list[list.length - 1];
-      if (src >= last.src && pre >= last.pre && pre < end.pre) list.push({ src, pre });
-    });
-    list.push(end);
-    anchors = list;
-  }
-
-  function mapY(y, from, to) {
-    const a = anchors;
-    if (y <= 0) return 0;
-    const end = a[a.length - 1];
-    if (y >= end[from]) return end[to];
-    for (let k = 1; k < a.length; k++) {
-      if (y <= a[k][from]) {
-        const p = a[k - 1];
-        const q = a[k];
-        const t = q[from] === p[from] ? 0 : Math.max(0, Math.min(1, (y - p[from]) / (q[from] - p[from])));
-        return p[to] + t * (q[to] - p[to]);
-      }
-    }
-    return 0;
-  }
-
-  /** Scroll the other side to match `side` ('src' or 'pre'). */
-  function syncFrom(side) {
-    if (mode !== 'split') return;
-    if (!anchors) buildAnchors();
-    readerSide = side;
-    driver = side;
-    clearTimeout(driverTimer);
-    driverTimer = setTimeout(() => { driver = null; }, 120);
-    if (side === 'src') previewPane.scrollTop = mapY(source.scrollTop, 'src', 'pre');
-    else source.scrollTop = mapY(previewPane.scrollTop, 'pre', 'src');
-  }
-
-  const onScroll = (side) => () => {
-    if (mode !== 'split' || (driver && driver !== side)) return;
-    syncFrom(side);
-  };
-  source.addEventListener('scroll', onScroll('src'), { passive: true });
-  previewPane.addEventListener('scroll', onScroll('pre'), { passive: true });
-  window.addEventListener('resize', () => { anchors = null; });
-  for (const [el, side] of [[source, 'src'], [previewPane, 'pre']]) {
-    for (const type of ['wheel', 'pointerdown', 'keydown', 'touchstart']) {
-      el.addEventListener(type, () => {
-        readerSide = side;
-        // Direct input can switch panes before the previous scroll settles.
-        if (driver && driver !== side) {
-          clearTimeout(driverTimer);
-          driver = null;
-        }
-      }, { passive: true, capture: true });
-    }
-  }
-  if (window.ResizeObserver) {
-    // Rebuild the mapping when figures load or edits change the preview height.
-    new ResizeObserver(() => {
-      if (mode !== 'split' || !anchors) return;
-      anchors = null;
-      syncFrom(readerSide || 'pre');
-    }).observe(preview);
-  }
-  if (document.fonts) document.fonts.ready.then(() => { anchors = null; });
-
-  // In Split mode, clicking the preview puts the cursor at that block's source.
-  preview.addEventListener('click', (e) => {
-    if (mode !== 'split' || e.target.closest('a, .fold-toggle') || String(window.getSelection())) return;
-    const block = e.target.closest('.src-block');
-    if (!block) return;
-    const at = Number(block.dataset.s);
-    const top = previewPane.scrollTop;
-    source.focus({ preventScroll: true });
-    source.setSelectionRange(at, at);
-    previewPane.scrollTop = top;
-    syncFrom('pre');
-  });
-  source.addEventListener('input', () => {
-    closeEditor(false);
-    doc = source.value;
-    setDirty(true);
-    rememberSoon();
-    clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => {
-      render().then(() => {
-        anchors = null; // the blocks changed
-        if (mode === 'split') requestAnimationFrame(() => syncFrom('src'));
-      });
-    }, 150);
-  });
-  source.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      source.setRangeText('  ', source.selectionStart, source.selectionEnd, 'end');
-      source.dispatchEvent(new Event('input'));
-    }
-  });
 
   // --- opening and saving files -------------------------------------------------
 
@@ -1817,7 +1617,6 @@
   const reshow = (text) => {
     closeEditor(false);
     doc = text.replace(/\r\n?/g, '\n');
-    setSource(doc);
     render();
     store.set('texglass:last', doc);
   };
@@ -1979,7 +1778,7 @@
   if (window.TeXglassTouch) {
     const tocEdge = () => (document.body.classList.contains('toc-right') ? 'right' : 'left');
     TeXglassTouch.edgeSwipe(window, {
-      enabled: () => narrow.matches && mode !== 'split' && !document.querySelector('dialog[open]'),
+      enabled: () => narrow.matches && !document.querySelector('dialog[open]'),
       onSwipe: (edge) => {
         if (edge === tocEdge()) {
           if (!tocToggle.hidden && !tocWanted) { tocWanted = true; showToc(); spyToc(); }
@@ -3285,8 +3084,7 @@
     const key = e.key.toLowerCase();
     if (mod && key === 'o') { e.preventDefault(); if (e.shiftKey) openFolder(); else openWithPicker(); }
     if (mod && key === 's') { e.preventDefault(); save(); }
-    if (mod && e.shiftKey && key === 'e') { e.preventDefault(); setMode(mode === 'split' ? 'preview' : 'split'); }
-    else if (mod && key === 'e') { e.preventDefault(); setMode(mode === 'edit' ? 'preview' : 'edit'); }
+    if (mod && !e.shiftKey && key === 'e') { e.preventDefault(); setMode(mode === 'edit' ? 'preview' : 'edit'); }
   });
 
   // --- reference previews ----------------------------------------------------
@@ -3884,72 +3682,6 @@
       if (document.querySelector('dialog[open]') || Coach.running()) return;
       startCoach();
     }, 700);
-  }
-
-  // --- resizable split ------------------------------------------------------------
-
-  const panes = $('panes');
-  const splitter = $('splitter');
-
-  function setSplit(pct, remember) {
-    if (pct == null) {
-      panes.style.removeProperty('--split');
-      splitter.setAttribute('aria-valuenow', '50');
-    } else {
-      pct = Math.max(15, Math.min(85, pct));
-      panes.style.setProperty('--split', pct.toFixed(1) + '%');
-      splitter.setAttribute('aria-valuenow', String(Math.round(pct)));
-    }
-    anchors = null;
-    if (remember) store.set('texglass:split', pct == null ? '' : String(pct));
-  }
-
-  const isStacked = () => getComputedStyle(panes).flexDirection === 'column';
-
-  splitter.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    splitter.setPointerCapture(e.pointerId);
-    splitter.classList.add('dragging');
-    document.body.classList.add('resizing');
-    document.body.classList.toggle('stacked', isStacked());
-    const top = source.scrollTop;
-    const move = (ev) => {
-      const r = panes.getBoundingClientRect();
-      const pct = isStacked() ? ((ev.clientY - r.top) / r.height) * 100 : ((ev.clientX - r.left) / r.width) * 100;
-      setSplit(pct, false);
-      source.scrollTop = top;
-      syncFrom('src');
-    };
-    const up = () => {
-      splitter.releasePointerCapture(e.pointerId);
-      splitter.classList.remove('dragging');
-      document.body.classList.remove('resizing', 'stacked');
-      splitter.removeEventListener('pointermove', move);
-      splitter.removeEventListener('pointerup', up);
-      splitter.removeEventListener('pointercancel', up);
-      const v = parseFloat(panes.style.getPropertyValue('--split'));
-      setSplit(isNaN(v) ? null : v, true);
-    };
-    splitter.addEventListener('pointermove', move);
-    splitter.addEventListener('pointerup', up);
-    splitter.addEventListener('pointercancel', up);
-  });
-  splitter.addEventListener('dblclick', () => setSplit(null, true));
-  splitter.addEventListener('keydown', (e) => {
-    const cur = parseFloat(splitter.getAttribute('aria-valuenow')) || 50;
-    const step = e.shiftKey ? 10 : 2;
-    const keys = { ArrowLeft: -step, ArrowUp: -step, ArrowRight: step, ArrowDown: step };
-    if (e.key in keys) setSplit(cur + keys[e.key], true);
-    else if (e.key === 'Home') setSplit(15, true);
-    else if (e.key === 'End') setSplit(85, true);
-    else if (e.key === 'Enter') setSplit(null, true);
-    else return;
-    e.preventDefault();
-  });
-  {
-    const saved = parseFloat(store.get('texglass:split'));
-    if (!isNaN(saved)) setSplit(saved, false);
   }
 
   // --- light and dark theme ------------------------------------------------------
@@ -4778,8 +4510,7 @@
   }
 
   function start() {
-    const saved = store.get('texglass:mode');
-    setMode(saved === 'edit' || saved === 'split' ? saved : 'preview');
+    setMode(store.get('texglass:mode'));
     let lastGh = null;
     try { lastGh = JSON.parse(store.get('texglass:last-gh') || 'null'); } catch (e) { /* ignore */ }
     const last = store.get('texglass:last');

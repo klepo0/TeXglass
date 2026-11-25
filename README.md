@@ -101,7 +101,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 - **Live preview in VS Code** as you type, without saving, across multi-file documents; what TeXglass can't draw is drawn by your own LaTeX, if installed.
 - **Scroll sync** both ways and **jump to source** from the preview.
 - **Live preview beside Overleaf's editor** from the browser extension.
-- **Edit in the web viewer** with in-place editing, a split view and LaTeX autocomplete.
+- **Edit in the web viewer** with in-place editing and LaTeX autocomplete.
 - **Export** a standalone offline HTML page, with or without the reading tools, an **EPUB** e-book, or **print** to PDF laid out like a paper.
 - **Live parameters**: declare `\tgparam{p}{1}{4}` with the optional [`texglass.sty`](latex/README.md) and readers get a slider that redraws the formulas and TikZ pictures using `p`; the PDF shows the start value.
 - **[texglass.sty](latex/README.md)**: optional hints for TeXglass (notation, dependency links, proof steps, live parameters) that LaTeX ignores.
