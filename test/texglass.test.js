@@ -1042,3 +1042,36 @@ Some {\fontsize{9pt}{11pt}\selectfont small} words.\end{document}`);
   assert.match(text(html), /Big title/);
   assert.match(text(html), /Some small words\./);
 });
+
+test('math array spans preserve the cell content and following columns', () => {
+  const { html } = strictKatex(String.raw`
+\[\begin{array}{ccc}\multicolumn{2}{c}{x} & y\\ a & b & c\end{array}\]
+$\begin{array}{ccc}\multicolumn{2}{r}{z} & w\end{array}$`);
+  noMathErrors(html);
+  assert.match(html, /<td colspan="2" style="text-align:center">[^]*?data-tex="x"/);
+  const cells = [...html.matchAll(/<mtd[^>]*>(.*?)<\/mtd>/g)].map((m) => m[1]);
+  assert.equal(cells.length, 3);
+  assert.doesNotMatch(cells[0], /<mi>/);
+  assert.match(cells[1], /<mi>z<\/mi>/);
+  assert.match(cells[2], /<mi>w<\/mi>/);
+});
+
+test('bare alignment rows and Plain TeX aligned commands render inside displays', () => {
+  const { html } = strictKatex(String.raw`
+\[ a &:=& b\\ c &:=& d \]
+\begin{equation}\aligned x &= y\\ z &= 1 \endaligned \end{equation}`);
+  noMathErrors(html);
+  assert.equal((html.match(/<mtable rowspacing=/g) || []).length, 2);
+});
+
+test('text subscripts, upright operators, old Fraktur fonts and accent aliases render in formulas', () => {
+  const { html } = strictKatex(String.raw`
+\def\log{\mathop{\text{\upshape log}}}
+\def\frak#1{\hbox{\eufm#1}}
+$p\textsubscript{NMT}$, $\text{A\textsubscript{0}}$, $\log x$,
+$\frak{g} + \Tilde{\gamma} + \Bar{D} + \ifstrempty{}{u}{v}$.`);
+  noMathErrors(html);
+  assert.match(html, /<msub>/);
+  assert.match(html, /mathvariant="fraktur"/);
+  assert.match(html, /<mi>u<\/mi>/);
+});

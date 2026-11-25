@@ -424,6 +424,9 @@
   const MATH_MACROS = {
     '\\hdots': '\\ldots',
     '\\boxbar': '\\mathbin{\\text{◫}}',
+    '\\Tilde': '\\tilde{#1}',
+    '\\Bar': '\\bar{#1}',
+    '\\upshape': '',
     // symbols from fdsymbol/MnSymbol and amsmath spacing that KaTeX lacks
     '\\shortleftarrow': '\\mathrel{\\scriptstyle\\leftarrow}',
     '\\shortrightarrow': '\\mathrel{\\scriptstyle\\rightarrow}',
@@ -666,6 +669,24 @@
   const optBracket = (ctx) => (peekText(ctx) === '[' ? (ctx.popToken(), tokText(ctx.consumeArg([']']).tokens)) : null);
   const group = (ctx) => tokText(ctx.consumeArgs(1)[0]);
   const optGroup = (ctx) => (peekText(ctx) === '{' ? group(ctx) : null);
+  MATH_MACROS['\\textsubscript'] = (ctx) => {
+    const content = '_{\\text{' + group(ctx) + '}}';
+    return ctx.mode === 'text' ? '$' + '{}' + content + '$' : content;
+  };
+  MATH_MACROS['\\ifstrempty'] = (ctx) => {
+    const value = group(ctx);
+    const empty = group(ctx);
+    const nonempty = group(ctx);
+    return value === '' ? empty : nonempty;
+  };
+  // For nested KaTeX arrays, reserve the columns occupied by the cell.
+  MATH_MACROS['\\multicolumn'] = (ctx) => {
+    const count = Math.max(1, Math.min(100, Number.parseInt(group(ctx), 10) || 1));
+    const alignment = group(ctx);
+    const text = group(ctx);
+    const left = alignment.includes('r') ? count - 1 : alignment.includes('c') ? Math.floor((count - 1) / 2) : 0;
+    return '&'.repeat(left) + text + '&'.repeat(count - 1 - left);
+  };
   function inferenceRule(ctx, mathpartir) {
     const mark = peekText(ctx);
     if (mark === '*' || (!mathpartir && (mark === '=' || mark === '-'))) ctx.popToken();
@@ -1047,6 +1068,9 @@
    * stretch them, so they are drawn at their own size).
    */
   function plainTexMath(tex, display) {
+    // Plain TeX's \aligned … \endaligned spelling for an AMS sub-display.
+    tex = tex.replace(/(?<!\\)\\aligned(?![A-Za-z@])([\s\S]*?)(?<!\\)\\endaligned(?![A-Za-z@])/g, '\\begin{aligned}$1\\end{aligned}');
+    tex = tex.replace(/(?<!\\)\\[hm]box\s*\{\s*\\eufm(?![A-Za-z@])\s*([^{}]*)\}/g, '\\mathfrak{$1}');
     // LaTeX accepts a braced delimiter argument; KaTeX expects a single token.
     tex = tex.replace(/(?<!\\)(\\(?:[bB]ig(?:g)?[lmr]?|left|middle|right)(?![A-Za-z@]))\s*\{\s*(\\(?:[A-Za-z@]+|[{}|])|[()[\]|./<>])\s*\}/g, '$1 $2 ');
     // Plain TeX moves an hbox by a size or a named length register. If the
@@ -3164,11 +3188,16 @@
       // The source to copy: the formula as written, with the environment kept
       // where its rows need it (align, gather, ...).
       const src = texAttr(/^(align|gather|flalign|alignat|eqnarray|multline)$/.test(base) ? `\\begin{${name}}${body}\\end{${name}}` : body);
-      if (DIAGRAM_RE.test(body) && tikz()) {
-        if (name === 'displaymath' && /\\begin\s*\{minipage\}/.test(body)) {
-          const array = /^\s*\\begin\s*\{array\}([\s\S]*)\\end\s*\{array\}\s*$/.exec(body);
-          if (array) return this.tabular('array', array[1], true);
+      if (name === 'displaymath' && /\\(?:multicolumn(?![A-Za-z@])|begin\s*\{minipage\})/.test(body)) {
+        const array = /^\s*\\begin\s*\{array\}/.exec(body);
+        if (array) {
+          const end = findEnvEnd(body, array[0].length, 'array');
+          if (end.contentEnd < body.length && !body.slice(end.end).trim()) {
+            return this.tabular('array', body.slice(array[0].length, end.contentEnd), true);
+          }
         }
+      }
+      if (DIAGRAM_RE.test(body) && tikz()) {
         // A diagram (with maybe some math around it and an equation number).
         const r = this.numberRow(body.replace(/\\\\\s*$/, ''), !starred && base !== 'displaymath', id);
         const t = /\\tag(\*?)\{([\s\S]*)\}$/.exec(r.tag);
@@ -3188,6 +3217,12 @@
           if (rows.length > 1) inner = `\\begin{gathered}${rows.join(' \\\\ ')}\\end{gathered}`;
         }
         if (base === 'multline') inner = `\\begin{gathered}${inner}\\end{gathered}`;
+        if (base === 'displaymath' && inner.includes('&') && inner.includes('\\\\')) {
+          const rows = splitTop(inner, rowSep);
+          if (rows.length > 1 && rows.some((row) => splitTop(row, cellSep).length > 1)) {
+            inner = `\\begin{aligned}${rows.join(' \\\\ ')}\\end{aligned}`;
+          }
+        }
         tex = inner + r.tag;
       } else {
         let lead = '';

@@ -55,18 +55,47 @@ function tar(files) {
   return Buffer.concat(blocks);
 }
 
+const RASTER_EPS = String.raw`%!PS-Adobe-3.0 EPSF-3.0
+%%Creator: GPL Ghostscript 10070 (eps2write)
+%%BeginPageSetup
+4 0 obj
+<</Type/Page/MediaBox [0 0 100 50] /Contents 5 0 R >>
+endobj
+%%EndPageSetup
+5 0 obj
+<</Length 125>>stream
+q 1 0 0 1 0 0 cm
+q 100 0 0 -50 0 50 cm
+BI
+/CS/DeviceRGB /W 1 /H 1 /BPC 8 /F[/A85 /Fl]
+ID
+Gb"ZW^]4?:!!*'~>
+EI Q Q
+endstream
+endobj
+%%PageTrailer
+`;
+
+test('eps2write only forwards the supported single-raster layout', () => {
+  const eps = require('../src/eps.js');
+  assert.match(eps.rasterPdf(RASTER_EPS), /^%PDF-1.4/);
+  assert.equal(eps.rasterPdf(RASTER_EPS.replace('EI Q Q', 'EI 1 1 m Q Q')), null);
+  assert.equal(eps.rasterPdf(RASTER_EPS.replace('/W 1', '/W 140000001')), null);
+});
+
 const PAPER = tar({
   'main.tex': String.raw`\documentclass{article}\begin{document}
-\includegraphics{plot} \includegraphics{both.pdf}
+\includegraphics{plot} \includegraphics{both.pdf} \includegraphics{raster.eps}
 \end{document}`,
   'plot.pdf': tinyPdf(100, 50),
+  'raster.eps': RASTER_EPS,
   'both.pdf': tinyPdf(100, 50),
   'both.png': 'PNG',
 });
 
 test('.pdf figures are kept from a paper, unless the authors also uploaded a picture browsers can show', async () => {
   const p = await A.importPaper('2301.00003', { fetch: async () => new Response(zlib.gzipSync(PAPER), { headers: { 'content-type': 'application/gzip' } }) });
-  assert.deepEqual(Object.keys(p.images).sort(), ['both.png', 'plot.pdf']);
+  assert.deepEqual(Object.keys(p.images).sort(), ['both.png', 'plot.pdf', 'raster.eps']);
   assert.equal(p.images['plot.pdf'].type, 'application/pdf');
   const resolve = A.imageResolver({ 'plot.pdf': 'blob:plot', 'both.png': 'blob:both' }, p.source);
   assert.equal(resolve('plot'), 'blob:plot');
@@ -106,7 +135,51 @@ test('the viewer draws .pdf figures with pdf.js, at the size of the PDF page', {
     assert.equal(r.w, 133);
     assert.equal(r.h, 67);
     assert.ok(r.png, 'the drawing is inside the SVG');
+    const raster = await page.locator('#preview img[alt="raster.eps"]').evaluate(async (img) => {
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+    });
+    assert.deepEqual(raster, [255, 0, 0, 255]);
   } finally {
     await browser.close();
   }
+});
+
+test('Cairo single-image EPS preserves its page box and clipping', () => {
+  const eps = require('../src/eps.js');
+  const source = String.raw`%!PS-Adobe-3.0 EPSF-3.0
+%%BoundingBox: 0 1 100 51
+%%Creator: cairo 1.16.0
+%%EndPageSetup
+q 0 1 100 50 rectclip
+1 0 0 -1 0 51 cm q
+q
+0 0 100 50 re W n
+[ 100 0 0 50 0 0 ] concat
+/cairo_ascii85_file currentfile /ASCII85Decode filter def
+/DeviceRGB setcolorspace
+<<
+  /ImageType 1
+  /Width 1
+  /Height 1
+  /Interpolate false
+  /BitsPerComponent 8
+  /Decode [ 0 1 0 1 0 1 ]
+  /DataSource cairo_ascii85_file /FlateDecode filter
+  /ImageMatrix [ 1 0 0 -1 0 1 ]
+>>
+cairo_image
+Gb"ZW^]4?:!!*'~>
+Q
+Q Q
+showpage
+`;
+  const pdf = eps.rasterPdf(source);
+  assert.match(pdf, /\/MediaBox \[0 1 100 51\]/);
+  assert.match(pdf, /0 1 100 50 re W n 1 0 0 -1 0 51 cm/);
+  assert.equal(eps.rasterPdf(source.replace('/ImageType 1', '/ImageType 3')), null);
 });
