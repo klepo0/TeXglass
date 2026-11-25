@@ -121,9 +121,12 @@
       }
       if (res.status === 404) return null;
       if (res.status === 403 || res.status === 429) {
-        throw new Error(/api\.github/.test(url)
+        const api = /api\.github/.test(url);
+        const e = new Error(api
           ? 'GitHub limits how often a repository can be listed without signing in. Wait a few minutes, or open the .tex file itself on GitHub and use that link.'
           : `GitHub refused the request (${res.status}).`);
+        e.limited = api;
+        throw e;
       }
       if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
       return as === 'json' ? res.json() : as === 'blob' ? res.blob() : res.text();
@@ -144,41 +147,104 @@
       // A folder or a whole repo: list it and pick the main .tex file.
       let tree = null;
       let dir = '';
-      if (loc.kind === 'repo') {
-        const info = await get(`${API}/repos/${owner}/${repo}`, 'json');
-        if (!info) throw new Error(`Could not find ${where}. It may be private, or the name is misspelt.`);
-        ref = info.default_branch;
-        tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, 'json');
-      } else {
-        const options = loc.rest.length === 1 ? [{ ref: loc.rest[0], path: '' }] : splits(loc.rest).concat([{ ref: loc.rest.join('/'), path: '' }]);
-        for (const c of options) {
-          tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(c.ref)}?recursive=1`, 'json');
-          if (tree) {
-            ref = c.ref;
-            dir = c.path;
-            break;
+      try {
+        if (loc.kind === 'repo') {
+          const info = await get(`${API}/repos/${owner}/${repo}`, 'json');
+          if (!info) throw new Error(`Could not find ${where}. It may be private, or the name is misspelt.`);
+          ref = info.default_branch;
+          tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, 'json');
+        } else {
+          const options = loc.rest.length === 1 ? [{ ref: loc.rest[0], path: '' }] : splits(loc.rest).concat([{ ref: loc.rest.join('/'), path: '' }]);
+          for (const c of options) {
+            tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(c.ref)}?recursive=1`, 'json');
+            if (tree) {
+              ref = c.ref;
+              dir = c.path;
+              break;
+            }
           }
         }
+      } catch (e) {
+        if (!e.limited) throw e;
+        // GitHub allows few listings an hour without signing in, and a shared
+        // network soon uses them up: guess the main file from raw files instead.
+        if (loc.kind === 'repo') ref = 'HEAD';
+        else {
+          ref = loc.rest[0];
+          dir = loc.rest.slice(1).join('/');
+        }
+        const guess = await guessMain(dir);
+        if (!guess) throw e;
+        mainPath = guess.path;
+        mainText = guess.text;
       }
-      if (!tree) throw new Error(`Could not list ${where}. It may be private.`);
-      const prefix = dir ? dir + '/' : '';
-      const texPaths = (tree.tree || [])
-        .filter((e) => e.type === 'blob' && e.path.startsWith(prefix) && /\.(tex|ltx|latex)$/i.test(e.path))
-        .map((e) => e.path);
-      if (!texPaths.length) throw new Error(`There is no .tex file in ${where}${dir ? '/' + dir : ''}.`);
-      // Read the likeliest few and let the arXiv chooser pick the one with \documentclass.
-      const ranked = texPaths
-        .map((p) => ({ p, score: (/^(main|ms|paper|article|thesis|arxiv)\.tex$/i.test(p.split('/').pop()) ? 2 : 0) - p.slice(prefix.length).split('/').length }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8);
-      const texts = {};
-      for (const { p } of ranked) {
-        const t = await get(rawUrl(ref, p));
-        if (t != null) texts[p] = t;
+      if (mainPath == null) {
+        if (!tree) throw new Error(`Could not list ${where}. It may be private.`);
+        const prefix = dir ? dir + '/' : '';
+        const texPaths = (tree.tree || [])
+          .filter((e) => e.type === 'blob' && e.path.startsWith(prefix) && /\.(tex|ltx|latex)$/i.test(e.path))
+          .map((e) => e.path);
+        if (!texPaths.length) throw new Error(`There is no .tex file in ${where}${dir ? '/' + dir : ''}.`);
+        // Read the likeliest few and let the arXiv chooser pick the one with \documentclass.
+        const ranked = texPaths
+          .map((p) => ({ p, score: (/^(main|ms|paper|article|thesis|arxiv)\.tex$/i.test(p.split('/').pop()) ? 2 : 0) - p.slice(prefix.length).split('/').length }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 8);
+        const texts = {};
+        for (const { p } of ranked) {
+          const t = await get(rawUrl(ref, p));
+          if (t != null) texts[p] = t;
+        }
+        mainPath = Arxiv.pickMain(texts);
+        if (!mainPath) throw new Error(`Could not read the .tex files in ${where}.`);
+        mainText = texts[mainPath];
       }
-      mainPath = Arxiv.pickMain(texts);
-      if (!mainPath) throw new Error(`Could not read the .tex files in ${where}.`);
-      mainText = texts[mainPath];
+    }
+
+    /**
+     * Without a listing of the repo: the main .tex file in `dir` (or below it),
+     * found by reading the .tex files and folders its README links to, then the
+     * usual names, as { path, text }, or null.
+     */
+    async function guessMain(dir) {
+      const at = (p) => normalize((dir ? dir + '/' : '') + p);
+      const cands = [];
+      const add = (p) => { if (!cands.includes(p)) cands.push(p); };
+      const inFolder = (f, names) => names.forEach((n) => add(at((f ? f.replace(/\/?$/, '/') : '') + n + '.tex')));
+      let readme = null;
+      for (const n of ['README.md', 'readme.md', 'README.markdown']) {
+        readme = await get(rawUrl(ref, at(n))).catch(() => null);
+        if (readme != null) break;
+      }
+      if (readme) {
+        for (const m of readme.matchAll(/\]\(\s*<?([^)\s#>]+)|href\s*=\s*"([^"#]+)"/g)) {
+          let link = decodeSeg(m[1] || m[2]).replace(/^\.\//, '');
+          if (/^[a-z]+:|^\/\//i.test(link)) {
+            // a link to a file of this same repo, written out in full
+            const l = parseUrl(link);
+            if (!l || l.owner !== owner || l.repo !== repo || l.kind === 'repo') continue;
+            link = l.rest.slice(1).join('/');
+            if (dir) { if (!link.startsWith(dir + '/')) continue; link = link.slice(dir.length + 1); }
+          }
+          if (/\.(tex|ltx)$/i.test(link)) add(at(link));
+          else if (/\.pdf$/i.test(link)) add(at(link.replace(/\.pdf$/i, '.tex'))); // the source of a PDF it links to
+          else if (!/\.[a-z0-9]+$/i.test(link.replace(/\/$/, ''))) inFolder(link, ['main', link.replace(/\/$/, '').split('/').pop()].concat(MAIN_NAMES));
+        }
+      }
+      inFolder('', MAIN_NAMES);
+      for (const f of ['paper', 'manuscript', 'tex', 'latex', 'src', 'draft', 'thesis', 'notes', 'doc', 'docs']) inFolder(f, ['main', f]);
+      const isMain = (t) => {
+        const body = t && stripComments(t);
+        return body && /\\documentclass/.test(body) && !/\\documentclass\s*\[[^\]]*\]\s*\{subfiles\}/.test(body);
+      };
+      const list = cands.slice(0, 80);
+      for (let i = 0; i < list.length; i += 8) {
+        const batch = list.slice(i, i + 8);
+        const texts = await Promise.all(batch.map((p) => get(rawUrl(ref, p)).catch(() => null)));
+        const k = texts.findIndex(isMain);
+        if (k >= 0) return { path: batch[k], text: texts[k] };
+      }
+      return null;
     }
 
     const fix = (t) => (t == null ? null : t.replace(/\r\n?/g, '\n'));

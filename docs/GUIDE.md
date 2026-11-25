@@ -847,7 +847,10 @@ install; after the first visit it opens and renders offline.
     figures (including `.eps` and `.pdf`) come along;
   - type `github` and words to **search GitHub** for repositories with LaTeX,
     or paste a link to a public file, folder or repository (`github
-    owner/repo` works too);
+    owner/repo` works too). For a folder or repository TeXglass finds the
+    main file; when GitHub's hourly limit for listing repositories without
+    signing in has run out, it looks at the files the README links to and the
+    usual names (`main.tex`, `paper/main.tex`, …) instead;
   - or pick a file or folder from this computer.
 - <kbd>Ctrl+O</kbd> opens a `.tex` file (or a [TeXmark](#texmark-latex-without-the-preamble)
   `.tmd` file); <kbd>Ctrl+Shift+O</kbd> (or Shift+click
