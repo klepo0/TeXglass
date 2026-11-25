@@ -1360,7 +1360,8 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
 - **Math**: `$…$`, `\(…\)`, `\[…\]`, `equation`, `align`, `gather`,
   `multline`, `alignat`, `eqnarray`, mhequ's `equ` and `equs`, with `\tag`,
   `\nonumber`, `\notag`. The physics package's macros (`\abs`, `\norm`,
-  `\qty`, `\dv`, …) work out of the box.
+  `\qty`, `\dv`, …) work out of the box, and so does amsmath's `\sideset`
+  (`\sideset{}{'}\sum`).
 - **Macros**: `\newcommand`, `\renewcommand`, `\def` (delimited parameters
   too), `\let`, `\DeclareMathOperator`, in math and text, and those in a
   paper's own `.sty` files when imported from arXiv. Shortcuts for half an
@@ -1368,7 +1369,9 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   conditionals in macros (`\ifx`, `\ifmmode`, `\ifnum`, flags made with
   `\newif`, `\iffalse … \fi` around text) show only the branch TeX would
   take. A paper that redefines a standard symbol with low-level TeX keeps the
-  usual symbol.
+  usual symbol. Plain TeX fonts made with `\font` work for sans serif
+  (`cmss`) and the Washington Cyrillic fonts (`wncyr`, as in
+  `\font\cyr=wncyr10` and `\text{\cyr SH}` for Ш).
 - **Text in formulas**: `\mbox`, `\text`, `\parbox`, `\textsc` and
   `\footnote` inside maths, with `$…$` of their own.
 - **Plain TeX**: `\eqno` and `\leqno`, `\buildrel … \over`, `\eqalign`,

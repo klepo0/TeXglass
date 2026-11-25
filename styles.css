@@ -3002,3 +3002,10 @@ div.tg-texfallback-picture { margin: 0.8em 0; }
 /* A formula of a long paper on a phone, away from the screen: its drawing is put
    away (app.js stripMath); its text and equation number stay for the reading tools. */
 .katex-html.tg-lazy { visibility: hidden; }
+
+/* \author{Name\\ Affiliation}: the lines after the name, in the text's own font */
+.author .affil { display: block; font-variant: normal; font-size: 0.85em; line-height: 1.5; }
+.author .affil:first-of-type { margin-top: 0.3em; }
+/* a \thanks note in the title: its mark is a symbol (∗, †, …), not a number */
+.footnotes li.fn-symbol { list-style: none; }
+.footnotes li.fn-symbol::before { content: attr(data-mark); display: inline-block; width: 1.4em; margin-left: -1.4em; }
