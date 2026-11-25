@@ -1,6 +1,9 @@
-# Releases TeXglass: the VS Code extension and the browser extension share one
-# version, the "version" in vscode/package.json. Feature pull requests never
-# change it; it moves only here, once per release.
+# Releases TeXglass: the VS Code extension and the npm package (the converter
+# and CLI, root package.json) share one version, the "version" in
+# vscode/package.json. Feature pull requests never change it; it moves only
+# here, once per release. The browser extension has its own version and its own
+# workflow, browser-release.yml (Actions > Browser release); this one doesn't
+# touch it.
 #
 # Usual way, from GitHub (no local clone needed):
 #   Actions > Release > Run workflow, pick patch / minor / major.
@@ -11,12 +14,11 @@
 #   git tag vX.Y.Z && git push origin vX.Y.Z
 # The tag must match the version in vscode/package.json.
 #
-# Either way the GitHub release carries the .vsix and the browser extension
-# zips, with notes generated from the pull requests merged since the previous
-# tag, and the .vsix goes to the VS Code Marketplace (and Open VSX). The
-# Firefox build goes to Firefox Add-ons when the AMO_JWT_* secrets are set.
-# The converter and CLI (root package.json, same version) go to npm as
-# "texglass" once that package exists there (see "Publish to npm").
+# Either way the GitHub release carries the .vsix, with notes generated from
+# the pull requests merged since the previous tag, and the .vsix goes to the
+# VS Code Marketplace (and Open VSX). The converter and CLI (root
+# package.json, same version) go to npm as "texglass" once that package
+# exists there (see "Publish to npm").
 name: Release
 
 on:
@@ -49,6 +51,8 @@ jobs:
           exit 1
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tags, for the release notes
 
       - uses: actions/setup-node@v4
         with:
@@ -107,9 +111,6 @@ jobs:
         working-directory: vscode
         run: npx vsce package -o "../texglass-${TAG#v}.vsix"
 
-      - name: Build the browser extension
-        run: node browser/build.js --release
-
       # A push fails if main moved while this ran; nothing is published then,
       # so just run the workflow again.
       # main is protected by a ruleset, which GITHUB_TOKEN can't bypass. When
@@ -138,16 +139,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files="texglass-*.vsix browser/dist/texglass-arxiv-chrome-*.zip browser/dist/texglass-arxiv-firefox-*.zip"
+          files="texglass-*.vsix"
           # On a re-run (e.g. after fixing a publish token) the release exists:
           # replace its files instead of failing.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $files --clobber
           else
+            # Notes from the previous vX.Y.Z release, not a browser-v one.
+            prev=$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -vx "$TAG" | head -n 1)
+            start=()
+            [ -n "$prev" ] && start=(--notes-start-tag "$prev")
             gh release create "$TAG" \
               --verify-tag \
               --title "TeXglass $TAG" \
-              --generate-notes \
+              --generate-notes "${start[@]}" \
               $files
           fi
 
@@ -167,55 +172,6 @@ jobs:
             exit 0
           fi
           npx --yes ovsx@1.3.0 publish --skip-duplicate --packagePath texglass-*.vsix
-
-      # Firefox: the build in browser/dist/firefox goes to addons.mozilla.org as
-      # a new listed version of the add-on whose ID is in its manifest
-      # (browser_specific_settings.gecko.id in browser/build.js), with the
-      # repository's source for reviewers, since the bundle ships minified
-      # KaTeX and pdf.js. It doesn't wait for Mozilla's review: the version goes
-      # live when they approve it. The key comes from
-      # addons.mozilla.org/developers/addon/api/key (AMO_JWT_ISSUER is the
-      # "JWT issuer", AMO_JWT_SECRET the "JWT secret").
-      - name: Publish to Firefox Add-ons
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
-            echo "::notice::AMO_JWT_ISSUER / AMO_JWT_SECRET secrets not set; skipping Firefox Add-ons"
-            exit 0
-          fi
-          src="$RUNNER_TEMP/texglass-source-${TAG#v}.zip"
-          git archive --format=zip -o "$src" HEAD
-          notes="Built from the attached source (the repository at tag $TAG, https://github.com/${GITHUB_REPOSITORY}/tree/$TAG) with Node.js 22 and no other tools or downloads:
-
-            node browser/build.js --release
-
-          The add-on is browser/dist/firefox/ (also zipped as browser/dist/texglass-arxiv-firefox-${TAG#v}.zip). vendor/katex is unmodified KaTeX 0.16.11 and vendor/pdfjs is unmodified pdf.js 4.10.38 (build/pdf.min.mjs and build/pdf.worker.min.mjs of pdfjs-dist, renamed .js); everything else is unminified source.
-
-          About the validator warnings: the Function constructor and dynamic import() are inside pdf.js. src/pdf.js loads it from the add-on's own vendor/pdfjs folder and calls it with isEvalSupported: false. The innerHTML assignments build the reader's own interface; text from papers and from the arXiv, DataCite and Crossref APIs is escaped first, math goes through KaTeX (trust off), and the default extension CSP blocks inline scripts."
-          jq -n --arg notes "$notes" \
-            --arg rel "Changes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" \
-            '{version: {approval_notes: $notes, release_notes: {"en-US": $rel}}}' > "$RUNNER_TEMP/amo-metadata.json"
-          set +e
-          npx --yes web-ext@10.8.0 sign \
-            --channel=listed \
-            --source-dir=browser/dist/firefox \
-            --artifacts-dir="$RUNNER_TEMP/web-ext" \
-            --api-key="$AMO_JWT_ISSUER" \
-            --api-secret="$AMO_JWT_SECRET" \
-            --upload-source-code="$src" \
-            --amo-metadata="$RUNNER_TEMP/amo-metadata.json" \
-            --approval-timeout=0 \
-            --no-input 2>&1 | tee "$RUNNER_TEMP/web-ext.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          # On a re-run the version is already there: not an error.
-          if [ "$status" -ne 0 ] && grep -qi "already exists" "$RUNNER_TEMP/web-ext.log"; then
-            echo "::notice::Firefox Add-ons already has ${TAG#v}; skipping"
-            exit 0
-          fi
-          exit "$status"
 
       # npm: the converter and CLI (root package.json, its "files") as the
       # package "texglass", with the release's version. Trusted publishing: no

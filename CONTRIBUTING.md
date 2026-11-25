@@ -53,17 +53,22 @@ shortcut, so check those by hand.
 
 ## Versions and releases
 
-TeXglass has **one version number**, the `"version"` in `vscode/package.json`.
-The VS Code extension and the browser extension both use it
-(`browser/build.js` reads it from there), and the Release workflow gives the
-npm package (the root `package.json`) the same one.
+TeXglass has **two version numbers**, each with its own release workflow:
 
-**Pull requests don't change the version.** Not in `vscode/package.json`, not
-in `vscode/package-lock.json`, not anywhere else. That way parallel pull
-requests never conflict over version numbers. Describe the change in the pull
-request title; the release notes are generated from those titles.
+- the `"version"` in `vscode/package.json`, for the VS Code extension; the
+  **Release** workflow gives the npm package (the root `package.json`) the
+  same one;
+- the `"version"` in `browser/package.json`, for the browser extension
+  (`browser/build.js` reads it from there); only the **Browser release**
+  workflow moves it.
 
-### Releasing
+**Pull requests don't change either version.** Not in `vscode/package.json`,
+not in `vscode/package-lock.json`, not in `browser/package.json`, not anywhere
+else. That way parallel pull requests never conflict over version numbers.
+Describe the change in the pull request title; the release notes are generated
+from those titles.
+
+### Releasing the VS Code extension
 
 From GitHub, no local clone needed:
 
@@ -71,17 +76,27 @@ From GitHub, no local clone needed:
 2. Pick **minor** (new features, the usual choice), **patch** (fixes only) or
    **major**.
 
-The workflow raises the version, runs the tests, builds the `.vsix` and the
-browser extension zips, then pushes a `Release vX.Y.Z` commit to `main` with
-the `vX.Y.Z` tag, creates the GitHub release and publishes to the VS Code
-Marketplace (and Open VSX when its token is set) and sends the Firefox build to
-Firefox Add-ons (when its key is set). If anything fails before the push,
-nothing changes on `main`; fix it and run the workflow again.
+The workflow raises the version, runs the tests, builds the `.vsix`, then
+pushes a `Release vX.Y.Z` commit to `main` with the `vX.Y.Z` tag, creates the
+GitHub release and publishes to the VS Code Marketplace (and Open VSX when its
+token is set). If anything fails before the push, nothing changes on `main`;
+fix it and run the workflow again.
 
-`main` is protected, and the workflow's built-in token can't bypass that, so
-the release commit is pushed with the deploy key in the `RELEASE_DEPLOY_KEY`
-secret. That key must have write access and be on the bypass list of the
-`main` ruleset.
+Fallback from a clone: change the version in `vscode/package.json` in its own
+commit on `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The same
+workflow runs on the tag.
+
+### Releasing the browser extension
+
+1. Open **Actions → Browser release → Run workflow** on `main`.
+2. Pick **minor**, **patch** or **major**, as above.
+
+The workflow raises the version in `browser/package.json`, runs the tests,
+builds the Chrome and Firefox zips, then pushes a `Browser extension: release
+X.Y.Z` commit to `main` with the `browser-vX.Y.Z` tag, creates the GitHub
+release *TeXglass for arXiv X.Y.Z* with both zips (not marked as the latest
+release, which stays the VS Code extension's) and sends the Firefox build to
+Firefox Add-ons (when its key is set).
 
 Firefox Add-ons (addons.mozilla.org) gets each release as a new listed
 version of the add-on `texglass-arxiv@klepo0.github.io` (the ID in
@@ -96,9 +111,16 @@ secrets, and skips this step without them:
    repository secret** and add `AMO_JWT_ISSUER` (the "JWT issuer", like
    `user:12345:67`) and `AMO_JWT_SECRET` (the "JWT secret").
 
-Fallback from a clone: change the version in `vscode/package.json` in its own
-commit on `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The same
-workflow runs on the tag.
+Fallback from a clone: change the version in `browser/package.json` in its own
+commit on `main`, then `git tag browser-vX.Y.Z && git push origin
+browser-vX.Y.Z`.
+
+### Pushing to protected `main`
+
+`main` is protected, and the workflows' built-in token can't bypass that, so
+both release workflows push their release commit with the deploy key in the
+`RELEASE_DEPLOY_KEY` secret. That key must have write access and be on the
+bypass list of the `main` ruleset.
 
 ### Test builds
 
@@ -111,5 +133,5 @@ they can't be confused with a release:
 - VS Code extension: `npm run package:dev` inside `vscode/` writes
   `vscode/texglass-<version>-dev.<commit>.vsix`.
 
-The Release workflow builds with `node browser/build.js --release` and
-`vsce package` for the clean names.
+The release workflows build with `node browser/build.js --release` (Browser
+release) and `vsce package` (Release) for the clean names.
