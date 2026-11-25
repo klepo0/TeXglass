@@ -1219,6 +1219,12 @@ offline** (the bookmark) at the top of the **…** menu. The **Open** dialog lis
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
 
+**Long papers.** A paper with thousands of formulas (a few hundred pages)
+draws its formulas only near the part on screen, so the phone's browser does
+not run out of memory and close the page. Search, **Navigate**, the notation
+index, the map and your notes still see the whole paper. Scrolling fast, a
+formula can appear a moment after the text around it.
+
 **The first-run tour** works here too: its cards sit at the bottom of the
 screen and point at the compact toolbar (see
 [First-run tour](#first-run-tour-show-me-around)).
