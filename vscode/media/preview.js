@@ -647,14 +647,14 @@
   // Formulas and pictures TeXglass could not draw, drawn by the reader's own LaTeX:
   // the extension compiles them (texglass.localTex) and sends PDFs, shown as images.
   const pendingTex = new Map();
-  let texId = 0;
+  let fallbackId = 0;
   let texPreamble = ''; // the document's preamble, from the extension with each render
   const texFallback = window.TeXglassTexFallback
     ? window.TeXglassTexFallback.create({
       root: preview,
       preamble: () => texPreamble,
       request: (pieces) => new Promise((resolve) => {
-        const id = ++texId;
+        const id = ++fallbackId;
         pendingTex.set(id, resolve);
         vscode.postMessage({ type: 'tex-fallback', id, pieces });
       }),
