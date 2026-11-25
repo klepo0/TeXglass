@@ -988,3 +988,49 @@ $\infer[\text{rule}]{C}{A & B}$
   noMathErrors(html);
   assert.equal((html.match(/<mfrac>/g) || []).length, 3);
 });
+
+test('plain TeX Cyrillic fonts (\\font\\cs=wncyr10) and amsmath \\sideset render', () => {
+  const { html } = strictKatex(String.raw`
+\font\cyr=wncyr10
+\newcommand{\Sha}{\text{\cyr SH}}
+\begin{document}
+The group $\Sha(E/K)$ and {\cyr Shch} in text.
+$$\sideset{}{^\ast}\sum_{n\le N} a_n \qquad \sideset{_a}{'}\prod_k b_k$$
+\end{document}`);
+  noMathErrors(html);
+  assert.doesNotMatch(html, /color:#cc0000/); // no undefined commands
+  const t = text(html);
+  assert.match(t, /Ш/);
+  assert.match(t, /Щ in text/);
+  assert.match(html, /∗/);
+});
+
+test('\\thanks in the title gets a symbol, not a number; affiliations after \\\\ are separate lines', () => {
+  const { html } = strictKatex(String.raw`\title{On Widgets}
+\author{Ann Smith$^{1}$\thanks{Funded by a made-up grant.}\\[6pt]
+\small $^1$Department of Widgets,\\[-2pt] \small Some Town \and Bob Jones\thanks{Also funded.}}
+\begin{document}
+\maketitle
+Text\footnote{The first real note.} and $x\footnote{A note in math.}$.
+\end{document}`);
+  noMathErrors(html);
+  const marks = (html.match(/<sup class="fn"><a [^>]*>([^<]*)<\/a><\/sup>/g) || []).map((m) => />([^<]*)<\/a>/.exec(m)[1]);
+  assert.deepEqual(marks, ['∗', '†', '1']); // the math note is a KaTeX superscript
+  assert.match(html, /<li id="fn-1" class="fn-symbol" data-mark="∗">Funded/);
+  assert.match(html, /<li id="fn-3" value="1">The first real note/);
+  assert.match(html, /<li id="fn-4" value="2">A note in math/);
+  const author = /<span class="author">(.*?)<\/span><span class="author">/.exec(html)[1];
+  assert.equal((author.match(/class="affil"/g) || []).length, 2);
+  assert.match(text(author), /Department of Widgets,/);
+  assert.doesNotMatch(text(author), /\[6pt\]|\[-2pt\]/);
+});
+
+test('a section title with a reference makes a contents entry without a link inside', () => {
+  const { toc } = strictKatex(String.raw`\begin{document}
+\begin{equation}\label{e1} a=b \end{equation}
+\subsection{How \texorpdfstring{\eqref{e1}}{(1)} is used}
+\end{document}`);
+  const entry = toc.find((t) => /How/.test(t.title));
+  assert.doesNotMatch(entry.title, /<a\b/);
+  assert.match(text(entry.title), /How \(1\) is used/);
+});

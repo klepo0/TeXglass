@@ -440,6 +440,8 @@
     // \newcommand{\R}{\ensuremath{\mathbb R}} used inside $…$); \xspace adds nothing there.
     '\\ensuremath': '#1',
     '\\xspace': '',
+    // amsmath \sideset{_a^b}{^*}\sum: scripts beside the operator, its limits still above and below
+    '\\sideset': '\\mathop{{}#1#3\\nolimits#2}',
     '\\MoveEqLeft': '',
     // vertical space between the rows of an array: the row gaps are KaTeX's own
     '\\smallskip': '',
@@ -993,6 +995,39 @@
   ]);
 
   /** Commands texglass.sty defines: TeXglass reads them itself, so a copy of the package never redefines them. */
+  // Plain TeX \font\cs=wncyr10: the Washington Cyrillic fonts, typed in
+  // Latin letters (OT2 transliteration), as in \text{\Shafont SH} for Ш.
+  const CYRILLIC = [
+    ['shch', 'щ'], ['sh', 'ш'], ['ch', 'ч'], ['zh', 'ж'], ['kh', 'х'], ['yu', 'ю'], ['ya', 'я'], ['yo', 'ё'],
+    ['a', 'а'], ['b', 'б'], ['v', 'в'], ['g', 'г'], ['d', 'д'], ['e', 'е'], ['z', 'з'], ['i', 'и'], ['j', 'й'], ['k', 'к'],
+    ['l', 'л'], ['m', 'м'], ['n', 'н'], ['o', 'о'], ['p', 'п'], ['r', 'р'], ['s', 'с'], ['t', 'т'], ['u', 'у'], ['f', 'ф'],
+    ['x', 'х'], ['c', 'ц'], ['y', 'ы'], ['h', 'х'],
+  ];
+  /** Latin letters as the wncyr fonts draw them: "SH" -> "Ш", "Shch" -> "Щ". */
+  function cyrillic(text) {
+    let out = '';
+    for (let i = 0; i < text.length;) {
+      const rest = text.slice(i).toLowerCase();
+      const hit = CYRILLIC.find(([l]) => rest.startsWith(l));
+      if (!hit) { out += text[i++]; continue; }
+      out += text[i] === text[i].toUpperCase() && /[A-Za-z]/.test(text[i]) ? hit[1].toUpperCase() : hit[1];
+      i += hit[0].length;
+    }
+    return out;
+  }
+  // \texglassCyr: the letters after it, up to the end of the group, in Cyrillic
+  MATH_MACROS['\\texglassCyr'] = (ctx) => {
+    let letters = '';
+    while (/^[ A-Za-z]$/.test(ctx.future().text)) {
+      const t = ctx.popToken().text;
+      if (t !== ' ' || letters) letters += t;
+    }
+    return letters.trim() ? `\\text{${cyrillic(letters.trim())}}` : '';
+  };
+
+  // the marks of \thanks notes, as LaTeX's \fnsymbol
+  const FN_SYMBOLS = ['∗', '†', '‡', '§', '¶', '‖', '∗∗', '††', '‡‡'];
+
   const TG_COMMANDS = new Set(['tgdefine', 'tguses', 'tgparam', 'tgvalue', 'tgstep', 'tghide', 'tgonly']);
   const TG_ENVS = new Set(['tghide', 'tgonly']);
   /** HTML of only the empty markers they leave. */
@@ -1173,6 +1208,7 @@
       this.toc = [];
       this.cites = Object.create(null);
       this.footnotes = [];
+      this.fnSymbols = [];
       this.warnings = [];
       this.macros = Object.create(null); // name (without backslash) -> {nargs, def, body}
       this.params = new Map(); // \tgparam by name (scanParams); values set by sliders in options.params
@@ -1356,7 +1392,7 @@
           this.footnote(g.content);
           notes.set(g.content, this.footnotes.length);
         }
-        out += tex.slice(last, m.index) + `{}^{${notes.get(g.content)}}`;
+        out += tex.slice(last, m.index) + `{}^{${this.fnLabel(notes.get(g.content))}}`;
         last = g.end;
       }
       return out + tex.slice(last);
@@ -1490,7 +1526,11 @@
       if (this.footnotes.length) {
         const notes =
           '<section class="footnotes"><ol>' +
-          this.footnotes.map((f, k) => `<li id="fn-${k + 1}">${f} <a class="fn-back" href="#fnref-${k + 1}">↩</a></li>`).join('') +
+          this.footnotes.map((f, k) => {
+            const label = this.fnLabel(k + 1);
+            const mark = label === String(k + 1) ? '' : /^\d+$/.test(label) ? ` value="${label}"` : ` class="fn-symbol" data-mark="${escapeHtml(label)}"`;
+            return `<li id="fn-${k + 1}"${mark}>${f} <a class="fn-back" href="#fnref-${k + 1}">↩</a></li>`;
+          }).join('') +
           '</ol></section>';
         html += '\n' + notes;
         if (this.blocks) this.blocks.push(notes);
@@ -2078,7 +2118,7 @@
         }
         case 'thanks': {
           const a = readArg(src, i);
-          return res(this.footnote(a.content), a.end);
+          return res(this.footnote(a.content, true), a.end);
         }
         case 'texorpdfstring': {
           const tex = readArg(src, i);
@@ -2276,6 +2316,10 @@
           (this.treeSymbols || (this.treeSymbols = Object.create(null)))[nm.content.trim()] = { baseline: bl.content.trim(), body: body.content };
           return res('', body.end);
         }
+        case 'texglassCyr': {
+          const m = /^[ \t]*([A-Za-z]+)/.exec(src.slice(i));
+          return m ? res(escapeHtml(cyrillic(m[1])), i + m[0].length) : res('', i);
+        }
         case 'texglassTree': {
           const a = readArg(src, i);
           return res(this.inlineMath(`\\texglassTree{${a.content}}`), a.end);
@@ -2347,9 +2391,9 @@
         }
         case 'font': {
           // Plain TeX font declarations used as text selectors in math boxes.
-          const font = /^\\([A-Za-z@]+)\s*=\s*(cmss\d+)(?![A-Za-z0-9])(?:\s+(?:at\s*[\d.]+\s*pt|scaled\s*(?:\\magstep\s*)?\d+))?/.exec(src.slice(i));
+          const font = /^\\([A-Za-z@]+)\s*=\s*(cmss|wncy[rbi])(\d+)(?![A-Za-z0-9])(?:\s+(?:at\s*[\d.]+\s*pt|scaled\s*(?:\\magstep\s*)?\d+))?/.exec(src.slice(i));
           if (!font) break;
-          this.macros[font[1]] = { nargs: 0, def: null, body: '\\sf' };
+          this.macros[font[1]] = { nargs: 0, def: null, body: font[2] === 'cmss' ? '\\sf' : '\\texglassCyr' };
           this._katexMacros = null;
           return res('', i + font[0].length);
         }
@@ -2673,11 +2717,23 @@
 
     // --- footnotes, citations, title, toc ----------------------------------
 
-    footnote(text) {
+    /**
+     * A footnote; its mark is the next number, or for `symbol` (\thanks in the
+     * title) the next of LaTeX's footnote symbols, which leave the numbers alone.
+     */
+    footnote(text, symbol) {
       this.footnotes.push(null);
       const k = this.footnotes.length;
+      if (symbol) (this.fnSymbols || (this.fnSymbols = []))[k - 1] = FN_SYMBOLS[this.fnSymbols.filter(Boolean).length % FN_SYMBOLS.length];
       this.footnotes[k - 1] = this.flow(text, true);
-      return `<sup class="fn"><a href="#fn-${k}" id="fnref-${k}">${k}</a></sup>`;
+      return `<sup class="fn"><a href="#fn-${k}" id="fnref-${k}">${escapeHtml(this.fnLabel(k))}</a></sup>`;
+    }
+
+    /** The mark of footnote k (from 1): its symbol, or its number among the numbered ones. */
+    fnLabel(k) {
+      const syms = this.fnSymbols || [];
+      if (syms[k - 1]) return syms[k - 1];
+      return String(k - syms.slice(0, k - 1).filter(Boolean).length);
     }
 
     citeHtml(keys, note) {
@@ -2700,7 +2756,16 @@
       let html = '<header class="title-block">';
       if (m.title) html += `<h1 class="doc-title">${this.flow(m.title, true)}</h1>`;
       if (m.author) {
-        const authors = splitTop(m.author, commandSep('and')).map((a) => `<span class="author">${this.flow(a.trim(), true)}</span>`);
+        // A name, then lines of affiliation after \\ (in the text's own font, not the name's small capitals).
+        const lineSep = (t, i) => {
+          const b = /^\\\\\*?(?:\s*\[[^\]]*\])?/.exec(t.slice(i, i + 40));
+          return b ? b[0].length : 0;
+        };
+        const authors = splitTop(m.author, commandSep('and')).map((a) => {
+          const [name, ...lines] = splitTop(a.trim(), lineSep).map((l) => l.trim()).filter(Boolean);
+          const affil = lines.map((l) => `<span class="affil">${this.flow(l, true)}</span>`).join('');
+          return `<span class="author">${this.flow(name || '', true)}${affil}</span>`;
+        });
         html += `<div class="authors">${authors.join('')}</div>`;
       }
       const date = m.date === null ? this.options.today || formatToday() : this.flow(m.date, true);
@@ -2737,7 +2802,10 @@
       if (level >= 5) {
         return { html: `<strong class="run-in" id="${id}">${title}</strong> `, end: a.end, parbreak: true };
       }
-      if (!s.star || level <= 2) this.toc.push({ level, num, title: o ? this.flow(o.content, true) : title, id });
+      // The contents entry is itself a link: links in the title (\eqref, \cite) become plain text,
+      // since a link inside a link breaks the entry apart.
+      const tocTitle = (o ? this.flow(o.content, true) : title).replace(/<a\b[^>]*>|<\/a>/g, '');
+      if (!s.star || level <= 2) this.toc.push({ level, num, title: tocTitle, id });
       const tag = 'h' + Math.min(6, Math.max(1, level));
       const prefix = num ? `<span class="secnum">${this.appendix && name === this.topLevel && name === 'chapter' ? 'Appendix ' : ''}${escapeHtml(num)}</span>` : '';
       return { html: `<${tag} id="${id}" class="${name}">${prefix}${title}</${tag}>`, end: a.end, block: true };
