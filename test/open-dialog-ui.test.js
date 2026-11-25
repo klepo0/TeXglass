@@ -147,7 +147,8 @@ $\frac{a}$ and $\unknowncommand$ and $\eqref{missing-equation}$.
     await page.waitForSelector('#original-pdf:not([hidden])', { state: 'attached' });
     assert.equal(await page.getAttribute('#original-pdf', 'href'), 'https://arxiv.org/pdf/math/0601001v2');
 
-    await page.click('#open');
+    await page.click('#more'); // on a phone, Open is in the … menu (the gear has its place)
+    await page.click('#more-compact #open');
     await page.fill('#arxiv-input', '2401.00001v3');
     await page.press('#arxiv-input', 'Enter');
     await page.waitForSelector('#arxiv-original-pdf:not([hidden])');
