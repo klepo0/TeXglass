@@ -324,15 +324,21 @@
       if (/^(tex|ltx|latex|bbl|bib|sty|cls|def)$/.test(ext) || !path.includes('.')) texFiles[path] = decodeText(data);
       else if (IMAGE_TYPES[ext]) images[path] = new Blob([data], { type: IMAGE_TYPES[ext] });
     }
-    // .eps figures, which browsers cannot show, drawn as SVG (unless the authors
-    // also uploaded the figure as a picture browsers can show)
+    // Use a browser-ready image if available. Otherwise draw EPS as SVG or
+    // pass supported embedded rasters to the viewer's PDF renderer.
     if (Eps) {
       for (const [path, data] of Object.entries(raw)) {
         if (!/\.(eps|ps|epsi|epsf)$/i.test(path)) continue;
         const stem = path.replace(/\.[^.]+$/, '');
         if (['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'].some((e) => images[stem + e])) continue;
+        const source = latin1(data);
+        const pdf = Eps.rasterPdf(source);
+        if (pdf) {
+          images[path] = new Blob([pdf], { type: 'application/pdf' });
+          continue;
+        }
         let r = null;
-        try { r = Eps.toSvg(latin1(data)); } catch (e) { r = null; }
+        try { r = Eps.toSvg(source); } catch (e) { r = null; }
         if (r) images[path] = new Blob([r.svg], { type: 'image/svg+xml' });
       }
     }

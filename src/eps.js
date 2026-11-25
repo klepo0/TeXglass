@@ -939,5 +939,69 @@
     return { svg, partial: r.partial };
   }
 
-  return { toSvg, _: { scan, run } };
+  // eps2write can wrap one raster in a PostScript PDF-operator emulator. For
+  // that format, reuse PDF.js's image decoder instead of running the prolog.
+  function rasterPdf(text) {
+    if (/^%%Creator: cairo /m.test(text)) return cairoRasterPdf(text);
+    if (!/^%%Creator: (?:GPL )?Ghostscript [^\r\n]*\(eps2write\)\s*$/m.test(text)) return null;
+    const page = /^%%BeginPageSetup\r?\n([\s\S]*?)^%%EndPageSetup/m.exec(text);
+    if (!page) return null;
+    const size = /\/MediaBox\s*\[\s*0\s+0\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*\]/.exec(page[1]);
+    if (!size || !size.slice(1).every((n) => Number(n) > 0 && Number(n) <= 14400)) return null;
+    const rest = text.slice(page.index + page[0].length);
+    const raster = /^\s*\d+ 0 obj\s*<<\/Length \d+>>stream\s*(q\s+[\d.\s-]+cm\s+q\s+[\d.\s-]+cm)\s+BI\s+\/CS\/Device(RGB|Gray)\s+\/W (\d+)\s+\/H (\d+)\s+\/BPC 8\s+\/F\[\s*\/A85\s+\/(LZW|Fl)\s*\]\s+ID\s+/.exec(rest.slice(0, 1024));
+    if (!raster) return null;
+    const [, matrix, color, width, height, filter] = raster;
+    const data = rasterData(rest, raster[0].length, /^\s+EI\s+Q\s+Q\s+endstream\s+endobj\s+%%PageTrailer/);
+    if (!data) return null;
+    return imagePdf([0, 0, size[1], size[2]], matrix + ' /Im0 Do Q Q\n',
+      color, width, height, filter === 'LZW' ? 'LZWDecode' : 'FlateDecode', data);
+  }
+
+  function cairoRasterPdf(text) {
+    const box = /^%%(?:HiRes)?BoundingBox:[ \t]+(-?[\d.]+)[ \t]+(-?[\d.]+)[ \t]+(-?[\d.]+)[ \t]+(-?[\d.]+)[ \t]*\r?$/m.exec(text);
+    const pageAt = text.indexOf('%%EndPageSetup');
+    if (!box || pageAt < 0) return null;
+    const rest = text.slice(pageAt + '%%EndPageSetup'.length);
+    const raster = /^\s*q ([\d.\s-]+) rectclip\s+([\d.\s-]+) cm q\s+q\s+([\d.\s-]+) re W n\s+\[([\d.\s-]+)\] concat\s+\/cairo_ascii85_file currentfile \/ASCII85Decode filter def\s+\/Device(RGB|Gray) setcolorspace\s+<<\s*\/ImageType 1\s*\/Width (\d+)\s*\/Height (\d+)\s*\/Interpolate false\s*\/BitsPerComponent 8\s*\/Decode \[([ 01]+)\]\s*\/DataSource cairo_ascii85_file \/FlateDecode filter\s*\/ImageMatrix \[\s*(\d+) 0 0 -(\d+) 0 (\d+) \]\s*>>\s*cairo_image\s+/.exec(rest.slice(0, 1024));
+    if (!raster) return null; // vector drawing and interleaved masks have different operators
+    const [, clip, transform, innerClip, matrix, color, width, height, decode, sx, sy, oy] = raster;
+    if (width !== sx || height !== sy || height !== oy || decode.trim() !== (color === 'RGB' ? '0 1 0 1 0 1' : '0 1')) return null;
+    const data = rasterData(rest, raster[0].length, /^\s+Q\s+Q Q\s+showpage\b/);
+    if (!data) return null;
+    const operators = 'q ' + clip + ' re W n ' + transform + ' cm q q ' + innerClip + ' re W n ' + matrix + ' cm /Im0 Do Q Q Q\n';
+    return imagePdf(box.slice(1), operators, color, width, height, 'FlateDecode', data);
+  }
+
+  function rasterData(source, start, trailer) {
+    const end = source.indexOf('~>', start);
+    if (end < 0 || end - start > 16 * 1024 * 1024 || !trailer.test(source.slice(end + 2, end + 1026))) return null;
+    const encoded = source.slice(start, end);
+    return /^[!-uz\r\n\t ]+$/.test(encoded) ? encoded + '~>' : null;
+  }
+
+  function imagePdf(box, operators, color, width, height, filter, data) {
+    const [x0, y0, x1, y1] = box.map(Number);
+    if (![x0, y0, x1, y1].every(Number.isFinite) || x1 <= x0 || y1 <= y0 || x1 - x0 > 14400 || y1 - y0 > 14400) return null;
+    if (!(Number(width) > 0 && Number(height) > 0 && width * height <= 140000000)) return null;
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      `<< /Type /Page /Parent 2 0 R /MediaBox [${box.join(' ')}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>`,
+      `<< /Length ${operators.length} >>\nstream\n${operators}endstream`,
+      `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /Device${color} /BitsPerComponent 8 /Filter [/ASCII85Decode /${filter}] /Length ${data.length} >>\nstream\n${data}\nendstream`,
+    ];
+    let pdf = '%PDF-1.4\n';
+    const offsets = [];
+    for (const [i, object] of objects.entries()) {
+      offsets.push(pdf.length);
+      pdf += `${i + 1} 0 obj\n${object}\nendobj\n`;
+    }
+    const xref = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+    return pdf + `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  }
+
+  return { toSvg, rasterPdf, _: { scan, run } };
 });

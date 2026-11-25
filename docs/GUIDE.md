@@ -1411,8 +1411,8 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   (`\begin{bibdiv}…\bib{key}{article}{…}`).
 - **Figures**: PNG, JPEG, SVG, GIF and WebP, with `\graphicspath`. `.eps`
   figures (common in older papers) are drawn as SVG by a small PostScript
-  interpreter, pictures inside them included, and `.pdf` figures with pdf.js,
-  loaded only for papers that have them.
+  interpreter. PDF figures and single-raster EPS from Ghostscript or Cairo
+  are drawn with pdf.js, which loads only when needed.
 - **Diagrams**: `tikzcd` and `\xymatrix` (bends, shifts, 2-cells, arrow
   styles) and `tikzpicture`s, including `\clip`, hatching patterns, braces,
   pictures inside nodes, macros that hold paths, and `\resizebox` to the
