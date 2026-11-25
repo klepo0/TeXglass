@@ -1,6 +1,6 @@
 {
   "name": "texglass",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Convert LaTeX papers to HTML in pure JavaScript: math, numbered theorems with working references, TikZ, bibliography. Library and CLI, with an optional interactive reader page.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "author": "Khoa Le",
