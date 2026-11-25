@@ -1034,3 +1034,11 @@ test('a section title with a reference makes a contents entry without a link ins
   assert.doesNotMatch(entry.title, /<a\b/);
   assert.match(text(entry.title), /How \(1\) is used/);
 });
+
+test('\\fontsize{size}{skip} prints nothing, in the title or in the text', () => {
+  const { html } = plain(String.raw`\title{\fontsize{20}{24}\selectfont\bfseries Big title}\begin{document}\maketitle
+Some {\fontsize{9pt}{11pt}\selectfont small} words.\end{document}`);
+  assert.doesNotMatch(text(html), /20|24|9pt|11pt/);
+  assert.match(text(html), /Big title/);
+  assert.match(text(html), /Some small words\./);
+});
