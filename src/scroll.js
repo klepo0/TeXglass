@@ -246,7 +246,7 @@
     return api;
   }
 
-  const api = { to, placeOf, remember, history };
+  const api = { to, remember, history };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TeXglassScroll = api;
 })(typeof self !== 'undefined' ? self : this);

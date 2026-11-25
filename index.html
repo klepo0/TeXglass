@@ -68,7 +68,6 @@
     <div class="mode-switch" role="group" aria-label="Mode">
       <button id="mode-preview" type="button" aria-pressed="true" title="Read the rendered document (Ctrl+E)">Preview</button>
       <button id="mode-edit" type="button" aria-pressed="false" title="Click any part of the document to edit it (Ctrl+E)">Edit</button>
-      <button id="mode-split" type="button" aria-pressed="false" title="Source and preview side by side, scrolling together (Ctrl+Shift+E)">Split</button>
     </div>
     <button id="open" type="button" class="tb-iconic" title="Open a paper from arXiv, a repository from GitHub, or a .tex file from this computer (Ctrl+K). Ctrl+O picks a .tex file; Shift+click or Ctrl+Shift+O, a folder" aria-label="Open" aria-keyshortcuts="Control+K Meta+K"><svg class="tb-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 18.5V6a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H18A1.5 1.5 0 0 1 19.5 8.2V10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M3.5 18.5l2.6-7.1a1.5 1.5 0 0 1 1.4-1h13.1a1 1 0 0 1 .9 1.3l-2.3 6.1a1.5 1.5 0 0 1-1.4.9H3.5Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg><span class="tb-label">Open</span></button>
     <input id="file-input" type="file" accept=".tex,.ltx,.latex,.tmd,text/x-tex,text/plain" multiple hidden>
@@ -156,10 +155,6 @@
       </div>
       <ol id="toc-list" class="toc-list"></ol>
     </nav>
-    <section class="pane source-pane" id="source-pane" hidden>
-      <textarea id="source" spellcheck="false" aria-label="LaTeX source"></textarea>
-    </section>
-    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize the source and preview panes" aria-valuemin="15" aria-valuemax="85" aria-valuenow="50" tabindex="0" title="Drag to resize · double-click to reset" hidden></div>
     <section class="pane preview-pane" id="preview-pane">
       <article id="preview" class="document"></article>
       <div class="add-block-row"><button id="add-block" type="button" class="add-block">+ Add text at the end</button></div>

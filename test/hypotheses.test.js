@@ -301,10 +301,8 @@ test('in the viewer, hovering a result cited in a proof shows its hypotheses and
     });
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    await page.click('#mode-split');
-    await page.fill('#source', DOC);
+    await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
     await page.waitForSelector('#preview .proof a.ref');
-    await page.click('#mode-preview');
     await page.hover('#preview .proof a.ref >> nth=0');
     await page.waitForSelector('#ref-popover:not([hidden]) .hyp-check');
     await page.hover('#ref-popover .hyp-box >> nth=0');

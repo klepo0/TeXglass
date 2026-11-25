@@ -60,9 +60,7 @@ test('a tall reference preview stays inside a small window and scrolls', { skip:
     });
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    await page.click('#mode-split');
-    await page.fill('#source', DOC);
-    await page.click('#mode-preview');
+    await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
     await page.waitForFunction(() => [...document.querySelectorAll('#preview a.ref')].some((a) => a.textContent.trim() === '1'));
     const link = page.locator('#preview a.ref', { hasText: /^1$/ }).last();
 

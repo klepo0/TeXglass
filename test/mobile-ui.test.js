@@ -110,7 +110,7 @@ test('on a phone: one row of large buttons, drawers, formulas that fit, previews
     // the toolbar: one row; the rest is at the top of the "…" menu
     const bar = await page.evaluate(() => ({
       h: document.querySelector('.toolbar').offsetHeight,
-      inMenu: !!document.querySelector('#more-compact #mode-split') && !!document.querySelector('#more-compact .zoom-group'),
+      inMenu: !!document.querySelector('#more-compact #mode-preview') && !!document.querySelector('#more-compact .zoom-group'),
       wide: document.documentElement.scrollWidth > innerWidth,
       small: [...document.querySelectorAll('.toolbar > button:not([hidden]), .toolbar .more-button')].filter((b) => b.offsetParent && b.offsetHeight < 44).map((b) => b.id),
     }));
@@ -119,7 +119,7 @@ test('on a phone: one row of large buttons, drawers, formulas that fit, previews
     assert.equal(bar.wide, false, 'nothing runs off the side of the page');
     assert.deepEqual(bar.small, [], 'toolbar buttons are at least 44px tall');
     await page.tap('#more');
-    assert.equal(await page.locator('#more-compact #mode-split').isVisible(), true);
+    assert.equal(await page.locator('#more-compact #mode-preview').isVisible(), true);
     await page.tap('#more-compact #mode-edit');
     assert.equal(await page.locator('#more-menu').isHidden(), true, 'choosing a mode closes the menu');
     assert.equal(await page.getAttribute('#mode-edit', 'aria-pressed'), 'true');

@@ -39,11 +39,9 @@ test('M opens the larger map, which zooms and pans', { skip: !chromium && 'Playw
     });
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    await page.click('#mode-split');
-    await page.fill('#source', DOC);
+    await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
     await page.waitForFunction((n) => document.querySelectorAll('#preview .theorem').length >= n, N);
 
-    await page.click('#mode-preview');
     await page.click('#preview .theorem');
     await page.keyboard.press('m');
     await page.waitForSelector('.insight-dialog[open] .dep-map');
@@ -118,12 +116,12 @@ test('M opens the larger map, which zooms and pans', { skip: !chromium && 'Playw
     assert.equal(await page.evaluate(() => !!document.querySelector('.insight-dialog[open]')), false);
 
     // Typing M in the editor types it.
-    await page.click('#mode-split');
-    await page.focus('#source');
+    await page.click('#mode-edit');
+    await page.locator('#preview .theorem').first().click();
     await page.keyboard.press('Control+End');
     await page.keyboard.press('m');
     assert.equal(await page.evaluate(() => !!document.querySelector('.insight-dialog[open]')), false);
-    assert.match(await page.inputValue('#source'), /m$/);
+    assert.match(await page.inputValue('#inline-source'), /m$/);
   } finally {
     await browser.close();
   }

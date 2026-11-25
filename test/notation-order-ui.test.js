@@ -73,10 +73,8 @@ test('the Notation tab: search, Section / Kind / A–Z, and Used in …', { skip
     const load = async () => {
       await page.goto('http://texglass.test/index.html');
       await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-      await page.click('#mode-split');
-      await page.fill('#source', DOC);
+      await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
       await page.waitForFunction(() => document.querySelectorAll('#preview .theorem').length >= 1 && document.querySelectorAll('#preview h2').length >= 2);
-      await page.click('#mode-preview');
       await page.click('[data-side-tab="notation"]');
       await page.waitForSelector('.side-insight .insight-group');
     };

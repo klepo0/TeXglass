@@ -32,8 +32,7 @@ test('hovering a footnote mark previews the footnote text', { skip: !chromium &&
     });
     await page.goto('http://texglass.test/index.html');
     await page.waitForSelector('#preview h1, #preview h2, #preview .section');
-    await page.click('#mode-split');
-    await page.fill('#source', DOC);
+    await page.evaluate((doc) => window.TeXglassViewer.reshow(doc), DOC);
     await page.waitForSelector('#preview sup.fn a');
 
     await page.hover('#preview sup.fn a');
