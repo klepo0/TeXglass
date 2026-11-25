@@ -317,6 +317,12 @@ body {
 }
 .features-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .features-extra { padding: 8px 20px 12px; font-size: 13px; color: var(--muted); }
+/* Settings: About TeXglass, last in the list (app.js aboutSection) */
+.features-about .about-intro { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.features-about .about-links { margin: 0 0 8px; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 13.5px; }
+.features-about .about-links li { padding: 4px 0; }
+.features-about a { color: var(--accent); }
+@media (pointer: coarse) { .features-about .about-links li { padding: 8px 0; } }
 /* "What does this use?" buttons switched off */
 .tg-no-uses .uses-btn { display: none !important; }
 img.graphic { max-width: 100%; height: auto; }
