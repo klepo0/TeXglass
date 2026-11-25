@@ -285,6 +285,7 @@ body {
 .features-dialog {
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px); /* the visible height, under a phone's browser bars */
   border: 1px solid var(--rule);
   border-radius: 10px;
   padding: 0;
@@ -299,6 +300,7 @@ body {
 .features-head h2 { margin: 0; font-size: 17px; flex: 1; }
 .features-close { font: inherit; font-size: 20px; line-height: 1; padding: 2px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .features-close:hover { background: var(--accent-soft); color: var(--ink); }
+.features-back { display: none; }
 .features-intro { margin: 6px 20px 8px; font-size: 13px; color: var(--muted); }
 .features-list { overflow-y: auto; padding: 0 20px; min-height: 0; flex: 1; }
 .features-list fieldset { border: 0; margin: 0 0 6px; padding: 0; }
@@ -322,6 +324,24 @@ body {
 .features-about .about-links { margin: 0 0 8px; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 13.5px; }
 .features-about .about-links li { padding: 4px 0; }
 .features-about a { color: var(--accent); }
+/* On a phone Settings fills the screen: its title bar and Done stay in view
+   (clear of the notch and the home bar), and the list scrolls between them. */
+@media (max-width: 760px) {
+  .features-dialog {
+    width: 100%; max-width: none; height: 100%; height: 100dvh; max-height: none;
+    margin: 0; inset: 0; border: 0; border-radius: 0; box-shadow: none;
+  }
+  .features-head { padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left)); }
+  .features-close { display: none; }
+  .features-back {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;
+    margin: 0 4px 0 -12px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--accent); cursor: pointer;
+  }
+  .features-back svg { width: 26px; height: 26px; }
+  .features-back:active { background: var(--accent-soft); }
+  .features-foot { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .features-foot button { min-height: 44px; }
+}
 @media (pointer: coarse) { .features-about .about-links li { padding: 8px 0; } }
 /* "What does this use?" buttons switched off */
 .tg-no-uses .uses-btn { display: none !important; }

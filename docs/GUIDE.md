@@ -455,6 +455,10 @@ code on GitHub, this guide, the issue tracker (to report a problem or ask for a
 feature), the license and the support page. On a phone, this is where to find
 the GitHub repository.
 
+On a phone Settings fills the screen. The **‹** arrow before its title stays at
+the top while the list scrolls, and it, **Done**, or the phone's own Back
+(button or swipe) close it and return you to the paper.
+
 Click an item to jump to it, **×** to unpin it. **Clear all** unpins
 everything, after asking (your pin sets and notes stay, so a saved set brings
 them back; the reading order goes, so new pins start in the paper's order).

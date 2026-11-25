@@ -3767,8 +3767,30 @@
   // About TeXglass, last in the list so that it scrolls with it on a phone
   if (settingsPanel) settingsPanel.element.querySelector('.features-list').appendChild(aboutSection());
   if ($('settings')) {
-    if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
+    if (settingsPanel) $('settings').addEventListener('click', () => openSettings());
     else $('settings').hidden = true;
+  }
+  // On a phone, Settings fills the screen, so the phone's Back (button or swipe)
+  // closes it: opening it adds a history entry, and going back closes it.
+  function openSettings() {
+    settingsPanel.open();
+    if ((narrow.matches || coarse.matches) && !(history.state && history.state.tgSettings)) {
+      try { history.pushState({ ...(history.state || {}), tgSettings: true }, ''); } catch { /* sandboxed */ }
+    }
+  }
+  if (settingsPanel) {
+    // a Back arrow before the title, as in a phone app (shown on narrow screens)
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'features-back';
+    back.setAttribute('aria-label', 'Back');
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    back.addEventListener('click', () => settingsPanel.close());
+    settingsPanel.element.querySelector('.features-head').prepend(back);
+    settingsPanel.element.addEventListener('close', () => {
+      if (history.state && history.state.tgSettings) history.back(); // closed with its own buttons: drop the entry
+    });
+    window.addEventListener('popstate', () => { if (settingsPanel.isOpen()) settingsPanel.close(); });
   }
   // Settings changed in another tab of this browser.
   window.addEventListener('storage', (e) => {

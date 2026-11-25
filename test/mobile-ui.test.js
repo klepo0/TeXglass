@@ -257,8 +257,28 @@ test('on a phone: Settings ends with About TeXglass, linking to the repository',
     const links = await page.locator('.features-about a').evaluateAll((as) => as.map((a) => a.href));
     assert.ok(links.some((h) => h.endsWith('/docs/GUIDE.md')), 'the guide');
     assert.ok(links.includes('https://buymeacoffee.com/texglass'), 'the support page');
-    // and back on a wide window
+    // Settings fills the screen; its close button and Done are in view, and the
+    // phone's Back closes it (and leaves the page where it was)
+    await page.evaluate(() => { const l = document.querySelector('.features-list'); l.scrollTop = l.scrollHeight; }); // scrolled to the end
+    const inView = await page.evaluate(() => ['.features-back', '.features-done'].map((sel) => {
+      const r = document.querySelector('.features-dialog ' + sel).getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && r.height >= 44;
+    }));
+    assert.deepEqual(inView, [true, true], 'Back and Done are on screen and large enough to tap');
+    const url = page.url();
+    await page.goBack();
+    await page.waitForFunction(() => !document.querySelector('.features-dialog').open);
+    assert.equal(page.url(), url, 'Back closed Settings without leaving the page');
+    await page.tap('#settings');
+    await page.tap('.features-back');
+    assert.equal(await page.evaluate(() => document.querySelector('.features-dialog').open), false, 'the Back arrow closes it');
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => !!(history.state && history.state.tgSettings)), false, 'and drops its history entry');
+    await page.tap('#settings');
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.features-dialog').open);
+
+    // and back on a wide window
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.waitForTimeout(200);
     const order = await page.evaluate(() => {
