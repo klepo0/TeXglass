@@ -2998,3 +2998,7 @@ p > .tg-sliders, li > .tg-sliders, td > .tg-sliders, dd > .tg-sliders { margin-b
 div.tg-texfallback-picture { margin: 0.8em 0; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tg-texfallback-img { filter: invert(1) hue-rotate(180deg); } }
 @media screen { :root[data-theme="dark"] .tg-texfallback-img { filter: invert(1) hue-rotate(180deg); } }
+
+/* A formula of a long paper on a phone, away from the screen: its drawing is put
+   away (app.js stripMath); its text and equation number stay for the reading tools. */
+.katex-html.tg-lazy { visibility: hidden; }

@@ -83,6 +83,24 @@ test('importFile picks the main file of a repo', async () => {
   assert.match(r.source, /Chapter one\./);
 });
 
+test('importFile finds the main file of a repo when GitHub will not list it', async () => {
+  const H = 'https://raw.githubusercontent.com/o/r/HEAD';
+  const files = {
+    [`${H}/README.md`]: 'Read [the paper](paper/notes.pdf) or the [source](paper/).',
+    [`${H}/paper/notes.tex`]: '\\documentclass{article}\\begin{document}\\input{sec1}\\end{document}',
+    [`${H}/paper/sec1.tex`]: 'Section one.',
+  };
+  const base = fakeFetch(files);
+  const fetch = async (url) => (/api\.github\.com/.test(url) ? { ok: false, status: 403 } : base(url));
+  const r = await G.importFile('https://github.com/o/r', { fetch });
+  assert.equal(r.path, 'paper/notes.tex');
+  assert.match(r.source, /Section one\./);
+  assert.equal(r.links.view, 'https://github.com/o/r/blob/HEAD/paper/notes.tex');
+  // Nothing to guess from: the rate-limit message stays.
+  const none = async (url) => (/api\.github\.com/.test(url) ? { ok: false, status: 403 } : { ok: false, status: 404 });
+  await assert.rejects(G.importFile('https://github.com/o/r', { fetch: none }), /without signing in/);
+});
+
 test('importFile explains a missing or private file', async () => {
   await assert.rejects(G.importFile('https://github.com/o/r/blob/main/a.tex', { fetch: fakeFetch({}) }), /private/);
   await assert.rejects(G.importFile('https://example.com/x', { fetch: fakeFetch({}) }), /GitHub/);

@@ -272,7 +272,9 @@
   function showBlocks(blocks, source) {
     renderedDoc = source;
     if (comparing) comparing.view.clear(); // marks come off before the blocks change, and go back on below
+    if (!lazy) lazy = lazyWanted(blocks);
     patchPreview(blocks);
+    if (lazy || lazyNear) lazyPatched(patched);
     swapPdfFigures(); // a render that started before a PDF figure was drawn
     applyFolds();
     updateToc();
@@ -426,13 +428,19 @@
   /** Parse blocks of HTML into [{ html, nodes }], in one go. */
   function toEntries(blocks) {
     if (!blocks.length) return [];
-    const tpl = document.createElement('template');
-    tpl.innerHTML = blocks.join('<!--b-->');
     const entries = blocks.map((html) => ({ html, nodes: [] }));
-    let k = 0;
-    for (const node of Array.from(tpl.content.childNodes)) {
-      if (node.nodeType === 8 && node.data === 'b') k++;
-      else entries[k].nodes.push(node);
+    // A long paper on a phone is parsed a few blocks at a time, its formulas
+    // put away as they come (lazyMath), so it never holds them all at once.
+    const step = lazy ? 40 : blocks.length;
+    for (let i = 0; i < blocks.length; i += step) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = blocks.slice(i, i + step).join('<!--b-->');
+      if (lazy) stripMath(tpl.content);
+      let k = i;
+      for (const node of Array.from(tpl.content.childNodes)) {
+        if (node.nodeType === 8 && node.data === 'b') k++;
+        else entries[k].nodes.push(node);
+      }
     }
     return entries;
   }
@@ -519,6 +527,8 @@
   /** Forget the preview, e.g. before showing another document. */
   function clearPreview() {
     if (texFallback) texFallback.reset();
+    if (lazyNear) { lazyNear.disconnect(); lazyFar.disconnect(); lazyNear = lazyFar = null; }
+    lazy = false;
     preview.replaceChildren();
     shown = [];
     patched = null;
@@ -1967,6 +1977,144 @@
       if (el.scrollWidth > el.clientWidth + 1) el.classList.add('tg-reflow');
     });
   }
+  // --- long papers on phones: formulas drawn only near the screen ---------------
+  // A long paper can have tens of thousands of formulas, over a million elements
+  // in all, more than a phone's browser keeps before it closes the page. On a
+  // phone or tablet, a formula away from the screen keeps its MathML (with the
+  // TeX the reading tools read), its equation number and its text; its drawing
+  // waits as HTML in an attribute and goes back in as it nears the screen.
+  const LAZY_KEEP = '.tag, .mord.text[style*="color:#cc0000"]'; // what find, the map and the warnings look for
+  const LAZY_MIN = 3000; // formulas in a paper before it is drawn this way
+  const lazyForced = /[?&]lazy=1(&|$)/.test(location.search);
+  let lazy = false; // this paper's formulas are drawn only near the screen
+  let lazyNear = null; // IntersectionObservers: blocks coming near the screen, and going far from it
+  let lazyFar = null;
+
+  function lazyWanted(blocks) {
+    if (lazyForced) return true;
+    if (!narrow.matches && !coarse.matches) return false;
+    let n = 0;
+    for (const html of blocks) {
+      n += (html.match(/class="katex"/g) || []).length;
+      if (n >= LAZY_MIN) return true;
+    }
+    return false;
+  }
+
+  /** The topmost elements under `el` that the reading tools look for, in order. */
+  function lazyWalk(el) {
+    const out = [];
+    const walk = (e) => {
+      for (const c of Array.from(e.children)) {
+        if (c.matches(LAZY_KEEP)) out.push(c);
+        else walk(c);
+      }
+    };
+    walk(el);
+    return out;
+  }
+
+  const MATHML = 'http://www.w3.org/1998/Math/MathML';
+  /** Put away the drawing of each formula under `root`, keeping the same text in the same order. */
+  function stripMath(root) {
+    for (const html of Array.from(root.querySelectorAll('.katex > .katex-html:not(.tg-lazy)'))) {
+      const katex = html.parentNode;
+      const stub = document.createElement('span');
+      stub.className = 'katex-html tg-lazy';
+      stub.setAttribute('aria-hidden', 'true');
+      stub.dataset.h = katex.innerHTML;
+      let text = '';
+      const walk = (e) => {
+        for (const c of Array.from(e.childNodes)) {
+          if (c.nodeType === 3) text += c.data;
+          else if (c.nodeType === 1) {
+            if (!c.matches(LAZY_KEEP)) { walk(c); continue; }
+            if (text) { stub.append(text); text = ''; }
+            stub.append(c); // the same node, so what holds on to it still finds it after fillMath
+          }
+        }
+      };
+      walk(html);
+      if (text) stub.append(text);
+      // Of the MathML, only the TeX, which the reading tools read.
+      const mathml = katex.querySelector(':scope > .katex-mathml');
+      const tex = mathml && mathml.querySelector('annotation');
+      if (mathml && tex) {
+        const math = document.createElementNS(MATHML, 'math');
+        const sem = document.createElementNS(MATHML, 'semantics');
+        sem.append(tex);
+        math.append(sem);
+        mathml.replaceChildren(math);
+      }
+      html.replaceWith(stub);
+    }
+  }
+
+  /** Draw again each formula under `root` that stripMath put away. The kept elements stay the same nodes. */
+  function fillMath(root) {
+    const stubs = root.classList && root.classList.contains('tg-lazy') ? [root] : Array.from(root.querySelectorAll('.tg-lazy'));
+    for (const stub of stubs) {
+      const katex = stub.parentNode;
+      const tpl = document.createElement('template');
+      tpl.innerHTML = stub.dataset.h || '';
+      const html = Array.from(tpl.content.children).find((c) => c.classList.contains('katex-html'));
+      if (!html || !katex) continue;
+      const kept = Array.from(stub.children);
+      const fresh = lazyWalk(html);
+      if (kept.length === fresh.length) fresh.forEach((f, i) => f.replaceWith(kept[i]));
+      katex.replaceChildren(tpl.content);
+    }
+    return stubs.length;
+  }
+
+  let lazyChangedTimer = 0;
+  function lazyFill(el) {
+    if (!el.querySelector('.tg-lazy') || !fillMath(el)) return;
+    reflowSoon();
+    // highlights and notes are placed by the text's nodes, which the drawing replaced
+    clearTimeout(lazyChangedTimer);
+    lazyChangedTimer = setTimeout(() => { if (margin && margin.notes().length) margin.refresh(); }, 400);
+  }
+  function lazyStrip(el) {
+    if (!lazy || !el.querySelector('.katex > .katex-html:not(.tg-lazy)')) return;
+    const sel = window.getSelection();
+    if (el.contains(document.activeElement) || (sel && sel.rangeCount && el.contains(sel.getRangeAt(0).commonAncestorContainer))) return;
+    stripMath(el);
+  }
+
+  /** Watch the blocks a render added, draw the ones near the screen now (no blank formulas for a frame). */
+  function lazyPatched({ added, removed }) {
+    if (!('IntersectionObserver' in window)) { fillMath(preview); return; }
+    const style = getComputedStyle(previewPane).overflowY;
+    const root = style === 'auto' || style === 'scroll' ? previewPane : null;
+    if (!lazyNear || lazyNear.root !== root) {
+      if (lazyNear) { lazyNear.disconnect(); lazyFar.disconnect(); }
+      lazyNear = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) lazyFill(e.target); }), { root, rootMargin: '200% 0px' });
+      lazyFar = new IntersectionObserver((es) => es.forEach((e) => { if (!e.isIntersecting) lazyStrip(e.target); }), { root, rootMargin: '600% 0px' });
+      added = Array.from(preview.children);
+    }
+    removed.forEach((n) => { if (n.nodeType === 1) { lazyNear.unobserve(n); lazyFar.unobserve(n); } });
+    const box = root ? root.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const h = box.bottom - box.top;
+    for (const n of added) {
+      if (n.nodeType !== 1) continue;
+      if (n.parentNode === preview) { lazyNear.observe(n); lazyFar.observe(n); }
+      else { fillMath(n); continue; } // in the inline editor's preview
+      const r = n.getBoundingClientRect();
+      if (r.bottom > box.top - h && r.top < box.bottom + h) lazyFill(n);
+    }
+  }
+
+  // Copies of the page (previews on hover, the Pins tab, …) and printing get the drawings.
+  new MutationObserver((records) => {
+    for (const rec of records) {
+      for (const n of rec.addedNodes) {
+        if (n.nodeType === 1 && !preview.contains(n) && (n.classList.contains('tg-lazy') || n.querySelector('.tg-lazy'))) fillMath(n);
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('beforeprint', () => fillMath(preview));
+
   let reflowFrame = 0;
   const reflowSoon = () => { if (!reflowFrame) reflowFrame = requestAnimationFrame(() => { reflowFrame = 0; reflowMath(); }); };
   window.addEventListener('resize', () => {

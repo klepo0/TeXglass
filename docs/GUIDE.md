@@ -847,7 +847,10 @@ install; after the first visit it opens and renders offline.
     figures (including `.eps` and `.pdf`) come along;
   - type `github` and words to **search GitHub** for repositories with LaTeX,
     or paste a link to a public file, folder or repository (`github
-    owner/repo` works too);
+    owner/repo` works too). For a folder or repository TeXglass finds the
+    main file; when GitHub's hourly limit for listing repositories without
+    signing in has run out, it looks at the files the README links to and the
+    usual names (`main.tex`, `paper/main.tex`, …) instead;
   - or pick a file or folder from this computer.
 - <kbd>Ctrl+O</kbd> opens a `.tex` file (or a [TeXmark](#texmark-latex-without-the-preamble)
   `.tmd` file); <kbd>Ctrl+Shift+O</kbd> (or Shift+click
@@ -1215,6 +1218,12 @@ view you have on (**Show only these**, **What does this use?**).
 offline** (the bookmark) at the top of the **…** menu. The **Open** dialog lists the recent ones and
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
+
+**Long papers.** A paper with thousands of formulas (a few hundred pages)
+draws its formulas only near the part on screen, so the phone's browser does
+not run out of memory and close the page. Search, **Navigate**, the notation
+index, the map and your notes still see the whole paper. Scrolling fast, a
+formula can appear a moment after the text around it.
 
 **The first-run tour** works here too: its cards sit at the bottom of the
 screen and point at the compact toolbar (see
