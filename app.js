@@ -2105,11 +2105,26 @@
     }
   }
 
-  // Copies of the page (previews on hover, the Pins tab, …) and printing get the drawings.
+  // Copies of the page (previews on hover, the Notation and Pins tabs, …) get the
+  // drawings as they come into view: the Notation tab of a long paper copies
+  // hundreds of sentences, and drawing all of them at once would stall the phone.
+  const copyNear = 'IntersectionObserver' in window
+    ? new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      copyNear.unobserve(e.target);
+      if (e.target.isConnected) fillMath(e.target);
+    }), { rootMargin: '100% 0px' })
+    : null;
   new MutationObserver((records) => {
     for (const rec of records) {
       for (const n of rec.addedNodes) {
-        if (n.nodeType === 1 && !preview.contains(n) && (n.classList.contains('tg-lazy') || n.querySelector('.tg-lazy'))) fillMath(n);
+        if (n.nodeType !== 1 || preview.contains(n)) continue;
+        const stubs = n.classList.contains('tg-lazy') ? [n] : n.querySelectorAll('.tg-lazy');
+        for (const stub of stubs) {
+          const katex = stub.parentNode;
+          if (copyNear && katex) copyNear.observe(katex);
+          else fillMath(stub);
+        }
       }
     }
   }).observe(document.body, { childList: true, subtree: true });

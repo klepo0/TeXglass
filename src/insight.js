@@ -1051,8 +1051,12 @@
     const own = definedSymbol(el.dataset.tex || '');
     const ownKey = own ? texTokens(own).join(' ') : null;
     const best = new Map(); // key -> { d, spans }
+    const has = new Set(f);
     for (const d of defs) {
-      if (d.key === ownKey || !holdsAt(d, el)) continue;
+      // first the tokens the symbol needs (cheap), then where the formula sits (a DOM
+      // comparison, which a long paper would otherwise make millions of times)
+      const need = d.pat.need || (d.pat.need = d.pat.toks.filter((t) => typeof t === 'string'));
+      if (d.key === ownKey || !need.every((t) => has.has(t)) || !holdsAt(d, el)) continue;
       const spans = occurrences(f, d.pat);
       const had = best.get(d.key);
       if (spans.length && !(had && had.d.author && !d.author)) best.set(d.key, { d, spans });
@@ -2441,7 +2445,9 @@
       const secs = idx.secs;
       const k = secs.indexOf(sec);
       const start = sec.el;
-      const end = k >= 0 && k + 1 < secs.length ? secs[k + 1].el : null;
+      // (the opening pages, before the first section, are not in secs: they end where it starts)
+      const next = sec === OPENING ? secs[0] : k >= 0 ? secs[k + 1] : null;
+      const end = next ? next.el : null;
       const inside = (el) => (!start || start.compareDocumentPosition(el) & 4) && (!end || el.compareDocumentPosition(end) & 4);
       const names = new Set();
       const keys = new Set();

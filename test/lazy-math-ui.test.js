@@ -79,14 +79,24 @@ test('long papers on phones: formulas far from the screen wait, the reading tool
     const waitingText = await textOf(lastSel);
     const tagEl = await page.evaluateHandle(() => [...document.querySelectorAll('.math-display .katex-html .tag')].pop());
 
-    // A copy of a far block (a preview on hover) gets the drawings.
+    // A copy of a far block (a preview on hover) gets the drawings once it is in view;
+    // one far out of view waits (the Notation tab copies hundreds of sentences).
     const copied = await page.evaluate(() => {
+      const far = [...document.querySelectorAll('#preview .math-display')].pop();
       const box = document.createElement('div');
-      box.appendChild([...document.querySelectorAll('#preview .math-display')].pop().cloneNode(true));
-      document.body.appendChild(box);
-      return new Promise((r) => setTimeout(() => { r({ waiting: box.querySelectorAll('.tg-lazy').length, drawn: box.querySelectorAll('.katex-html .mfrac').length }); box.remove(); }, 0));
+      box.style.cssText = 'position:fixed;top:0;left:0';
+      box.appendChild(far.cloneNode(true));
+      const away = document.createElement('div');
+      away.style.cssText = 'position:fixed;top:100000px;left:0';
+      away.appendChild(far.cloneNode(true));
+      document.body.append(box, away);
+      return new Promise((r) => setTimeout(() => {
+        r({ waiting: box.querySelectorAll('.tg-lazy').length, drawn: box.querySelectorAll('.katex-html .mfrac').length, away: away.querySelectorAll('.tg-lazy').length });
+        box.remove();
+        away.remove();
+      }, 300));
     });
-    assert.deepEqual(copied, { waiting: 0, drawn: 1 });
+    assert.deepEqual(copied, { waiting: 0, drawn: 1, away: 1 });
 
     // Scroll to the end: the last formulas are drawn, the first ones put away.
     await page.evaluate(() => { const p = document.getElementById('preview-pane'); p.scrollTop = p.scrollHeight; });
