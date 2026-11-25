@@ -184,20 +184,28 @@
         const texPaths = (tree.tree || [])
           .filter((e) => e.type === 'blob' && e.path.startsWith(prefix) && /\.(tex|ltx|latex)$/i.test(e.path))
           .map((e) => e.path);
-        if (!texPaths.length) throw new Error(`There is no .tex file in ${where}${dir ? '/' + dir : ''}.`);
-        // Read the likeliest few and let the arXiv chooser pick the one with \documentclass.
-        const ranked = texPaths
-          .map((p) => ({ p, score: (/^(main|ms|paper|article|thesis|arxiv)\.tex$/i.test(p.split('/').pop()) ? 2 : 0) - p.slice(prefix.length).split('/').length }))
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 8);
-        const texts = {};
-        for (const { p } of ranked) {
-          const t = await get(rawUrl(ref, p));
-          if (t != null) texts[p] = t;
+        // A very large repo (such as openai/math) is listed only in part, so the
+        // folder may be missing from the listing: guess from raw files instead.
+        const guess = !texPaths.length && tree.truncated ? await guessMain(dir) : null;
+        if (guess) {
+          mainPath = guess.path;
+          mainText = guess.text;
+        } else {
+          if (!texPaths.length) throw new Error(`There is no .tex file in ${where}${dir ? '/' + dir : ''}.`);
+          // Read the likeliest few and let the arXiv chooser pick the one with \documentclass.
+          const ranked = texPaths
+            .map((p) => ({ p, score: (/^(main|ms|paper|article|thesis|arxiv)\.tex$/i.test(p.split('/').pop()) ? 2 : 0) - p.slice(prefix.length).split('/').length }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8);
+          const texts = {};
+          for (const { p } of ranked) {
+            const t = await get(rawUrl(ref, p));
+            if (t != null) texts[p] = t;
+          }
+          mainPath = Arxiv.pickMain(texts);
+          if (!mainPath) throw new Error(`Could not read the .tex files in ${where}.`);
+          mainText = texts[mainPath];
         }
-        mainPath = Arxiv.pickMain(texts);
-        if (!mainPath) throw new Error(`Could not read the .tex files in ${where}.`);
-        mainText = texts[mainPath];
       }
     }
 

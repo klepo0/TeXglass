@@ -101,6 +101,20 @@ test('importFile finds the main file of a repo when GitHub will not list it', as
   await assert.rejects(G.importFile('https://github.com/o/r', { fetch: none }), /without signing in/);
 });
 
+test('importFile finds the main file of a folder left out of a truncated listing', async () => {
+  // GitHub lists a very large repo only in part (truncated: true).
+  const M = 'https://raw.githubusercontent.com/o/r/main';
+  const fetch = fakeFetch({
+    'https://api.github.com/repos/o/r/git/trees/main?recursive=1': { truncated: true, tree: [{ path: 'README.md', type: 'blob' }] },
+    [`${M}/papers/p1/README.md`]: 'The [LaTeX source](build/main.tex) is in the build folder.',
+    [`${M}/papers/p1/build/main.tex`]: '\\documentclass{article}\\begin{document}\\input{intro}\\end{document}',
+    [`${M}/papers/p1/build/intro.tex`]: 'The introduction.',
+  });
+  const r = await G.importFile('https://github.com/o/r/tree/main/papers/p1', { fetch });
+  assert.equal(r.path, 'papers/p1/build/main.tex');
+  assert.match(r.source, /The introduction\./);
+});
+
 test('importFile explains a missing or private file', async () => {
   await assert.rejects(G.importFile('https://github.com/o/r/blob/main/a.tex', { fetch: fakeFetch({}) }), /private/);
   await assert.rejects(G.importFile('https://example.com/x', { fetch: fakeFetch({}) }), /GitHub/);

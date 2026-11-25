@@ -1933,6 +1933,8 @@
         return res(`<span>${this.flow(a.content, true)}</span>`, a.end);
       }
       if (name === 'color') return res('', readArg(src, i).end);
+      // \fontsize{size}{baselineskip}: the sizes are dropped, not printed.
+      if (name === 'fontsize') return res('', readArg(src, readArg(src, i).end).end);
 
       // TikZ styles and colours, kept for tikzpicture.
       if (name === 'tikzset') {
