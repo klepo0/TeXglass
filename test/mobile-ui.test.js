@@ -236,3 +236,26 @@ test('on a tablet: a pen writes a note in the margin; the page keeps its layout'
     await browser.close();
   }
 });
+
+test('on a phone: Settings ends with About TeXglass, linking to the repository', { skip: !playwright && 'Playwright is not installed' }, async (t) => {
+  const browser = await launch(t);
+  if (!browser) return;
+  try {
+    const { page, errors } = await open(browser, playwright.devices['iPhone 13']);
+    await page.tap('#more');
+    await page.tap('#settings');
+    const repo = page.locator('.features-dialog .features-about #about-repo');
+    await repo.scrollIntoViewIfNeeded();
+    assert.equal(await repo.isVisible(), true, 'the repository link can be reached');
+    assert.equal(await repo.getAttribute('href'), 'https://github.com/klepo0/TeXglass');
+    assert.equal(await repo.getAttribute('target'), '_blank');
+    const version = require('../vscode/package.json').version;
+    await page.waitForFunction((v) => document.querySelector('.features-about .about-version').textContent === `Version ${v}.`, version);
+    const links = await page.locator('.features-about a').evaluateAll((as) => as.map((a) => a.href));
+    assert.ok(links.some((h) => h.endsWith('/docs/GUIDE.md')), 'the guide');
+    assert.ok(links.includes('https://buymeacoffee.com/texglass'), 'the support page');
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});

@@ -3709,6 +3709,37 @@
     features = Features.read(store);
     applyFeatures();
   }
+  /**
+   * "About TeXglass" at the foot of Settings: the version, and links to the
+   * source code on GitHub, the guide, the license and the support page. On a
+   * phone this is the way to reach the repository.
+   */
+  function aboutSection() {
+    const REPO = 'https://github.com/klepo0/TeXglass';
+    const f = document.createElement('fieldset');
+    f.className = 'features-about';
+    f.innerHTML = '<legend>About TeXglass</legend>' +
+      '<p class="about-intro">TeXglass draws LaTeX papers as readable pages, with reading aids for mathematics. <span class="about-version"></span></p>' +
+      '<ul class="about-links">' +
+      `<li><a id="about-repo" href="${REPO}" target="_blank" rel="noopener">Source code on GitHub</a></li>` +
+      `<li><a href="${REPO}/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">User guide</a></li>` +
+      `<li><a href="${REPO}/issues" target="_blank" rel="noopener">Report a problem or ask for a feature</a></li>` +
+      `<li><a href="${REPO}/blob/main/LICENSE" target="_blank" rel="noopener">License</a> (PolyForm Noncommercial 1.0.0)</li>` +
+      '<li><a href="https://buymeacoffee.com/texglass" target="_blank" rel="noopener">Support TeXglass ☕</a></li>' +
+      '</ul>';
+    const version = f.querySelector('.about-version');
+    const show = (v) => { if (v) version.textContent = `Version ${v}.`; };
+    try {
+      // the browser extension knows its own version
+      const rt = (typeof chrome !== 'undefined' && chrome.runtime) || (typeof browser !== 'undefined' && browser.runtime);
+      if (rt && rt.getManifest) return show(rt.getManifest().version), f;
+    } catch { /* not an extension page */ }
+    // the web viewer: the last released version, from the site itself
+    if (/^https?:$/.test(location.protocol)) {
+      fetch('vscode/package.json').then((r) => (r.ok ? r.json() : null)).then((j) => show(j && j.version)).catch(() => {});
+    }
+    return f;
+  }
   const settingsPanel = Features ? Features.panel({
     get: () => features,
     set: setFeature,
@@ -3725,6 +3756,8 @@
       return p;
     })() : null,
   }) : null;
+  // About TeXglass, last in the list so that it scrolls with it on a phone
+  if (settingsPanel) settingsPanel.element.querySelector('.features-list').appendChild(aboutSection());
   if ($('settings')) {
     if (settingsPanel) $('settings').addEventListener('click', () => settingsPanel.open());
     else $('settings').hidden = true;

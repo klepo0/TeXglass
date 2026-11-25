@@ -450,6 +450,11 @@ no side panel: there the list opens under the pin instead.
 - **Text**: passages pinned with the pin on the bar that appears when you
   select text (see [Your own highlights and notes](#your-own-highlights-and-notes)).
 
+Last in Settings, **About TeXglass** shows the version and links to the source
+code on GitHub, this guide, the issue tracker (to report a problem or ask for a
+feature), the license and the support page. On a phone, this is where to find
+the GitHub repository.
+
 Click an item to jump to it, **×** to unpin it. **Clear all** unpins
 everything, after asking (your pin sets and notes stay, so a saved set brings
 them back; the reading order goes, so new pins start in the paper's order).
