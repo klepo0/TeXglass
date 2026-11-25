@@ -1,0 +1,199 @@
+# Releases the browser extension, TeXglass for arXiv (Chrome, Edge, Firefox).
+# It is separate from the Release workflow (release.yml: the VS Code extension
+# and the npm package) and has its own version, the "version" in
+# browser/package.json. Feature pull requests never change it; it moves only
+# here, once per browser release.
+#
+# Usual way, from GitHub (no local clone needed):
+#   Actions > Browser release > Run workflow, pick patch / minor / major.
+#   The workflow bumps browser/package.json, tests and builds, then pushes a
+#   "Browser extension: release X.Y.Z" commit to main and the browser-vX.Y.Z
+#   tag (which does not start release.yml), and publishes.
+#
+# Fallback, from a clone: bump browser/package.json yourself, merge it, then
+#   git tag browser-vX.Y.Z && git push origin browser-vX.Y.Z
+# The tag must match the version in browser/package.json.
+#
+# Either way the GitHub release "TeXglass for arXiv X.Y.Z" carries the Chrome
+# and Firefox zips, with notes generated from the pull requests merged since
+# the previous browser release. It is not marked as the repository's latest
+# release, so that stays the VS Code extension's. The Firefox build goes to
+# Firefox Add-ons when the AMO_JWT_* secrets are set.
+name: Browser release
+
+on:
+  push:
+    tags: ['browser-v*']
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the browser extension's version to raise (1.1.0 -> patch 1.1.1, minor 1.2.0, major 2.0.0)
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+
+permissions:
+  contents: write
+
+concurrency:
+  group: browser-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only release from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the Browser release workflow from main (it ran from $GITHUB_REF_NAME)"
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tags, for the release notes
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Run from the Actions tab: raise the version here. The commit and tag
+      # are only pushed further down, after the tests and builds pass.
+      - name: Bump the version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          (cd browser && npm version "$BUMP" --no-git-tag-version)
+          v=$(node -p "require('./browser/package.json').version")
+          if git ls-remote --exit-code --tags origin "refs/tags/browser-v$v" >/dev/null; then
+            echo "::error::Tag browser-v$v already exists"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Browser extension: release $v"
+          git tag "browser-v$v"
+          echo "TAG=browser-v$v" >> "$GITHUB_ENV"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Check the tag matches the browser extension version
+        if: github.event_name == 'push'
+        run: |
+          tag="${GITHUB_REF_NAME#browser-v}"
+          ext=$(node -p "require('./browser/package.json').version")
+          if [ "$tag" != "$ext" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match browser/package.json version $ext"
+            exit 1
+          fi
+          echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          echo "VERSION=$ext" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build the browser extension
+        run: node browser/build.js --release
+
+      # Same as release.yml: main is protected by a ruleset, which GITHUB_TOKEN
+      # can't bypass, so the commit goes to main with the deploy key in
+      # RELEASE_DEPLOY_KEY (write access, on the ruleset's bypass list) and the
+      # tag with GITHUB_TOKEN, so the tag push doesn't start this workflow a
+      # second time. Without the secret, both go with GITHUB_TOKEN. A push
+      # fails if main moved while this ran; nothing is published then, so just
+      # run the workflow again.
+      - name: Push the release commit and tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          if [ -n "$DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh
+            printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/release_key
+            chmod 600 ~/.ssh/release_key
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            GIT_SSH_COMMAND="ssh -i ~/.ssh/release_key -o IdentitiesOnly=yes" \
+              git push "git@github.com:${GITHUB_REPOSITORY}.git" HEAD:main
+            git push origin "refs/tags/$TAG"
+          else
+            git push --atomic origin HEAD:main "refs/tags/$TAG"
+          fi
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files="browser/dist/texglass-arxiv-chrome-$VERSION.zip browser/dist/texglass-arxiv-firefox-$VERSION.zip"
+          # On a re-run (e.g. after fixing a publish key) the release exists:
+          # replace its files instead of failing.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $files --clobber
+            exit 0
+          fi
+          # Notes from the previous browser release; before the first one, from
+          # the last TeXglass release, which still carried the browser extension.
+          prev=$(git tag -l 'browser-v*' --sort=-v:refname | grep -vx "$TAG" | head -n 1)
+          [ -n "$prev" ] || prev=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)
+          start=()
+          [ -n "$prev" ] && start=(--notes-start-tag "$prev")
+          gh release create "$TAG" \
+            --verify-tag \
+            --latest=false \
+            --title "TeXglass for arXiv $VERSION" \
+            --generate-notes "${start[@]}" \
+            $files
+
+      # Firefox: the build in browser/dist/firefox goes to addons.mozilla.org as
+      # a new listed version of the add-on whose ID is in its manifest
+      # (browser_specific_settings.gecko.id in browser/build.js), with the
+      # repository's source for reviewers, since the bundle ships minified
+      # KaTeX and pdf.js. It doesn't wait for Mozilla's review: the version goes
+      # live when they approve it. The key comes from
+      # addons.mozilla.org/developers/addon/api/key (AMO_JWT_ISSUER is the
+      # "JWT issuer", AMO_JWT_SECRET the "JWT secret").
+      - name: Publish to Firefox Add-ons
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::notice::AMO_JWT_ISSUER / AMO_JWT_SECRET secrets not set; skipping Firefox Add-ons"
+            exit 0
+          fi
+          src="$RUNNER_TEMP/texglass-source-$VERSION.zip"
+          git archive --format=zip -o "$src" HEAD
+          notes="Built from the attached source (the repository at tag $TAG, https://github.com/${GITHUB_REPOSITORY}/tree/$TAG) with Node.js 22 and no other tools or downloads:
+
+            npm ci
+            node browser/build.js --release
+
+          The add-on is browser/dist/firefox/ (also zipped as browser/dist/texglass-arxiv-firefox-$VERSION.zip). vendor/katex is unmodified KaTeX 0.16.11 and vendor/pdfjs is unmodified pdf.js 4.10.38 (build/pdf.min.mjs and build/pdf.worker.min.mjs of pdfjs-dist, renamed .js); everything else is unminified source.
+
+          About the validator warnings: the Function constructor and dynamic import() are inside pdf.js. src/pdf.js loads it from the add-on's own vendor/pdfjs folder and calls it with isEvalSupported: false. The innerHTML assignments build the reader's own interface; text from papers and from the arXiv, DataCite and Crossref APIs is escaped first, math goes through KaTeX (trust off), and the default extension CSP blocks inline scripts."
+          jq -n --arg notes "$notes" \
+            --arg rel "Changes: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG" \
+            '{version: {approval_notes: $notes, release_notes: {"en-US": $rel}}}' > "$RUNNER_TEMP/amo-metadata.json"
+          set +e
+          npx --yes web-ext@10.8.0 sign \
+            --channel=listed \
+            --source-dir=browser/dist/firefox \
+            --artifacts-dir="$RUNNER_TEMP/web-ext" \
+            --api-key="$AMO_JWT_ISSUER" \
+            --api-secret="$AMO_JWT_SECRET" \
+            --upload-source-code="$src" \
+            --amo-metadata="$RUNNER_TEMP/amo-metadata.json" \
+            --approval-timeout=0 \
+            --no-input 2>&1 | tee "$RUNNER_TEMP/web-ext.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # On a re-run the version is already there: not an error.
+          if [ "$status" -ne 0 ] && grep -qi "already exists" "$RUNNER_TEMP/web-ext.log"; then
+            echo "::notice::Firefox Add-ons already has $VERSION; skipping"
+            exit 0
+          fi
+          exit "$status"

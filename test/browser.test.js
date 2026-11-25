@@ -11,6 +11,18 @@ const { manifest, viewerHtml } = require('../browser/build.js');
 
 const ROOT = path.join(__dirname, '..');
 
+// The browser extension has its own version and its own release workflow,
+// separate from the VS Code extension's Release workflow.
+test('the browser extension takes its version from browser/package.json and releases on its own', () => {
+  const own = require('../browser/package.json').version;
+  for (const target of ['chrome', 'firefox']) assert.strictEqual(manifest(target).version, own);
+  const browserRelease = fs.readFileSync(path.join(ROOT, '.github/workflows/browser-release.yml'), 'utf8');
+  assert.match(browserRelease, /node browser\/build\.js --release/);
+  assert.match(browserRelease, /tags: \['browser-v\*'\]/);
+  const release = fs.readFileSync(path.join(ROOT, '.github/workflows/release.yml'), 'utf8');
+  assert.doesNotMatch(release, /browser\/build\.js|browser\/dist|web-ext|AMO_JWT/, 'the VS Code Release leaves the browser extension alone');
+});
+
 function fakeBrowser(stored = {}) {
   const listeners = {};
   const on = (name) => ({ addListener: (fn) => (listeners[name] = fn) });

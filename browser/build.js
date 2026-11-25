@@ -8,10 +8,11 @@
  *   browser/dist/chrome/   and browser/dist/texglass-arxiv-chrome-<version>.zip   (Chrome, Edge)
  *   browser/dist/firefox/  and browser/dist/texglass-arxiv-firefox-<version>.zip  (Firefox)
  *
- * The version is the VS Code extension's (vscode/package.json): one number for
- * the whole release, bumped only by the Release workflow. A plain build is a dev
- * build, labelled <version>-dev.<commit> so it can't be mistaken for the release;
- * the Release workflow passes --release for the clean name.
+ * The version is the browser extension's own, in browser/package.json, raised
+ * only by the Browser release workflow (.github/workflows/browser-release.yml),
+ * separately from the VS Code extension's. A plain build is a dev build,
+ * labelled <version>-dev.<commit> so it can't be mistaken for the release; the
+ * Browser release workflow passes --release for the clean name.
  *
  * Each one bundles a copy of the web viewer (index.html, app.js, styles.css,
  * src/*.js) with KaTeX from node_modules, so `npm install` must have run.
@@ -27,7 +28,7 @@ const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 const KATEX = path.join(ROOT, 'vendor', 'katex');
-const VERSION = require('../vscode/package.json').version;
+const VERSION = require('./package.json').version;
 const RELEASE = process.argv.includes('--release');
 
 /** The commit this build comes from, for dev build names ("local" outside git). */
