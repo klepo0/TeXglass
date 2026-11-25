@@ -195,7 +195,7 @@ test('web viewer on a phone: cards in a sheet, the side panel as its drawer, …
     assert.equal(sheet.sheet, 'bottom');
     assert.equal(sheet.bottom, sheet.H);
     assert.equal(sheet.w, sheet.W, 'full width');
-    assert.ok(await lit(page, '#open'));
+    assert.ok(await lit(page, '#more'), 'Open is in …, so the first card points there');
     await page.tap('[data-coach="next"]');
     await page.waitForTimeout(250);
     assert.equal(await title(page), 'The side panel');
@@ -204,7 +204,7 @@ test('web viewer on a phone: cards in a sheet, the side panel as its drawer, …
     await page.waitForTimeout(250);
     assert.equal(await page.locator('#toc-pane').isVisible(), false, 'and closes after');
     for (let i = 0; i < 4; i++) { await page.tap('[data-coach="next"]'); await page.waitForTimeout(150); }
-    assert.ok(await lit(page, '#more'), 'the last card points at …');
+    assert.ok(await lit(page, '#settings'), 'the last card points at the gear, first in the toolbar');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'nothing runs off the side');
     await page.tap('[data-coach="next"]');
     assert.equal(await page.locator('.tg-coach-card').count(), 0, 'Done ends it');

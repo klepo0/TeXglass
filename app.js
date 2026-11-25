@@ -1915,15 +1915,23 @@
   // drawers: their buttons open them, and so does a swipe in from the edge of the
   // screen (src/touch.js); a swipe back, a tap outside or Escape closes them.
   const compact = $('more-compact');
-  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#save-offline', '#gh-link', '#settings', '#hand-toggle', '#render-actions']
+  const COMPACT_MOVES = ['.mode-switch', '.zoom-group', '#toc-toggle', '#fold-proofs', '#save-offline', '#gh-link', '#open', '#hand-toggle', '#render-actions']
     .map((sel) => document.querySelector('.toolbar ' + sel))
     .filter(Boolean)
     .map((el) => ({ el, parent: el.parentNode, next: el.nextSibling }));
+  // Settings and Open swap places on a phone: the gear takes Open's spot, first in
+  // the toolbar, so Settings (and About TeXglass in it) is one tap away; Open is
+  // in the menu, and Ctrl+K still opens it.
+  const gear = $('settings');
+  const gearHome = gear ? { parent: gear.parentNode, next: gear.nextSibling } : null;
+  const openSpot = $('open') ? $('open').nextSibling : null; // what follows Open in the toolbar
   function setCompact(on) {
     if (on) {
+      if (gear && openSpot) openSpot.parentNode.insertBefore(gear, openSpot);
       for (const m of COMPACT_MOVES) compact.appendChild(m.el);
     } else {
       for (const m of COMPACT_MOVES.slice().reverse()) m.parent.insertBefore(m.el, m.next && m.next.parentNode === m.parent ? m.next : null);
+      if (gear) gearHome.parent.insertBefore(gear, gearHome.next && gearHome.next.parentNode === gearHome.parent ? gearHome.next : null);
     }
     for (const action of [warningButton, originalPdf]) {
       if (on) action.setAttribute('role', 'menuitem');
@@ -3784,8 +3792,8 @@
     const key = (k) => (touch ? '' : ` (<kbd>${k}</kbd>)`);
     let tocOpened = false;
     return [
-      { target: () => shownEl($('open')), title: 'Open a paper',
-        body: `<p>Search arXiv by words or an id, paste a GitHub link, or open a <code>.tex</code> file from this computer${key('Ctrl+K')}.</p>` },
+      { target: () => orMore('open'), title: 'Open a paper',
+        body: `<p>${phone ? '<b>Open</b> is in the <b>…</b> menu. ' : ''}Search arXiv by words or an id, paste a GitHub link, or open a <code>.tex</code> file from this computer${key('Ctrl+K')}.</p>` },
       { title: 'The side panel',
         target: () => (phone ? (tocWanted ? tocPane : null) : (shownEl(tocPane) || orMore('toc-toggle'))),
         before: () => { if (phone && !tocWanted && !tocToggle.hidden) { tocWanted = true; tocOpened = true; showToc(); } },
@@ -3804,7 +3812,7 @@
       { target: () => shownEl($('share')) || orMore('save-offline'), title: 'Share, save, go back',
         body: '<p><b>Share</b> a link that opens this paper at the section you are reading. <b>Save offline</b> keeps it on this device. ' +
           `After a jump, <b>Back</b>${key('Alt+←')} returns you to where you were.</p>` },
-      { target: () => (phone ? shownEl($('more')) : shownEl($('settings')) || shownEl($('more'))), title: phone ? 'More in “…”' : 'Settings and “…”',
+      { target: () => shownEl($('settings')) || shownEl($('more')), title: 'Settings and “…”',
         body: '<p>Switch reading aids on or off in <b>Settings</b>. Export, print and your notes are in the <b>…</b> menu, and so is this tour: <b>Show me around</b>.</p>' },
     ];
   }

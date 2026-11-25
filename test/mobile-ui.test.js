@@ -242,7 +242,10 @@ test('on a phone: Settings ends with About TeXglass, linking to the repository',
   if (!browser) return;
   try {
     const { page, errors } = await open(browser, playwright.devices['iPhone 13']);
-    await page.tap('#more');
+    // Settings and Open swap places on a phone: the gear is first in the toolbar
+    const first = await page.evaluate(() => [...document.querySelectorAll('.toolbar > button, .toolbar > .more-group')].find((b) => b.offsetParent).id);
+    assert.equal(first, 'settings');
+    assert.equal(await page.locator('#more-compact #open').count(), 1, 'Open is in the … menu');
     await page.tap('#settings');
     const repo = page.locator('.features-dialog .features-about #about-repo');
     await repo.scrollIntoViewIfNeeded();
@@ -254,6 +257,15 @@ test('on a phone: Settings ends with About TeXglass, linking to the repository',
     const links = await page.locator('.features-about a').evaluateAll((as) => as.map((a) => a.href));
     assert.ok(links.some((h) => h.endsWith('/docs/GUIDE.md')), 'the guide');
     assert.ok(links.includes('https://buymeacoffee.com/texglass'), 'the support page');
+    // and back on a wide window
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.waitForTimeout(200);
+    const order = await page.evaluate(() => {
+      const ids = [...document.querySelectorAll('.toolbar > *')].map((e) => e.id);
+      return { open: ids.indexOf('open'), settings: ids.indexOf('settings'), hand: ids.indexOf('hand-toggle') };
+    });
+    assert.ok(order.open >= 0 && order.settings > order.open && order.hand === order.settings + 1, JSON.stringify(order));
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

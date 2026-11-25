@@ -799,7 +799,7 @@ Overleaf panel).
 
 ## Settings: switching features on or off
 
-The **gear** button (on a phone, **Settings** in the **…** menu) opens Settings, a list of TeXglass's reading aids with a
+The **gear** button (on a phone, the first button in the toolbar) opens Settings, a list of TeXglass's reading aids with a
 switch for each. Turn off what you don't use; **Turn everything back on**
 restores them. Choices apply to every paper at once. **Show me around** at the
 foot replays the [first-run tour](#first-run-tour-show-me-around). Under the switches, *Your
@@ -1221,7 +1221,7 @@ that opens the paper in TeXglass, at the section you are reading, or with the
 view you have on (**Show only these**, **What does this use?**).
 
 **Papers to read offline.** Before a trip, open each paper and tap **Save
-offline** (the bookmark) at the top of the **…** menu. The **Open** dialog lists the recent ones and
+offline** (the bookmark) at the top of the **…** menu. The **Open** dialog (also in the **…** menu) lists the recent ones and
 **Saved papers…** in the **…** menu lists them all; they open with no connection, figures included (see [Saving papers for
 offline reading](#web-viewer)).
 
@@ -1236,11 +1236,11 @@ screen and point at the compact toolbar (see
 [First-run tour](#first-run-tour-show-me-around)).
 
 **A compact toolbar (windows up to 760px wide).** The toolbar is one row of
-large buttons: **Open**, **Navigate** (the magnifier), the **pin** (it opens
+large buttons: **Settings** (the gear, where **Open** is on a wider screen), **Navigate** (the magnifier), the **pin** (it opens
 the side panel on the Pins tab), **Share**, the theme toggle and **…**. The mode switch (Preview,
 Edit, Split), zoom, **Contents** (the side panel; a swipe in from the edge opens
 it too), **Hide proofs**,
-**Save offline** (the bookmark), **Edit on GitHub**, **Settings** and **Handwritten notes** move to the top of the
+**Save offline** (the bookmark), **Edit on GitHub**, **Open** (<kbd>Ctrl+K</kbd> still opens it) and **Handwritten notes** move to the top of the
 **…** menu. They move back when the window is
 wider.
 

@@ -37,6 +37,12 @@ function tar(files) {
 const TEX = '\\documentclass{article}\n\\usepackage{graphicx}\n\\title{Saved \\emph{heat} bounds\\thanks{Thanks.}}\n\\begin{document}\n\\maketitle\n\\section{Kept offline}\nA figure:\n\n\\includegraphics{fig}\n\\end{document}\n';
 const TARBALL = zlib.gzipSync(tar({ 'main.tex': TEX, 'fig.png': PNG }));
 
+// On a phone, Open is in the … menu (the Settings gear has its toolbar spot).
+async function openOnPhone(page) {
+  await page.click('#more');
+  await page.click('#more-compact #open');
+}
+
 async function serve(context, arxiv) {
   await context.route('http://texglass.test/**', (route) => {
     const p = new URL(route.request().url()).pathname.replace(/^\//, '') || 'index.html';
@@ -142,7 +148,7 @@ test('saving papers for offline reading, opening them offline, and the list on a
     arxiv.up = false;
     const hits = arxiv.hits;
     await phone.setOffline(true);
-    await page.click('#open');
+    await openOnPhone(page);
     await page.waitForSelector('#library-recent-list .library-recent-open');
     assert.equal(await page.textContent('#library-recent-list .library-recent-title'), 'Saved heat bounds', 'the Open dialog lists the saved papers');
     await page.screenshot({ path: process.env.LIBRARY_OPEN_SHOT || path.join(require('os').tmpdir(), 'library-open.png') });
