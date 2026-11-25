@@ -754,7 +754,10 @@ Overleaf panel).
     GitHub** ends it.
   - Web viewer and browser extension: **Sync notes with GitHub…** in the
     **…** menu, then paste a token with only the `gist` scope (the dialog links
-    to the page that makes one). Once signed in, the menu item reads
+    to the page that makes one). Give the token an expiry date, such as 90
+    days, rather than *No expiration*: when it runs out, the dialog asks you
+    to sign in again. The token is kept only in that browser's storage and
+    can read and change all your gists, so sign out on a shared computer. Once signed in, the menu item reads
     **Syncing with GitHub… automatic**, and the dialog shows *Syncing automatically ·
     last synced …*, a **Sync now** link (only to pull in another device's
     change at once) and **Sign out**.
@@ -1312,6 +1315,11 @@ text still works as usual.
   It stores nothing on your device and is skipped when your browser sends Do
   Not Track or Global Privacy Control. Local copies, the browser extension, the
   VS Code extension and the command line count nothing.
+- The public website runs only its own scripts and talks only to the services
+  listed above (arXiv, GitHub, DataCite, Crossref, OpenAlex, Semantic Scholar
+  and GoatCounter): its Content-Security-Policy makes the browser refuse
+  anything else. In VS Code, notes sync uses VS Code's own GitHub sign-in, so
+  TeXglass keeps no token there.
 
 ## TeXmark: LaTeX without the preamble
 

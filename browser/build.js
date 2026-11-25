@@ -166,7 +166,11 @@ function viewerHtml() {
   if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) throw new Error('index.html has an inline script, which extension pages refuse');
   // The web site's visitor counter stays out of the extension.
   // So do the web app's manifest and home-screen icons (the extension has its own).
+  // The page's Content-Security-Policy is for the web site: extension pages have their own
+  // (from the manifest), and the extension reads file:// addresses the web policy refuses.
   return html
+    .replace(/[ \t]*<!-- What this page may load[\s\S]*?-->\n?/, '')
+    .replace(/[ \t]*<meta http-equiv="Content-Security-Policy"[^>]*>\n?/, '')
     .replace(/[ \t]*<script[^>]*src="src\/stats\.js"[^>]*><\/script>\n?/, '')
     .replace(/[ \t]*<link rel="(?:manifest|icon|apple-touch-icon)"[^>]*>\n?/g, '');
 }
