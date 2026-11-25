@@ -773,6 +773,7 @@
 
   function load(text, name, images, gh, arxiv) {
     stopCompare();
+    stopSplitExitScroll?.();
     closeEditor(false);
     watcher = null;
     showFolderHint(null);
@@ -973,8 +974,14 @@
 
   // --- in-place editing ------------------------------------------------------
 
+  let stopSplitExitScroll = null;
+
   function setMode(m) {
-    const wasSplit = mode === 'split';
+    const enteringSplit = m === 'split' && mode !== 'split';
+    const leavingSplit = m !== 'split' && mode === 'split';
+    const scroll = window.TeXglassScroll;
+    const place = (enteringSplit || leavingSplit) && previewPane.scrollTop > 0 ? scroll?.placeOf(previewPane) : null;
+    stopSplitExitScroll?.();
     mode = m;
     document.body.classList.toggle('mode-edit', m === 'edit');
     document.body.classList.toggle('editing', m === 'split');
@@ -988,11 +995,20 @@
     sourcePane.hidden = m !== 'split';
     $('splitter').hidden = m !== 'split';
     showToc();
-    if (m === 'split' && !wasSplit) {
+    if (enteringSplit) {
       setSource(doc);
       anchors = null;
-      // Line the source up with what was on screen in the preview.
+      // Keep the visible block in place as Split lays out the preview at its new width.
+      if (place?.el?.isConnected) {
+        previewPane.scrollTop += place.el.getBoundingClientRect().top - previewPane.getBoundingClientRect().top - place.off;
+      }
       requestAnimationFrame(() => syncFrom('pre'));
+    } else if (leavingSplit && place?.el?.isConnected) {
+      // Keep aiming at the block as the full-width preview lays out nearby blocks.
+      stopSplitExitScroll = scroll.to(previewPane, place.el, {
+        offset: place.off, smooth: false, history: false,
+        done: () => { stopSplitExitScroll = null; },
+      });
     }
   }
 
@@ -1223,6 +1239,7 @@
   let mirror = null;
   let driver = null;
   let driverTimer = null;
+  let readerSide = null;
 
   let srcMarks = null; // where each block starts in the wrapped source, kept until the text or width changes
 
@@ -1266,27 +1283,30 @@
     const blocks = Array.from(preview.querySelectorAll(':scope > .src-block')).filter((b) => b.offsetParent);
     const ys = measureSource(blocks);
     const paneTop = previewPane.getBoundingClientRect().top - previewPane.scrollTop;
-    const list = [{ src: 0, pre: 0 }];
-    blocks.forEach((b, k) => {
-      const src = ys[k];
-      if (src == null) return;
-      const pre = b.getBoundingClientRect().top - paneTop;
-      const last = list[list.length - 1];
-      if (src >= last.src && pre >= last.pre) list.push({ src, pre });
-    });
     const end = {
       src: Math.max(0, source.scrollHeight - source.clientHeight),
       pre: Math.max(0, previewPane.scrollHeight - previewPane.clientHeight),
     };
-    const last = list[list.length - 1];
-    if (end.src > last.src && end.pre > last.pre) list.push(end);
+    const list = [{ src: 0, pre: 0 }];
+    // Blocks below either pane's last scroll position cannot be reached at the top.
+    blocks.forEach((b, k) => {
+      const src = ys[k];
+      if (src == null || src >= end.src) return;
+      const pre = b.getBoundingClientRect().top - paneTop;
+      const last = list[list.length - 1];
+      if (src >= last.src && pre >= last.pre && pre < end.pre) list.push({ src, pre });
+    });
+    list.push(end);
     anchors = list;
   }
 
   function mapY(y, from, to) {
     const a = anchors;
+    if (y <= 0) return 0;
+    const end = a[a.length - 1];
+    if (y >= end[from]) return end[to];
     for (let k = 1; k < a.length; k++) {
-      if (y <= a[k][from] || k === a.length - 1) {
+      if (y <= a[k][from]) {
         const p = a[k - 1];
         const q = a[k];
         const t = q[from] === p[from] ? 0 : Math.max(0, Math.min(1, (y - p[from]) / (q[from] - p[from])));
@@ -1300,6 +1320,7 @@
   function syncFrom(side) {
     if (mode !== 'split') return;
     if (!anchors) buildAnchors();
+    readerSide = side;
     driver = side;
     clearTimeout(driverTimer);
     driverTimer = setTimeout(() => { driver = null; }, 120);
@@ -1314,18 +1335,20 @@
   source.addEventListener('scroll', onScroll('src'), { passive: true });
   previewPane.addEventListener('scroll', onScroll('pre'), { passive: true });
   window.addEventListener('resize', () => { anchors = null; });
-  // The preview changes height as blocks come into view (content-visibility draws them
-  // late, so a long block stands in at 120px until then), as figures load and after
-  // edits. Measure again then, and line the panes up again from the side the reader
-  // is using: otherwise a long block measured at 120px holds the preview still while
-  // the source scrolls on, and the browser's scroll anchoring then drags the source.
-  let readerSide = null;
   for (const [el, side] of [[source, 'src'], [previewPane, 'pre']]) {
     for (const type of ['wheel', 'pointerdown', 'keydown', 'touchstart']) {
-      el.addEventListener(type, () => { readerSide = side; }, { passive: true, capture: true });
+      el.addEventListener(type, () => {
+        readerSide = side;
+        // Direct input can switch panes before the previous scroll settles.
+        if (driver && driver !== side) {
+          clearTimeout(driverTimer);
+          driver = null;
+        }
+      }, { passive: true, capture: true });
     }
   }
   if (window.ResizeObserver) {
+    // Rebuild the mapping when figures load or edits change the preview height.
     new ResizeObserver(() => {
       if (mode !== 'split' || !anchors) return;
       anchors = null;

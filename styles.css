@@ -853,6 +853,13 @@ body.text-resizing #preview { transition: none; }
   contain-intrinsic-size: auto 120px;
 }
 
+/* Split scroll mapping needs the actual positions of offscreen blocks. */
+body.editing #preview > .src-block {
+  content-visibility: visible;
+  contain: layout style paint;
+  contain-intrinsic-size: none;
+}
+
 .document p { margin: 0 0 0.9em; }
 .document a { color: var(--accent); text-decoration: none; }
 .document a:hover { text-decoration: underline; }
