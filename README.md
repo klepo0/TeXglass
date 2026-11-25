@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://klepo0.github.io/TeXglass/?gh=https://github.com/jimjamzola/RH-Alpoge-Reconstruction/blob/main/manuscript/main.tex"><b>▶ Try it now</b></a>: <i>The Alpöge Proof of the Riemann Hypothesis</i> by Jimmie Adriazola, a 287-page reconstruction of the proof by Levent Alpöge and Claude, opened from GitHub in the web viewer.<br>
+  <a href="https://klepo0.github.io/TeXglass/?gh=https://github.com/jimjamzola/RH-Alpoge-Reconstruction/blob/main/manuscript/main.tex"><b>▶ Try it now</b></a>: <i>The Alpöge Proof of the Riemann Hypothesis</i> by Jimmie Adriazola, a 287-page reconstruction of the proof by Levent Alpöge and Claude, opened from GitHub in the web viewer, or <a href="https://klepo0.github.io/TeXglass/?gh=https://github.com/jimjamzola/RH-Alpoge-Reconstruction/blob/main/manuscript/main.tex&amp;view=1eyJtIjoicCIsInAiOltbImxhYmVsOnJlbTpzdGVwYW5vdiIsInVzZXMiXV19">a slice of the paper</a>, whatever matters most, in a chosen style, and share your slice with others, or print or export it as a handout.<br>
   <a href="https://klepo0.github.io/TeXglass/?tour"><b>▶ Take the tour</b></a>: a short paper with notes on what to try, from hover previews to the dependency map.
 </p>
 
