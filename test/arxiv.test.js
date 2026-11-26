@@ -237,13 +237,66 @@ test('flatten puts the authors\' own .sty files where they are loaded, but not p
 
 test('flatten leaves out an author\'s own copy of a standard package', () => {
   const files = {
-    'p.tex': '\\documentclass{article}\n\\usepackage{footmisc,enumitem}\n\\begin{document}x\\end{document}',
+    'p.tex': '\\documentclass{article}\n\\usepackage{footmisc,enumitem,diagrams}\n\\begin{document}x\\end{document}',
     'footmisc.sty': '\\def\\footnoterule{low-level}',
     'enumitem.sty': '\\def\\enit@x{low-level}',
+    'diagrams.sty': '\\def\\rTo{low-level}',
   };
   const out = A.flatten('p.tex', files);
   assert.doesNotMatch(out, /low-level/);
-  assert.match(out, /\\usepackage\{footmisc,enumitem\}/);
+  assert.match(out, /\\usepackage\{footmisc,enumitem,diagrams\}/);
+});
+
+test('flatten preserves diagrams.tex package loaders in the preamble', () => {
+  const TeXglass = require('../src/texglass.js');
+  const katex = require('katex');
+  for (const loader of [String.raw`\input diagrams`, String.raw`\input{diagrams.tex}`, String.raw`\input ./diagrams.tex`]) {
+    const out = A.flatten('paper.tex', {
+      'paper.tex': '\\documentclass{article}\n\\input{preamble}\n\\begin{document}$A\\rTo^f B$\\end{document}',
+      'preamble.tex': loader,
+      'diagrams.tex': '\\def\\newarrow#1{}\\def\\diagramstyle[#1]{}\\def\\rTo{low-level}',
+    });
+    assert.ok(out.includes(loader));
+    assert.doesNotMatch(out, /low-level/);
+    const { html } = TeXglass.render(out, {
+      renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true }),
+    });
+    assert.match(html, /<mo[^>]*>→<\/mo>/);
+  }
+});
+
+test('flatten inlines an author\'s own diagrams.tex in the preamble', () => {
+  const out = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\cat$\\end{document}',
+    'diagrams.tex': '\\newcommand{\\cat}{\\mathcal{C}}',
+  });
+  assert.match(out, /\\newcommand\{\\cat\}\{\\mathcal\{C\}\}/);
+  // Defining one arrow of its own, or naming the package's author, does not make it the package.
+  const own = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\Cat$\\end{document}',
+    'diagrams.tex': '% arrows in the style of Paul Taylor\n\\def\\rTo{\\longrightarrow}\n\\newcommand{\\Cat}{\\mathcal{C}}',
+  });
+  assert.match(own, /\\newcommand\{\\Cat\}/);
+  // Nor does a commented-out package definition, or wrapping tikzcd as \diagram … \enddiagram.
+  for (const body of [
+    '% \\def\\newarrow and \\def\\diagramstyle come from the package\n\\newcommand{\\Cat}{\\mathcal{C}}',
+    '\\def\\diagram{\\begin{tikzcd}}\\def\\enddiagram{\\end{tikzcd}}\n\\newcommand{\\Cat}{\\mathcal{C}}',
+  ]) {
+    const kept = A.flatten('paper.tex', {
+      'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\Cat$\\end{document}',
+      'diagrams.tex': body,
+    });
+    assert.match(kept, /\\newcommand\{\\Cat\}/);
+  }
+});
+
+test('flatten still inserts a paper section named diagrams.tex', () => {
+  const out = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\begin{document}\\input{section}\\end{document}',
+    'section.tex': '\\input{diagrams}',
+    'diagrams.tex': '\\section{Our diagrams} A diagram goes here.',
+  });
+  assert.match(out, /\\section\{Our diagrams\} A diagram goes here\./);
 });
 
 test('an amsrefs .bbl (no .bib in the source) takes the place of \\bibliography', () => {

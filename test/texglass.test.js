@@ -135,12 +135,49 @@ test('user macros reach KaTeX and expand in text', () => {
 // user macros can be compared with the same formula written out by hand.
 const katexOpts = { throwOnError: true, strict: 'ignore' };
 const dropAnnotation = (html) => html.replace(/<annotation[^]*?<\/annotation>/g, '');
-const realMath = (src) =>
-  TeXglass.render(src, {
-    renderMath: (tex, displayMode, macros) =>
-      dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts))),
-  });
+const renderKaTeX = (tex, displayMode, macros) =>
+  dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts)));
+const realMath = (src) => TeXglass.render(src, { renderMath: renderKaTeX });
 const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
+
+test('rules inside text boxes render without changing the surrounding math shifts', () => {
+  const src = String.raw`\Gamma\mbox{$\,$\rule[2pt]{11pt}{0.2pt}$\triangleright\,$}\Gamma`;
+  const expected = String.raw`\Gamma\text{$\,$$\rule[2pt]{11pt}{0.2pt}$$\triangleright\,$}\Gamma`;
+  assert.ok(realMath('$' + src + '$').html.includes(handMath(expected)));
+  const rule = String.raw`\rule{1em}{1pt}`;
+  assert.ok(realMath('$' + rule + '$').html.includes(handMath(rule)));
+});
+
+test('a paper\'s own \\newarrow command is not read as diagrams.sty', () => {
+  const t = text(plain(String.raw`\newcommand{\newarrow}[1]{\textbf{#1}}\begin{document}\newarrow{go} Next sentence.\end{document}`).html);
+  assert.match(t, /go Next sentence\./);
+});
+
+test('diagrams.sty arrows keep both labels outside a diagram', () => {
+  const pre = String.raw`\usepackage{amsmath, diagrams}
+\newarrow{Mono}>--->
+\newarrow{Epic}----{>>}
+\begin{document}`;
+  const texs = [
+    String.raw`A\rTo^{f}_{g}B`,
+    String.raw`B\lTo{u}{v}A`,
+    String.raw`A\rMono^{f}_{g}B`,
+    String.raw`B\lMono A`,
+    String.raw`B\lEpic^{h}A`,
+  ];
+  const expected = [
+    String.raw`A\xrightarrow[{g}]{f}B`,
+    String.raw`B\xleftarrow[{v}]{u}A`,
+    String.raw`A\mathrel{\overset{f}{\underset{g}{\rightarrowtail}}}B`,
+    String.raw`B\leftarrowtail A`,
+    String.raw`B\xtwoheadleftarrow{h}A`,
+  ].map(handMath);
+  const { html, defs } = realMath(pre + texs.map((tex) => '$' + tex + '$').join(' and ') + '\\end{document}');
+  for (const arrow of expected) assert.ok(html.includes(arrow));
+  assert.doesNotMatch(html, /math-error/);
+  assert.deepEqual(TeXglass.renderSnippets(JSON.parse(JSON.stringify(defs)), texs, { renderMath: renderKaTeX }), expected);
+});
+
 const MACRO_PREAMBLE = String.raw`
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\pair}[2][x]{\langle #1, #2\rangle}

@@ -67,6 +67,82 @@ See \eqref{eq:d}.
   assert.match(html, /<span class="diagram-tag">\[I:\(1\)\]<\/span>/);
 });
 
+test('diagrams.sty connects the objects around arrow cells and keeps equation labels', () => {
+  const { html, labels } = plain(String.raw`\usepackage{diagrams}
+\newarrow {Mono} >--->
+\begin{document}
+\begin{equation}\label{eq:square}
+  \begin{diagram}[width=1em]
+  A & & \rTo^{f} & B \\
+  \dMono_g & & & \dTo<h \\
+  C & \lTo{k}{l} & & D
+  \end{diagram}
+\end{equation}
+\end{document}`);
+  assert.equal(labels['eq:square'].num, '1');
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t, tail, L }) => [f, t, tail, L.map((l) => l.s)]), [
+    ['1-1', '1-4', 'none', ['above']],
+    ['1-1', '3-1', 'tail', ['right']],
+    ['1-4', '3-4', 'none', ['left']],
+    ['3-4', '3-1', 'none', ['above', 'below']],
+  ]);
+  assert.match(html, /\[I:\\scriptstyle f\]/);
+  assert.match(html, /\[I:\\scriptstyle l\]/);
+  assert.match(html, /<span class="diagram-tag">\[I:\(1\)\]<\/span>/);
+});
+
+test('an unsupported diagrams.sty arrow keeps the diagram source for fallback', () => {
+  const { html } = plain(String.raw`\begin{diagram} A & \rUnknown & B \end{diagram}`);
+  assert.match(html, /data-tg-source="\\begin\{diagram\} A &amp; \\rUnknown &amp; B \\end\{diagram\}"/);
+  assert.match(html, /class="graphic-placeholder"/);
+});
+
+test('a diagrams.sty cell such as \\lVert x\\rVert is an object, not an unknown arrow', () => {
+  const { html } = plain(String.raw`\begin{diagram} \lVert x\rVert & \rTo^f & B \end{diagram}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t }) => [f, t]), [['1-1', '1-3']]);
+  assert.match(html, /\[I:\\displaystyle \\lVert x\\rVert\]/);
+});
+
+test('diagrams.sty: the paper\'s own \\lObj{A} is an object', () => {
+  const { html } = plain(String.raw`\newcommand{\lObj}[1]{\mathcal{#1}}
+\begin{document}\begin{diagram} \lObj{A} & \rTo^f & B \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t }) => [f, t]), [['1-1', '1-3']]);
+});
+
+test('diagrams.sty: a macro that stands for an arrow still connects its objects', () => {
+  const { html } = plain(String.raw`\newcommand{\incl}{\rTo^i}
+\begin{document}\begin{diagram} A & \incl & B \end{diagram}\end{document}`);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t, L }) => [f, t, L.length]), [['1-1', '1-3', 1]]);
+  assert.match(html, /\[I:\\scriptstyle i\]/);
+});
+
+test('diagrams.sty: \\let aliases and arrow macros with arguments connect their objects', () => {
+  for (const [def, cell] of [
+    [String.raw`\let\incl\rTo`, String.raw`\incl^i`],
+    [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl{i}`],
+    [String.raw`\newcommand{\incl}[1][i]{\rTo^{#1}}`, String.raw`\incl`],
+    [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl i`],
+    [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl\alpha`],
+  ]) {
+    const { html } = plain(def + String.raw`\begin{document}\begin{diagram} A & ` + cell + String.raw` & B \end{diagram}\end{document}`);
+    const [cd] = models(html, 'data-cd');
+    assert.deepEqual(cd.arrows.map(({ f, t, L }) => [f, t, L.length]), [['1-1', '1-3', 1]], def);
+  }
+});
+
+test('diagrams.sty: [A] after a line break is the first object, not options', () => {
+  const { html } = plain(String.raw`\begin{diagram}
+[A]/R & \rTo^f & B
+\end{diagram}`);
+  assert.match(html, /\[I:\\displaystyle \[A\]\/R\]/);
+});
+
 test('xymatrix: spacing, labels, hooks, curves and 2-cells', () => {
   const { html } = plain(String.raw`\[\xymatrix@C=3pc{
 X \ar[r]^{f} \ar@{^{(}->}[d]_g & Y \ar@{=}[d] \ar@/^/[dl]|{s} \\

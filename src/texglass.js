@@ -143,7 +143,7 @@
         (_, a, kind) => `${a}{${kind === 'truncate' ? Math.trunc(+value) : value}}`);
   }
 
-  const DIAGRAM_RE = /\\begin\s*\{(tikzcd|tikzpicture)\}|\\xymatrix(?![A-Za-z])/;
+  const DIAGRAM_RE = /\\begin\s*\{(tikzcd|tikzpicture|diagram)\}|\\xymatrix(?![A-Za-z])/;
 
   /** Where the diagram starting at match m of DIAGRAM_RE in s ends. */
   function diagramEnd(s, m) {
@@ -669,6 +669,32 @@
   const optBracket = (ctx) => (peekText(ctx) === '[' ? (ctx.popToken(), tokText(ctx.consumeArg([']']).tokens)) : null);
   const group = (ctx) => tokText(ctx.consumeArgs(1)[0]);
   const optGroup = (ctx) => (peekText(ctx) === '{' ? group(ctx) : null);
+  // LaTeX allows rules in text boxes. KaTeX's built-in rule requires math mode.
+  MATH_MACROS['\\rule'] = (ctx) => {
+    if (ctx.mode !== 'text') return { tokens: [{ text: '\\rule', noexpand: true }], numArgs: 0 };
+    const shift = optBracket(ctx);
+    const width = group(ctx);
+    const height = group(ctx);
+    return '$\\rule' + (shift === null ? '' : '[' + shift + ']') + '{' + width + '}{' + height + '}$';
+  };
+  // diagrams.sty horizontal arrows outside a diagram's grid. The older
+  // braced labels and the newer superscript/subscript syntax are equivalent.
+  function diagramMathArrow([symbol, stretchy]) {
+    return (ctx) => {
+      optBracket(ctx);
+      let above = optGroup(ctx);
+      let below = above === null ? null : optGroup(ctx);
+      for (let mark; /^[\^_]$/.test(mark = peekText(ctx));) {
+        ctx.popToken();
+        if (mark === '^') above = group(ctx);
+        else below = group(ctx);
+      }
+      if (!above && !below) return symbol;
+      if (stretchy) return stretchy + (below ? '[{' + below + '}]' : '') + '{' + (above || '') + '}';
+      const lower = below ? '\\underset{' + below + '}{' + symbol + '}' : symbol;
+      return '\\mathrel{' + (above ? '\\overset{' + above + '}{' + lower + '}' : lower) + '}';
+    };
+  }
   MATH_MACROS['\\textsubscript'] = (ctx) => {
     const content = '_{\\text{' + group(ctx) + '}}';
     return ctx.mode === 'text' ? '$' + '{}' + content + '$' : content;
@@ -1396,7 +1422,7 @@
     liveMark(tex, extra) {
       const u = this.paramUses(tex);
       if (!u.params.length || this.liveOnly) return '';
-      const defs = this.liveDefs(u.macros);
+      const defs = this.liveDefs(u.macros, u.arrows);
       return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 
@@ -1433,6 +1459,13 @@
     katexMacros(tex) {
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS, CONDITIONAL_MACROS);
+        if (this.taylorDiagrams) {
+          const arrows = tikz()?.taylorMathArrows?.(this.diagramArrows) || {
+            '\\rTo': ['\\rightarrow', '\\xrightarrow'],
+            '\\lTo': ['\\leftarrow', '\\xleftarrow'],
+          };
+          for (const [name, shape] of Object.entries(arrows)) m[name] = diagramMathArrow(shape);
+        }
         m['\\cite'] = (ctx) => {
           const note = optBracket(ctx);
           const cites = this.known ? this.known.cites : this.cites;
@@ -1513,6 +1546,11 @@
 
     // --- top level ---------------------------------------------------------
 
+    setPreamble(pre) {
+      this.preamble = pre;
+      this.taylorDiagrams = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\]\s*)?\{(?:[^{}]*,)?\s*diagrams\s*(?:,[^{}]*)?\}|\\input(?:\s*\{\s*(?:\.\/)*diagrams(?:\.tex)?\s*\}|\s+(?:\.\/)*diagrams(?:\.tex)?(?=\s|$))/.test(pre);
+    }
+
     run(src) {
       let pre = '';
       let body = src;
@@ -1525,7 +1563,7 @@
         const end = documentMark(body, 'end');
         if (end) body = body.slice(0, end.at);
       }
-      this.preamble = pre;
+      this.setPreamble(pre);
       // amsart, amsproc: an abstract written before \maketitle goes under the title
       this.amsTitle = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{\s*ams(?:art|proc)\s*\}/.test(pre) && /\\maketitle\b/.test(body);
       this.heldAbstract = '';
@@ -1630,12 +1668,13 @@
 
     /**
      * The parameters TeX code depends on: \tgvalue{name}, \name, or a macro
-     * of the paper that uses one; and the paper's macros it reaches (for liveDefs).
+     * of the paper that uses one, along with the macro and arrow definitions it reaches.
      */
     paramUses(tex) {
       const params = new Set();
       const macros = [];
-      if (!this.params.size) return { params: [], macros };
+      const arrows = new Set();
+      if (!this.params.size) return { params: [], macros, arrows };
       const seen = new Set();
       const visit = (t, depth) => {
         if (depth > 20) return;
@@ -1643,6 +1682,7 @@
           const cs = m[1];
           if (cs === 'tgvalue') { if (m[2] && this.params.has(m[2])) params.add(m[2]); continue; }
           if (this.paramCs.has(cs)) { params.add(cs); continue; }
+          if (/^[lr]/.test(cs) && this.diagramArrows?.[cs.slice(1)]) arrows.add(cs.slice(1));
           if (seen.has(cs) || !this.macros[cs] || typeof this.macros[cs].body !== 'string') continue;
           seen.add(cs);
           visit(this.macros[cs].body, depth + 1);
@@ -1650,16 +1690,21 @@
         }
       };
       visit(tex, 0);
-      return { params: Array.from(params), macros };
+      return { params: Array.from(params), macros, arrows };
     }
 
     /** The paper's definitions of the macros a live piece uses, as TeX, to render it again on its own. */
-    liveDefs(names) {
-      return names.map((n) => {
+    liveDefs(names, arrows) {
+      const arrowDefs = Array.from(arrows, (name) => {
+        const parts = this.diagramArrows[name].map((part) => '{' + part + '}').join('');
+        return '\\newarrow{' + name + '}' + parts;
+      });
+      const macros = names.map((n) => {
         const m = this.macros[n];
         if (!m || m.delims || m.let) return '';
         return `\\renewcommand{\\${n}}${m.nargs ? `[${m.nargs}]` : ''}${m.nargs && m.def !== null ? `[${m.def}]` : ''}{${m.body}}`;
-      }).filter(Boolean).join('\n');
+      });
+      return arrowDefs.concat(macros).filter(Boolean).join('\n');
     }
 
     /** The parameters, for the sliders: hidden marks at the end of the page. */
@@ -1976,6 +2021,29 @@
       if (DROP_ARGS.has(name)) return res('', dropArgs(src, i));
 
       switch (name) {
+        // diagrams.sty, unless the paper defines a command of that name itself
+        case 'diagramstyle':
+          if (this.macros[name]) break;
+          this.taylorDiagrams = true;
+          this._katexMacros = null;
+          return res('', readOpt(src, i)?.end || i);
+        case 'newarrow': {
+          if (this.macros[name]) break;
+          const bare = /^[A-Za-z]+/.exec(src.slice(i));
+          const arrow = bare ? { content: bare[0], end: i + bare[0].length } : readArg(src, i);
+          if (!/^[A-Za-z]+$/.test(arrow.content)) break;
+          const parts = [];
+          let end = arrow.end;
+          for (let k = 0; k < 5; k++) {
+            const part = readArg(src, end);
+            parts.push(part.content.trim());
+            end = part.end;
+          }
+          (this.diagramArrows ||= Object.create(null))[arrow.content] = parts;
+          this.taylorDiagrams = true;
+          this._katexMacros = null;
+          return res('', end);
+        }
         // texglass.sty (docs/GUIDE.md, "Hints for TeXglass in your own papers"):
         // hints that ordinary LaTeX ignores, read here.
         case 'tgdefine': {
@@ -3007,6 +3075,8 @@
         case 'tikzcd':
           if (tikz()) return tikz().tikzcd(body, (t, display) => this.renderMath(t, display));
           return `<div class="graphic-placeholder">[tikzcd diagram]</div>`;
+        case 'diagram':
+          return this.taylorDiagram(body);
         case 'tikzpicture':
           return withSource(this.tikzpicture(body), name, body);
         case 'picture': case 'pgfpicture': case 'axis':
@@ -3402,7 +3472,8 @@
           const at = m.index + m[0].length;
           const e = findEnvEnd(rest, at, m[1]);
           const body = rest.slice(at, e.contentEnd);
-          out.push(m[1] === 'tikzcd' ? T.tikzcd(body, math) : this.tikzpicture(body));
+          if (m[1] === 'diagram') out.push(this.taylorDiagram(body));
+          else out.push(m[1] === 'tikzcd' ? T.tikzcd(body, math) : this.tikzpicture(body));
           rest = rest.slice(e.end);
         } else {
           const r = T.xymatrix(rest.slice(m.index + m[0].length), math);
@@ -3413,6 +3484,12 @@
       }
       piece(rest);
       return out.join('');
+    }
+
+    taylorDiagram(body) {
+      const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
+        (name) => this.macros[name] || this.paired[name] || null);
+      return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);
     }
 
     tikzpicture(body) {
@@ -3955,8 +4032,11 @@
       title: second.meta.title ? stripTags(second.flow(second.meta.title, true)).trim() : null,
       labels: second.labels,
       toc: second.toc,
-      // The paper's own macros, for the notation index (src/insight.js) and renderSnippets.
-      defs: { macros: second.macros, paired: second.paired, triple: second.triple },
+      // Math definitions for the notation index (src/insight.js) and renderSnippets.
+      defs: {
+        macros: second.macros, paired: second.paired, triple: second.triple,
+        taylorDiagrams: second.taylorDiagrams, diagramArrows: second.diagramArrows,
+      },
       warnings,
       unknownCommands: Array.from(new Set(first.warnings.filter((w) => /^Unknown command/.test(w)).map((w) => w.slice(16, -1)))),
     };
@@ -3972,6 +4052,8 @@
       Object.assign(r.macros, defs.macros || {});
       Object.assign(r.paired, defs.paired || {});
       if (defs.triple) r.triple = defs.triple.slice();
+      r.taylorDiagrams = defs.taylorDiagrams === true;
+      if (defs.diagramArrows) r.diagramArrows = Object.assign(Object.create(null), defs.diagramArrows);
     }
     return texs.map((t) => r.renderMath(String(t), false));
   }
@@ -3989,7 +4071,7 @@
     const r = new Renderer(opts, { labels: Object.create(null), toc: [], cites: Object.create(null) });
     r.liveOnly = true;
     const begin = documentMark(src, 'begin');
-    r.preamble = begin ? src.slice(0, begin.at) : '';
+    r.setPreamble(begin ? src.slice(0, begin.at) : '');
     r.startParams(src);
     r.inPreamble = true;
     r.flow(r.preamble, false);

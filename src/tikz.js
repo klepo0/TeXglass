@@ -519,6 +519,185 @@
     return { rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, aliases) };
   }
 
+  // --- Paul Taylor's diagrams.sty ------------------------------------------------
+
+  const TAYLOR_ARROWS = {
+    To: ['-', '-', '-', '-', '>'],
+    Line: ['-', '-', '-', '-', '-'],
+    Eq: ['=', '=', '=', '=', '='],
+  };
+
+  const TAYLOR_HEADS = new Map([['>', 'to'], ['>>', '2h'], ['|', 'bar']]);
+  const TAYLOR_TAILS = new Map([['>', 'tail'], ['<', 'to'], ['<<', '2h'], ['|', 'bar'], ['C', 'hook']]);
+
+  function taylorArrowStyle(parts) {
+    const [tail, before, middle, after, head] = parts;
+    const style = {
+      head: head === after || !head ? 'none' : TAYLOR_HEADS.get(head),
+      tail: tail === before || !tail ? 'none' : TAYLOR_TAILS.get(tail),
+      dbl: 0,
+      dash: '',
+    };
+    if (!style.head || !style.tail || (middle && middle !== before && middle !== after)) return null;
+    if (before === '=' && after === '=') style.dbl = 1;
+    else if (before === 'dash' || after === 'dash') style.dash = 'dashed';
+    else if (before === '.' && after === '.') style.dash = 'dotted';
+    else if (before !== '-' || after !== '-') return null;
+    return style;
+  }
+
+  // KaTeX symbols for right and left arrows, with stretchy forms where available.
+  // Styles without an equivalent stay as source in ordinary math.
+  const TAYLOR_MATH_SHAPES = {
+    'none/to/solid': [['\\rightarrow', '\\xrightarrow'], ['\\leftarrow', '\\xleftarrow']],
+    'none/2h/solid': [['\\twoheadrightarrow', '\\xtwoheadrightarrow'], ['\\twoheadleftarrow', '\\xtwoheadleftarrow']],
+    'to/none/solid': [['\\leftarrow', '\\xleftarrow'], ['\\rightarrow', '\\xrightarrow']],
+    'tail/to/solid': [['\\rightarrowtail'], ['\\leftarrowtail']],
+    'hook/to/solid': [['\\hookrightarrow', '\\xhookrightarrow'], ['\\hookleftarrow', '\\xhookleftarrow']],
+    'bar/to/solid': [['\\mapsto', '\\xmapsto'], ['\\mathrel{\\leftarrow\\mkern-6mu\\vert}']],
+    'to/to/solid': [['\\leftrightarrow', '\\xleftrightarrow'], ['\\leftrightarrow', '\\xleftrightarrow']],
+    'none/none/solid': [['\\mathrel{-}'], ['\\mathrel{-}']],
+    'none/none/double': [['=', '\\xlongequal'], ['=', '\\xlongequal']],
+    'none/to/double': [['\\Rightarrow', '\\xRightarrow'], ['\\Leftarrow', '\\xLeftarrow']],
+    'to/none/double': [['\\Leftarrow', '\\xLeftarrow'], ['\\Rightarrow', '\\xRightarrow']],
+    'to/to/double': [['\\Leftrightarrow', '\\xLeftrightarrow'], ['\\Leftrightarrow', '\\xLeftrightarrow']],
+    'none/to/dashed': [['\\dashrightarrow'], ['\\dashleftarrow']],
+  };
+
+  function taylorMathArrows(definitions) {
+    const arrows = {};
+    for (const [name, parts] of Object.entries({ ...TAYLOR_ARROWS, ...definitions })) {
+      const style = taylorArrowStyle(parts);
+      if (!style) continue;
+      const shapes = TAYLOR_MATH_SHAPES[style.tail + '/' + style.head + '/' + (style.dbl ? 'double' : style.dash || 'solid')];
+      if (!shapes) continue;
+      arrows['\\r' + name] = shapes[0];
+      arrows['\\l' + name] = shapes[1];
+    }
+    return arrows;
+  }
+
+  function taylorArrow(tex, definitions, macro) {
+    const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
+    if (!m) return null;
+    // The paper's own macro, such as \lObj{A}, is an object.
+    if (!definitions?.[m[2]] && macro?.(m[1] + m[2])) return null;
+    const parts = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
+    // An unknown name followed by more than labels is a node, such as \lVert x\rVert.
+    const fail = parts ? false : null;
+    const style = parts ? taylorArrowStyle(parts) : {};
+    if (!style) return false;
+    const a = Object.assign(newArrow(), style, { dir: m[1] });
+
+    let i = skipWs(tex, m[0].length);
+    if (tex[i] === '[') i = skipWs(tex, matchGroup(tex, i));
+    const [dr, dc] = dirOffset(a.dir);
+    const above = !dr ? 'above' : !dc || dr !== dc ? 'left' : 'right';
+    const below = !dr ? 'below' : above === 'left' ? 'right' : 'left';
+    const sides = { '^': above, _: below, '<': 'left', '>': 'right', '~': 'c' };
+    const labels = [];
+    for (let braces = 0; i < tex.length;) {
+      const mark = tex[i];
+      const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
+      if (!side) return fail;
+      if (mark !== '{') i = skipWs(tex, i + 1);
+      if (i >= tex.length) return fail;
+      const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
+      const label = tex[i] === '{' ? tex.slice(i + 1, end - 1) : tex.slice(i, end);
+      if (label.trim()) labels.push({ tex: label, s: side });
+      i = skipWs(tex, end);
+    }
+    // An arrow style this renderer does not know: show the diagram's source.
+    if (!parts) return false;
+    return { a, dr, dc, labels };
+  }
+
+  /**
+   * A cell that starts with the paper's macros, with those macros written out:
+   * \let\incl\rTo, \newcommand{\incl}{\rTo^i} or \newcommand{\incl}[1]{\rTo^{#1}}.
+   */
+  function taylorAlias(tex, macro) {
+    let t = tex;
+    for (let k = 0; k < 10 && macro; k++) {
+      const m = /^\\([A-Za-z@]+)(?![A-Za-z@])/.exec(t);
+      const d = m && macro(m[1]);
+      if (!d || typeof d.body !== 'string' || d.delims) break;
+      if (d.let && !/^\\[A-Za-z@]+$/.test(d.body.trim())) break;
+      let i = m[0].length;
+      const args = [];
+      const nargs = d.let ? 0 : d.nargs || 0;
+      if (nargs && d.def !== null && d.def !== undefined) {
+        const at = skipWs(t, i);
+        if (t[at] === '[') {
+          const end = matchGroup(t, at);
+          args.push(t.slice(at + 1, end - 1));
+          i = end;
+        } else args.push(d.def);
+      }
+      while (args.length < nargs) {
+        const at = skipWs(t, i);
+        if (at >= t.length || t[at] === '}') return tex;
+        // a braced group, or one token: \incl{i}, \incl i, \incl\alpha
+        const end = t[at] === '{' ? matchGroup(t, at) : at + (/^\\(?:[A-Za-z@]+|.)/.exec(t.slice(at))?.[0].length || 1);
+        args.push(t[at] === '{' ? t.slice(at + 1, end - 1) : t.slice(at, end));
+        i = end;
+      }
+      t = d.body.trim().replace(/#([1-9])/g, (all, n) => (n <= args.length ? args[n - 1] : all)) + t.slice(i);
+    }
+    return t;
+  }
+
+  /** Taylor arrows sit between their endpoints, with empty cells along the way. */
+  function taylorDiagram(body, math, definitions, macro) {
+    // Options come right after \begin{diagram}; after a space, [A] starts the first object.
+    const end = body[0] === '[' ? matchGroup(body, 0) : 0;
+    const opts = end === 0 ? {} : Object.fromEntries(splitTop(body.slice(1, end - 1), ',').map(keyVal));
+    const rows = splitTop(body.slice(end), '\\\\').map((row) => splitTop(row, '&').map(trimTex));
+    if (rows.length > 1 && rows[rows.length - 1].every((cell) => !cell)) rows.pop();
+    const cols = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const nodes = new Map();
+    const arrows = [];
+    for (const [r, row] of rows.entries()) {
+      for (const [c, tex] of row.entries()) {
+        let arrow = taylorArrow(tex, definitions, macro);
+        // A macro of the paper that stands for an arrow, such as \incl for \rTo^i.
+        if (arrow === null) {
+          const alias = taylorAlias(tex, macro);
+          if (alias !== tex) arrow = taylorArrow(alias, definitions, macro) ?? null;
+        }
+        if (arrow === false) return null;
+        if (arrow) arrows.push({ ...arrow, r, c });
+        else if (tex) nodes.set(r * cols + c, tex);
+      }
+    }
+
+    const endpoint = (r, c, dr, dc) => {
+      for (r += dr, c += dc; r >= 0 && r < rows.length && c >= 0 && c < cols; r += dr, c += dc) {
+        if (nodes.has(r * cols + c)) return (r + 1) + '-' + (c + 1);
+      }
+      return null;
+    };
+    const labels = [];
+    for (const arrow of arrows) {
+      const { a, r, c, dr, dc } = arrow;
+      a.f = endpoint(r, c, -dr, -dc);
+      a.t = endpoint(r, c, dr, dc);
+      if (!a.f || !a.t) return null;
+      for (const label of arrow.labels) {
+        a.L.push({ k: labels.length, p: null, s: label.s, d: label.s === 'c' });
+        labels.push(math('\\scriptstyle ' + label.tex));
+      }
+    }
+    const cells = Array.from(nodes, ([at, tex]) => ({
+      r: Math.floor(at / cols) + 1,
+      c: at % cols + 1,
+      html: math('\\displaystyle ' + tex),
+    }));
+    const rs = cdSep(opts.height || opts.size, 0.8);
+    const cs = cdSep(opts.width || opts.size, 0.8);
+    return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
+  }
+
   // --- xymatrix ----------------------------------------------------------------
 
   /** An xy arrow style such as "->", "-->", "^{(}->", "=>", "|->", ".>" . */
@@ -2192,6 +2371,8 @@
 
   return {
     tikzcd: (body, math) => cdHtml(parseTikzcd(body, math)),
+    taylorDiagram,
+    taylorMathArrows,
     xymatrix(src, math) {
       const r = parseXymatrix(src, math);
       return r ? { html: cdHtml(r.model), end: r.end } : null;

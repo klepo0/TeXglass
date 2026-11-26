@@ -189,7 +189,7 @@
    * spacing, caption boxes), which only adds stray text or takes long to read.
    */
   const NATIVE_PACKAGES = new Set([
-    'mhequ',
+    'mhequ', 'diagrams',
     // TeXglass's own package (latex/texglass.sty): its commands are read natively
     'texglass',
     'amsmath', 'amssymb', 'amsthm', 'amsfonts', 'mathtools', 'graphicx', 'graphics', 'color', 'xcolor',
@@ -198,6 +198,18 @@
     'setspace', 'fancyhdr', 'titlesec', 'cleveref', 'xspace', 'bm', 'mathrsfs', 'dsfont', 'bbm',
   ]);
 
+  /**
+   * Whether a diagrams.tex is Paul Taylor's package itself: outside comments,
+   * it defines both of its commands \newarrow and \diagramstyle. An author's
+   * file that defines one arrow, or wraps tikzcd as \diagram … \enddiagram,
+   * is not.
+   */
+  const isTaylorDiagrams = (text) => {
+    const code = String(text || '').replace(/(^|[^\\])%.*$/gm, '$1');
+    const defines = (name) => new RegExp(String.raw`\\(?:(?:long|outer|global|protected)\s*\\)*(?:g?def|let)\s*\\${name}(?![A-Za-z@])`).test(code);
+    return defines('newarrow') && defines('diagramstyle');
+  };
+
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;
     const mark = (p) => (starts ? `\u0000${p}\u0000` : '');
@@ -205,19 +217,24 @@
     const mainDir = dirOf(mainPath);
     const only = includeOnly(texFiles[mainPath]);
     const seen = new Set();
-    const expand = (path, depth) => {
+    const expand = (path, depth, inPreamble) => {
       if (depth > 20 || seen.has(path)) return '';
       seen.add(path);
       const text = texFiles[path];
-      const out = text.replace(/(^|[^\\])(%.*$)|\\(input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\]+)|\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/gm,
-        (m, pre, comment, cmd, arg, impDir, impFile, bare, pkgs) => {
+      const out = text.replace(/(^|[^\\])(%.*$)|\\(input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\]+)|\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}|\\begin\s*\{(document)\}/gm,
+        (m, pre, comment, cmd, arg, impDir, impFile, bare, pkgs, beginDocument) => {
           if (comment !== undefined) return m;
-          if (pkgs !== undefined) return localPackages(m, pkgs, (found) => expand(found, depth + 1));
+          if (beginDocument) { inPreamble = false; return m; }
+          if (pkgs !== undefined) return localPackages(m, pkgs, (found) => expand(found, depth + 1, inPreamble));
           const name = arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare;
           if (cmd === 'include' && only && !only.has(includeName(name))) return '\n';
           const found = resolvePath(texFiles, mainDir, name, ['', '.tex', '.ltx']);
           if (!found || found === path) return m;
-          let body = expand(found, depth + 1);
+          // The plain-TeX form of the diagrams package also has a native renderer.
+          // An author's own diagrams.tex (macros, say) is still inlined.
+          if (inPreamble && (cmd === 'input' || bare !== undefined) && /^(?:\.\/)*diagrams(?:\.tex)?$/.test(name.trim())
+            && isTaylorDiagrams(texFiles[found])) return m;
+          let body = expand(found, depth + 1, inPreamble);
           if (cmd === 'subfile') body = '\n' + subfileBody(body) + '\n';
           body = mark(found) + body;
           seen.delete(found);
@@ -240,7 +257,7 @@
       if (!inlined) return m;
       return (kept.length ? m.replace(/\{[^}]*\}$/, `{${kept.join(',')}}`) : '') + inlined;
     };
-    let text = expand(mainPath, 0);
+    let text = expand(mainPath, 0, true);
     const bib = bibliographyFor(mainPath, texFiles, text);
     if (bib) {
       let used = false;

@@ -86,6 +86,27 @@ test('renderLive draws a piece again with the sliders\' values', () => {
   assert.match(live(0, { p: 'oops' }), /<mn>2<\/mn>/);
 });
 
+test('renderLive keeps diagrams.sty arrows when their labels use a parameter', () => {
+  const doc = String.raw`\documentclass{article}
+\usepackage{diagrams}
+\usepackage{texglass}
+\tgparam[2]{p}{1}{4}
+\newcommand{\link}[1]{C\lMono^{#1}D}
+\begin{document}
+\newarrow{Mono}>--->
+$A\rTo^{\p}B$
+$\link{\p}$
+\end{document}`;
+  const { html } = TeXglass.render(doc, { renderMath });
+  assert.match(html, /<mo[^>]*>→<\/mo>/);
+  assert.match(html, /<mo[^>]*>↢<\/mo>/);
+  assert.match(html, /<mn>2<\/mn>/);
+  const [standard, custom] = pieces(html).map(({ piece }) => TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath }));
+  assert.match(standard, /<mo[^>]*>→<\/mo>/);
+  assert.match(custom, /<mo[^>]*>↢<\/mo>/);
+  for (const live of [standard, custom]) assert.match(live, /<mn>3.5<\/mn>/);
+});
+
 test('a definition of the parameter in the paper or the picture counts, as in LaTeX', () => {
   const doc = String.raw`\documentclass{article}\usepackage{texglass}
 \tgparam{a}{0}{4}\tgparam{alpha}{0}{1}\def\a{1.5}
