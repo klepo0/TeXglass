@@ -679,7 +679,7 @@
   };
   // diagrams.sty horizontal arrows outside a diagram's grid. The older
   // braced labels and the newer superscript/subscript syntax are equivalent.
-  function diagramMathArrow(direction) {
+  function diagramMathArrow([symbol, stretchy]) {
     return (ctx) => {
       optBracket(ctx);
       let above = optGroup(ctx);
@@ -689,9 +689,10 @@
         if (mark === '^') above = group(ctx);
         else below = group(ctx);
       }
-      const arrow = direction === 'r' ? 'rightarrow' : 'leftarrow';
-      if (!above && !below) return '\\' + arrow;
-      return '\\x' + arrow + (below ? '[{' + below + '}]' : '') + '{' + (above || '') + '}';
+      if (!above && !below) return symbol;
+      if (stretchy) return stretchy + (below ? '[{' + below + '}]' : '') + '{' + (above || '') + '}';
+      const lower = below ? '\\underset{' + below + '}{' + symbol + '}' : symbol;
+      return '\\mathrel{' + (above ? '\\overset{' + above + '}{' + lower + '}' : lower) + '}';
     };
   }
   MATH_MACROS['\\textsubscript'] = (ctx) => {
@@ -1421,7 +1422,7 @@
     liveMark(tex, extra) {
       const u = this.paramUses(tex);
       if (!u.params.length || this.liveOnly) return '';
-      const defs = this.liveDefs(u.macros);
+      const defs = this.liveDefs(u.macros, u.arrows);
       return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 
@@ -1459,8 +1460,11 @@
       if (!this._katexMacros) {
         const m = Object.assign({}, MATH_MACROS, CONDITIONAL_MACROS);
         if (this.taylorDiagrams) {
-          m['\\rTo'] = diagramMathArrow('r');
-          m['\\lTo'] = diagramMathArrow('l');
+          const arrows = tikz()?.taylorMathArrows?.(this.diagramArrows) || {
+            '\\rTo': ['\\rightarrow', '\\xrightarrow'],
+            '\\lTo': ['\\leftarrow', '\\xleftarrow'],
+          };
+          for (const [name, shape] of Object.entries(arrows)) m[name] = diagramMathArrow(shape);
         }
         m['\\cite'] = (ctx) => {
           const note = optBracket(ctx);
@@ -1664,12 +1668,13 @@
 
     /**
      * The parameters TeX code depends on: \tgvalue{name}, \name, or a macro
-     * of the paper that uses one; and the paper's macros it reaches (for liveDefs).
+     * of the paper that uses one, along with the macro and arrow definitions it reaches.
      */
     paramUses(tex) {
       const params = new Set();
       const macros = [];
-      if (!this.params.size) return { params: [], macros };
+      const arrows = new Set();
+      if (!this.params.size) return { params: [], macros, arrows };
       const seen = new Set();
       const visit = (t, depth) => {
         if (depth > 20) return;
@@ -1677,6 +1682,7 @@
           const cs = m[1];
           if (cs === 'tgvalue') { if (m[2] && this.params.has(m[2])) params.add(m[2]); continue; }
           if (this.paramCs.has(cs)) { params.add(cs); continue; }
+          if (/^[lr]/.test(cs) && this.diagramArrows?.[cs.slice(1)]) arrows.add(cs.slice(1));
           if (seen.has(cs) || !this.macros[cs] || typeof this.macros[cs].body !== 'string') continue;
           seen.add(cs);
           visit(this.macros[cs].body, depth + 1);
@@ -1684,16 +1690,21 @@
         }
       };
       visit(tex, 0);
-      return { params: Array.from(params), macros };
+      return { params: Array.from(params), macros, arrows };
     }
 
     /** The paper's definitions of the macros a live piece uses, as TeX, to render it again on its own. */
-    liveDefs(names) {
-      return names.map((n) => {
+    liveDefs(names, arrows) {
+      const arrowDefs = Array.from(arrows, (name) => {
+        const parts = this.diagramArrows[name].map((part) => '{' + part + '}').join('');
+        return '\\newarrow{' + name + '}' + parts;
+      });
+      const macros = names.map((n) => {
         const m = this.macros[n];
         if (!m || m.delims || m.let) return '';
         return `\\renewcommand{\\${n}}${m.nargs ? `[${m.nargs}]` : ''}${m.nargs && m.def !== null ? `[${m.def}]` : ''}{${m.body}}`;
-      }).filter(Boolean).join('\n');
+      });
+      return arrowDefs.concat(macros).filter(Boolean).join('\n');
     }
 
     /** The parameters, for the sliders: hidden marks at the end of the page. */
@@ -4018,7 +4029,10 @@
       labels: second.labels,
       toc: second.toc,
       // Math definitions for the notation index (src/insight.js) and renderSnippets.
-      defs: { macros: second.macros, paired: second.paired, triple: second.triple, taylorDiagrams: second.taylorDiagrams },
+      defs: {
+        macros: second.macros, paired: second.paired, triple: second.triple,
+        taylorDiagrams: second.taylorDiagrams, diagramArrows: second.diagramArrows,
+      },
       warnings,
       unknownCommands: Array.from(new Set(first.warnings.filter((w) => /^Unknown command/.test(w)).map((w) => w.slice(16, -1)))),
     };
@@ -4035,6 +4049,7 @@
       Object.assign(r.paired, defs.paired || {});
       if (defs.triple) r.triple = defs.triple.slice();
       r.taylorDiagrams = defs.taylorDiagrams === true;
+      if (defs.diagramArrows) r.diagramArrows = Object.assign(Object.create(null), defs.diagramArrows);
     }
     return texs.map((t) => r.renderMath(String(t), false));
   }

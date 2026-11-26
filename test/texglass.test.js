@@ -149,9 +149,24 @@ test('rules inside text boxes render without changing the surrounding math shift
 });
 
 test('diagrams.sty arrows keep both labels outside a diagram', () => {
-  const pre = String.raw`\usepackage{amsmath, diagrams}\begin{document}`;
-  const texs = [String.raw`A\rTo^{f}_{g}B`, String.raw`B\lTo{u}{v}A`];
-  const expected = [String.raw`A\xrightarrow[{g}]{f}B`, String.raw`B\xleftarrow[{v}]{u}A`].map(handMath);
+  const pre = String.raw`\usepackage{amsmath, diagrams}
+\newarrow{Mono}>--->
+\newarrow{Epic}----{>>}
+\begin{document}`;
+  const texs = [
+    String.raw`A\rTo^{f}_{g}B`,
+    String.raw`B\lTo{u}{v}A`,
+    String.raw`A\rMono^{f}_{g}B`,
+    String.raw`B\lMono A`,
+    String.raw`B\lEpic^{h}A`,
+  ];
+  const expected = [
+    String.raw`A\xrightarrow[{g}]{f}B`,
+    String.raw`B\xleftarrow[{v}]{u}A`,
+    String.raw`A\mathrel{\overset{f}{\underset{g}{\rightarrowtail}}}B`,
+    String.raw`B\leftarrowtail A`,
+    String.raw`B\xtwoheadleftarrow{h}A`,
+  ].map(handMath);
   const { html, defs } = realMath(pre + texs.map((tex) => '$' + tex + '$').join(' and ') + '\\end{document}');
   for (const arrow of expected) assert.ok(html.includes(arrow));
   assert.doesNotMatch(html, /math-error/);

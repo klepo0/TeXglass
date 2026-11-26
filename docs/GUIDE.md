@@ -1415,7 +1415,8 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   pictures inside nodes, macros that hold paths, and `\resizebox` to the
   column width (pictures wider than the column shrink to fit). Tree symbols
   declared with `\DeclareSymbol` (as in regularity structures papers) are
-  drawn inside formulas. Heavier TikZ shows its source.
+  drawn inside formulas. Common horizontal arrow styles declared with
+  `\newarrow` also work in formulas. Heavier TikZ shows its source.
 
 Anything unknown is skipped gracefully. There is no TeX install and no compile
 step, and long papers stay fast. In VS Code (and FlexTeX), if you do have TeX

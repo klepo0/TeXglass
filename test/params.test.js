@@ -91,16 +91,20 @@ test('renderLive keeps diagrams.sty arrows when their labels use a parameter', (
 \usepackage{diagrams}
 \usepackage{texglass}
 \tgparam[2]{p}{1}{4}
+\newcommand{\link}[1]{C\lMono^{#1}D}
 \begin{document}
+\newarrow{Mono}>--->
 $A\rTo^{\p}B$
+$\link{\p}$
 \end{document}`;
   const { html } = TeXglass.render(doc, { renderMath });
   assert.match(html, /<mo[^>]*>→<\/mo>/);
+  assert.match(html, /<mo[^>]*>↢<\/mo>/);
   assert.match(html, /<mn>2<\/mn>/);
-  const [{ piece }] = pieces(html);
-  const live = TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath });
-  assert.match(live, /<mo[^>]*>→<\/mo>/);
-  assert.match(live, /<mn>3.5<\/mn>/);
+  const [standard, custom] = pieces(html).map(({ piece }) => TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath }));
+  assert.match(standard, /<mo[^>]*>→<\/mo>/);
+  assert.match(custom, /<mo[^>]*>↢<\/mo>/);
+  for (const live of [standard, custom]) assert.match(live, /<mn>3.5<\/mn>/);
 });
 
 test('a definition of the parameter in the paper or the picture counts, as in LaTeX', () => {

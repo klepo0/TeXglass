@@ -527,23 +527,63 @@
     Eq: ['=', '=', '=', '=', '='],
   };
 
+  const TAYLOR_HEADS = new Map([['>', 'to'], ['>>', '2h'], ['|', 'bar']]);
+  const TAYLOR_TAILS = new Map([['>', 'tail'], ['<', 'to'], ['<<', '2h'], ['|', 'bar'], ['C', 'hook']]);
+
+  function taylorArrowStyle(parts) {
+    const [tail, before, middle, after, head] = parts;
+    const style = {
+      head: head === after || !head ? 'none' : TAYLOR_HEADS.get(head),
+      tail: tail === before || !tail ? 'none' : TAYLOR_TAILS.get(tail),
+      dbl: 0,
+      dash: '',
+    };
+    if (!style.head || !style.tail || (middle && middle !== before && middle !== after)) return null;
+    if (before === '=' && after === '=') style.dbl = 1;
+    else if (before === 'dash' || after === 'dash') style.dash = 'dashed';
+    else if (before === '.' && after === '.') style.dash = 'dotted';
+    else if (before !== '-' || after !== '-') return null;
+    return style;
+  }
+
+  // KaTeX symbols for right and left arrows, with stretchy forms where available.
+  // Styles without an equivalent stay as source in ordinary math.
+  const TAYLOR_MATH_SHAPES = {
+    'none/to/solid': [['\\rightarrow', '\\xrightarrow'], ['\\leftarrow', '\\xleftarrow']],
+    'none/2h/solid': [['\\twoheadrightarrow', '\\xtwoheadrightarrow'], ['\\twoheadleftarrow', '\\xtwoheadleftarrow']],
+    'to/none/solid': [['\\leftarrow', '\\xleftarrow'], ['\\rightarrow', '\\xrightarrow']],
+    'tail/to/solid': [['\\rightarrowtail'], ['\\leftarrowtail']],
+    'hook/to/solid': [['\\hookrightarrow', '\\xhookrightarrow'], ['\\hookleftarrow', '\\xhookleftarrow']],
+    'bar/to/solid': [['\\mapsto', '\\xmapsto'], ['\\mathrel{\\leftarrow\\mkern-6mu\\vert}']],
+    'to/to/solid': [['\\leftrightarrow', '\\xleftrightarrow'], ['\\leftrightarrow', '\\xleftrightarrow']],
+    'none/none/solid': [['\\mathrel{-}'], ['\\mathrel{-}']],
+    'none/none/double': [['=', '\\xlongequal'], ['=', '\\xlongequal']],
+    'none/to/double': [['\\Rightarrow', '\\xRightarrow'], ['\\Leftarrow', '\\xLeftarrow']],
+    'to/none/double': [['\\Leftarrow', '\\xLeftarrow'], ['\\Rightarrow', '\\xRightarrow']],
+    'to/to/double': [['\\Leftrightarrow', '\\xLeftrightarrow'], ['\\Leftrightarrow', '\\xLeftrightarrow']],
+    'none/to/dashed': [['\\dashrightarrow'], ['\\dashleftarrow']],
+  };
+
+  function taylorMathArrows(definitions) {
+    const arrows = {};
+    for (const [name, parts] of Object.entries({ ...TAYLOR_ARROWS, ...definitions })) {
+      const style = taylorArrowStyle(parts);
+      if (!style) continue;
+      const shapes = TAYLOR_MATH_SHAPES[style.tail + '/' + style.head + '/' + (style.dbl ? 'double' : style.dash || 'solid')];
+      if (!shapes) continue;
+      arrows['\\r' + name] = shapes[0];
+      arrows['\\l' + name] = shapes[1];
+    }
+    return arrows;
+  }
+
   function taylorArrow(tex, definitions) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
-    const style = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
+    const parts = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
+    const style = parts && taylorArrowStyle(parts);
     if (!style) return false;
-    const [tail, before, middle, after, head] = style;
-    const heads = { '>': 'to', '>>': '2h', '|': 'bar' };
-    const tails = { '>': 'tail', '<': 'to', '<<': '2h', '|': 'bar', C: 'hook' };
-    const a = newArrow();
-    a.dir = m[1];
-    a.head = head === after || !head ? 'none' : heads[head];
-    a.tail = tail === before || !tail ? 'none' : tails[tail];
-    if (!a.head || !a.tail || (middle && middle !== before && middle !== after)) return false;
-    if (before === '=' && after === '=') a.dbl = 1;
-    else if (before === 'dash' || after === 'dash') a.dash = 'dashed';
-    else if (before === '.' && after === '.') a.dash = 'dotted';
-    else if (before !== '-' || after !== '-') return false;
+    const a = Object.assign(newArrow(), style, { dir: m[1] });
 
     let i = skipWs(tex, m[0].length);
     if (tex[i] === '[') i = skipWs(tex, matchGroup(tex, i));
@@ -2286,6 +2326,7 @@
   return {
     tikzcd: (body, math) => cdHtml(parseTikzcd(body, math)),
     taylorDiagram,
+    taylorMathArrows,
     xymatrix(src, math) {
       const r = parseXymatrix(src, math);
       return r ? { html: cdHtml(r.model), end: r.end } : null;
