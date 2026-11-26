@@ -265,6 +265,14 @@ test('flatten preserves diagrams.tex package loaders in the preamble', () => {
   }
 });
 
+test('flatten inlines an author\'s own diagrams.tex in the preamble', () => {
+  const out = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\cat$\\end{document}',
+    'diagrams.tex': '\\newcommand{\\cat}{\\mathcal{C}}',
+  });
+  assert.match(out, /\\newcommand\{\\cat\}\{\\mathcal\{C\}\}/);
+});
+
 test('flatten still inserts a paper section named diagrams.tex', () => {
   const out = A.flatten('paper.tex', {
     'paper.tex': '\\documentclass{article}\n\\begin{document}\\input{section}\\end{document}',

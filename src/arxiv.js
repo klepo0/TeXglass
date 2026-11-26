@@ -198,6 +198,9 @@
     'setspace', 'fancyhdr', 'titlesec', 'cleveref', 'xspace', 'bm', 'mathrsfs', 'dsfont', 'bbm',
   ]);
 
+  /** Whether a diagrams.tex is Paul Taylor's package itself (it defines \newarrow and the arrows). */
+  const isTaylorDiagrams = (text) => /\\(?:g?def|let)\s*\\(?:newarrow|diagramstyle|rTo)(?![A-Za-z@])|Paul Taylor/.test(text || '');
+
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;
     const mark = (p) => (starts ? `\u0000${p}\u0000` : '');
@@ -215,11 +218,13 @@
           if (beginDocument) { inPreamble = false; return m; }
           if (pkgs !== undefined) return localPackages(m, pkgs, (found) => expand(found, depth + 1, inPreamble));
           const name = arg !== undefined ? arg : impFile !== undefined ? impDir.replace(/\/?$/, '/') + impFile : bare;
-          // The plain-TeX form of the diagrams package also has a native renderer.
-          if (inPreamble && (cmd === 'input' || bare !== undefined) && /^(?:\.\/)*diagrams(?:\.tex)?$/.test(name.trim())) return m;
           if (cmd === 'include' && only && !only.has(includeName(name))) return '\n';
           const found = resolvePath(texFiles, mainDir, name, ['', '.tex', '.ltx']);
           if (!found || found === path) return m;
+          // The plain-TeX form of the diagrams package also has a native renderer.
+          // An author's own diagrams.tex (macros, say) is still inlined.
+          if (inPreamble && (cmd === 'input' || bare !== undefined) && /^(?:\.\/)*diagrams(?:\.tex)?$/.test(name.trim())
+            && isTaylorDiagrams(texFiles[found])) return m;
           let body = expand(found, depth + 1, inPreamble);
           if (cmd === 'subfile') body = '\n' + subfileBody(body) + '\n';
           body = mark(found) + body;

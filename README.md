@@ -67,7 +67,7 @@ setting, in the **[TeXglass guide](docs/GUIDE.md)**.
 ### Read
 
 - **Rendered like the paper**: KaTeX math, numbered theorems, equations and sections, BibTeX, biblatex and amsrefs bibliographies.
-- **Diagrams drawn**: `tikz-cd`, `xymatrix` and TikZ pictures.
+- **Diagrams drawn**: `tikz-cd`, `xymatrix`, `diagrams.sty` grids and TikZ pictures.
 - **Hover previews** of references, footnotes, citations (with the cited paper's abstract) and cited theorems.
 - **Go to** any theorem, equation or section by number, and **Back** to where you were after any jump.
 - **Contents** that follows you, folding sections and proofs, search, zoom, a text width you drag, light and dark.

@@ -581,7 +581,9 @@
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
     const parts = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
-    const style = parts && taylorArrowStyle(parts);
+    // An unknown name followed by more than labels is a node, such as \lVert x\rVert.
+    const fail = parts ? false : null;
+    const style = parts ? taylorArrowStyle(parts) : {};
     if (!style) return false;
     const a = Object.assign(newArrow(), style, { dir: m[1] });
 
@@ -595,14 +597,16 @@
     for (let braces = 0; i < tex.length;) {
       const mark = tex[i];
       const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
-      if (!side) return false;
+      if (!side) return fail;
       if (mark !== '{') i = skipWs(tex, i + 1);
-      if (i >= tex.length) return false;
+      if (i >= tex.length) return fail;
       const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
       const label = tex[i] === '{' ? tex.slice(i + 1, end - 1) : tex.slice(i, end);
       if (label.trim()) labels.push({ tex: label, s: side });
       i = skipWs(tex, end);
     }
+    // An arrow style this renderer does not know: show the diagram's source.
+    if (!parts) return false;
     return { a, dr, dc, labels };
   }
 

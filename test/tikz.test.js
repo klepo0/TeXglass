@@ -98,6 +98,14 @@ test('an unsupported diagrams.sty arrow keeps the diagram source for fallback', 
   assert.match(html, /class="graphic-placeholder"/);
 });
 
+test('a diagrams.sty cell such as \\lVert x\\rVert is an object, not an unknown arrow', () => {
+  const { html } = plain(String.raw`\begin{diagram} \lVert x\rVert & \rTo^f & B \end{diagram}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t }) => [f, t]), [['1-1', '1-3']]);
+  assert.match(html, /\[I:\\displaystyle \\lVert x\\rVert\]/);
+});
+
 test('xymatrix: spacing, labels, hooks, curves and 2-cells', () => {
   const { html } = plain(String.raw`\[\xymatrix@C=3pc{
 X \ar[r]^{f} \ar@{^{(}->}[d]_g & Y \ar@{=}[d] \ar@/^/[dl]|{s} \\
