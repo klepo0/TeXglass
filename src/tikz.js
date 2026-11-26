@@ -636,9 +636,10 @@
       }
       while (args.length < nargs) {
         const at = skipWs(t, i);
-        if (t[at] !== '{') return tex;
-        const end = matchGroup(t, at);
-        args.push(t.slice(at + 1, end - 1));
+        if (at >= t.length || t[at] === '}') return tex;
+        // a braced group, or one token: \incl{i}, \incl i, \incl\alpha
+        const end = t[at] === '{' ? matchGroup(t, at) : at + (/^\\(?:[A-Za-z@]+|.)/.exec(t.slice(at))?.[0].length || 1);
+        args.push(t[at] === '{' ? t.slice(at + 1, end - 1) : t.slice(at, end));
         i = end;
       }
       t = d.body.trim().replace(/#([1-9])/g, (all, n) => (n <= args.length ? args[n - 1] : all)) + t.slice(i);

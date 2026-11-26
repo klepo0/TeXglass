@@ -127,6 +127,8 @@ test('diagrams.sty: \\let aliases and arrow macros with arguments connect their 
     [String.raw`\let\incl\rTo`, String.raw`\incl^i`],
     [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl{i}`],
     [String.raw`\newcommand{\incl}[1][i]{\rTo^{#1}}`, String.raw`\incl`],
+    [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl i`],
+    [String.raw`\newcommand{\incl}[1]{\rTo^{#1}}`, String.raw`\incl\alpha`],
   ]) {
     const { html } = plain(def + String.raw`\begin{document}\begin{diagram} A & ` + cell + String.raw` & B \end{diagram}\end{document}`);
     const [cd] = models(html, 'data-cd');
