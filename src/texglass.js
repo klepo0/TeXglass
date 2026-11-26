@@ -1542,6 +1542,11 @@
 
     // --- top level ---------------------------------------------------------
 
+    setPreamble(pre) {
+      this.preamble = pre;
+      this.taylorDiagrams = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\]\s*)?\{(?:[^{}]*,)?\s*diagrams\s*(?:,[^{}]*)?\}|\\input(?:\s*\{\s*diagrams(?:\.tex)?\s*\}|\s+diagrams(?:\.tex)?(?=\s|$))/.test(pre);
+    }
+
     run(src) {
       let pre = '';
       let body = src;
@@ -1554,8 +1559,7 @@
         const end = documentMark(body, 'end');
         if (end) body = body.slice(0, end.at);
       }
-      this.preamble = pre;
-      this.taylorDiagrams = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\]\s*)?\{(?:[^{}]*,)?\s*diagrams\s*(?:,[^{}]*)?\}|\\input(?:\s*\{\s*diagrams(?:\.tex)?\s*\}|\s+diagrams(?:\.tex)?(?=\s|$))/.test(pre);
+      this.setPreamble(pre);
       // amsart, amsproc: an abstract written before \maketitle goes under the title
       this.amsTitle = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{\s*ams(?:art|proc)\s*\}/.test(pre) && /\\maketitle\b/.test(body);
       this.heldAbstract = '';
@@ -4013,8 +4017,8 @@
       title: second.meta.title ? stripTags(second.flow(second.meta.title, true)).trim() : null,
       labels: second.labels,
       toc: second.toc,
-      // The paper's own macros, for the notation index (src/insight.js) and renderSnippets.
-      defs: { macros: second.macros, paired: second.paired, triple: second.triple },
+      // Math definitions for the notation index (src/insight.js) and renderSnippets.
+      defs: { macros: second.macros, paired: second.paired, triple: second.triple, taylorDiagrams: second.taylorDiagrams },
       warnings,
       unknownCommands: Array.from(new Set(first.warnings.filter((w) => /^Unknown command/.test(w)).map((w) => w.slice(16, -1)))),
     };
@@ -4030,6 +4034,7 @@
       Object.assign(r.macros, defs.macros || {});
       Object.assign(r.paired, defs.paired || {});
       if (defs.triple) r.triple = defs.triple.slice();
+      r.taylorDiagrams = defs.taylorDiagrams === true;
     }
     return texs.map((t) => r.renderMath(String(t), false));
   }
@@ -4047,7 +4052,7 @@
     const r = new Renderer(opts, { labels: Object.create(null), toc: [], cites: Object.create(null) });
     r.liveOnly = true;
     const begin = documentMark(src, 'begin');
-    r.preamble = begin ? src.slice(0, begin.at) : '';
+    r.setPreamble(begin ? src.slice(0, begin.at) : '');
     r.startParams(src);
     r.inPreamble = true;
     r.flow(r.preamble, false);

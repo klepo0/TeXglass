@@ -135,11 +135,9 @@ test('user macros reach KaTeX and expand in text', () => {
 // user macros can be compared with the same formula written out by hand.
 const katexOpts = { throwOnError: true, strict: 'ignore' };
 const dropAnnotation = (html) => html.replace(/<annotation[^]*?<\/annotation>/g, '');
-const realMath = (src) =>
-  TeXglass.render(src, {
-    renderMath: (tex, displayMode, macros) =>
-      dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts))),
-  });
+const renderKaTeX = (tex, displayMode, macros) =>
+  dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts)));
+const realMath = (src) => TeXglass.render(src, { renderMath: renderKaTeX });
 const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
 
 test('rules inside text boxes render without changing the surrounding math shifts', () => {
@@ -152,10 +150,12 @@ test('rules inside text boxes render without changing the surrounding math shift
 
 test('diagrams.sty arrows keep both labels outside a diagram', () => {
   const pre = String.raw`\usepackage{amsmath, diagrams}\begin{document}`;
-  const { html } = realMath(pre + String.raw`$A\rTo^{f}_{g}B$ and $B\lTo{u}{v}A$\end{document}`);
-  assert.ok(html.includes(handMath(String.raw`A\xrightarrow[{g}]{f}B`)));
-  assert.ok(html.includes(handMath(String.raw`B\xleftarrow[{v}]{u}A`)));
+  const texs = [String.raw`A\rTo^{f}_{g}B`, String.raw`B\lTo{u}{v}A`];
+  const expected = [String.raw`A\xrightarrow[{g}]{f}B`, String.raw`B\xleftarrow[{v}]{u}A`].map(handMath);
+  const { html, defs } = realMath(pre + texs.map((tex) => '$' + tex + '$').join(' and ') + '\\end{document}');
+  for (const arrow of expected) assert.ok(html.includes(arrow));
   assert.doesNotMatch(html, /math-error/);
+  assert.deepEqual(TeXglass.renderSnippets(JSON.parse(JSON.stringify(defs)), texs, { renderMath: renderKaTeX }), expected);
 });
 
 const MACRO_PREAMBLE = String.raw`

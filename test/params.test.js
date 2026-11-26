@@ -86,6 +86,23 @@ test('renderLive draws a piece again with the sliders\' values', () => {
   assert.match(live(0, { p: 'oops' }), /<mn>2<\/mn>/);
 });
 
+test('renderLive keeps diagrams.sty arrows when their labels use a parameter', () => {
+  const doc = String.raw`\documentclass{article}
+\usepackage{diagrams}
+\usepackage{texglass}
+\tgparam[2]{p}{1}{4}
+\begin{document}
+$A\rTo^{\p}B$
+\end{document}`;
+  const { html } = TeXglass.render(doc, { renderMath });
+  assert.match(html, /<mo[^>]*>→<\/mo>/);
+  assert.match(html, /<mn>2<\/mn>/);
+  const [{ piece }] = pieces(html);
+  const live = TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath });
+  assert.match(live, /<mo[^>]*>→<\/mo>/);
+  assert.match(live, /<mn>3.5<\/mn>/);
+});
+
 test('a definition of the parameter in the paper or the picture counts, as in LaTeX', () => {
   const doc = String.raw`\documentclass{article}\usepackage{texglass}
 \tgparam{a}{0}{4}\tgparam{alpha}{0}{1}\def\a{1.5}
