@@ -67,6 +67,37 @@ See \eqref{eq:d}.
   assert.match(html, /<span class="diagram-tag">\[I:\(1\)\]<\/span>/);
 });
 
+test('diagrams.sty connects the objects around arrow cells and keeps equation labels', () => {
+  const { html, labels } = plain(String.raw`\usepackage{diagrams}
+\newarrow {Mono} >--->
+\begin{document}
+\begin{equation}\label{eq:square}
+  \begin{diagram}[width=1em]
+  A & & \rTo^{f} & B \\
+  \dMono_g & & & \dTo<h \\
+  C & \lTo{k}{l} & & D
+  \end{diagram}
+\end{equation}
+\end{document}`);
+  assert.equal(labels['eq:square'].num, '1');
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t, tail, L }) => [f, t, tail, L.map((l) => l.s)]), [
+    ['1-1', '1-4', 'none', ['above']],
+    ['1-1', '3-1', 'tail', ['right']],
+    ['1-4', '3-4', 'none', ['left']],
+    ['3-4', '3-1', 'none', ['above', 'below']],
+  ]);
+  assert.match(html, /\[I:\\scriptstyle f\]/);
+  assert.match(html, /\[I:\\scriptstyle l\]/);
+  assert.match(html, /<span class="diagram-tag">\[I:\(1\)\]<\/span>/);
+});
+
+test('an unsupported diagrams.sty arrow keeps the diagram source for fallback', () => {
+  const { html } = plain(String.raw`\begin{diagram} A & \rUnknown & B \end{diagram}`);
+  assert.match(html, /data-tg-source="\\begin\{diagram\} A &amp; \\rUnknown &amp; B \\end\{diagram\}"/);
+  assert.match(html, /class="graphic-placeholder"/);
+});
+
 test('xymatrix: spacing, labels, hooks, curves and 2-cells', () => {
   const { html } = plain(String.raw`\[\xymatrix@C=3pc{
 X \ar[r]^{f} \ar@{^{(}->}[d]_g & Y \ar@{=}[d] \ar@/^/[dl]|{s} \\

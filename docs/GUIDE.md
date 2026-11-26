@@ -142,8 +142,8 @@ Rebind any of them in **Keyboard Shortcuts** (Ctrl+K Ctrl+S) by searching for
   section heading or a folded proof. **Hide proofs** (the toolbar button with
   two arrows meeting at a line) folds or unfolds every proof at once; its
   tooltip says which it will do. Folds are remembered.
-- **Diagrams** are drawn: `tikz-cd`, `xymatrix` and TikZ pictures (heavier
-  TikZ shows its source). Pictures wider than the column shrink to fit.
+- **Diagrams** are drawn, including `tikz-cd`, `xymatrix`, grids with labelled
+  arrows from `diagrams.sty` and TikZ pictures. Pictures wider than the column shrink to fit.
 - **Margin notes**: `\marginpar`, `\marginnote` and `\todo` sit in a margin
   column level with their line (`\todo[inline]` stays in the line).
   - Drag the line between the text and the margin to resize it, or use
@@ -1410,7 +1410,8 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   interpreter. PDF figures and single-raster EPS from Ghostscript or Cairo
   are drawn with pdf.js, which loads only when needed.
 - **Diagrams**: `tikzcd` and `\xymatrix` (bends, shifts, 2-cells, arrow
-  styles) and `tikzpicture`s, including `\clip`, hatching patterns, braces,
+  styles), labelled-arrow grids from Paul Taylor's `diagrams.sty` and
+  `tikzpicture`s, including `\clip`, hatching patterns, braces,
   pictures inside nodes, macros that hold paths, and `\resizebox` to the
   column width (pictures wider than the column shrink to fit). Tree symbols
   declared with `\DeclareSymbol` (as in regularity structures papers) are

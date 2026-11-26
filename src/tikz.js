@@ -519,6 +519,99 @@
     return { rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, aliases) };
   }
 
+  // --- Paul Taylor's diagrams.sty ------------------------------------------------
+
+  const TAYLOR_ARROWS = {
+    To: ['-', '-', '-', '-', '>'],
+    Line: ['-', '-', '-', '-', '-'],
+    Eq: ['=', '=', '=', '=', '='],
+  };
+
+  function taylorArrow(tex, definitions) {
+    const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
+    if (!m) return null;
+    const style = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
+    if (!style) return false;
+    const [tail, before, middle, after, head] = style;
+    const heads = { '>': 'to', '>>': '2h', '|': 'bar' };
+    const tails = { '>': 'tail', '<': 'to', '<<': '2h', '|': 'bar', C: 'hook' };
+    const a = newArrow();
+    a.dir = m[1];
+    a.head = head === after || !head ? 'none' : heads[head];
+    a.tail = tail === before || !tail ? 'none' : tails[tail];
+    if (!a.head || !a.tail || (middle && middle !== before && middle !== after)) return false;
+    if (before === '=' && after === '=') a.dbl = 1;
+    else if (before === 'dash' || after === 'dash') a.dash = 'dashed';
+    else if (before === '.' && after === '.') a.dash = 'dotted';
+    else if (before !== '-' || after !== '-') return false;
+
+    let i = skipWs(tex, m[0].length);
+    if (tex[i] === '[') i = skipWs(tex, matchGroup(tex, i));
+    const [dr, dc] = dirOffset(a.dir);
+    const above = !dr ? 'above' : !dc || dr !== dc ? 'left' : 'right';
+    const below = !dr ? 'below' : above === 'left' ? 'right' : 'left';
+    const sides = { '^': above, _: below, '<': 'left', '>': 'right', '~': 'c' };
+    const labels = [];
+    for (let braces = 0; i < tex.length;) {
+      const mark = tex[i];
+      const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
+      if (!side) return false;
+      if (mark !== '{') i = skipWs(tex, i + 1);
+      if (i >= tex.length) return false;
+      const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
+      const label = tex[i] === '{' ? tex.slice(i + 1, end - 1) : tex.slice(i, end);
+      if (label.trim()) labels.push({ tex: label, s: side });
+      i = skipWs(tex, end);
+    }
+    return { a, dr, dc, labels };
+  }
+
+  /** Taylor arrows sit between their endpoints, with empty cells along the way. */
+  function taylorDiagram(body, math, definitions) {
+    const start = skipWs(body, 0);
+    const end = body[start] === '[' ? matchGroup(body, start) : start;
+    const opts = end === start ? {} : Object.fromEntries(splitTop(body.slice(start + 1, end - 1), ',').map(keyVal));
+    const rows = splitTop(body.slice(end), '\\\\').map((row) => splitTop(row, '&').map(trimTex));
+    if (rows.length > 1 && rows[rows.length - 1].every((cell) => !cell)) rows.pop();
+    const cols = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const nodes = new Map();
+    const arrows = [];
+    for (const [r, row] of rows.entries()) {
+      for (const [c, tex] of row.entries()) {
+        const arrow = taylorArrow(tex, definitions);
+        if (arrow === false) return null;
+        if (arrow) arrows.push({ ...arrow, r, c });
+        else if (tex) nodes.set(r * cols + c, tex);
+      }
+    }
+
+    const endpoint = (r, c, dr, dc) => {
+      for (r += dr, c += dc; r >= 0 && r < rows.length && c >= 0 && c < cols; r += dr, c += dc) {
+        if (nodes.has(r * cols + c)) return (r + 1) + '-' + (c + 1);
+      }
+      return null;
+    };
+    const labels = [];
+    for (const arrow of arrows) {
+      const { a, r, c, dr, dc } = arrow;
+      a.f = endpoint(r, c, -dr, -dc);
+      a.t = endpoint(r, c, dr, dc);
+      if (!a.f || !a.t) return null;
+      for (const label of arrow.labels) {
+        a.L.push({ k: labels.length, p: null, s: label.s, d: label.s === 'c' });
+        labels.push(math('\\scriptstyle ' + label.tex));
+      }
+    }
+    const cells = Array.from(nodes, ([at, tex]) => ({
+      r: Math.floor(at / cols) + 1,
+      c: at % cols + 1,
+      html: math('\\displaystyle ' + tex),
+    }));
+    const rs = cdSep(opts.height || opts.size, 0.8);
+    const cs = cdSep(opts.width || opts.size, 0.8);
+    return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
+  }
+
   // --- xymatrix ----------------------------------------------------------------
 
   /** An xy arrow style such as "->", "-->", "^{(}->", "=>", "|->", ".>" . */
@@ -2192,6 +2285,7 @@
 
   return {
     tikzcd: (body, math) => cdHtml(parseTikzcd(body, math)),
+    taylorDiagram,
     xymatrix(src, math) {
       const r = parseXymatrix(src, math);
       return r ? { html: cdHtml(r.model), end: r.end } : null;

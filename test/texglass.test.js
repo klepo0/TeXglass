@@ -141,6 +141,23 @@ const realMath = (src) =>
       dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts))),
   });
 const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
+
+test('rules inside text boxes render without changing the surrounding math shifts', () => {
+  const src = String.raw`\Gamma\mbox{$\,$\rule[2pt]{11pt}{0.2pt}$\triangleright\,$}\Gamma`;
+  const expected = String.raw`\Gamma\text{$\,$$\rule[2pt]{11pt}{0.2pt}$$\triangleright\,$}\Gamma`;
+  assert.ok(realMath('$' + src + '$').html.includes(handMath(expected)));
+  const rule = String.raw`\rule{1em}{1pt}`;
+  assert.ok(realMath('$' + rule + '$').html.includes(handMath(rule)));
+});
+
+test('diagrams.sty arrows keep both labels outside a diagram', () => {
+  const pre = String.raw`\usepackage{amsmath, diagrams}\begin{document}`;
+  const { html } = realMath(pre + String.raw`$A\rTo^{f}_{g}B$ and $B\lTo{u}{v}A$\end{document}`);
+  assert.ok(html.includes(handMath(String.raw`A\xrightarrow[{g}]{f}B`)));
+  assert.ok(html.includes(handMath(String.raw`B\xleftarrow[{v}]{u}A`)));
+  assert.doesNotMatch(html, /math-error/);
+});
+
 const MACRO_PREAMBLE = String.raw`
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\pair}[2][x]{\langle #1, #2\rangle}

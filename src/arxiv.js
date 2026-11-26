@@ -189,7 +189,7 @@
    * spacing, caption boxes), which only adds stray text or takes long to read.
    */
   const NATIVE_PACKAGES = new Set([
-    'mhequ',
+    'mhequ', 'diagrams',
     // TeXglass's own package (latex/texglass.sty): its commands are read natively
     'texglass',
     'amsmath', 'amssymb', 'amsthm', 'amsfonts', 'mathtools', 'graphicx', 'graphics', 'color', 'xcolor',
