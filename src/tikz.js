@@ -577,11 +577,11 @@
     return arrows;
   }
 
-  function taylorArrow(tex, definitions, isMacro) {
+  function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
     // The paper's own macro, such as \lObj{A}, is an object.
-    if (!definitions?.[m[2]] && isMacro?.(m[1] + m[2])) return null;
+    if (!definitions?.[m[2]] && macro?.(m[1] + m[2])) return null;
     const parts = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
     // An unknown name followed by more than labels is a node, such as \lVert x\rVert.
     const fail = parts ? false : null;
@@ -612,8 +612,20 @@
     return { a, dr, dc, labels };
   }
 
+  /** A cell that starts with the paper's macros without arguments, with those macros written out. */
+  function taylorAlias(tex, macro) {
+    let t = tex;
+    for (let k = 0; k < 10 && macro; k++) {
+      const m = /^\\([A-Za-z@]+)(?![A-Za-z@])/.exec(t);
+      const d = m && macro(m[1]);
+      if (!d || typeof d.body !== 'string' || d.nargs || d.delims || d.let) break;
+      t = d.body.trim() + t.slice(m[0].length);
+    }
+    return t;
+  }
+
   /** Taylor arrows sit between their endpoints, with empty cells along the way. */
-  function taylorDiagram(body, math, definitions, isMacro) {
+  function taylorDiagram(body, math, definitions, macro) {
     // Options come right after \begin{diagram}; after a space, [A] starts the first object.
     const end = body[0] === '[' ? matchGroup(body, 0) : 0;
     const opts = end === 0 ? {} : Object.fromEntries(splitTop(body.slice(1, end - 1), ',').map(keyVal));
@@ -624,7 +636,12 @@
     const arrows = [];
     for (const [r, row] of rows.entries()) {
       for (const [c, tex] of row.entries()) {
-        const arrow = taylorArrow(tex, definitions, isMacro);
+        let arrow = taylorArrow(tex, definitions, macro);
+        // A macro of the paper that stands for an arrow, such as \incl for \rTo^i.
+        if (arrow === null) {
+          const alias = taylorAlias(tex, macro);
+          if (alias !== tex) arrow = taylorArrow(alias, definitions, macro) ?? null;
+        }
         if (arrow === false) return null;
         if (arrow) arrows.push({ ...arrow, r, c });
         else if (tex) nodes.set(r * cols + c, tex);

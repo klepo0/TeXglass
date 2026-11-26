@@ -3485,7 +3485,7 @@
 
     taylorDiagram(body) {
       const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
-        (name) => !!(this.macros[name] || this.paired[name]));
+        (name) => this.macros[name] || this.paired[name] || null);
       return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);
     }
 

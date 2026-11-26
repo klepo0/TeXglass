@@ -254,7 +254,7 @@ test('flatten preserves diagrams.tex package loaders in the preamble', () => {
     const out = A.flatten('paper.tex', {
       'paper.tex': '\\documentclass{article}\n\\input{preamble}\n\\begin{document}$A\\rTo^f B$\\end{document}',
       'preamble.tex': loader,
-      'diagrams.tex': '\\def\\newarrow#1{}\\def\\rTo{low-level}',
+      'diagrams.tex': '\\def\\newarrow#1{}\\def\\diagramstyle[#1]{}\\def\\rTo{low-level}',
     });
     assert.ok(out.includes(loader));
     assert.doesNotMatch(out, /low-level/);
@@ -277,6 +277,17 @@ test('flatten inlines an author\'s own diagrams.tex in the preamble', () => {
     'diagrams.tex': '% arrows in the style of Paul Taylor\n\\def\\rTo{\\longrightarrow}\n\\newcommand{\\Cat}{\\mathcal{C}}',
   });
   assert.match(own, /\\newcommand\{\\Cat\}/);
+  // Nor does a commented-out package definition, or wrapping tikzcd as \diagram … \enddiagram.
+  for (const body of [
+    '% \\def\\newarrow and \\def\\diagramstyle come from the package\n\\newcommand{\\Cat}{\\mathcal{C}}',
+    '\\def\\diagram{\\begin{tikzcd}}\\def\\enddiagram{\\end{tikzcd}}\n\\newcommand{\\Cat}{\\mathcal{C}}',
+  ]) {
+    const kept = A.flatten('paper.tex', {
+      'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\Cat$\\end{document}',
+      'diagrams.tex': body,
+    });
+    assert.match(kept, /\\newcommand\{\\Cat\}/);
+  }
 });
 
 test('flatten still inserts a paper section named diagrams.tex', () => {

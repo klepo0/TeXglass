@@ -199,11 +199,16 @@
   ]);
 
   /**
-   * Whether a diagrams.tex is Paul Taylor's package itself: it defines the
-   * package's own commands \newarrow, \diagramstyle or \enddiagram. An
-   * author's file that only defines an arrow such as \rTo is not.
+   * Whether a diagrams.tex is Paul Taylor's package itself: outside comments,
+   * it defines both of its commands \newarrow and \diagramstyle. An author's
+   * file that defines one arrow, or wraps tikzcd as \diagram … \enddiagram,
+   * is not.
    */
-  const isTaylorDiagrams = (text) => /\\(?:(?:long|outer|global|protected)\s*\\)*(?:g?def|let)\s*\\(?:newarrow|diagramstyle|enddiagram)(?![A-Za-z@])/.test(text || '');
+  const isTaylorDiagrams = (text) => {
+    const code = String(text || '').replace(/(^|[^\\])%.*$/gm, '$1');
+    const defines = (name) => new RegExp(String.raw`\\(?:(?:long|outer|global|protected)\s*\\)*(?:g?def|let)\s*\\${name}(?![A-Za-z@])`).test(code);
+    return defines('newarrow') && defines('diagramstyle');
+  };
 
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;

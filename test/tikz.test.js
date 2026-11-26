@@ -114,6 +114,14 @@ test('diagrams.sty: the paper\'s own \\lObj{A} is an object', () => {
   assert.deepEqual(cd.arrows.map(({ f, t }) => [f, t]), [['1-1', '1-3']]);
 });
 
+test('diagrams.sty: a macro that stands for an arrow still connects its objects', () => {
+  const { html } = plain(String.raw`\newcommand{\incl}{\rTo^i}
+\begin{document}\begin{diagram} A & \incl & B \end{diagram}\end{document}`);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t, L }) => [f, t, L.length]), [['1-1', '1-3', 1]]);
+  assert.match(html, /\[I:\\scriptstyle i\]/);
+});
+
 test('diagrams.sty: [A] after a line break is the first object, not options', () => {
   const { html } = plain(String.raw`\begin{diagram}
 [A]/R & \rTo^f & B
