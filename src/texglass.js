@@ -2021,11 +2021,14 @@
       if (DROP_ARGS.has(name)) return res('', dropArgs(src, i));
 
       switch (name) {
+        // diagrams.sty, unless the paper defines a command of that name itself
         case 'diagramstyle':
+          if (this.macros[name]) break;
           this.taylorDiagrams = true;
           this._katexMacros = null;
           return res('', readOpt(src, i)?.end || i);
         case 'newarrow': {
+          if (this.macros[name]) break;
           const bare = /^[A-Za-z]+/.exec(src.slice(i));
           const arrow = bare ? { content: bare[0], end: i + bare[0].length } : readArg(src, i);
           if (!/^[A-Za-z]+$/.test(arrow.content)) break;

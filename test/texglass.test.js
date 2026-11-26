@@ -148,6 +148,11 @@ test('rules inside text boxes render without changing the surrounding math shift
   assert.ok(realMath('$' + rule + '$').html.includes(handMath(rule)));
 });
 
+test('a paper\'s own \\newarrow command is not read as diagrams.sty', () => {
+  const t = text(plain(String.raw`\newcommand{\newarrow}[1]{\textbf{#1}}\begin{document}\newarrow{go} Next sentence.\end{document}`).html);
+  assert.match(t, /go Next sentence\./);
+});
+
 test('diagrams.sty arrows keep both labels outside a diagram', () => {
   const pre = String.raw`\usepackage{amsmath, diagrams}
 \newarrow{Mono}>--->

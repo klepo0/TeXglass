@@ -612,14 +612,36 @@
     return { a, dr, dc, labels };
   }
 
-  /** A cell that starts with the paper's macros without arguments, with those macros written out. */
+  /**
+   * A cell that starts with the paper's macros, with those macros written out:
+   * \let\incl\rTo, \newcommand{\incl}{\rTo^i} or \newcommand{\incl}[1]{\rTo^{#1}}.
+   */
   function taylorAlias(tex, macro) {
     let t = tex;
     for (let k = 0; k < 10 && macro; k++) {
       const m = /^\\([A-Za-z@]+)(?![A-Za-z@])/.exec(t);
       const d = m && macro(m[1]);
-      if (!d || typeof d.body !== 'string' || d.nargs || d.delims || d.let) break;
-      t = d.body.trim() + t.slice(m[0].length);
+      if (!d || typeof d.body !== 'string' || d.delims) break;
+      if (d.let && !/^\\[A-Za-z@]+$/.test(d.body.trim())) break;
+      let i = m[0].length;
+      const args = [];
+      const nargs = d.let ? 0 : d.nargs || 0;
+      if (nargs && d.def !== null && d.def !== undefined) {
+        const at = skipWs(t, i);
+        if (t[at] === '[') {
+          const end = matchGroup(t, at);
+          args.push(t.slice(at + 1, end - 1));
+          i = end;
+        } else args.push(d.def);
+      }
+      while (args.length < nargs) {
+        const at = skipWs(t, i);
+        if (t[at] !== '{') return tex;
+        const end = matchGroup(t, at);
+        args.push(t.slice(at + 1, end - 1));
+        i = end;
+      }
+      t = d.body.trim().replace(/#([1-9])/g, (all, n) => (n <= args.length ? args[n - 1] : all)) + t.slice(i);
     }
     return t;
   }
