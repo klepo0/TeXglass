@@ -577,9 +577,11 @@
     return arrows;
   }
 
-  function taylorArrow(tex, definitions) {
+  function taylorArrow(tex, definitions, isMacro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
+    // The paper's own macro, such as \lObj{A}, is an object.
+    if (!definitions?.[m[2]] && isMacro?.(m[1] + m[2])) return null;
     const parts = definitions?.[m[2]] || TAYLOR_ARROWS[m[2]];
     // An unknown name followed by more than labels is a node, such as \lVert x\rVert.
     const fail = parts ? false : null;
@@ -611,10 +613,10 @@
   }
 
   /** Taylor arrows sit between their endpoints, with empty cells along the way. */
-  function taylorDiagram(body, math, definitions) {
-    const start = skipWs(body, 0);
-    const end = body[start] === '[' ? matchGroup(body, start) : start;
-    const opts = end === start ? {} : Object.fromEntries(splitTop(body.slice(start + 1, end - 1), ',').map(keyVal));
+  function taylorDiagram(body, math, definitions, isMacro) {
+    // Options come right after \begin{diagram}; after a space, [A] starts the first object.
+    const end = body[0] === '[' ? matchGroup(body, 0) : 0;
+    const opts = end === 0 ? {} : Object.fromEntries(splitTop(body.slice(1, end - 1), ',').map(keyVal));
     const rows = splitTop(body.slice(end), '\\\\').map((row) => splitTop(row, '&').map(trimTex));
     if (rows.length > 1 && rows[rows.length - 1].every((cell) => !cell)) rows.pop();
     const cols = rows.reduce((max, row) => Math.max(max, row.length), 0);
@@ -622,7 +624,7 @@
     const arrows = [];
     for (const [r, row] of rows.entries()) {
       for (const [c, tex] of row.entries()) {
-        const arrow = taylorArrow(tex, definitions);
+        const arrow = taylorArrow(tex, definitions, isMacro);
         if (arrow === false) return null;
         if (arrow) arrows.push({ ...arrow, r, c });
         else if (tex) nodes.set(r * cols + c, tex);

@@ -254,7 +254,7 @@ test('flatten preserves diagrams.tex package loaders in the preamble', () => {
     const out = A.flatten('paper.tex', {
       'paper.tex': '\\documentclass{article}\n\\input{preamble}\n\\begin{document}$A\\rTo^f B$\\end{document}',
       'preamble.tex': loader,
-      'diagrams.tex': '\\def\\rTo{low-level}',
+      'diagrams.tex': '\\def\\newarrow#1{}\\def\\rTo{low-level}',
     });
     assert.ok(out.includes(loader));
     assert.doesNotMatch(out, /low-level/);
@@ -271,6 +271,12 @@ test('flatten inlines an author\'s own diagrams.tex in the preamble', () => {
     'diagrams.tex': '\\newcommand{\\cat}{\\mathcal{C}}',
   });
   assert.match(out, /\\newcommand\{\\cat\}\{\\mathcal\{C\}\}/);
+  // Defining one arrow of its own, or naming the package's author, does not make it the package.
+  const own = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\input{diagrams}\n\\begin{document}$\\Cat$\\end{document}',
+    'diagrams.tex': '% arrows in the style of Paul Taylor\n\\def\\rTo{\\longrightarrow}\n\\newcommand{\\Cat}{\\mathcal{C}}',
+  });
+  assert.match(own, /\\newcommand\{\\Cat\}/);
 });
 
 test('flatten still inserts a paper section named diagrams.tex', () => {

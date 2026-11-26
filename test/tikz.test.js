@@ -106,6 +106,21 @@ test('a diagrams.sty cell such as \\lVert x\\rVert is an object, not an unknown 
   assert.match(html, /\[I:\\displaystyle \\lVert x\\rVert\]/);
 });
 
+test('diagrams.sty: the paper\'s own \\lObj{A} is an object', () => {
+  const { html } = plain(String.raw`\newcommand{\lObj}[1]{\mathcal{#1}}
+\begin{document}\begin{diagram} \lObj{A} & \rTo^f & B \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  const [cd] = models(html, 'data-cd');
+  assert.deepEqual(cd.arrows.map(({ f, t }) => [f, t]), [['1-1', '1-3']]);
+});
+
+test('diagrams.sty: [A] after a line break is the first object, not options', () => {
+  const { html } = plain(String.raw`\begin{diagram}
+[A]/R & \rTo^f & B
+\end{diagram}`);
+  assert.match(html, /\[I:\\displaystyle \[A\]\/R\]/);
+});
+
 test('xymatrix: spacing, labels, hooks, curves and 2-cells', () => {
   const { html } = plain(String.raw`\[\xymatrix@C=3pc{
 X \ar[r]^{f} \ar@{^{(}->}[d]_g & Y \ar@{=}[d] \ar@/^/[dl]|{s} \\

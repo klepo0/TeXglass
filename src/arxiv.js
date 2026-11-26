@@ -198,8 +198,12 @@
     'setspace', 'fancyhdr', 'titlesec', 'cleveref', 'xspace', 'bm', 'mathrsfs', 'dsfont', 'bbm',
   ]);
 
-  /** Whether a diagrams.tex is Paul Taylor's package itself (it defines \newarrow and the arrows). */
-  const isTaylorDiagrams = (text) => /\\(?:g?def|let)\s*\\(?:newarrow|diagramstyle|rTo)(?![A-Za-z@])|Paul Taylor/.test(text || '');
+  /**
+   * Whether a diagrams.tex is Paul Taylor's package itself: it defines the
+   * package's own commands \newarrow, \diagramstyle or \enddiagram. An
+   * author's file that only defines an arrow such as \rTo is not.
+   */
+  const isTaylorDiagrams = (text) => /\\(?:(?:long|outer|global|protected)\s*\\)*(?:g?def|let)\s*\\(?:newarrow|diagramstyle|enddiagram)(?![A-Za-z@])/.test(text || '');
 
   function flatten(mainPath, texFiles, opts) {
     const starts = opts && opts.starts;
