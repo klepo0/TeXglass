@@ -1544,7 +1544,7 @@
 
     setPreamble(pre) {
       this.preamble = pre;
-      this.taylorDiagrams = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\]\s*)?\{(?:[^{}]*,)?\s*diagrams\s*(?:,[^{}]*)?\}|\\input(?:\s*\{\s*diagrams(?:\.tex)?\s*\}|\s+diagrams(?:\.tex)?(?=\s|$))/.test(pre);
+      this.taylorDiagrams = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\]\s*)?\{(?:[^{}]*,)?\s*diagrams\s*(?:,[^{}]*)?\}|\\input(?:\s*\{\s*(?:\.\/)*diagrams(?:\.tex)?\s*\}|\s+(?:\.\/)*diagrams(?:\.tex)?(?=\s|$))/.test(pre);
     }
 
     run(src) {

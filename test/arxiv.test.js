@@ -247,6 +247,33 @@ test('flatten leaves out an author\'s own copy of a standard package', () => {
   assert.match(out, /\\usepackage\{footmisc,enumitem,diagrams\}/);
 });
 
+test('flatten preserves diagrams.tex package loaders in the preamble', () => {
+  const TeXglass = require('../src/texglass.js');
+  const katex = require('katex');
+  for (const loader of [String.raw`\input diagrams`, String.raw`\input{diagrams.tex}`, String.raw`\input ./diagrams.tex`]) {
+    const out = A.flatten('paper.tex', {
+      'paper.tex': '\\documentclass{article}\n\\input{preamble}\n\\begin{document}$A\\rTo^f B$\\end{document}',
+      'preamble.tex': loader,
+      'diagrams.tex': '\\def\\rTo{low-level}',
+    });
+    assert.ok(out.includes(loader));
+    assert.doesNotMatch(out, /low-level/);
+    const { html } = TeXglass.render(out, {
+      renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true }),
+    });
+    assert.match(html, /<mo[^>]*>→<\/mo>/);
+  }
+});
+
+test('flatten still inserts a paper section named diagrams.tex', () => {
+  const out = A.flatten('paper.tex', {
+    'paper.tex': '\\documentclass{article}\n\\begin{document}\\input{section}\\end{document}',
+    'section.tex': '\\input{diagrams}',
+    'diagrams.tex': '\\section{Our diagrams} A diagram goes here.',
+  });
+  assert.match(out, /\\section\{Our diagrams\} A diagram goes here\./);
+});
+
 test('an amsrefs .bbl (no .bib in the source) takes the place of \\bibliography', () => {
   const files = {
     'p.tex': '\\documentclass{amsart}\n\\usepackage[alphabetic]{amsrefs}\n\\begin{document}\nSee \\cite{w}.\n\\bibliography{refs}\n\\end{document}',
