@@ -237,9 +237,17 @@ test('a diagrams.sty cell reads TeX commands: a row break before letters is no a
   assert.doesNotMatch(html, /graphic-placeholder/);
 });
 
+test('a diagrams.sty cell is judged by what its macros expand to', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>
+\newcommand{\object}{\ifmmode B\else\rDotted^f\fi}\begin{document}
+\begin{diagram} A\object & \rTo & C \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+});
+
 test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {
-  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`, String.raw`B\dotmap{f}`]) {
-    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\newcommand{\dotmap}[1]{\rDotted^{#1}}\begin{document}
+  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`, String.raw`B\dotmap{f}`, String.raw`B\optmap`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\newcommand{\dotmap}[1]{\rDotted^{#1}}
+\newcommand{\optmap}[1][\rDotted^f]{#1}\begin{document}
 \begin{diagram} A & ` + cell + String.raw` \end{diagram}\end{document}`);
     assert.match(html, /graphic-placeholder/, cell);
     assert.doesNotMatch(html, /math-error/, cell);

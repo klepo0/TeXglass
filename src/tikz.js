@@ -586,24 +586,7 @@
     return Object.prototype.hasOwnProperty.call(taylorMathArrows(definitions), '\\' + name);
   }
 
-  /**
-   * Whether every diagrams.sty arrow in a formula, read as TeX commands and
-   * through the paper's macros (\newcommand{\dotmap}[1]{\rDotted^{#1}}), has an inline form.
-   */
-  function taylorCellInline(tex, definitions, macro, depth) {
-    if (depth > 10) return true;
-    for (const t of String(tex).matchAll(/\\([A-Za-z@]+|.)/g)) {
-      const name = t[1];
-      const d = macro?.(name);
-      if (d) {
-        if (typeof d.body === 'string' && !taylorCellInline(d.body, definitions, macro, depth + 1)) return false;
-        continue;
-      }
-      const a = /^([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)$/.exec(name);
-      if (a && (definitions?.[a[2]] || TAYLOR_ARROWS[a[2]]) && !taylorInline(name, definitions)) return false;
-    }
-    return true;
-  }
+  const TAYLOR_UNDEFINED = /(?:#cc0000"><mtext>|Undefined control sequence: )\\(?:[ud]?[lr]|[lr]?[ud])[A-Z][A-Za-z]*/;
 
   function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
@@ -699,7 +682,6 @@
         if (arrow) arrows.push({ ...arrow, r, c });
         else if (tex) {
           // an object cell drawn as a formula: any arrow in it needs an inline form
-          if (!taylorCellInline(tex, definitions, macro, 0)) return null;
           nodes.set(r * cols + c, tex);
         }
       }
@@ -727,6 +709,10 @@
       c: at % cols + 1,
       html: math('\\displaystyle ' + tex),
     }));
+    // An object cell drawn as a formula may reach an arrow with no inline form,
+    // written there or through the paper's macros: KaTeX then names it as
+    // undefined, and the diagram shows its source instead.
+    if (cells.some((cell) => TAYLOR_UNDEFINED.test(cell.html))) return null;
     const rs = cdSep(opts.height || opts.size, 0.8);
     const cs = cdSep(opts.width || opts.size, 0.8);
     return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
