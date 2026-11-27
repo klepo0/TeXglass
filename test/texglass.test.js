@@ -137,6 +137,8 @@ const katexOpts = { throwOnError: true, strict: 'ignore' };
 const dropAnnotation = (html) => html.replace(/<annotation[^]*?<\/annotation>/g, '');
 const renderKaTeX = (tex, displayMode, macros) =>
   dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts)));
+// the drawn part of KaTeX's output, without its MathML
+const visible = (html) => html.replace(/<span class="katex-mathml">[\s\S]*?<\/math><\/span>/g, '');
 const realMath = (src) => TeXglass.render(src, { renderMath: renderKaTeX });
 const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
 
@@ -202,7 +204,7 @@ test('a paper\'s own environments are written out inside a formula', () => {
 \newenvironment{stackTL}{\begin{stackAux}{t}{l}}{\end{stackAux}}
 \begin{document}$x = \begin{stackTL} a \\ b \end{stackTL}$\end{document}`);
   assert.doesNotMatch(html, /math-error/);
-  assert.ok(html.includes(handMath(String.raw`x = {{ \begin{array}{l}  a \\ b  \end{array}} }`)));
+  assert.ok(visible(html).includes(visible(handMath(String.raw`x = \begin{array}{l} a \\ b \end{array}`))));
 });
 
 test('a paper\'s environment in a formula is a group, and its \\ref and token edges are kept', () => {
@@ -212,20 +214,32 @@ test('a paper\'s environment in a formula is a group, and its \\ref and token ed
 \begin{document}\begin{equation}\label{eq:a}a=b\end{equation}
 $a+\begin{colored}b\end{colored}+c$ and $\begin{al}x\end{al}$ and $\begin{see}\end{see}$\end{document}`);
   assert.doesNotMatch(html, /math-error|eq:a/);
-  assert.ok(html.includes(handMath(String.raw`a+{\color{red} b }+c`)));
-  assert.ok(html.includes(handMath(String.raw`{\alpha x }`)));
+  assert.ok(visible(html).includes(visible(handMath(String.raw`a+\begingroup\color{red}b\endgroup+c`))));
+  assert.ok(visible(html).includes(visible(handMath(String.raw`\alpha x`))));
+  // relations keep their spacing across the environment's edges
+  const { html: rel } = realMath(String.raw`\newenvironment{rel}{}{}\begin{document}$A\begin{rel}=\end{rel}B$\end{document}`);
+  assert.ok(visible(rel).includes(visible(handMath('A=B'))));
 });
 
 test('\\scalerel keeps the second object unless starred, and skips a width', () => {
   const { html } = realMath(String.raw`\begin{document}$\scalerel{X}{Y}$ and $\scalerel*[2ex]{X}{Y}$\end{document}`);
   assert.doesNotMatch(html, /math-error/);
-  assert.ok(html.includes(handMath(String.raw`{\large X}{Y}`)));
+  assert.ok(html.includes(handMath(String.raw`{\large X} Y`)));
+  // an operator reference keeps its limits
+  const { html: sum } = realMath(String.raw`\begin{document}\[\scalerel{X}{\sum}_{i=1}^n\]\end{document}`);
+  assert.match(sum, /<munderover>/);
   assert.ok(html.includes(handMath(String.raw`{\large X}`)));
 });
 
+test('a diagrams.sty cell reads TeX commands: a row break before letters is no arrow', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\begin{document}
+\begin{diagram} A & \rTo & \begin{matrix}1\\dTo\end{matrix} \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+});
+
 test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {
-  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`]) {
-    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`, String.raw`B\dotmap{f}`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\newcommand{\dotmap}[1]{\rDotted^{#1}}\begin{document}
 \begin{diagram} A & ` + cell + String.raw` \end{diagram}\end{document}`);
     assert.match(html, /graphic-placeholder/, cell);
     assert.doesNotMatch(html, /math-error/, cell);

@@ -721,7 +721,8 @@
     optBracket(ctx);
     const symbol = group(ctx).replace(/\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![A-Za-z])/g, '');
     const reference = group(ctx);
-    return '{\\large ' + symbol + '}' + (starred ? '' : '{' + reference + '}');
+    // the reference as it is, so an operator such as \sum keeps its limits
+    return '{\\large ' + symbol + '}' + (starred ? '' : ' ' + reference);
   };
   MATH_MACROS['\\textsubscript'] = (ctx) => {
     const content = '_{\\text{' + group(ctx) + '}}';
@@ -1478,8 +1479,9 @@
           j = a.end;
         }
         const sub = (t) => t.replace(/#(\d)/g, (_, d) => args[d - 1] || '');
-        // an environment is a group, as in LaTeX; spaces keep \alpha from running into x
-        tex = tex.slice(0, m.index) + '{' + sub(e.begin) + ' ' + tex.slice(j, end.contentEnd) + ' ' + sub(e.end) + '}' + tex.slice(end.end);
+        // an environment is a group, as in LaTeX, that keeps the spacing of what it holds
+        // (\begingroup, not braces); spaces keep \alpha from running into x
+        tex = tex.slice(0, m.index) + '\\begingroup ' + sub(e.begin) + ' ' + tex.slice(j, end.contentEnd) + ' ' + sub(e.end) + '\\endgroup ' + tex.slice(end.end);
         // look again from here: the written-out text may hold more of the paper's environments
         re.lastIndex = m.index;
       }
@@ -1492,7 +1494,8 @@
       if (!u.params.length || this.liveOnly) return '';
       let defs = this.liveDefs(u.macros, u.arrows);
       // diagrams.sty arrows (\rTo) inferred from a diagram, not the preamble: the redraw needs them too
-      if (this.taylorDiagrams && /\\[lr][A-Z]/.test(tex)) defs = '\\diagramstyle' + (defs ? '\n' + defs : '');
+      const arrowIn = (t) => /\\[lr][A-Z]/.test(t);
+      if (this.taylorDiagrams && (arrowIn(tex) || u.macros.some((n) => arrowIn(String(this.macros[n]?.body || ''))))) defs = '\\diagramstyle' + (defs ? '\n' + defs : '');
       return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 

@@ -91,7 +91,8 @@ test('renderLive keeps diagrams.sty arrows a diagram turned on without the packa
 \usepackage{texglass}
 \tgparam[2]{p}{1}{4}
 \begin{document}
-\begin{diagram} A & \rTo^{\p} B \end{diagram}
+\newcommand{\link}[1]{\rTo^{#1}}
+\begin{diagram} A & \rTo^{\p} B & C & B\link{\p} \end{diagram}
 \end{document}`;
   const { html } = TeXglass.render(doc, { renderMath });
   const live = pieces(html).map(({ piece }) => TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath }));
