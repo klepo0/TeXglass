@@ -714,11 +714,14 @@
   MATH_MACROS['\\mathversion'] = (ctx) => { group(ctx); return ''; };
   MATH_MACROS['\\setlength'] = (ctx) => { ctx.consumeArgs(2); return ''; };
   // scalerel: \scalerel*{\Huge K}{\big(} draws its first argument at about the size of the second
+  // (the unstarred form prints the second argument after it; [width] is ignored)
   MATH_MACROS['\\scalerel'] = (ctx) => {
-    if (peekText(ctx) === '*') ctx.popToken();
+    const starred = peekText(ctx) === '*';
+    if (starred) ctx.popToken();
+    optBracket(ctx);
     const symbol = group(ctx).replace(/\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![A-Za-z])/g, '');
-    group(ctx);
-    return '{\\large ' + symbol + '}';
+    const reference = group(ctx);
+    return '{\\large ' + symbol + '}' + (starred ? '' : '{' + reference + '}');
   };
   MATH_MACROS['\\textsubscript'] = (ctx) => {
     const content = '_{\\text{' + group(ctx) + '}}';
@@ -1427,9 +1430,11 @@
     }
 
     renderMath(tex, display) {
+      // the paper's environments first, so what they bring in (\ref, \footnote) is read like the rest
+      tex = this.mathEnvs(tex);
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       const missing = this.options.sourceMap && this.known ? new Set() : null;
-      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathEnvs(this.mathRefs(tex, missing))), this.triple));
+      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
       const refs = missing ? Array.from(missing, (key) => `<span hidden data-math-ref-missing="${escapeHtml(key)}"></span>`).join('') : '';
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       // a formula that uses a \tgparam: a mark with its TeX, to draw it again when a slider moves
@@ -1473,7 +1478,8 @@
           j = a.end;
         }
         const sub = (t) => t.replace(/#(\d)/g, (_, d) => args[d - 1] || '');
-        tex = tex.slice(0, m.index) + sub(e.begin) + tex.slice(j, end.contentEnd) + sub(e.end) + tex.slice(end.end);
+        // an environment is a group, as in LaTeX; spaces keep \alpha from running into x
+        tex = tex.slice(0, m.index) + '{' + sub(e.begin) + ' ' + tex.slice(j, end.contentEnd) + ' ' + sub(e.end) + '}' + tex.slice(end.end);
         // look again from here: the written-out text may hold more of the paper's environments
         re.lastIndex = m.index;
       }
@@ -1484,7 +1490,9 @@
     liveMark(tex, extra) {
       const u = this.paramUses(tex);
       if (!u.params.length || this.liveOnly) return '';
-      const defs = this.liveDefs(u.macros, u.arrows);
+      let defs = this.liveDefs(u.macros, u.arrows);
+      // diagrams.sty arrows (\rTo) inferred from a diagram, not the preamble: the redraw needs them too
+      if (this.taylorDiagrams && /\\[lr][A-Z]/.test(tex)) defs = '\\diagramstyle' + (defs ? '\n' + defs : '');
       return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 

@@ -86,6 +86,23 @@ test('renderLive draws a piece again with the sliders\' values', () => {
   assert.match(live(0, { p: 'oops' }), /<mn>2<\/mn>/);
 });
 
+test('renderLive keeps diagrams.sty arrows a diagram turned on without the package', () => {
+  const doc = String.raw`\documentclass{article}
+\usepackage{texglass}
+\tgparam[2]{p}{1}{4}
+\begin{document}
+\begin{diagram} A & \rTo^{\p} B \end{diagram}
+\end{document}`;
+  const { html } = TeXglass.render(doc, { renderMath });
+  const live = pieces(html).map(({ piece }) => TeXglass.renderLive(doc, piece, { p: '3.5' }, { renderMath }));
+  assert.ok(live.length > 0);
+  for (const l of live) {
+    assert.doesNotMatch(l, /katex-error|color:#cc0000/);
+    assert.match(l, /<mo[^>]*>→<\/mo>/);
+    assert.match(l, /<mn>3.5<\/mn>/);
+  }
+});
+
 test('renderLive keeps diagrams.sty arrows when their labels use a parameter', () => {
   const doc = String.raw`\documentclass{article}
 \usepackage{diagrams}

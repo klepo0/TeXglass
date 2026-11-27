@@ -581,6 +581,11 @@
     return arrows;
   }
 
+  /** Whether an arrow such as \\rTo can be drawn inside a formula (horizontal, with a KaTeX shape). */
+  function taylorInline(name, definitions) {
+    return Object.prototype.hasOwnProperty.call(taylorMathArrows(definitions), '\\' + name);
+  }
+
   function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
@@ -605,7 +610,7 @@
       const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
       // A known arrow followed by an object, as in \rTo^f B: the cell is drawn as
       // ordinary maths, where \rTo is an inline arrow.
-      if (!side) return parts ? null : fail;
+      if (!side) return parts && taylorInline(m[1] + m[2], definitions) ? null : fail;
       if (mark !== '{') i = skipWs(tex, i + 1);
       if (i >= tex.length) return fail;
       const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
@@ -673,7 +678,13 @@
         }
         if (arrow === false) return null;
         if (arrow) arrows.push({ ...arrow, r, c });
-        else if (tex) nodes.set(r * cols + c, tex);
+        else if (tex) {
+          // an object cell drawn as a formula: any arrow in it needs an inline form
+          for (const a of tex.matchAll(/\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/g)) {
+            if ((definitions?.[a[2]] || TAYLOR_ARROWS[a[2]]) && !macro?.(a[1] + a[2]) && !taylorInline(a[1] + a[2], definitions)) return null;
+          }
+          nodes.set(r * cols + c, tex);
+        }
       }
     }
 

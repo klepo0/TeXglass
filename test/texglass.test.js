@@ -202,7 +202,34 @@ test('a paper\'s own environments are written out inside a formula', () => {
 \newenvironment{stackTL}{\begin{stackAux}{t}{l}}{\end{stackAux}}
 \begin{document}$x = \begin{stackTL} a \\ b \end{stackTL}$\end{document}`);
   assert.doesNotMatch(html, /math-error/);
-  assert.ok(html.includes(handMath(String.raw`x = \begin{array}{l} a \\ b \end{array}`)));
+  assert.ok(html.includes(handMath(String.raw`x = {{ \begin{array}{l}  a \\ b  \end{array}} }`)));
+});
+
+test('a paper\'s environment in a formula is a group, and its \\ref and token edges are kept', () => {
+  const { html } = realMath(String.raw`\newenvironment{colored}{\color{red}}{}
+\newenvironment{al}{\alpha}{}
+\newenvironment{see}{\text{see \eqref{eq:a}}}{}
+\begin{document}\begin{equation}\label{eq:a}a=b\end{equation}
+$a+\begin{colored}b\end{colored}+c$ and $\begin{al}x\end{al}$ and $\begin{see}\end{see}$\end{document}`);
+  assert.doesNotMatch(html, /math-error|eq:a/);
+  assert.ok(html.includes(handMath(String.raw`a+{\color{red} b }+c`)));
+  assert.ok(html.includes(handMath(String.raw`{\alpha x }`)));
+});
+
+test('\\scalerel keeps the second object unless starred, and skips a width', () => {
+  const { html } = realMath(String.raw`\begin{document}$\scalerel{X}{Y}$ and $\scalerel*[2ex]{X}{Y}$\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(html.includes(handMath(String.raw`{\large X}{Y}`)));
+  assert.ok(html.includes(handMath(String.raw`{\large X}`)));
+});
+
+test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {
+  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} A & ` + cell + String.raw` \end{diagram}\end{document}`);
+    assert.match(html, /graphic-placeholder/, cell);
+    assert.doesNotMatch(html, /math-error/, cell);
+  }
 });
 
 test('package symbols KaTeX lacks render', () => {
