@@ -431,6 +431,21 @@
     '\\shortleftarrow': '\\mathrel{\\scriptstyle\\leftarrow}',
     '\\shortrightarrow': '\\mathrel{\\scriptstyle\\rightarrow}',
     '\\mspace': '\\mskip#1',
+    // more package symbols KaTeX lacks: centernot, mathabx/txfonts, stmaryrd, wasysym, revtex
+    '\\centernot': '\\not',
+    '\\bigtimes': '\\mathop{\\vcenter{\\Large\\times}}',
+    '\\bigsqcap': '\\mathop{\\vcenter{\\Large\\sqcap}}',
+    '\\cdotp': '\\mathpunct{\\cdot}',
+    '\\longhookrightarrow': '\\mathrel{\\xhookrightarrow{\\,}}',
+    '\\longhookleftarrow': '\\mathrel{\\xhookleftarrow{\\,}}',
+    '\\arrowvert': '\\vert',
+    '\\Arrowvert': '\\Vert',
+    '\\varolessthan': '\\mathbin{\\text{⧀}}',
+    '\\varogreaterthan': '\\mathbin{\\text{⧁}}',
+    '\\lightning': '\\mathord{\\text{↯}}',
+    '\\checked': '\\checkmark',
+    '\\mathsection': '\\S',
+    '\\agt': '\\gtrsim',
     // rules that stretch to fill a box: drawn at a fixed width in a formula
     '\\hrulefill': '\\rule[0.25em]{1.5em}{0.4pt}',
     '\\leftarrowfill': '\\xleftarrow{\\quad}',
@@ -695,6 +710,16 @@
       return '\\mathrel{' + (above ? '\\overset{' + above + '}{' + lower + '}' : lower) + '}';
     };
   }
+  // settings that change nothing KaTeX draws: \mathversion{bold}, \setlength{\arraycolsep}{0pt}
+  MATH_MACROS['\\mathversion'] = (ctx) => { group(ctx); return ''; };
+  MATH_MACROS['\\setlength'] = (ctx) => { ctx.consumeArgs(2); return ''; };
+  // scalerel: \scalerel*{\Huge K}{\big(} draws its first argument at about the size of the second
+  MATH_MACROS['\\scalerel'] = (ctx) => {
+    if (peekText(ctx) === '*') ctx.popToken();
+    const symbol = group(ctx).replace(/\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![A-Za-z])/g, '');
+    group(ctx);
+    return '{\\large ' + symbol + '}';
+  };
   MATH_MACROS['\\textsubscript'] = (ctx) => {
     const content = '_{\\text{' + group(ctx) + '}}';
     return ctx.mode === 'text' ? '$' + '{}' + content + '$' : content;
@@ -861,7 +886,8 @@
         spec = spec.replace(/[@!<>]\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
       }
       spec = spec.replace(/[pmbw]\s*\{[^{}]*\}/g, 'l');
-      out += tex.slice(last, open + 1) + spec + '}';
+      // KaTeX has no [t]/[b] placement for an array: drop it
+      out += tex.slice(last, m.index) + m[0].replace(/\[[^\]]*\]\s*/, '') + spec + '}';
       last = k + 1;
       re.lastIndex = last;
     }
@@ -1403,7 +1429,7 @@
     renderMath(tex, display) {
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       const missing = this.options.sourceMap && this.known ? new Set() : null;
-      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
+      tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathEnvs(this.mathRefs(tex, missing))), this.triple));
       const refs = missing ? Array.from(missing, (key) => `<span hidden data-math-ref-missing="${escapeHtml(key)}"></span>`).join('') : '';
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       // a formula that uses a \tgparam: a mark with its TeX, to draw it again when a slider moves
@@ -1416,6 +1442,42 @@
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
       }
+    }
+
+    /**
+     * The paper's own environments inside a formula, written out
+     * (\newenvironment{stack}{\begin{array}[t]{l}}{\end{array}}), since KaTeX
+     * knows only its own.
+     */
+    mathEnvs(tex) {
+      if (!/\\begin/.test(tex)) return tex;
+      const re = /\\begin\s*\{([^{}]+)\}/g;
+      let m;
+      for (let guard = 0; guard < 200 && (m = re.exec(tex)); guard++) {
+        const name = m[1].trim();
+        const e = Object.prototype.hasOwnProperty.call(this.envs, name) ? this.envs[name] : null;
+        if (!e) continue;
+        const at = m.index + m[0].length;
+        const end = findEnvEnd(tex, at, m[1]);
+        const args = [];
+        let j = at;
+        for (let k = 0; k < e.nargs; k++) {
+          if (k === 0 && e.def !== null) {
+            const o = readOpt(tex, j);
+            args.push(o ? o.content : e.def);
+            if (o) j = o.end;
+            continue;
+          }
+          const a = readArg(tex, j);
+          args.push(a.content);
+          j = a.end;
+        }
+        const sub = (t) => t.replace(/#(\d)/g, (_, d) => args[d - 1] || '');
+        tex = tex.slice(0, m.index) + sub(e.begin) + tex.slice(j, end.contentEnd) + sub(e.end) + tex.slice(end.end);
+        // look again from here: the written-out text may hold more of the paper's environments
+        re.lastIndex = m.index;
+      }
+      return tex;
     }
 
     /** A hidden mark for a formula or picture (tex) that uses parameters, read by src/params.js. */
@@ -3487,6 +3549,9 @@
     }
 
     taylorDiagram(body) {
+      // A diagram means diagrams.sty, even without \usepackage: cells such as
+      // \rTo^f B draw \rTo as an inline arrow.
+      if (!this.taylorDiagrams) { this.taylorDiagrams = true; this._katexMacros = null; }
       const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
         (name) => this.macros[name] || this.paired[name] || null);
       return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);

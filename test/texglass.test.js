@@ -178,6 +178,44 @@ test('diagrams.sty arrows keep both labels outside a diagram', () => {
   assert.deepEqual(TeXglass.renderSnippets(JSON.parse(JSON.stringify(defs)), texs, { renderMath: renderKaTeX }), expected);
 });
 
+test('diagrams.sty arrows defined with braced heads such as {->} work in ordinary math and in diagrams', () => {
+  const pre = String.raw`\usepackage{diagrams}
+\newarrow{To}----{->}
+\newarrow{Inj}>---{->}
+\begin{document}`;
+  const { html } = realMath(pre + String.raw`$A\rTo^{f}B$ and $A\rInj B$
+\begin{diagram} A & \rTo^{f} & B \\ \dInj && \dTo \\ C & \rTo & D \end{diagram}\end{document}`);
+  assert.ok(html.includes(handMath(String.raw`A\xrightarrow{f}B`)));
+  assert.ok(html.includes(handMath(String.raw`A\rightarrowtail B`)));
+  assert.doesNotMatch(html, /math-error|graphic-placeholder/);
+});
+
+test('a diagrams.sty cell with an arrow next to an object is drawn as maths, not as source', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\begin{document}
+\begin{diagram} & X \rTo^{f} & Y & \rTo^{g} Z & \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /math-error|graphic-placeholder/);
+  assert.ok(html.includes(handMath(String.raw`\displaystyle X \xrightarrow{f}`).replace(/^<span class="katex">/, '')));
+});
+
+test('a paper\'s own environments are written out inside a formula', () => {
+  const { html } = realMath(String.raw`\newenvironment{stackAux}[2]{\setlength{\arraycolsep}{0pt}\begin{array}[#1]{#2}}{\end{array}}
+\newenvironment{stackTL}{\begin{stackAux}{t}{l}}{\end{stackAux}}
+\begin{document}$x = \begin{stackTL} a \\ b \end{stackTL}$\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(html.includes(handMath(String.raw`x = \begin{array}{l} a \\ b \end{array}`)));
+});
+
+test('package symbols KaTeX lacks render', () => {
+  const { html } = realMath(String.raw`\begin{document}
+$x \centernot\equiv y$, $\bigtimes_i X_i$, $\bigsqcap_a C$, $a\cdotp b$, $A \longhookrightarrow B$,
+$f\arrowvert_U$, $a \varolessthan b$, $\checked \lightning \mathsection$, $T \agt 1$,
+$\textnormal{\mathversion{bold}$x$}$, $\scalerel*{\Huge K}{\big(}$
+\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(html.includes(handMath(String.raw`x \not\equiv y`)));
+  assert.ok(html.includes(handMath(String.raw`T \gtrsim 1`)));
+});
+
 const MACRO_PREAMBLE = String.raw`
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\pair}[2][x]{\langle #1, #2\rangle}

@@ -1378,14 +1378,17 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   `multline`, `alignat`, `eqnarray`, mhequ's `equ` and `equs`, with `\tag`,
   `\nonumber`, `\notag`. The physics package's macros (`\abs`, `\norm`,
   `\qty`, `\dv`, …) work out of the box, and so does amsmath's `\sideset`
-  (`\sideset{}{'}\sum`).
+  (`\sideset{}{'}\sum`). Common symbols from other packages that KaTeX lacks
+  (`\centernot`, `\bigtimes`, `\longhookrightarrow`, `\lightning`, `\agt`, …)
+  are drawn too.
 - **Macros**: `\newcommand`, `\renewcommand`, `\def` (delimited parameters
   too), `\let`, `\DeclareMathOperator`, in math and text, and those in a
   paper's own `.sty` files when imported from arXiv. Shortcuts for half an
   environment (`\def\be{\begin{equation}}` … `\ee`) work, and TeX
   conditionals in macros (`\ifx`, `\ifmmode`, `\ifnum`, flags made with
   `\newif`, `\iffalse … \fi` around text) show only the branch TeX would
-  take. A paper that redefines a standard symbol with low-level TeX keeps the
+  take. A paper's own environments (`\newenvironment`) work inside formulas
+  too. A paper that redefines a standard symbol with low-level TeX keeps the
   usual symbol. Plain TeX fonts made with `\font` work for sans serif
   (`cmss`) and the Washington Cyrillic fonts (`wncyr`, as in
   `\font\cyr=wncyr10` and `\text{\cyr SH}` for Ш).
@@ -1416,7 +1419,9 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   column width (pictures wider than the column shrink to fit). Tree symbols
   declared with `\DeclareSymbol` (as in regularity structures papers) are
   drawn inside formulas. Common horizontal arrow styles declared with
-  `\newarrow` also work in formulas. Heavier TikZ shows its source.
+  `\newarrow` (heads such as `>`, `{->}` or `>>`) also work in formulas, and a
+  grid cell that holds an object next to an arrow (`A \rTo^f`) is drawn as a
+  formula. Heavier TikZ shows its source.
 
 Anything unknown is skipped gracefully. There is no TeX install and no compile
 step, and long papers stay fast. In VS Code (and FlexTeX), if you do have TeX

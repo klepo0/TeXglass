@@ -530,11 +530,15 @@
   const TAYLOR_HEADS = new Map([['>', 'to'], ['>>', '2h'], ['|', 'bar']]);
   const TAYLOR_TAILS = new Map([['>', 'tail'], ['<', 'to'], ['<<', '2h'], ['|', 'bar'], ['C', 'hook']]);
 
+  // Other heads and tails diagrams.sty draws, such as {->} or {>->}, read by their main mark.
+  const taylorEnd = (mark, ends, back) => ends.get(mark)
+    ?? (/>>|<</.test(mark) ? '2h' : /[>]/.test(mark) ? (back ? 'tail' : 'to') : /</.test(mark) ? 'to' : /\|/.test(mark) ? 'bar' : undefined);
+
   function taylorArrowStyle(parts) {
-    const [tail, before, middle, after, head] = parts;
+    const [tail, before, middle, after, head] = parts.map((part) => String(part ?? '').replace(/\s+/g, ''));
     const style = {
-      head: head === after || !head ? 'none' : TAYLOR_HEADS.get(head),
-      tail: tail === before || !tail ? 'none' : TAYLOR_TAILS.get(tail),
+      head: head === after || !head ? 'none' : taylorEnd(head, TAYLOR_HEADS, false),
+      tail: tail === before || !tail ? 'none' : taylorEnd(tail, TAYLOR_TAILS, true),
       dbl: 0,
       dash: '',
     };
@@ -599,7 +603,9 @@
     for (let braces = 0; i < tex.length;) {
       const mark = tex[i];
       const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
-      if (!side) return fail;
+      // A known arrow followed by an object, as in \rTo^f B: the cell is drawn as
+      // ordinary maths, where \rTo is an inline arrow.
+      if (!side) return parts ? null : fail;
       if (mark !== '{') i = skipWs(tex, i + 1);
       if (i >= tex.length) return fail;
       const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
