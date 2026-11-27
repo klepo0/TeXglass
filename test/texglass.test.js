@@ -245,7 +245,8 @@ test('a diagrams.sty cell is judged by what its macros expand to', () => {
 });
 
 test('a diagrams.sty grid falls back only for arrows it knows, named by KaTeX itself', () => {
-  for (const cell of [String.raw`A\rHeading`, String.raw`A\text{Undefined control sequence: \textbackslash rDotted}`]) {
+  for (const cell of [String.raw`A\rHeading`, String.raw`A\text{Undefined control sequence: \textbackslash rDotted}`,
+    String.raw`A\textcolor{#cc0000}{\text{\textbackslash rDotted}}`]) {
     const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
 \begin{diagram} ` + cell + String.raw` & \rTo & B \end{diagram}\end{document}`);
     assert.doesNotMatch(html, /graphic-placeholder/, cell);
@@ -259,6 +260,11 @@ Text.\footnote{Visible note}\end{document}`);
   assert.match(html, /graphic-placeholder/);
   assert.doesNotMatch(html, /Diagram note<\/|id="fn-2"/);
   assert.match(html, /id="fnref-1"/);
+  // a label inside the discarded note is gone too
+  const { html: ref } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} A\footnote{Hidden note\label{fn:hidden}} & \rTo & B\rDotted^f \end{diagram}
+See \ref{fn:hidden}.\end{document}`);
+  assert.doesNotMatch(ref, /href="#label-/);
 });
 
 test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {

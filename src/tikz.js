@@ -581,13 +581,22 @@
     return arrows;
   }
 
+  /** The diagrams.sty arrows (\\rDotted, \\uDotted, …) that have no form inside a formula. */
+  function taylorBlockArrows(definitions) {
+    const inline = taylorMathArrows(definitions);
+    const out = [];
+    for (const base of Object.keys({ ...TAYLOR_ARROWS, ...definitions })) {
+      for (const dir of ['l', 'r', 'u', 'd', 'ul', 'ur', 'dl', 'dr', 'lu', 'ld', 'ru', 'rd']) {
+        if (!inline['\\' + dir + base]) out.push(dir + base);
+      }
+    }
+    return out;
+  }
+
   /** Whether an arrow such as \\rTo can be drawn inside a formula (horizontal, with a KaTeX shape). */
   function taylorInline(name, definitions) {
     return Object.prototype.hasOwnProperty.call(taylorMathArrows(definitions), '\\' + name);
   }
-
-  // KaTeX's own reports of an undefined command: red source text, or a parse error in a math-error title
-  const TAYLOR_UNDEFINED = /mathcolor="#cc0000"><mtext>\\([A-Za-z]+)<\/mtext>|class="math-error" title="KaTeX parse error: Undefined control sequence: \\([A-Za-z]+) at position/g;
 
   function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
@@ -662,7 +671,7 @@
   }
 
   /** Taylor arrows sit between their endpoints, with empty cells along the way. */
-  function taylorDiagram(body, math, definitions, macro) {
+  function taylorDiagram(body, math, definitions, macro, broken) {
     // Options come right after \begin{diagram}; after a space, [A] starts the first object.
     const end = body[0] === '[' ? matchGroup(body, 0) : 0;
     const opts = end === 0 ? {} : Object.fromEntries(splitTop(body.slice(1, end - 1), ',').map(keyVal));
@@ -711,13 +720,9 @@
       html: math('\\displaystyle ' + tex),
     }));
     // An object cell drawn as a formula may reach an arrow with no inline form,
-    // written there or through the paper's macros: KaTeX then names it as
-    // undefined, and the diagram shows its source instead.
-    const known = (name) => {
-      const m = /^(?:[ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)$/.exec(name);
-      return !!m && !!(definitions?.[m[1]] || TAYLOR_ARROWS[m[1]]);
-    };
-    if (cells.some((cell) => Array.from(cell.html.matchAll(TAYLOR_UNDEFINED), (u) => u[1] || u[2]).some(known))) return null;
+    // written there or through the paper's macros: broken() says whether drawing
+    // the cells expanded one, and the diagram then shows its source instead.
+    if (broken?.()) return null;
     const rs = cdSep(opts.height || opts.size, 0.8);
     const cs = cdSep(opts.width || opts.size, 0.8);
     return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
@@ -2398,6 +2403,7 @@
     tikzcd: (body, math) => cdHtml(parseTikzcd(body, math)),
     taylorDiagram,
     taylorMathArrows,
+    taylorBlockArrows,
     xymatrix(src, math) {
       const r = parseXymatrix(src, math);
       return r ? { html: cdHtml(r.model), end: r.end } : null;

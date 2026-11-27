@@ -1443,7 +1443,8 @@
       if (this.params.size) tex = this.putValues(tex);
       tex = plainTexMath(tex, display);
       try {
-        const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
+        const macros = this.mathProbe ? Object.assign({}, this.katexMacros(tex), this.mathProbe) : this.katexMacros(tex);
+        const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
         return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + refs + live;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
@@ -3564,14 +3565,37 @@
       // \rTo^f B draw \rTo as an inline arrow.
       if (!this.taylorDiagrams) { this.taylorDiagrams = true; this._katexMacros = null; }
       // footnotes in the cells are made while drawing; a diagram that falls back to source takes them back
+      // (and the labels in them)
       const notes = this.footnotes.length;
       const symbols = this.fnSymbols ? this.fnSymbols.length : 0;
-      const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
-        (name) => this.macros[name] || this.paired[name] || null);
+      const labels = Object.assign(Object.create(null), this.labels);
+      // An arrow with no inline form, reached while KaTeX expands a cell, is
+      // reported by a probe macro, not read from the drawn markup.
+      const T = tikz();
+      let hit = false;
+      const probe = Object.create(null);
+      for (const name of T?.taylorBlockArrows?.(this.diagramArrows) || []) {
+        if (!this.macros[name]) probe['\\' + name] = () => { hit = true; return '\\square'; };
+      }
+      const outer = this.mathProbe;
+      this.mathProbe = probe;
+      // the first pass skips maths, but whether this grid is kept decides its footnotes' labels
+      const draw = this.renderMathFn;
+      if (!this.known) this.renderMathFn = this.options.renderMath || defaultRenderMath;
+      let html;
+      try {
+        html = T?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
+          (name) => this.macros[name] || this.paired[name] || null, () => hit);
+      } finally {
+        this.mathProbe = outer;
+        this.renderMathFn = draw;
+      }
       if (!html && this.footnotes.length > notes) {
         this.footnotes.length = notes;
         if (this.fnSymbols) this.fnSymbols.length = Math.min(symbols, this.fnSymbols.length);
         for (const [key, k] of this.mathNotes || []) if (k > notes) this.mathNotes.delete(key);
+        for (const key of Object.keys(this.labels)) if (!(key in labels)) delete this.labels[key];
+        Object.assign(this.labels, labels);
       }
       return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);
     }
