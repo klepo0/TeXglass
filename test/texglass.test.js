@@ -244,6 +244,23 @@ test('a diagrams.sty cell is judged by what its macros expand to', () => {
   assert.doesNotMatch(html, /graphic-placeholder/);
 });
 
+test('a diagrams.sty grid falls back only for arrows it knows, named by KaTeX itself', () => {
+  for (const cell of [String.raw`A\rHeading`, String.raw`A\text{Undefined control sequence: \textbackslash rDotted}`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} ` + cell + String.raw` & \rTo & B \end{diagram}\end{document}`);
+    assert.doesNotMatch(html, /graphic-placeholder/, cell);
+  }
+});
+
+test('a diagrams.sty grid that falls back to source takes back its footnotes', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} A\footnote{Diagram note} & \rTo & B\rDotted^f \end{diagram}
+Text.\footnote{Visible note}\end{document}`);
+  assert.match(html, /graphic-placeholder/);
+  assert.doesNotMatch(html, /Diagram note<\/|id="fn-2"/);
+  assert.match(html, /id="fnref-1"/);
+});
+
 test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {
   for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`, String.raw`B\dotmap{f}`, String.raw`B\optmap`]) {
     const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\newcommand{\dotmap}[1]{\rDotted^{#1}}

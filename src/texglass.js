@@ -3563,8 +3563,16 @@
       // A diagram means diagrams.sty, even without \usepackage: cells such as
       // \rTo^f B draw \rTo as an inline arrow.
       if (!this.taylorDiagrams) { this.taylorDiagrams = true; this._katexMacros = null; }
+      // footnotes in the cells are made while drawing; a diagram that falls back to source takes them back
+      const notes = this.footnotes.length;
+      const symbols = this.fnSymbols ? this.fnSymbols.length : 0;
       const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
         (name) => this.macros[name] || this.paired[name] || null);
+      if (!html && this.footnotes.length > notes) {
+        this.footnotes.length = notes;
+        if (this.fnSymbols) this.fnSymbols.length = Math.min(symbols, this.fnSymbols.length);
+        for (const [key, k] of this.mathNotes || []) if (k > notes) this.mathNotes.delete(key);
+      }
       return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);
     }
 

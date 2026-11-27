@@ -586,7 +586,8 @@
     return Object.prototype.hasOwnProperty.call(taylorMathArrows(definitions), '\\' + name);
   }
 
-  const TAYLOR_UNDEFINED = /(?:#cc0000"><mtext>|Undefined control sequence: )\\(?:[ud]?[lr]|[lr]?[ud])[A-Z][A-Za-z]*/;
+  // KaTeX's own reports of an undefined command: red source text, or a parse error in a math-error title
+  const TAYLOR_UNDEFINED = /mathcolor="#cc0000"><mtext>\\([A-Za-z]+)<\/mtext>|class="math-error" title="KaTeX parse error: Undefined control sequence: \\([A-Za-z]+) at position/g;
 
   function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
@@ -712,7 +713,11 @@
     // An object cell drawn as a formula may reach an arrow with no inline form,
     // written there or through the paper's macros: KaTeX then names it as
     // undefined, and the diagram shows its source instead.
-    if (cells.some((cell) => TAYLOR_UNDEFINED.test(cell.html))) return null;
+    const known = (name) => {
+      const m = /^(?:[ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)$/.exec(name);
+      return !!m && !!(definitions?.[m[1]] || TAYLOR_ARROWS[m[1]]);
+    };
+    if (cells.some((cell) => Array.from(cell.html.matchAll(TAYLOR_UNDEFINED), (u) => u[1] || u[2]).some(known))) return null;
     const rs = cdSep(opts.height || opts.size, 0.8);
     const cs = cdSep(opts.width || opts.size, 0.8);
     return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
