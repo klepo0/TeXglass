@@ -1301,3 +1301,42 @@ $\i^2 = -1$ and $\adjustbox{scale=0.5}{$y$}$.
   assert.deepEqual(redMacros(html), []);
   assert.match(text(html), /\(see[\s\u00a0]*\(1\)\)/);
 });
+
+test('box registers stay in their formula and group; \\box empties, \\copy keeps', () => {
+  const draw = (src) => text(strict(`\\begin{document}\n${src}\n\\end{document}`).html);
+  assert.match(draw(String.raw`$\setbox87=\hbox{Q}\copy87\copy87$`), /QQ/);
+  assert.doesNotMatch(draw(String.raw`$\setbox87=\hbox{Q}\box87\box87$`), /QQ/);
+  // nothing left over from another formula or document
+  assert.doesNotMatch(draw(String.raw`$\copy87 R$`), /Q/);
+  // a group's assignment ends with the group
+  assert.match(draw(String.raw`$\setbox5=\hbox{A}{\setbox5=\hbox{B}}\copy5$`), /A/);
+});
+
+test('only the hand-drawn-letter idiom and setup-only macros are replaced', () => {
+  const { html } = strict(String.raw`
+\def\decorated{\setbox0=\hbox{$A$}\box0\vrule width0.5pt + B}
+\def\printed{\ifmmode X\else\catcode92=12\fi}
+\newcommand{\includegraphics}[1]{\boxed{#1}}
+\begin{document}
+$\decorated$ and $\printed+Y$ and $\includegraphics{Q}$
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  const t = text(html);
+  assert.match(t, /\+B/);
+  assert.doesNotMatch(html, /mathbb/);
+  assert.match(t, /X\+Y/);
+  assert.match(html, /boxed|fbox/);
+  assert.doesNotMatch(html, /tg-math-figure/);
+});
+
+test('tabular cells keep their groups; macro references report misses; tinted rules stay rules', () => {
+  const { html } = strict(String.raw`
+\def\see#1{\eqref{#1}}
+\begin{document}
+\[ \begin{tabular}{l} \textbf{value $x^2$} \end{tabular} \]
+$\see{missing}$ and $\includegraphics{a.png}$ and $\textcolor{#a60000}{\rule{1em}{1em}}$
+\end{document}`, { sourceMap: true, resolveImage: (p) => p });
+  assert.deepEqual(mathErrors(html), []);
+  assert.match(html, /data-math-ref-missing="missing"/);
+  assert.equal((html.match(/tg-math-figure/g) || []).length, 1);
+});

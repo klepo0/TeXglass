@@ -778,8 +778,9 @@
     return `\\rule[${r(-size.depth)}em]{${r(Math.max(0, size.width))}em}{${r(Math.max(0, size.height + size.depth))}em}`;
   };
   // Plain TeX box registers in a formula (\setbox1=\hbox{$x$} … \box1): the
-  // box's content is kept and put back. Their sizes (\wd1) are not known.
-  const BOXES = new Map();
+  // box's content is kept and put back. A register is a KaTeX macro, so it is
+  // local to its group and to the formula; \box empties it, \copy does not.
+  // Their sizes (\wd1) are not known.
   const boxNumber = (ctx) => {
     ctx.consumeSpaces();
     let t = ctx.popToken();
@@ -789,6 +790,7 @@
     ctx.pushToken(t);
     return n;
   };
+  const boxKey = (n) => '\\texglassBox@' + n;
   MATH_MACROS['\\setbox'] = (ctx) => {
     const n = boxNumber(ctx);
     ctx.consumeSpaces();
@@ -797,15 +799,18 @@
     const kind = ctx.future().text;
     if (!/^\\(hbox|vbox|vtop)$/.test(kind)) return '';
     ctx.popToken();
-    BOXES.set(n, group(ctx));
+    ctx.macros.set(boxKey(n), { tokens: [], numArgs: 0, texglassBox: group(ctx) });
     return '';
   };
-  const useBox = (ctx) => {
-    const n = boxNumber(ctx);
-    return BOXES.has(n) ? `\\hbox{${BOXES.get(n)}}` : '';
+  const useBox = (empty) => (ctx) => {
+    const key = boxKey(boxNumber(ctx));
+    const box = ctx.macros.get(key);
+    if (!box || box.texglassBox === undefined) return '';
+    if (empty) ctx.macros.set(key, undefined);
+    return `\\hbox{${box.texglassBox}}`;
   };
-  MATH_MACROS['\\box'] = useBox;
-  MATH_MACROS['\\copy'] = useBox;
+  MATH_MACROS['\\box'] = useBox(true);
+  MATH_MACROS['\\copy'] = useBox(false);
   // \ht2=0pt, \baselineskip=5pt: sizes of boxes and lines, which KaTeX sets itself
   const assignment = (box) => (ctx) => {
     if (box) boxNumber(ctx);
@@ -1151,13 +1156,22 @@
    * letter they stand for (\mathbb{C}), or null for another macro.
    */
   function handDrawnLetter(body) {
-    if (!/\\setbox/.test(body) || !/\\vrule/.test(body) || !/\\box\s*\d/.test(body)) return null;
-    const m = /\\setbox\s*\d+\s*=?\s*\\hbox\s*\{([^{}]*)\}/.exec(body);
-    const letter = m ? m[1].replace(/\\[A-Za-z@]+/g, '').replace(/[\s$]/g, '') : '';
+    if (!/\\setbox/.test(body) || !/\\vrule/.test(body)) return null;
+    const letters = new Set();
+    // the measured letter, the zero-width boxes with the rules, and the letter put back
+    let rest = body
+      .replace(/\\setbox\s*0\s*=?\s*\\hbox\s*\{([^{}]*)\}/g, (_, t) => { letters.add(t.replace(/\\[A-Za-z@]+/g, '').replace(/[\s$]/g, '')); return ''; })
+      .replace(/\\hbox\s*to\s*0\s*pt\s*\{([^{}]*)\}/g, (m, t) => (/^\s*(?:\\kern\s*-?[\d.]*\s*\\wd\s*0\s*)?\\vrule(?:\s*(?:height|depth|width)\s*-?[\d.]*\s*(?:\\(?:ht|wd|dp)\s*0|pt|em|ex)\s*)*\\hss\s*$/.test(t) ? '' : m))
+      .replace(/\\raise\s*-?[\d.]*\s*\\ht\s*0/g, '')
+      .replace(/\\box\s*0(?!\d)|\\hbox(?![A-Za-z@])|\\mathchoice(?![A-Za-z@])/g, '');
+    rest = rest.replace(/[\s{}]/g, '');
+    if (rest || letters.size !== 1) return null;
+    const [letter] = letters;
     if (/^[A-Z]$/.test(letter)) return `\\mathbb{${letter}}`;
     if (/^[a-z0-9]$/.test(letter)) return `\\mathbbm{${letter}}`;
     return null;
   }
+
 
   /**
    * Commands that only make sense in math. A user macro whose body uses one
@@ -1330,9 +1344,8 @@
         // rules before the row stay outside the text
         const lead = /^(\s*(?:\\hline|\\cline\s*\{[^{}]*\}|\\toprule|\\midrule|\\bottomrule)\s*)*/.exec(c)[0];
         let body = c.slice(lead.length).replace(/\\multicolumn\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1');
-        // text, and $…$ maths in it
-        body = body.split(/(?<!\\)\$/).map((part, k) => (k % 2 ? `{${part}}` : part.trim() ? `\\text{${part}}` : part)).join('');
-        return lead + body;
+        // text, with its $…$ maths and groups as they are
+        return lead + (body.trim() ? `\\text{${body}}` : body);
       };
       const rows = splitTop(tex.slice(spec.end, e.contentEnd), rowSep).map((row) => splitTop(row, cellSep).map(cell).join('&'));
       const array = `\\begin{array}{${spec.content}}${rows.join('\\\\')}\\end{array}`;
@@ -1661,21 +1674,35 @@
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       const missing = this.options.sourceMap && this.known ? new Set() : null;
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
-      const refs = missing ? Array.from(missing, (key) => `<span hidden data-math-ref-missing="${escapeHtml(key)}"></span>`).join('') : '';
+      // references a macro brings in are looked up while KaTeX expands it (see katexMacros)
+      const outerMissing = this.mathRefMissing;
+      const outerImages = this.mathImages;
+      this.mathRefMissing = missing;
+      this.mathImages = null;
+      try {
+        return this.renderMathBody(tex, display, missing);
+      } finally {
+        this.mathRefMissing = outerMissing;
+        this.mathImages = outerImages;
+      }
+    }
+
+    renderMathBody(tex, display, missing) {
       tex = tex.replace(/\\(qedhere|nonumber|notag)\b/g, '').replace(/\\label\s*(?:\[[^\]]*\]\s*)?\{[^}]*\}/g, '');
       // a formula that uses a \tgparam: a mark with its TeX, to draw it again when a slider moves
       const live = this.params.size && !this.inPicture ? this.liveMark(tex, display ? ' data-tg-display=""' : '') : '';
       if (this.params.size) tex = this.putValues(tex);
       tex = plainTexMath(tex, display);
+      const refs = () => (missing ? Array.from(missing, (key) => `<span hidden data-math-ref-missing="${escapeHtml(key)}"></span>`).join('') : '');
       try {
         // the paper's own definitions (macros, paired delimiters, …) win over the probes
         const macros = this.mathProbe ? Object.assign({}, this.mathProbe, this.katexMacros(tex)) : this.katexMacros(tex);
         const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
         let out = this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
         if (this.mathImages && /color:#a6[0-9a-f]{4}/.test(out)) out = this.putImages(out);
-        return out + refs + live;
+        return out + refs() + live;
       } catch (e) {
-        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
+        return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs() + live;
       }
     }
 
@@ -1778,6 +1805,25 @@
           const citation = '[' + labels.join(', ') + (note ? ', ' + note : '') + ']';
           return ctx.mode === 'text' ? citation : '\\text{' + citation + '}';
         };
+        // figures in a formula, also from a macro: drawn after KaTeX (see mathImage). These and
+        // the references below come before the paper's macros, which may define them itself.
+        m['\\includegraphics'] = (ctx) => {
+          optStar(ctx);
+          const opts = optBracket(ctx);
+          return this.mathImage(opts, group(ctx).trim());
+        };
+        // \eqref and \ref that reach KaTeX through a macro (\def\eq#1{\eqref{#1}}): the number as text
+        for (const cmd of ['ref', 'eqref']) {
+          m['\\' + cmd] = (ctx) => {
+            const key = group(ctx).trim();
+            const info = this.lookup(key);
+            if (!info && this.mathRefMissing) this.mathRefMissing.add(key);
+            let num = info ? info.num : '??';
+            if (cmd === 'eqref') num = `(${num})`;
+            num = String(num).replace(/([{}\\#$%&_^~])/g, '\\$1');
+            return ctx.mode === 'text' ? num : `\\text{${num}}`;
+          };
+        }
         for (const [flag, value] of this.flags) {
           m['\\' + flag] = value ? '\\iftrue' : '\\iffalse';
           m['\\' + flag.slice(2) + 'true'] = '';
@@ -1795,6 +1841,34 @@
           lowLevel.set(name, v);
           return v;
         };
+        // macros made only of category-code changes and other settings for
+        // verbatim text (\catcode`\^^M=\active\let^^M=\par, \ttfamily, …), maybe
+        // through other such macros: they draw nothing in a formula
+        const setupOnly = new Map(); // name -> { pure: only settings, cat: changes catcodes }
+        const setupOf = (name, depth) => {
+          if (setupOnly.has(name)) return setupOnly.get(name);
+          const v = { pure: false, cat: false };
+          setupOnly.set(name, v);
+          const mac = this.macros[name];
+          if (!mac || mac.nargs || mac.delims || depth > 6) return v;
+          v.cat = /\\catcode(?![A-Za-z@])/.test(mac.body);
+          let rest = mac.body
+            .replace(/\\catcode\s*`\s*(?:\\\^\^.|\^\^.|\\.|.)\s*=?\s*(?:\d+|\\active|\\other)/g, '')
+            .replace(/\\let\s*(?:\^\^.|\\[A-Za-z@]+|\\.|.)\s*=?\s*(?:\\[A-Za-z@]+|\\.|.)/g, '')
+            .replace(/\\@makeother\s*\\./g, '')
+            .replace(/\\(?:par(?:sep|indent|skip)|baselineskip|leftskip|rightskip)\s*=?\s*-?[\d.]+\s*[a-z]{2}/g, '')
+            .replace(/\\def\s*\\.\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, '')
+            .replace(/\\(?:ttfamily|tt|frenchspacing|nonfrenchspacing|obeylines|obeyspaces|relax)(?![A-Za-z@])/g, '');
+          rest = rest.replace(/\\([A-Za-z@]+)/g, (c, n) => {
+            const sub = n !== name && setupOf(n, depth + 1);
+            if (!sub || !sub.pure) return c;
+            if (sub.cat) v.cat = true;
+            return '';
+          });
+          v.pure = !rest.replace(/[\s{}%]/g, '');
+          return v;
+        };
+        const isSetupOnly = (name) => { const v = setupOf(name, 0); return v.pure && v.cat; };
         const keep = new Set();
         for (const name in this.macros) {
           const mac = this.macros[name];
@@ -1816,7 +1890,7 @@
           if (letter) { m['\\' + name] = letter; continue; }
           // a macro that changes category codes (\catcode`\^^M=\active…, set up for
           // verbatim code) draws nothing in a formula
-          if (/\\catcode(?![A-Za-z@])/.test(mac.body)) { m['\\' + name] = ''; continue; }
+          if (isSetupOnly(name)) { m['\\' + name] = ''; continue; }
           // a test of the paper's own that it never made with \newif: false (not
           // etoolbox's \ifdef{…}{…}{…} and the like, which have no \fi)
           if (/\\fi(?![A-Za-z@])/.test(mac.body)) for (const r of mac.body.matchAll(/\\(if[A-Za-z@]*)/g)) {
@@ -1833,22 +1907,6 @@
           if (low && name === 'infer' && this.macros['@infer']) m['\\infer'] = (ctx) => inferenceRule(ctx, false);
           else if (name === 'inferrule' && this.macros['mpr@inferrule']) m['\\inferrule'] = (ctx) => inferenceRule(ctx, true);
           else m['\\' + name] = low ? lowLevelMacro('\\' + name, own) : own;
-        }
-        // figures in a formula, also from a macro: drawn after KaTeX (see mathImage)
-        m['\\includegraphics'] = (ctx) => {
-          optStar(ctx);
-          const opts = optBracket(ctx);
-          return this.mathImage(opts, group(ctx).trim());
-        };
-        // \eqref and \ref that reach KaTeX through a macro (\def\eq#1{\eqref{#1}}): the number as text
-        for (const cmd of ['ref', 'eqref']) {
-          m['\\' + cmd] = (ctx) => {
-            const info = this.lookup(group(ctx).trim());
-            let num = info ? info.num : '??';
-            if (cmd === 'eqref') num = `(${num})`;
-            num = String(num).replace(/([{}\\#$%&_^~])/g, '\\$1');
-            return ctx.mode === 'text' ? num : `\\text{${num}}`;
-          };
         }
         // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
         if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
@@ -3738,15 +3796,16 @@
       if (!width && !height) html = html.replace(/^<img /, `<img style="height:${r(h)}em" `);
       const list = this.mathImages || (this.mathImages = []);
       const color = `#a6${list.length.toString(16).padStart(4, '0')}`;
-      list.push(html);
+      list.push({ html, size: `border-right-width:${r(w)}em;border-top-width:${r(h)}em;` });
       return `\\textcolor{${color}}{\\rule{${r(w)}em}{${r(h)}em}}`;
     }
 
     /** Put the figures where mathImage left their rules in KaTeX's output. */
     putImages(html) {
-      return html.replace(/<span class="mord rule( mtight)?" style="color:(#a6[0-9a-f]{4});[^"]*"><\/span>/g, (m, tight, color) => {
+      return html.replace(/<span class="mord rule( mtight)?" style="color:(#a6[0-9a-f]{4});([^"]*)"><\/span>/g, (m, tight, color, style) => {
+        // only this formula's markers, by colour and size, not a rule the paper tinted the same
         const img = this.mathImages[parseInt(color.slice(3), 16)];
-        return img ? `<span class="mord tg-math-figure${tight || ''}">${img}</span>` : m;
+        return img && style.startsWith(img.size) ? `<span class="mord tg-math-figure${tight || ''}">${img.html}</span>` : m;
       });
     }
 
