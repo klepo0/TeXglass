@@ -435,7 +435,6 @@
     '\\centernot': '\\not',
     '\\bigtimes': '\\mathop{\\vcenter{\\Large\\times}}',
     '\\bigsqcap': '\\mathop{\\vcenter{\\Large\\sqcap}}',
-    '\\cdotp': '\\mathpunct{\\cdot}',
     '\\longhookrightarrow': '\\mathrel{\\xhookrightarrow{\\,}}',
     '\\longhookleftarrow': '\\mathrel{\\xhookleftarrow{\\,}}',
     '\\arrowvert': '\\vert',
@@ -454,9 +453,7 @@
     // plain TeX displays: \eqalign{a &= b\cr …} and \displaylines{…\cr …}
     '\\eqalign': '\\begin{aligned}#1\\end{aligned}',
     '\\displaylines': '\\begin{gathered}#1\\end{gathered}',
-    // \ensuremath{…} is just its argument once in math (user macros like
-    // \newcommand{\R}{\ensuremath{\mathbb R}} used inside $…$); \xspace adds nothing there.
-    '\\ensuremath': '#1',
+    // \xspace adds nothing in a formula (\ensuremath: see below)
     '\\xspace': '',
     // amsmath \sideset{_a^b}{^*}\sum: scripts beside the operator, its limits still above and below
     '\\sideset': '\\mathop{{}#1#3\\nolimits#2}',
@@ -692,6 +689,160 @@
     const height = group(ctx);
     return '$\\rule' + (shift === null ? '' : '[' + shift + ']') + '{' + width + '}{' + height + '}$';
   };
+  // A command that only works in math, reached in a text box inside a formula
+  // (\text{\ensuremath{\vec\psi}}, \tag*{\qed}): set as math there.
+  const mathIn = (tex) => (ctx) => (ctx.mode === 'text' ? '$' + tex + '$' : tex);
+  // \ensuremath{…} is just its argument in math; in a text box it is math again.
+  MATH_MACROS['\\ensuremath'] = (ctx) => {
+    const body = group(ctx);
+    return ctx.mode === 'text' ? '$' + body + '$' : body;
+  };
+  // KaTeX reads the character · in a text box as \cdotp, which is a math symbol.
+  MATH_MACROS['\\cdotp'] = (ctx) => (ctx.mode === 'text' ? '\\char183{}' : '\\mathpunct{\\cdot}');
+  for (const n of ['\\hrulefill', '\\leftarrowfill', '\\rightarrowfill']) MATH_MACROS[n] = mathIn(MATH_MACROS[n]);
+  MATH_MACROS['\\qed'] = mathIn('\\square');
+  MATH_MACROS['\\qedsymbol'] = mathIn('\\square');
+  // the dotless i and j of text, written in a formula
+  MATH_MACROS['\\i'] = (ctx) => (ctx.mode === 'text' ? { tokens: [{ text: '\\i', noexpand: true }], numArgs: 0 } : '\\imath');
+  MATH_MACROS['\\j'] = (ctx) => (ctx.mode === 'text' ? { tokens: [{ text: '\\j', noexpand: true }], numArgs: 0 } : '\\jmath');
+  // \noalign{\medskip} between the rows of an array (as computer algebra
+  // systems write matrices): KaTeX keeps its own row gaps.
+  MATH_MACROS['\\noalign'] = (ctx) => { ctx.consumeArgs(1); return ''; };
+  // page breaks inside a display mean nothing on a web page
+  MATH_MACROS['\\displaybreak'] = (ctx) => { optBracket(ctx); return ''; };
+  MATH_MACROS['\\allowdisplaybreaks'] = (ctx) => { optBracket(ctx); return ''; };
+  // adjustbox's \adjustbox{scale=0.8}{…}: a box of its content, unscaled
+  MATH_MACROS['\\adjustbox'] = (ctx) => {
+    ctx.consumeArgs(1);
+    ctx.consumeSpaces();
+    return ctx.future().text === 'EOF' ? '' : `\\hbox{${group(ctx)}}`;
+  };
+  // glue that fills a box (\hbox{\hfil$\sim$\hfil}): boxes in KaTeX are only as wide as what they hold
+  // paragraph alignment inside a box in a formula
+  for (const n of ['centering', 'raggedright', 'raggedleft']) MATH_MACROS['\\' + n] = '';
+  MATH_MACROS['\\hfil'] = '';
+  MATH_MACROS['\\hss'] = '';
+
+  /** em per unit, in a 10pt font; the sizes of plain TeX rules. */
+  const EM_PER = { pt: 0.1, bp: 0.10037, mm: 0.28453, cm: 2.8453, in: 7.227, pc: 1.2, dd: 0.107, cc: 1.284, sp: 0.1 / 65536, em: 1, ex: 0.431, mu: 1 / 18 };
+  /** The next tokens, if they spell one of words (height, depth, width): the word; else nothing is read. */
+  function katexKeyword(ctx, words) {
+    ctx.consumeSpaces();
+    const read = [];
+    let s = '';
+    for (;;) {
+      const t = ctx.future();
+      if (!/^[a-z]$/i.test(t.text) || !words.some((w) => w.startsWith(s + t.text.toLowerCase()))) break;
+      read.push(ctx.popToken());
+      s += t.text.toLowerCase();
+      if (words.includes(s)) return s;
+    }
+    for (let k = read.length - 1; k >= 0; k--) ctx.pushToken(read[k]);
+    return null;
+  }
+  /**
+   * A TeX size after a keyword (height 1.6ex, width.4pt, depth -0.5em), in em.
+   * A size made from a box or register (0.9\ht0) is read and gives null.
+   */
+  function katexDimen(ctx) {
+    ctx.consumeSpaces();
+    if (ctx.future().text === '=') { ctx.popToken(); ctx.consumeSpaces(); }
+    let s = '';
+    for (let t = ctx.future(); /^[-+0-9.,]$/.test(t.text); t = ctx.future()) { s += t.text === ',' ? '.' : t.text; ctx.popToken(); }
+    ctx.consumeSpaces();
+    const t = ctx.future();
+    if (/^\\[A-Za-z@]+$/.test(t.text)) {
+      ctx.popToken();
+      // \ht0, \wd\mybox: the box's number or name too
+      if (/^\\(ht|wd|dp)$/.test(t.text)) {
+        ctx.consumeSpaces();
+        if (/^\\/.test(ctx.future().text)) ctx.popToken();
+        else while (/^\d$/.test(ctx.future().text)) ctx.popToken();
+      }
+      return null;
+    }
+    const unit = katexKeyword(ctx, Object.keys(EM_PER));
+    const n = parseFloat(s === '-' || s === '+' || s === '' ? s + '1' : s);
+    return unit && !isNaN(n) ? n * EM_PER[unit] : null;
+  }
+  // Plain TeX rules in a formula (\def\restriction{\vrule height 1.6ex depth 0pt
+  // width 0.13ex\vrule height 0.13ex width 1.3ex}): KaTeX's \rule of the same
+  // size. TeX stretches a rule with no height to the line; here it is a strut's.
+  const plainRule = (vertical) => (ctx) => {
+    const size = vertical ? { width: 0.04, height: 0.75, depth: 0.25 } : { width: 1, height: 0.04, depth: 0 };
+    for (let word; (word = katexKeyword(ctx, ['height', 'depth', 'width'])); ) {
+      const v = katexDimen(ctx);
+      if (v !== null) size[word] = v;
+    }
+    const r = (x) => Math.round(x * 1000) / 1000;
+    return `\\rule[${r(-size.depth)}em]{${r(Math.max(0, size.width))}em}{${r(Math.max(0, size.height + size.depth))}em}`;
+  };
+  // Plain TeX box registers in a formula (\setbox1=\hbox{$x$} … \box1): the
+  // box's content is kept and put back. Their sizes (\wd1) are not known.
+  const BOXES = new Map();
+  const boxNumber = (ctx) => {
+    ctx.consumeSpaces();
+    let t = ctx.popToken();
+    if (/^\\/.test(t.text)) return t.text;
+    let n = '';
+    while (/^\d$/.test(t.text)) { n += t.text; t = ctx.popToken(); }
+    ctx.pushToken(t);
+    return n;
+  };
+  MATH_MACROS['\\setbox'] = (ctx) => {
+    const n = boxNumber(ctx);
+    ctx.consumeSpaces();
+    if (ctx.future().text === '=') ctx.popToken();
+    ctx.consumeSpaces();
+    const kind = ctx.future().text;
+    if (!/^\\(hbox|vbox|vtop)$/.test(kind)) return '';
+    ctx.popToken();
+    BOXES.set(n, group(ctx));
+    return '';
+  };
+  const useBox = (ctx) => {
+    const n = boxNumber(ctx);
+    return BOXES.has(n) ? `\\hbox{${BOXES.get(n)}}` : '';
+  };
+  MATH_MACROS['\\box'] = useBox;
+  MATH_MACROS['\\copy'] = useBox;
+  // \ht2=0pt, \baselineskip=5pt: sizes of boxes and lines, which KaTeX sets itself
+  const assignment = (box) => (ctx) => {
+    if (box) boxNumber(ctx);
+    ctx.consumeSpaces();
+    if (ctx.future().text === '=') katexDimen(ctx);
+    return '';
+  };
+  for (const n of ['ht', 'wd', 'dp']) MATH_MACROS['\\' + n] = assignment(true);
+  for (const n of ['baselineskip', 'lineskip', 'lineskiplimit']) MATH_MACROS['\\' + n] = assignment(false);
+  // \vtop{\box1\box2} and \vbox{\hbox{…}\hbox{…}}: the boxes stacked, one per row
+  const vbox = (ctx) => {
+    const body = group(ctx);
+    const rows = [];
+    const re = /\\(?:box|copy)\s*(?:\d+|\\[A-Za-z@]+)|\\hbox\s*(?=\{)/y;
+    let k = 0;
+    for (;;) {
+      while (/\s/.test(body[k] || '')) k++;
+      if (k >= body.length) break;
+      re.lastIndex = k;
+      const m = re.exec(body);
+      if (!m) { rows.length = 0; break; }
+      if (/^\\hbox/.test(m[0])) {
+        const g = readGroup(body, re.lastIndex);
+        rows.push(`\\hbox{${g.content}}`);
+        k = g.end;
+      } else {
+        rows.push(m[0]);
+        k = re.lastIndex;
+      }
+    }
+    if (rows.length < 2) return `\\hbox{${body}}`;
+    return `{\\def\\arraystretch{0.7}\\begin{array}{c}${rows.join('\\\\')}\\end{array}}`;
+  };
+  MATH_MACROS['\\vtop'] = vbox;
+  MATH_MACROS['\\vbox'] = vbox;
+  MATH_MACROS['\\vrule'] = plainRule(true);
+  MATH_MACROS['\\hrule'] = plainRule(false);
   // diagrams.sty horizontal arrows outside a diagram's grid. The older
   // braced labels and the newer superscript/subscript syntax are equivalent.
   function diagramMathArrow([symbol, stretchy]) {
@@ -994,6 +1145,21 @@
   }
 
   /**
+   * Old papers draw blackboard-bold letters by hand, a roman letter with a
+   * rule through it: \def\C{{\mathchoice{\setbox0=\hbox{$\displaystyle\rm C$}
+   * \hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}…}}. The
+   * letter they stand for (\mathbb{C}), or null for another macro.
+   */
+  function handDrawnLetter(body) {
+    if (!/\\setbox/.test(body) || !/\\vrule/.test(body) || !/\\box\s*\d/.test(body)) return null;
+    const m = /\\setbox\s*\d+\s*=?\s*\\hbox\s*\{([^{}]*)\}/.exec(body);
+    const letter = m ? m[1].replace(/\\[A-Za-z@]+/g, '').replace(/[\s$]/g, '') : '';
+    if (/^[A-Z]$/.test(letter)) return `\\mathbb{${letter}}`;
+    if (/^[a-z0-9]$/.test(letter)) return `\\mathbbm{${letter}}`;
+    return null;
+  }
+
+  /**
    * Commands that only make sense in math. A user macro whose body uses one
    * of these is set as math when it appears in running text (\R, \eps,
    * \abs{x}), as it would have to be wrapped in \ensuremath to work in TeX.
@@ -1123,6 +1289,59 @@
    * corners \ulcorner … \urcorner after \left and \right (KaTeX does not
    * stretch them, so they are drawn at their own size).
    */
+  /**
+   * \raisebox{-0.5\height}{…} centres a box (a picture, a figure) on the line:
+   * KaTeX knows no \height, so a box lowered by about half its height is
+   * centred with \vcenter, and other moves by its own size are dropped.
+   */
+  function raiseBySize(tex) {
+    const re = /(?<!\\)\\raisebox\s*\{\s*([+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\(height|depth|totalheight|width)(?![A-Za-z@])\s*\}\s*(?:\[[^\]]*\]\s*){0,2}/g;
+    let out = '';
+    let last = 0;
+    for (const m of tex.matchAll(re)) {
+      if (m.index < last) continue;
+      const at = m.index + m[0].length;
+      if (tex[at] !== '{') continue;
+      const box = readGroup(tex, at);
+      const f = parseFloat((m[1] || '1').replace(/\s/g, '').replace(/^([+-])$/, '$11'));
+      const centre = /height/.test(m[2]) && f <= -0.3 && f >= -0.7;
+      out += tex.slice(last, m.index) + (centre ? `\\vcenter{\\hbox{${box.content}}}` : `\\hbox{${box.content}}`);
+      last = box.end;
+    }
+    return out + tex.slice(last);
+  }
+
+  /**
+   * Text environments written inside a formula. A tabular becomes an array
+   * whose cells are text with maths in them; \begin{small} … \end{small} a
+   * size switch in a group.
+   */
+  function textEnvsInMath(tex) {
+    tex = tex.replace(/\\begin\s*\{(tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\}/g, '{\\$1 ')
+      .replace(/\\end\s*\{(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\}/g, '}');
+    const re = /\\begin\s*\{tabular\}\s*(?:\[[^\]]*\]\s*)?/g;
+    let m;
+    for (let guard = 0; guard < 50 && (m = re.exec(tex)); guard++) {
+      const at = m.index + m[0].length;
+      if (tex[at] !== '{') continue;
+      const spec = readGroup(tex, at);
+      const e = findEnvEnd(tex, spec.end, 'tabular');
+      const cell = (c) => {
+        // rules before the row stay outside the text
+        const lead = /^(\s*(?:\\hline|\\cline\s*\{[^{}]*\}|\\toprule|\\midrule|\\bottomrule)\s*)*/.exec(c)[0];
+        let body = c.slice(lead.length).replace(/\\multicolumn\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, '$1');
+        // text, and $…$ maths in it
+        body = body.split(/(?<!\\)\$/).map((part, k) => (k % 2 ? `{${part}}` : part.trim() ? `\\text{${part}}` : part)).join('');
+        return lead + body;
+      };
+      const rows = splitTop(tex.slice(spec.end, e.contentEnd), rowSep).map((row) => splitTop(row, cellSep).map(cell).join('&'));
+      const array = `\\begin{array}{${spec.content}}${rows.join('\\\\')}\\end{array}`;
+      tex = tex.slice(0, m.index) + array + tex.slice(e.end);
+      re.lastIndex = m.index + 1;
+    }
+    return tex;
+  }
+
   function plainTexMath(tex, display) {
     // Plain TeX's \aligned … \endaligned spelling for an AMS sub-display.
     tex = tex.replace(/(?<!\\)\\aligned(?![A-Za-z@])([\s\S]*?)(?<!\\)\\endaligned(?![A-Za-z@])/g, '\\begin{aligned}$1\\end{aligned}');
@@ -1138,6 +1357,11 @@
         if (direction === 'raise') return `\\raisebox{${length}}`;
         return `\\raisebox{${length[0] === '-' ? length.slice(1) : '-' + length.replace(/^\+/, '')}}`;
       });
+    // \hbox to 0pt{…} and \hbox spread 1em{…}: KaTeX's boxes are as wide as what they hold
+    tex = tex.replace(/(?<!\\)\\hbox(?![A-Za-z@])\s*(?:to|spread)\s*(?:[+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)\s*(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex)|[+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)?\s*\\[A-Za-z@]+\s*\d*)\s*(?=\{)/g, '\\hbox');
+    // space that fills the line (\hspace*{\fill} before an end-of-proof mark)
+    tex = tex.replace(/(?<!\\)\\hspace\*?\s*\{\s*(?:\\(?:h?fill|hfil)|\\stretch\s*\{[^{}]*\})\s*\}/g, '\\quad');
+    if (/\\raisebox\s*\{[^{}]*\\(?:height|depth|totalheight|width)(?![A-Za-z@])/.test(tex)) tex = raiseBySize(tex);
     if (/\\l?eqno(?![A-Za-z@])/.test(tex)) {
       const tags = tex.match(/\\l?eqno(?![A-Za-z@])/g).length;
       tex = tex.replace(/\\l?eqno(?![A-Za-z@])\s*((?:[^\\]|\\(?!\\|cr(?![A-Za-z@])|end(?![A-Za-z@])))*)/g, (_, num) => {
@@ -1433,6 +1657,7 @@
     renderMath(tex, display) {
       // the paper's environments first, so what they bring in (\ref, \footnote) is read like the rest
       tex = this.mathEnvs(tex);
+      if (/\\begin\s*\{(?:tabular|tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\}/.test(tex)) tex = textEnvsInMath(tex);
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       const missing = this.options.sourceMap && this.known ? new Set() : null;
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
@@ -1446,7 +1671,9 @@
         // the paper's own definitions (macros, paired delimiters, …) win over the probes
         const macros = this.mathProbe ? Object.assign({}, this.mathProbe, this.katexMacros(tex)) : this.katexMacros(tex);
         const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
-        return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + refs + live;
+        let out = this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
+        if (this.mathImages && /color:#a6[0-9a-f]{4}/.test(out)) out = this.putImages(out);
+        return out + refs + live;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
       }
@@ -1583,6 +1810,13 @@
           // \let\oldcirc\circ before \renewcommand{\circ}{…\oldcirc…} would loop
           // in KaTeX, which cannot keep the old meaning apart: both are KaTeX's own \circ
           if (keep.has(name)) continue;
+          // a letter drawn by hand from box registers (\setbox0\hbox{\rm C}…\vrule…\box0): KaTeX has
+          // no boxes to measure, so the blackboard letter it stands for
+          const letter = !mac.nargs && !mac.delims && handDrawnLetter(mac.body);
+          if (letter) { m['\\' + name] = letter; continue; }
+          // a macro that changes category codes (\catcode`\^^M=\active…, set up for
+          // verbatim code) draws nothing in a formula
+          if (/\\catcode(?![A-Za-z@])/.test(mac.body)) { m['\\' + name] = ''; continue; }
           // a test of the paper's own that it never made with \newif: false (not
           // etoolbox's \ifdef{…}{…}{…} and the like, which have no \fi)
           if (/\\fi(?![A-Za-z@])/.test(mac.body)) for (const r of mac.body.matchAll(/\\(if[A-Za-z@]*)/g)) {
@@ -1599,6 +1833,22 @@
           if (low && name === 'infer' && this.macros['@infer']) m['\\infer'] = (ctx) => inferenceRule(ctx, false);
           else if (name === 'inferrule' && this.macros['mpr@inferrule']) m['\\inferrule'] = (ctx) => inferenceRule(ctx, true);
           else m['\\' + name] = low ? lowLevelMacro('\\' + name, own) : own;
+        }
+        // figures in a formula, also from a macro: drawn after KaTeX (see mathImage)
+        m['\\includegraphics'] = (ctx) => {
+          optStar(ctx);
+          const opts = optBracket(ctx);
+          return this.mathImage(opts, group(ctx).trim());
+        };
+        // \eqref and \ref that reach KaTeX through a macro (\def\eq#1{\eqref{#1}}): the number as text
+        for (const cmd of ['ref', 'eqref']) {
+          m['\\' + cmd] = (ctx) => {
+            const info = this.lookup(group(ctx).trim());
+            let num = info ? info.num : '??';
+            if (cmd === 'eqref') num = `(${num})`;
+            num = String(num).replace(/([{}\\#$%&_^~])/g, '\\$1');
+            return ctx.mode === 'text' ? num : `\\text{${num}}`;
+          };
         }
         // a paper's own \text may be made of \mbox ({\mbox{#1}}): then \mbox is KaTeX's \textrm
         if (this.macros.text) m['\\mbox'] = '\\textrm{#1}';
@@ -3465,6 +3715,39 @@
         height: r((y1 - y0) * S + 0.1),
         raise: r((y0 - base) * S - 0.05),
       };
+    }
+
+    /**
+     * A figure inside a formula (\vcenter{\hbox{\includegraphics[height=3cm]{f}}},
+     * or from a macro): KaTeX holds a rule of its size, tinted with a colour
+     * that names it, and putImages swaps the image in.
+     */
+    mathImage(opts, file) {
+      opts = (opts || '').replace(/\s+/g, ' ');
+      const size = (key) => {
+        const m = new RegExp(`(?:^|,)\\s*${key}\\s*=\\s*(\\d+(?:\\.\\d*)?|\\.\\d+)\\s*(cm|mm|in|pt|bp|em|ex)`).exec(opts);
+        return m ? parseFloat(m[1]) * EM_PER[m[2]] : 0;
+      };
+      const r = (x) => Math.round(x * 1000) / 1000;
+      const width = size('width');
+      const height = size('height') || size('totalheight');
+      // with no size given, a figure about as tall as a few lines
+      const h = height || (width ? width * 0.75 : 3);
+      const w = width || h * 1.33;
+      let html = this.flow(`\\includegraphics[${opts}]{${file}}`, true);
+      if (!width && !height) html = html.replace(/^<img /, `<img style="height:${r(h)}em" `);
+      const list = this.mathImages || (this.mathImages = []);
+      const color = `#a6${list.length.toString(16).padStart(4, '0')}`;
+      list.push(html);
+      return `\\textcolor{${color}}{\\rule{${r(w)}em}{${r(h)}em}}`;
+    }
+
+    /** Put the figures where mathImage left their rules in KaTeX's output. */
+    putImages(html) {
+      return html.replace(/<span class="mord rule( mtight)?" style="color:(#a6[0-9a-f]{4});[^"]*"><\/span>/g, (m, tight, color) => {
+        const img = this.mathImages[parseInt(color.slice(3), 16)];
+        return img ? `<span class="mord tg-math-figure${tight || ''}">${img}</span>` : m;
+      });
     }
 
     /** Put the drawings of tree symbols where treeMarker left their rules in KaTeX's output. */

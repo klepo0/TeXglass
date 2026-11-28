@@ -1523,11 +1523,11 @@
     }
   };
 
-  const NO_SEMI = new Set(['foreach', 'def', 'pgfmathsetmacro', 'pgfmathtruncatemacro', 'tikzset', 'newcommand', 'renewcommand',
+  const NO_SEMI = new Set(['foreach', 'def', 'tikzstyle', 'pgfmathsetmacro', 'pgfmathtruncatemacro', 'tikzset', 'newcommand', 'renewcommand',
     'usetikzlibrary', 'pgfsetlinewidth', 'pgfdeclarelayer', 'pgfsetlayers', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large',
     'normalsize', 'centering', 'noindent']);
 
-  const STATEMENTS = new Set(['draw', 'fill', 'filldraw', 'path', 'useasboundingbox', 'clip', 'node', 'coordinate', 'tikzstyle', 'begin', 'end']);
+  const STATEMENTS = new Set(['draw', 'fill', 'filldraw', 'shade', 'shadedraw', 'path', 'useasboundingbox', 'clip', 'node', 'coordinate', 'tikzstyle', 'begin', 'end']);
 
   function cloneState(st) {
     return Object.assign({}, st, { every: { node: st.every.node.slice(), label: st.every.label.slice() } });
@@ -1558,11 +1558,30 @@
     return s.length;
   }
 
+  /** \shade's options with its colours (ball color=, left color=, …) as one fill colour. */
+  function shadeAsFill(stmt) {
+    const k = skipWs(stmt, 0);
+    if (stmt[k] !== '[') return '[fill=gray!50]' + stmt;
+    const e = matchGroup(stmt, k);
+    let fill = null;
+    const opts = splitTop(stmt.slice(k + 1, e - 1), ',').filter((o) => {
+      const m = /^\s*(?:ball|inner|outer|left|right|top|bottom|middle|upper left|upper right|lower left|lower right)\s+color\s*=\s*(.+?)\s*$/.exec(o);
+      if (m) { if (!fill) fill = m[1]; return false; }
+      return !/^\s*shading(?:\s+angle)?\s*=/.test(o);
+    });
+    opts.push('fill=' + (fill || 'gray!50'));
+    return '[' + opts.join(',') + ']' + stmt.slice(e);
+  }
+
   TikzParser.prototype.statement = function (cmd, stmt, st, whole, at) {
     switch (cmd) {
       case 'draw': return this.path(stmt, st, { draw: true });
       case 'fill': return this.path(stmt, st, { fill: true });
       case 'filldraw': return this.path(stmt, st, { draw: true, fill: true });
+      // a shading (\shade[ball color=red] (0,0) circle (1);) is filled with its first colour; the
+      // picture still counts as drawn in part (UNSUPPORTED), so a local TeX can draw it instead
+      case 'shade': return this.path(shadeAsFill(stmt), st, { fill: true });
+      case 'shadedraw': return this.path(shadeAsFill(stmt), st, { draw: true, fill: true });
       case 'path': case 'useasboundingbox': return this.path(stmt, st, {});
       case 'clip': {
         // later paths in this scope are cut to this region (nested clips intersect)
@@ -1587,9 +1606,18 @@
         return undefined;
       }
       case 'tikzstyle': {
-        // \tikzstyle{name}=[opts]
-        const m = /^\{([^}]*)\}\s*(?:\+?=)\s*\[([\s\S]*)\]\s*$/.exec(stmt.trim());
-        if (m) this.styles[m[1].trim()] = m[2];
+        // \tikzstyle{name}=[opts], which needs no ';' after it (one may follow)
+        let k = skipWs(whole, at);
+        if (whole[k] !== '{') { this.skipTo = statementEnd(whole, at) + 1; return undefined; }
+        const ne = matchGroup(whole, k);
+        const name = whole.slice(k + 1, ne - 1).trim();
+        const eq = /^\s*\+?=\s*/.exec(whole.slice(ne));
+        k = ne + (eq ? eq[0].length : 0);
+        if (whole[k] !== '[') { this.skipTo = statementEnd(whole, at) + 1; return undefined; }
+        const oe = matchGroup(whole, k);
+        this.styles[name] = whole.slice(k + 1, oe - 1);
+        const semi = skipWs(whole, oe);
+        this.skipTo = whole[semi] === ';' ? semi + 1 : oe;
         return undefined;
       }
       case 'usetikzlibrary': case 'pgfsetlinewidth': case 'pgfdeclarelayer': case 'pgfsetlayers': {
@@ -1741,14 +1769,15 @@
       i = skipWs(whole, i + (m ? m[0].length : 0));
     }
     let body;
+    let resume;
     if (whole[i] === '{') {
       const e = matchGroup(whole, i);
       body = whole.slice(i + 1, e - 1);
-      this.skipTo = e;
+      resume = e;
     } else {
       const e = statementEnd(whole, i);
       body = whole.slice(i, e + 1);
-      this.skipTo = e + 1;
+      resume = e + 1;
     }
     const items = expandList(this.subst(listText));
     items.forEach((item, idx) => {
@@ -1766,6 +1795,8 @@
       for (const [n, v] of subs) b = b.replace(new RegExp('\\\\' + n + '(?![A-Za-z])', 'g'), () => v);
       this.run(b, st);
     });
+    // after the body, which may hold statements that set skipTo themselves (\pgfmathsetmacro)
+    this.skipTo = resume;
   };
 
   /** "1,...,5", "0,0.5,...,2", "a,b,c" -> items. */

@@ -1229,3 +1229,75 @@ $\frak{g} + \Tilde{\gamma} + \Bar{D} + \ifstrempty{}{u}{v}$.`);
   assert.match(html, /mathvariant="fraktur"/);
   assert.match(html, /<mi>u<\/mi>/);
 });
+
+// KaTeX with throwOnError, so a formula it cannot read fails the test
+const strict = (src, options) => {
+  const warn = console.warn;
+  console.warn = () => {}; // KaTeX has no metrics for some text glyphs (·)
+  try {
+    return TeXglass.render(src, Object.assign({
+      renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true, strict: 'ignore' }),
+    }, options));
+  } finally {
+    console.warn = warn;
+  }
+};
+const mathErrors = (html) => (html.match(/class="math-error"[^>]*title="[^"]*"/g) || []);
+const redMacros = (html) => (html.match(/color:#cc0000[^>]*>[^<]*/g) || []).map((m) => m.replace(/.*>/, ''));
+
+test('plain TeX rules, boxes and hand-drawn letters in formulas', () => {
+  const { html } = strict(String.raw`
+\newcommand{\restr}{\mathbin{\vrule height 1.6ex depth 0pt width 0.13ex\vrule height 0.13ex depth 0pt width 1.3ex}}
+\def\K{{\mathchoice {\setbox0=\hbox{$\displaystyle\rm K$}\hbox{\hbox
+to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\textstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\scriptstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\scriptscriptstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}}}
+\def\wave#1{\setbox1=\hbox{$#1$}\hbox to\wd1{\hfil$\sim$\hfil}}
+{\catcode${'`'}\^^M=\active\gdef\eolpar{\catcode${'`'}\^^M=\active\let^^M=\par}}
+\def\code{\eolpar\tt}
+\begin{document}
+$\mu \restr A$, $\K^n$, $\wave{y}$, $\code f$ and $\vrule\,x$.
+\[ M = \left[\begin{array}{cc} 0&1\\ \noalign{\medskip}1&0 \end{array}\right] \]
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  // the two rules of the restriction sign, 0.13ex wide and 1.3ex long
+  assert.match(html, /border-right-width:0\.056em;border-top-width:0\.69em/);
+  assert.match(html, /border-right-width:0\.56em;border-top-width:0\.056em/);
+  // the hand-drawn K is the blackboard K
+  assert.match(html, /mathbb\{K\}|<span class="mord mathbb">K<\/span>/);
+});
+
+test('figures, tables and text environments inside formulas', () => {
+  const { html } = strict(String.raw`
+\newcommand{\pic}[1]{\includegraphics[height=1em]{#1}}
+\begin{document}
+\[ x = \raisebox{-0.5\height}{\includegraphics[height=2cm]{fig/a.png}} + \vcenter{\hbox{\includegraphics[width=1cm, angle=0]{b.png}}} + \pic{c.png} \]
+\[ \begin{tabular}{|c|c|} \hline \multicolumn{1}{l|}{} & $y_j$ \\ \hline $x_i$ & sum $z$ \\ \hline \end{tabular} \]
+\[ \begin{small} \begin{matrix} a & b \end{matrix} \end{small} \quad \text{\ensuremath{\vec\psi=}} \frac{\text{cells·mL}}{\text{day}} \]
+\end{document}`, { resolveImage: (p) => 'img/' + p });
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  const figures = html.match(/<span class="mord tg-math-figure"><img class="graphic" src="img\/[^"]*"/g) || [];
+  assert.deepEqual(figures.map((f) => f.replace(/.*src="|"$/g, '')), ['img/fig/a.png', 'img/b.png', 'img/c.png']);
+  assert.match(html, /style="height:5\.691em"/); // height=2cm in em of a 10pt font
+  assert.doesNotMatch(html, /color:#a6/);
+  // the tabular's cells: text, with the maths in it
+  assert.match(html, /sum/);
+  assert.doesNotMatch(html.replace(/data-tex="[^"]*"/g, ''), /tabular|multicolumn/);
+  assert.match(html, /<mtext>cells·<\/mtext>/);
+});
+
+test('references, proof marks and breaks reached through macros inside formulas', () => {
+  const { html } = strict(String.raw`
+\def\see#1{(see \eqref{#1})}
+\begin{document}
+\begin{equation}\label{first} a = b \end{equation}
+\begin{align*} a &= b \displaybreak[0] \\ c &= d \text{ \see{first}} \hspace*{\fill} \tag*{\qed} \end{align*}
+$\i^2 = -1$ and $\adjustbox{scale=0.5}{$y$}$.
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  assert.match(text(html), /\(see[\s\u00a0]*\(1\)\)/);
+});

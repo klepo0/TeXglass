@@ -344,3 +344,32 @@ F=\dfrac{\xymatrix@!=0.5pc{A \ar[r] & B}}{\xymatrix@!{C}}
   assert.equal(diagrams.length, 2);
   assert.equal(diagrams[0].arrows[0].t, '1-2');
 });
+
+test('\\tikzstyle needs no semicolon, and \\pgfmathsetmacro in a \\foreach body', () => {
+  const tikz = (body) => Tikz.tikzpicture(body, { math: (t) => t, text: (t) => t });
+  const styled = tikz(String.raw`
+\tikzstyle{dot}=[circle,fill,inner sep=1.5pt]
+\node[dot] (a) {};
+\node[dot] (b) [right of=a] {};
+\draw (a) -- (b);`);
+  assert.doesNotMatch(styled, /tikz-note|tikz-fallback/);
+  const [m] = models(styled, 'data-tikz');
+  assert.equal(m.nodes.length, 2);
+  assert.equal(m.nodes[0].shape, 'circle');
+  const looped = tikz(String.raw`
+\foreach \k in {1,2,3} {
+  \pgfmathsetmacro{\ang}{90 + 120*(\k - 1)}
+  \node (n\k) at (\ang:1) {};
+}
+\draw (n1) -- (n2) -- (n3) -- cycle;`);
+  assert.doesNotMatch(looped, /tikz-note|tikz-fallback/);
+  assert.equal(models(looped, 'data-tikz')[0].nodes.length, 3);
+});
+
+test('\\shade is drawn filled with its colour and still counts as drawn in part', () => {
+  const html = Tikz.tikzpicture(String.raw`\shade[ball color=blue] (0,0) circle (1); \draw (0,0) -- (1,0);`, { math: (t) => t, text: (t) => t });
+  const [m] = models(html, 'data-tikz');
+  assert.equal(m.paths.length, 2);
+  assert.ok(m.paths[0].fill, 'the shading is filled');
+  assert.match(html, /tikz-note/);
+});

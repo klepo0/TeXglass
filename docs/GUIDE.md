@@ -1393,10 +1393,19 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   (`cmss`) and the Washington Cyrillic fonts (`wncyr`, as in
   `\font\cyr=wncyr10` and `\text{\cyr SH}` for Ш).
 - **Text in formulas**: `\mbox`, `\text`, `\parbox`, `\textsc` and
-  `\footnote` inside maths, with `$…$` of their own.
+  `\footnote` inside maths, with `$…$` of their own. A `tabular` written
+  inside a formula becomes a table of text with maths in its cells, and
+  `\includegraphics` inside a formula (such as
+  `\vcenter{\hbox{\includegraphics[height=2cm]{fig}}}` or
+  `\raisebox{-0.5\height}{…}`, also from a macro) shows the figure in place.
+  `\ref` and `\eqref` give their numbers even when a macro brings them into
+  a formula.
 - **Plain TeX**: `\eqno` and `\leqno`, `\buildrel … \over`, `\eqalign`,
   `\displaylines`, `\centerline`, `\romannumeral`, names made with
-  `\csname … \endcsname`; page sizes and spacing (`\textwidth 16cm`,
+  `\csname … \endcsname`, rules drawn with `\vrule height … depth … width …`
+  (as in hand-made restriction signs), boxes kept with `\setbox` and
+  stacked with `\vtop`, and blackboard letters drawn by hand from a letter
+  and a rule (shown as `\mathbb`); page sizes and spacing (`\textwidth 16cm`,
   `\vskip 2pt plus 1pt`) are skipped without leaving their sizes in the text.
 - **Theorems**: `\newtheorem` in all its forms, `\theoremstyle`, `proof` ∎.
 - **Numbering and references**: sections, `\appendix`, `\numberwithin`,
@@ -1421,7 +1430,9 @@ or a journal. In VS Code, `.tmd` files get the live preview too, and
   drawn inside formulas. Common horizontal arrow styles declared with
   `\newarrow` (heads such as `>`, `{->}` or `>>`) also work in formulas, and a
   grid cell that holds an object next to an arrow (`A \rTo^f`) is drawn as a
-  formula. Heavier TikZ shows its source.
+  formula. Old-style `\tikzstyle{name}=[…]` and `\foreach` loops that set
+  values with `\pgfmathsetmacro` work; a `\shade` is filled with its colour.
+  Heavier TikZ shows its source.
 
 Anything unknown is skipped gracefully. There is no TeX install and no compile
 step, and long papers stay fast. In VS Code (and FlexTeX), if you do have TeX
