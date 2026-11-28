@@ -1229,3 +1229,154 @@ $\frak{g} + \Tilde{\gamma} + \Bar{D} + \ifstrempty{}{u}{v}$.`);
   assert.match(html, /mathvariant="fraktur"/);
   assert.match(html, /<mi>u<\/mi>/);
 });
+
+// KaTeX with throwOnError, so a formula it cannot read fails the test
+const strict = (src, options) => {
+  const warn = console.warn;
+  console.warn = () => {}; // KaTeX has no metrics for some text glyphs (·)
+  try {
+    return TeXglass.render(src, Object.assign({
+      renderMath: (tex, displayMode, macros) => katex.renderToString(tex, { displayMode, macros, throwOnError: true, strict: 'ignore' }),
+    }, options));
+  } finally {
+    console.warn = warn;
+  }
+};
+const mathErrors = (html) => (html.match(/class="math-error"[^>]*title="[^"]*"/g) || []);
+const redMacros = (html) => (html.match(/color:#cc0000[^>]*>[^<]*/g) || []).map((m) => m.replace(/.*>/, ''));
+
+test('plain TeX rules, boxes and hand-drawn letters in formulas', () => {
+  const { html } = strict(String.raw`
+\newcommand{\restr}{\mathbin{\vrule height 1.6ex depth 0pt width 0.13ex\vrule height 0.13ex depth 0pt width 1.3ex}}
+\def\K{{\mathchoice {\setbox0=\hbox{$\displaystyle\rm K$}\hbox{\hbox
+to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\textstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\scriptstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}
+{\setbox0=\hbox{$\scriptscriptstyle\rm K$}\hbox{\hbox to0pt{\kern0.4\wd0\vrule height0.9\ht0\hss}\box0}}}}
+\def\wave#1{\setbox1=\hbox{$#1$}\hbox to\wd1{\hfil$\sim$\hfil}}
+{\catcode${'`'}\^^M=\active\gdef\eolpar{\catcode${'`'}\^^M=\active\let^^M=\par}}
+\def\code{\eolpar\tt}
+\begin{document}
+$\mu \restr A$, $\K^n$, $\wave{y}$, $\code f$ and $\vrule\,x$.
+\[ M = \left[\begin{array}{cc} 0&1\\ \noalign{\medskip}1&0 \end{array}\right] \]
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  // the two rules of the restriction sign, 0.13ex wide and 1.3ex long
+  assert.match(html, /border-right-width:0\.056em;border-top-width:0\.69em/);
+  assert.match(html, /border-right-width:0\.56em;border-top-width:0\.056em/);
+  // the hand-drawn K is the blackboard K
+  assert.match(html, /mathbb\{K\}|<span class="mord mathbb">K<\/span>/);
+});
+
+test('figures, tables and text environments inside formulas', () => {
+  const { html } = strict(String.raw`
+\newcommand{\pic}[1]{\includegraphics[height=1em]{#1}}
+\begin{document}
+\[ x = \raisebox{-0.5\height}{\includegraphics[height=2cm]{fig/a.png}} + \vcenter{\hbox{\includegraphics[width=1cm, angle=0]{b.png}}} + \pic{c.png} \]
+\[ \begin{tabular}{|c|c|} \hline \multicolumn{1}{l|}{} & $y_j$ \\ \hline $x_i$ & sum $z$ \\ \hline \end{tabular} \]
+\[ \begin{small} \begin{matrix} a & b \end{matrix} \end{small} \quad \text{\ensuremath{\vec\psi=}} \frac{\text{cells·mL}}{\text{day}} \]
+\end{document}`, { resolveImage: (p) => 'img/' + p });
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  const figures = html.match(/<span class="mord tg-math-figure"><img class="graphic" src="img\/[^"]*"/g) || [];
+  assert.deepEqual(figures.map((f) => f.replace(/.*src="|"$/g, '')), ['img/fig/a.png', 'img/b.png', 'img/c.png']);
+  assert.match(html, /style="height:5\.691em"/); // height=2cm in em of a 10pt font
+  assert.doesNotMatch(html, /class="mord rule"/); // every marker swapped
+  // the tabular's cells: text, with the maths in it
+  assert.match(html, /sum/);
+  assert.doesNotMatch(html.replace(/data-tex="[^"]*"/g, ''), /tabular|multicolumn/);
+  assert.match(html, /<mtext>cells·<\/mtext>/);
+});
+
+test('references, proof marks and breaks reached through macros inside formulas', () => {
+  const { html } = strict(String.raw`
+\def\see#1{(see \eqref{#1})}
+\begin{document}
+\begin{equation}\label{first} a = b \end{equation}
+\begin{align*} a &= b \displaybreak[0] \\ c &= d \text{ \see{first}} \hspace*{\fill} \tag*{\qed} \end{align*}
+$\i^2 = -1$ and $\adjustbox{scale=0.5}{$y$}$.
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  assert.deepEqual(redMacros(html), []);
+  assert.match(text(html), /\(see[\s\u00a0]*\(1\)\)/);
+});
+
+test('box registers stay in their formula and group; \\box empties, \\copy keeps', () => {
+  const draw = (src) => text(strict(`\\begin{document}\n${src}\n\\end{document}`).html);
+  assert.match(draw(String.raw`$\setbox87=\hbox{Q}\copy87\copy87$`), /QQ/);
+  assert.doesNotMatch(draw(String.raw`$\setbox87=\hbox{Q}\box87\box87$`), /QQ/);
+  // nothing left over from another formula or document
+  assert.doesNotMatch(draw(String.raw`$\copy87 R$`), /Q/);
+  // a group's assignment ends with the group
+  assert.match(draw(String.raw`$\setbox5=\hbox{A}{\setbox5=\hbox{B}}\copy5$`), /A/);
+});
+
+test('only the hand-drawn-letter idiom and setup-only macros are replaced', () => {
+  const { html } = strict(String.raw`
+\def\decorated{\setbox0=\hbox{$A$}\box0\vrule width0.5pt + B}
+\def\printed{\ifmmode X\else\catcode92=12\fi}
+\newcommand{\includegraphics}[1]{\boxed{#1}}
+\begin{document}
+$\decorated$ and $\printed+Y$ and $\includegraphics{Q}$
+\end{document}`);
+  assert.deepEqual(mathErrors(html), []);
+  const t = text(html);
+  assert.match(t, /\+B/);
+  assert.doesNotMatch(html, /mathbb/);
+  assert.match(t, /X\+Y/);
+  assert.match(html, /boxed|fbox/);
+  assert.doesNotMatch(html, /tg-math-figure/);
+});
+
+test('tabular cells keep their groups; macro references report misses; tinted rules stay rules', () => {
+  const { html } = strict(String.raw`
+\def\see#1{\eqref{#1}}
+\begin{document}
+\[ \begin{tabular}{l} \textbf{value $x^2$} \end{tabular} \]
+$\see{missing}$ and $\includegraphics{a.png}$ and $\textcolor{#a60000}{\rule{1em}{1em}}$
+\end{document}`, { sourceMap: true, resolveImage: (p) => p });
+  assert.deepEqual(mathErrors(html), []);
+  assert.match(html, /data-math-ref-missing="missing"/);
+  assert.equal((html.match(/tg-math-figure/g) || []).length, 1);
+});
+
+test('a box read in a group stays empty; a rule sized by a letter stays a rule; tables in inline maths; tinted rules of an image size', () => {
+  const draw = (src, options) => strict(`\\begin{document}\n${src}\n\\end{document}`, options).html;
+  assert.doesNotMatch(text(draw(String.raw`$\setbox6=\hbox{Q}{\box6}\copy6$`)), /QQ/);
+  assert.match(text(draw(String.raw`$\setbox6=\hbox{Q}{\setbox6=\hbox{R}\box6}\copy6$`)), /RQ/);
+  const rule = draw(String.raw`\def\justrule{\setbox0=\hbox{$A$}\hbox to0pt{\vrule height0.8\ht0\hss}}
+$\justrule$`);
+  assert.doesNotMatch(rule, /mathbb/);
+  const inline = draw(String.raw`$\begin{tabular}{l}$x$\end{tabular}$`);
+  assert.deepEqual(mathErrors(inline), []);
+  assert.equal((inline.match(/class="katex"/g) || []).length, 1);
+  const tinted = draw(String.raw`$\includegraphics[width=1em,height=1em]{a.png}+\textcolor{#a60000}{\rule{1em}{1em}}$`, { resolveImage: (p) => p });
+  assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
+  assert.match(tinted, /class="mord rule" style="color:#a60000/);
+});
+
+test('the formula scanner skips \\verb and only closed tables; bare hex colours are kept apart from image markers', () => {
+  const draw = (src, options) => strict(`\\begin{document}\n${src}\n\\end{document}`, options).html;
+  const verb = draw(String.raw`$x^{\text{$a$}}\verb|\begin{tabular}|$ after`);
+  assert.equal((verb.match(/class="katex"/g) || []).length, 1);
+  const spaced = draw(String.raw`$\begin {tabular}{l}$x$\end {tabular}$`);
+  assert.equal((spaced.match(/class="katex"/g) || []).length, 1);
+  // a colour the paper writes without #, as KaTeX allows, is never a marker's
+  const src = String.raw`$\includegraphics[width=1em,height=1em]{a.png}+\textcolor{\shadecolor}{\rule{1em}{1em}}$`;
+  const first = draw(`\\def\\shadecolor{000000}\n${src}`, { resolveImage: (p) => p });
+  const marker = /mathcolor="#([0-9a-f]{6})"/.exec(first)[1]; // the image marker's colour for this formula
+  const tinted = draw(`\\def\\shadecolor{${marker}}\n${src}`, { resolveImage: (p) => p });
+  assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
+  assert.match(tinted, new RegExp(`class="mord rule" style="color:#${marker}`));
+});
+
+test('\\verb in formulas: closed on its own line only, and literal inside a table', () => {
+  const draw = (src) => strict(`\\begin{document}\n${src}\n\\end{document}`).html;
+  const live = draw('$x\\verb|bad$.\nLater $y$ and $\\verb|ok|$.');
+  assert.ok((live.match(/class="katex"/g) || []).length >= 2, 'the later formulas still render');
+  assert.match(text(live), /Later/);
+  const table = draw(String.raw`$\begin{tabular}{ll}\verb|\end{tabular}| & $x$\end{tabular}$`);
+  assert.deepEqual(mathErrors(table), []);
+  assert.equal((table.match(/class="katex"/g) || []).length, 1);
+});
