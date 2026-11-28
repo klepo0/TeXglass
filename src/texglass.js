@@ -1347,7 +1347,7 @@
       const at = m.index + m[0].length;
       if (tex[at] !== '{') continue;
       const spec = readGroup(tex, at);
-      const e = findEnvEnd(tex, spec.end, 'tabular');
+      const e = findVerbatimAwareEnd(tex, spec.end, 'tabular') || { contentEnd: tex.length, end: tex.length };
       const cell = (c) => {
         // rules before the row stay outside the text
         const lead = /^(\s*(?:\\hline|\\cline\s*\{[^{}]*\}|\\toprule|\\midrule|\\bottomrule)\s*)*/.exec(c)[0];
@@ -1355,7 +1355,16 @@
         // text, with its $…$ maths and groups as they are
         return lead + (body.trim() ? `\\text{${body}}` : body);
       };
-      const rows = splitTop(tex.slice(spec.end, e.contentEnd), rowSep).map((row) => splitTop(row, cellSep).map(cell).join('&'));
+      // \verb|…| in a cell is literal: kept out of the way while the table is split
+      const verbs = [];
+      let body = '';
+      const raw = tex.slice(spec.end, e.contentEnd);
+      for (let k = 0; k < raw.length; k++) {
+        const v = raw[k] === '\\' ? verbEnd(raw, k) : -1;
+        if (v > 0) { body += `\u0000${verbs.length}\u0000`; verbs.push(raw.slice(k, v)); k = v - 1; } else body += raw[k];
+      }
+      const restore = (t) => t.replace(/\u0000(\d+)\u0000/g, (_, n) => verbs[n]);
+      const rows = splitTop(body, rowSep).map((row) => splitTop(row, cellSep).map((c) => restore(cell(c))).join('&'));
       const array = `\\begin{array}{${spec.content}}${rows.join('\\\\')}\\end{array}`;
       tex = tex.slice(0, m.index) + array + tex.slice(e.end);
       re.lastIndex = m.index + 1;
@@ -4368,17 +4377,14 @@
       const c = src[i];
       if (c === '\\') {
         // \verb|…| is literal text, whatever it holds
-        const verb = /^\\verb\*?([^A-Za-z\s*])/.exec(src.slice(i, i + 7));
-        if (verb) {
-          const close = src.indexOf(verb[1], i + verb[0].length);
-          if (close > 0) { i = close; continue; }
-        }
+        const verb = verbEnd(src, i);
+        if (verb > 0) { i = verb - 1; continue; }
         // a table inside the formula has text cells with $…$ of their own: skip it
         // whole, when it is closed
         const table = /^\\begin\s*\{(tabular\*?|minipage)\}/.exec(src.slice(i, i + 30));
         if (table) {
-          const e = findEnvEnd(src, i + table[0].length, table[1]);
-          if (e.contentEnd < src.length) { i = e.end - 1; continue; }
+          const e = findVerbatimAwareEnd(src, i + table[0].length, table[1]);
+          if (e) { i = e.end - 1; continue; }
         }
         if (src.startsWith('\\begin{', i)) environments++;
         else if (src.startsWith('\\end{', i)) environments--;
@@ -4392,6 +4398,39 @@
       else if (c === '\n' && depth === 0 && environments === 0 && token === '$' && /^\n[ \t]*\n/.test(src.slice(i, i + 40))) break;
     }
     return findUnescaped(src, token, from);
+  }
+
+  /**
+   * If src[i] starts \verb|…| (or \verb*), the index just after its closing
+   * delimiter, which must be on the same line, as TeX wants; else -1.
+   */
+  function verbEnd(src, i) {
+    const m = /^\\verb\*?([^A-Za-z\s*])/.exec(src.slice(i, i + 7));
+    if (!m) return -1;
+    const from = i + m[0].length;
+    const close = src.indexOf(m[1], from);
+    const line = src.indexOf('\n', from);
+    return close >= 0 && (line < 0 || close < line) ? close + 1 : -1;
+  }
+
+  /** findEnvEnd that does not count \begin or \end written inside \verb; null when the environment is not closed. */
+  function findVerbatimAwareEnd(src, from, name) {
+    let depth = 1;
+    const re = /\\(begin|end)\s*\{([^}]*)\}/y;
+    for (let i = from; i < src.length; i++) {
+      if (src[i] !== '\\') continue;
+      const v = verbEnd(src, i);
+      if (v > 0) { i = v - 1; continue; }
+      re.lastIndex = i;
+      const m = re.exec(src);
+      if (!m) { i++; continue; }
+      if (m[2] === name) {
+        if (m[1] === 'begin') depth++;
+        else if (--depth === 0) return { contentEnd: i, end: i + m[0].length };
+      }
+      i += m[0].length - 1;
+    }
+    return null;
   }
 
   function findUnescaped(src, token, from) {

@@ -1370,3 +1370,13 @@ test('the formula scanner skips \\verb and only closed tables; bare hex colours 
   assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
   assert.match(tinted, new RegExp(`class="mord rule" style="color:#${marker}`));
 });
+
+test('\\verb in formulas: closed on its own line only, and literal inside a table', () => {
+  const draw = (src) => strict(`\\begin{document}\n${src}\n\\end{document}`).html;
+  const live = draw('$x\\verb|bad$.\nLater $y$ and $\\verb|ok|$.');
+  assert.ok((live.match(/class="katex"/g) || []).length >= 2, 'the later formulas still render');
+  assert.match(text(live), /Later/);
+  const table = draw(String.raw`$\begin{tabular}{ll}\verb|\end{tabular}| & $x$\end{tabular}$`);
+  assert.deepEqual(mathErrors(table), []);
+  assert.equal((table.match(/class="katex"/g) || []).length, 1);
+});
