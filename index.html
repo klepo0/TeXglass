@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- What this page may load and talk to. It keeps the notes-sync token (in this browser's
+       storage) away from any script that is not the site's own. A new host the viewer
+       fetches from must be added to connect-src; test/csp.test.js checks. The browser
+       extension drops this tag and keeps its own policy (browser/build.js). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' blob: data: https://arxiv.org https://api.github.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://api.datacite.org https://api.crossref.org https://api.openalex.org https://api.semanticscholar.org https://texglass.goatcounter.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>TeXglass</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -197,6 +202,7 @@
       <p id="notes-sync-about" class="local-note">Your highlights, notes, reading progress and list of saved papers go to a private gist, <code>texglass-notes.json</code>, in your own GitHub account, and come back on every device where you sign in. Nothing passes through any other server. Notes made on two devices at once are merged. <strong>You sign in once</strong>: after that everything syncs automatically.</p>
       <div id="notes-sync-token-box">
         <label for="notes-sync-token">A GitHub token that may use gists: <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=TeXglass%20notes" target="_blank" rel="noopener">make one</a> with only the <code>gist</code> scope, and paste it here. It is kept in this browser only.</label>
+        <p class="local-note notes-sync-advice">Give it an expiry date, such as 90 days, rather than <em>No expiration</em>: when it runs out, TeXglass asks you to sign in again. The token can read and change all your gists, so on a shared computer, sign out when you are done.</p>
         <input id="notes-sync-token" type="password" autocomplete="off" spellcheck="false">
       </div>
       <p id="notes-sync-message" class="arxiv-message" role="status"></p>
