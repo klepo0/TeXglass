@@ -10,7 +10,7 @@
  * fetched as well, so the
  * viewer gets one self-contained document, as with an arXiv import.
  *
- * Only public repositories can be read this way.
+ * Signed-in browsing uses GitHub's authenticated API for all project files.
  *
  * Works in browsers and in Node 18+ (fetch).
  */
@@ -93,6 +93,76 @@
 
   const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp' };
   const IMAGE_EXTS = ['', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp'];
+  const TEX_EXT = /\.(tex|ltx|latex)$/i;
+
+  /** Read repositories and files in the browser with a fine-grained token. */
+  function connect(token, { fetch: doFetch = fetch } = {}) {
+    const credential = String(token || '').trim();
+    if (!/^github_pat_[\w]+$/.test(credential)) throw new Error('Enter a fine-grained GitHub personal access token.');
+
+    async function request(path, signal, as = 'json') {
+      const res = await doFetch(API + path, {
+        headers: {
+          Accept: as === 'json' ? 'application/vnd.github+json' : 'application/vnd.github.raw+json',
+          Authorization: 'Bearer ' + credential,
+        },
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+        signal,
+      });
+      if (res.status === 401) throw new Error('GitHub could not authenticate this token. Reconnect with a valid token.');
+      if (res.status === 403 || res.status === 429) {
+        if (res.status === 429 || res.headers.get('x-ratelimit-remaining') === '0') throw new Error('GitHub’s rate limit was reached. Try again later.');
+        throw new Error('GitHub denied access. Check the token’s repository selection, Contents read permission and any organization approval.');
+      }
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`GitHub returned ${res.status}.`);
+      return as === 'json' ? res.json() : as === 'blob' ? res.blob() : res.text();
+    }
+
+    async function pages(path, signal) {
+      const results = [];
+      const separator = path.includes('?') ? '&' : '?';
+      for (let page = 1; ; page++) {
+        const items = await request(`${path}${separator}per_page=100&page=${page}`, signal);
+        if (!Array.isArray(items)) throw new Error('GitHub could not list these items. Check the token’s repository access.');
+        results.push(...items);
+        if (items.length < 100) return results;
+      }
+    }
+
+    const repoPath = (repo) => '/repos/' + encodePath(repo.full_name);
+    const readTree = (repo, sha, signal, recursive = false) =>
+      request(`${repoPath(repo)}/git/trees/${encodeURIComponent(sha)}${recursive ? '?recursive=1' : ''}`, signal);
+
+    return {
+      repositories: (signal) => pages('/user/repos?sort=full_name', signal),
+      branches: (repo, signal) => pages(repoPath(repo) + '/branches', signal),
+      async snapshot(repo, branch, signal) {
+        const commit = await request(repoPath(repo) + '/git/commits/' + encodeURIComponent(branch.commit.sha), signal);
+        if (!commit || !commit.tree) throw new Error('GitHub could not open this branch. Check the token’s Contents read permission.');
+        return { ref: branch.name, commit: branch.commit.sha, tree: commit.tree.sha };
+      },
+      async folder(repo, tree, signal) {
+        const data = await readTree(repo, tree, signal);
+        if (!data) throw new Error('GitHub could not open this folder. Check the token’s repository access.');
+        const entries = data.tree.filter((e) => e.type === 'tree' || (e.type === 'blob' && TEX_EXT.test(e.path)));
+        entries.sort((a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.path.localeCompare(b.path));
+        return { entries, truncated: data.truncated };
+      },
+      open(repo, snapshot, path, signal) {
+        return importFile(repo.full_name, {
+          selected: {
+            ref: snapshot.ref,
+            path,
+            read: (p, as) => request(`${repoPath(repo)}/contents/${encodePath(p)}?ref=${encodeURIComponent(snapshot.commit)}`, signal, as || 'text'),
+            tree: () => readTree(repo, snapshot.tree, signal, true),
+          },
+        });
+      },
+    };
+  }
 
   // \input-like commands and figures, skipping comments.
   const INPUTS = /(^|[^\\])%.*$|\\(?:input|include|subfile)\s*\{([^}]*)\}|\\(?:sub)?import\s*\{([^}]*)\}\s*\{([^}]*)\}|\\input\s+([^\s{}\\%]+)/gm;
@@ -109,6 +179,7 @@
     const loc = parseUrl(input);
     if (!loc) throw new Error('That does not look like a link to a GitHub repository or file.');
     const { owner, repo } = loc;
+    const selected = options.selected;
     const where = `${owner}/${repo}`;
 
     const rawUrl = (ref, path) => `${RAW}/${owner}/${repo}/${encodePath(ref)}/${encodePath(path)}`;
@@ -131,17 +202,23 @@
       if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
       return as === 'json' ? res.json() : as === 'blob' ? res.blob() : res.text();
     };
+    const readFile = (ref, path, as) => selected ? selected.read(path, as) : get(rawUrl(ref, path), as);
 
     let ref = null;
     let mainPath = null;
     let mainText = null;
 
-    if (loc.kind === 'file') {
+    if (selected) {
+      ref = selected.ref;
+      mainPath = selected.path;
+      mainText = await readFile(ref, mainPath);
+      if (mainText == null) throw new Error('GitHub could not read this file. Check the token’s repository access.');
+    } else if (loc.kind === 'file') {
       // raw.githubusercontent.com takes branch and path joined by "/", so a
       // branch with slashes needs no special care: any split gives the same URLs.
       ref = loc.rest[0];
       mainPath = loc.rest.slice(1).join('/');
-      mainText = await get(rawUrl(ref, mainPath));
+      mainText = await readFile(ref, mainPath);
       if (mainText == null) throw new Error(`Could not open that file. ${where} may be private, or the file was moved or renamed.`);
     } else {
       // A folder or a whole repo: list it and pick the main .tex file.
@@ -199,7 +276,7 @@
             .slice(0, 8);
           const texts = {};
           for (const { p } of ranked) {
-            const t = await get(rawUrl(ref, p));
+            const t = await readFile(ref, p);
             if (t != null) texts[p] = t;
           }
           mainPath = Arxiv.pickMain(texts);
@@ -221,7 +298,7 @@
       const inFolder = (f, names) => names.forEach((n) => add(at((f ? f.replace(/\/?$/, '/') : '') + n + '.tex')));
       let readme = null;
       for (const n of ['README.md', 'readme.md', 'README.markdown']) {
-        readme = await get(rawUrl(ref, at(n))).catch(() => null);
+        readme = await readFile(ref, at(n)).catch(() => null);
         if (readme != null) break;
       }
       if (readme) {
@@ -248,7 +325,7 @@
       const list = cands.slice(0, 80);
       for (let i = 0; i < list.length; i += 8) {
         const batch = list.slice(i, i + 8);
-        const texts = await Promise.all(batch.map((p) => get(rawUrl(ref, p)).catch(() => null)));
+        const texts = await Promise.all(batch.map((p) => readFile(ref, p).catch(() => null)));
         const k = texts.findIndex(isMain);
         if (k >= 0) return { path: batch[k], text: texts[k] };
       }
@@ -259,7 +336,7 @@
     // .tex files by path in the repo: a promise of the text, or of null if there is none.
     const repoTexts = new Map([[mainPath, Promise.resolve(fix(mainText))]]);
     const fetchRepoTex = (p) => {
-      if (!repoTexts.has(p)) repoTexts.set(p, get(rawUrl(ref, p)).then(fix, () => null));
+      if (!repoTexts.has(p)) repoTexts.set(p, readFile(ref, p).then(fix, selected ? undefined : () => null));
       return repoTexts.get(p);
     };
     const maxFiles = options.maxFiles || 60;
@@ -298,7 +375,7 @@
     // A chapter opened on its own is shown as part of the whole document.
     const opened = mainPath;
     let project = null;
-    if (loc.kind === 'file' && options.findRoot !== false) {
+    if ((selected || loc.kind === 'file') && options.findRoot !== false) {
       const root = await findRoot(mainPath, fix(mainText));
       if (root) {
         mainPath = root.path;
@@ -313,14 +390,14 @@
     // A .bbl next to the main file, if one was committed.
     if (!/\\begin\s*\{(thebibliography|bibdiv|biblist)\}/.test(all()) && /\\(bibliography|printbibliography)\b/.test(all())) {
       const bblName = name.replace(/\.[^.]+$/, '') + '.bbl';
-      const bbl = await get(rawUrl(ref, full(bblName)));
+      const bbl = await readFile(ref, full(bblName));
       if (bbl != null) texFiles[bblName] = bbl;
       // No .bbl (it is rarely committed): the .bib files, from which the viewer builds one.
       if (bbl == null && Bib) {
         for (const n of Bib.bibResources(all()).slice(0, 10)) {
           const rel = /\.bib$/i.test(n) ? n : n + '.bib';
           if (texFiles[rel] != null) continue;
-          const t = await get(rawUrl(ref, full(rel)));
+          const t = await readFile(ref, full(rel));
           if (t != null) texFiles[rel] = t.replace(/\r\n?/g, '\n');
         }
       }
@@ -355,7 +432,7 @@
           const hasExt = /\.(png|jpe?g|gif|svg|webp)$/i.test(stem);
           for (const ext of hasExt ? [''] : IMAGE_EXTS.slice(1)) {
             const p = stem + ext;
-            const blob = await get(rawUrl(ref, full(p)), 'blob');
+            const blob = await readFile(ref, full(p), 'blob');
             if (blob) {
               const type = IMAGE_TYPES[(p.split('.').pop() || '').toLowerCase()];
               images[p] = type && blob.type !== type ? new Blob([blob], { type }) : blob;
@@ -367,7 +444,7 @@
         const isEps = /\.(eps|ps)$/i.test(rel);
         if (Eps && (isEps || !/\.[a-z]+$/i.test(rel))) {
           for (const p of isEps ? [rel] : [rel + '.eps']) {
-            const blob = await get(rawUrl(ref, full(p)), 'blob');
+            const blob = await readFile(ref, full(p), 'blob');
             if (!blob) continue;
             const r = Eps.toSvg(Arxiv.latin1(new Uint8Array(await blob.arrayBuffer())));
             if (r) { images[p] = new Blob([r.svg], { type: 'image/svg+xml' }); break search; }
@@ -377,7 +454,7 @@
         const isPdf = /\.pdf$/i.test(rel);
         if (isPdf || !/\.[a-z]+$/i.test(rel)) {
           for (const p of isPdf ? [rel] : [rel + '.pdf']) {
-            const blob = await get(rawUrl(ref, full(p)), 'blob');
+            const blob = await readFile(ref, full(p), 'blob');
             if (blob) { images[p] = new Blob([blob], { type: 'application/pdf' }); break search; }
           }
         }
@@ -433,10 +510,10 @@
       const inDir = (p) => dirOf(p);
       let cands = null;
       try {
-        const tree = await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, 'json');
+        const tree = selected ? await selected.tree() : await get(`${API}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`, 'json');
         if (tree && tree.tree) {
           cands = tree.tree
-            .filter((e) => e.type === 'blob' && /\.(tex|ltx)$/i.test(e.path) && e.path !== file && dirs.includes(inDir(e.path)))
+            .filter((e) => e.type === 'blob' && TEX_EXT.test(e.path) && e.path !== file && dirs.includes(inDir(e.path)))
             .map((e) => e.path);
         }
       } catch (e) {
@@ -528,5 +605,5 @@
     return { results, total: data.total_count || 0, more: page * perPage < total && items.length === perPage, anyLanguage };
   }
 
-  return { parseUrl, splits, importFile, links, bookmarklet, search };
+  return { parseUrl, splits, importFile, links, bookmarklet, search, connect };
 });

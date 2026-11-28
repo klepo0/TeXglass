@@ -719,7 +719,7 @@
 
   function rememberSoon() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => store.set('texglass:last', doc), 400);
+    if (!opened.gh?.private) saveTimer = setTimeout(() => store.set('texglass:last', doc), 400);
   }
 
   /**
@@ -765,6 +765,7 @@
   }
 
   function load(text, name, images, gh, arxiv) {
+    clearTimeout(saveTimer);
     stopCompare();
     closeEditor(false);
     watcher = null;
@@ -777,6 +778,9 @@
     pdfRun++;
     delete document.documentElement.dataset.pdfFigures;
     opened = { images: images || null, gh: gh || null, arxiv: arxiv || null };
+    folded = gh?.private ? new Set() : rememberedFolds;
+    privateMap = {};
+    privateNotationPins = [];
     setPdfLink(originalPdf, opened.arxiv);
     if (images && Object.keys(images).length && window.TeXglassArxiv) {
       imageMap = {};
@@ -795,9 +799,11 @@
     const shown = render();
     previewPane.scrollTop = 0;
     if (viewHistory) viewHistory.clear(); // a new document: nowhere to go back to
-    store.set('texglass:last', doc);
-    store.set('texglass:last-name', name || '');
-    store.set('texglass:last-arxiv', opened.arxiv || '');
+    if (!gh?.private) {
+      store.set('texglass:last', doc);
+      store.set('texglass:last-name', name || '');
+      store.set('texglass:last-arxiv', opened.arxiv || '');
+    }
     return shown;
   }
 
@@ -829,17 +835,25 @@
     if (gh) {
       ghLink.href = gh.links.edit;
       ghLink.title = `Open ${gh.path} on GitHub to edit and commit it. Or press "." there to edit it in github.dev.`;
+    } else {
+      ghLink.removeAttribute('href');
+      ghLink.removeAttribute('title');
     }
-    store.set('texglass:last-gh', gh ? JSON.stringify(gh) : '');
+    if (!gh?.private) store.set('texglass:last-gh', gh ? JSON.stringify(gh) : '');
   }
 
   // --- folding sections and proofs -------------------------------------------
 
   // Folded items are remembered by their text, so they stay folded across
   // re-renders and edits elsewhere in the document.
-  const folded = new Set();
-  try { JSON.parse(store.get('texglass:folds') || '[]').forEach((k) => folded.add(k)); } catch (e) { /* ignore */ }
-  const saveFolds = () => store.set('texglass:folds', JSON.stringify(Array.from(folded).slice(-500)));
+  const rememberedFolds = new Set();
+  let folded = rememberedFolds;
+  let privateMap = {};
+  let privateNotationPins = [];
+  try { JSON.parse(store.get('texglass:folds') || '[]').forEach((k) => rememberedFolds.add(k)); } catch (e) { /* ignore */ }
+  const saveFolds = () => {
+    if (!opened.gh?.private) store.set('texglass:folds', JSON.stringify(Array.from(folded).slice(-500)));
+  };
 
   const HEADING = ':scope > h1.part, :scope > h1.chapter, :scope > h2.section, :scope > h3.subsection, :scope > h4.subsubsection';
 
@@ -2050,7 +2064,7 @@
   function openNotes(ghPath, name, source) {
     if (!margin || !NotesSync) return;
     clearTimeout(notesPushTimer);
-    const key = NotesSync.paperKey({ github: ghPath, name, source });
+    const key = opened.gh?.private ? null : NotesSync.paperKey({ github: ghPath, name, source });
     paper = key ? { key, record: readNotes(key) || NotesSync.empty(key, NotesSync.titleOf(source)) } : null;
     if (paper) showNotes();
     else margin.setAnnotations([]);
@@ -2987,9 +3001,11 @@
   // in): kept in this browser under the document's name.
   const looseKey = () => 'texglass:loose-map:' + fileName.textContent;
   function looseMap() {
+    if (opened.gh?.private) return privateMap;
     try { const m = JSON.parse(store.get(looseKey()) || '{}'); return m && typeof m === 'object' ? m : {}; } catch (e) { return {}; }
   }
   function mapEditsChanged(m) {
+    if (opened.gh?.private) { privateMap = m; return; }
     if (!paper || !NotesSync) { try { store.set(looseKey(), JSON.stringify(NotesSync ? NotesSync.cleanMap(m) : m)); } catch (e) { /* for this visit only */ } return; }
     paper.record = Object.assign({}, paper.record, { map: m });
     writeNotes(paper.key, paper.record);
@@ -3348,8 +3364,14 @@
       onNotationOrder: (order) => store.set('texglass:notation-order', order),
       // pinned notation rows, kept per paper (or per file name)
       pins: {
-        get: () => { try { return JSON.parse(store.get('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent)) || '[]'); } catch (e) { return []; } },
-        set: (keys) => store.set('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent), JSON.stringify(keys)),
+        get: () => {
+          if (opened.gh?.private) return privateNotationPins;
+          try { return JSON.parse(store.get('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent)) || '[]'); } catch (e) { return []; }
+        },
+        set: (keys) => {
+          if (opened.gh?.private) privateNotationPins = keys;
+          else store.set('texglass:notation-pins:' + (paper ? paper.key : fileName.textContent), JSON.stringify(keys));
+        },
       },
       usedPinned: store.get('texglass:notation-used-pinned') === '1',
       onUsedPinned: (on) => store.set('texglass:notation-used-pinned', on ? '1' : ''),
@@ -4237,17 +4259,8 @@
     showStatus('Opening from GitHub…');
     try {
       const file = await TeXglassGitHub.importFile(input);
-      fileHandle = null;
-      const shown = load(file.source, file.name, file.images, { links: file.links, path: `${file.owner}/${file.repo}/${file.opened || file.path}` });
       if (arxivDialog.open) arxivDialog.close();
-      const more = file.files.length > 1 ? ` with ${file.files.length - 1} included file${file.files.length > 2 ? 's' : ''}` : '';
-      if (file.opened && file.opened !== file.path) {
-        // A chapter: the whole document is shown, scrolled to where the chapter begins.
-        flashStatus(`Opened ${file.opened} as part of ${file.path}${more}`);
-        if (file.start != null) shown.then(() => scrollToSource(file.start));
-      } else {
-        flashStatus(`Opened ${file.path} from ${file.owner}/${file.repo}${more}`);
-      }
+      showGitHubFile(file);
       return true;
     } catch (e) {
       ghSay(e instanceof TypeError ? 'Could not reach GitHub from this page. Check your connection.' : e.message, true);
@@ -4259,6 +4272,222 @@
       arxivGo.disabled = false;
     }
   }
+
+  function showGitHubFile(file, privateRepository = false) {
+    fileHandle = null;
+    const path = `${file.owner}/${file.repo}/${file.opened || file.path}`;
+    const source = { links: file.links, path };
+    if (privateRepository) source.private = true;
+    const shown = load(file.source, file.name, file.images, source);
+    const more = file.files.length > 1 ? ` with ${file.files.length - 1} included file${file.files.length > 2 ? 's' : ''}` : '';
+    if (file.opened && file.opened !== file.path) {
+      flashStatus(`Opened ${file.opened} as part of ${file.path}${more}`);
+      if (file.start != null) shown.then(() => scrollToSource(file.start));
+    } else {
+      flashStatus(`Opened ${file.path} from ${file.owner}/${file.repo}${more}`);
+    }
+  }
+
+  // --- browsing repositories with a GitHub token -------------------------------
+
+  const githubBrowser = $('github-browser-dialog');
+  const githubConnectForm = $('github-connect-form');
+  const githubTokenInput = $('github-repo-token');
+  const githubRepoBrowser = $('github-repo-browser');
+  const githubRepoSelect = $('github-repo-select');
+  const githubBranchSelect = $('github-branch-select');
+  const githubFiles = $('github-folder-files');
+  const githubRetry = $('github-browser-retry');
+  const githubDisconnect = $('github-browser-disconnect');
+  const githubFolderNav = $('github-folder-nav');
+  const githubFolderUp = $('github-folder-up');
+  const githubMessage = $('github-browser-message');
+  let githubSession = null;
+  let githubRepos = [];
+  let githubBranches = [];
+  let githubSnapshot = null;
+  let githubFolders = [];
+  let githubRequest = null;
+  let retryGitHub = null;
+
+  function githubBrowserSay(message, warn = false) {
+    githubMessage.textContent = message;
+    githubMessage.classList.toggle('warn', warn);
+  }
+
+  async function browseGitHub(message, task, retry = null) {
+    if (githubRequest) return;
+    const request = new AbortController();
+    githubRequest = request;
+    githubRepoBrowser.inert = true;
+    $('github-connect').disabled = true;
+    githubRetry.hidden = true;
+    retryGitHub = retry;
+    githubBrowserSay(message);
+    try {
+      await task(request.signal);
+    } catch (e) {
+      if (request.signal.aborted) return;
+      githubBrowserSay(e instanceof TypeError ? 'Could not reach GitHub. Check your connection.' : e.message, true);
+      githubRetry.hidden = !retry;
+    } finally {
+      if (githubRequest === request) {
+        githubRequest = null;
+        githubRepoBrowser.inert = false;
+        $('github-connect').disabled = false;
+      }
+    }
+  }
+
+  function showGitHubBrowser(connected) {
+    githubConnectForm.hidden = connected;
+    githubRepoBrowser.hidden = !connected;
+    githubDisconnect.hidden = !connected;
+  }
+
+  function resetGitHubFolder() {
+    githubSnapshot = null;
+    githubFolders = [];
+    githubFolderNav.hidden = true;
+    githubFiles.replaceChildren();
+  }
+
+  function renderGitHubFolder(folders, { entries, truncated }) {
+    githubFolders = folders;
+    githubFolderNav.hidden = false;
+    githubFolderUp.hidden = folders.length <= 1;
+    $('github-folder-path').textContent = '/' + folders.slice(1).map((entry) => entry.path).join('/');
+    githubFiles.replaceChildren(...entries.map((entry) => {
+      const item = document.createElement('li');
+      item.className = 'preprint';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'preprint-open';
+      const directory = entry.type === 'tree';
+      button.textContent = entry.path + (directory ? '/' : '');
+      button.addEventListener('click', () => {
+        if (directory) openGitHubFolder([...folders, entry]);
+        else openGitHubBrowserFile(entry);
+      });
+      item.append(button);
+      return item;
+    }));
+    githubFiles.scrollTop = 0;
+    githubBrowserSay(truncated ? 'GitHub returned only part of this folder.'
+      : entries.length ? '' : 'No TeX files or subfolders in this folder.');
+  }
+
+  function pickGitHubBranch(repo, branch) {
+    resetGitHubFolder();
+    const pick = () => browseGitHub('Loading branch…', async (signal) => {
+      const snapshot = await githubSession.snapshot(repo, branch, signal);
+      signal.throwIfAborted();
+      const folders = [{ sha: snapshot.tree }];
+      const data = await githubSession.folder(repo, snapshot.tree, signal);
+      signal.throwIfAborted();
+      githubSnapshot = snapshot;
+      renderGitHubFolder(folders, data);
+    }, pick);
+    return pick();
+  }
+
+  function openGitHubFolder(folders) {
+    const repo = githubRepos[githubRepoSelect.value];
+    const open = () => browseGitHub('Loading folder…', async (signal) => {
+      const data = await githubSession.folder(repo, folders[folders.length - 1].sha, signal);
+      signal.throwIfAborted();
+      renderGitHubFolder(folders, data);
+    }, open);
+    return open();
+  }
+
+  function openGitHubBrowserFile(entry) {
+    const repo = githubRepos[githubRepoSelect.value];
+    const path = [...githubFolders.slice(1).map((folder) => folder.path), entry.path].join('/');
+    const open = () => browseGitHub('Opening TeX project…', async (signal) => {
+      const file = await githubSession.open(repo, githubSnapshot, path, signal);
+      signal.throwIfAborted();
+      showGitHubFile(file, repo.private !== false || repo.visibility === 'internal');
+      githubBrowserSay('');
+      githubBrowser.close();
+    }, open);
+    return open();
+  }
+
+  $('arxiv-my-github').addEventListener('click', () => {
+    if (arxivBusy || ghBusy) return;
+    arxivDialog.close();
+    githubBrowser.showModal();
+  });
+  githubConnectForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const token = githubTokenInput.value;
+    githubTokenInput.value = '';
+    browseGitHub('Loading repositories…', async (signal) => {
+      const session = TeXglassGitHub.connect(token);
+      const repos = await session.repositories(signal);
+      signal.throwIfAborted();
+      githubSession = session;
+      githubRepos = repos;
+      githubRepoSelect.replaceChildren(new Option('Choose a repository', ''),
+        ...repos.map((repo, i) => new Option(repo.full_name + (repo.private ? ' (private)' : ''), i)));
+      showGitHubBrowser(true);
+      githubBrowserSay(repos.length ? '' : 'GitHub returned no repositories for this token.');
+    }).then(() => { if (githubBrowser.open) (githubSession ? githubRepoSelect : githubTokenInput).focus(); });
+  });
+  githubRepoSelect.addEventListener('change', async () => {
+    const repo = githubRepos[githubRepoSelect.value];
+    resetGitHubFolder();
+    githubBranchSelect.replaceChildren();
+    githubBranchSelect.disabled = true;
+    githubBrowserSay('');
+    if (!repo) return;
+    const list = async () => {
+      await browseGitHub('Loading branches…', async (signal) => {
+        githubBranches = await githubSession.branches(repo, signal);
+        signal.throwIfAborted();
+        githubBranchSelect.replaceChildren(...githubBranches.map((branch, i) => new Option(branch.name, i)));
+        githubBranchSelect.disabled = !githubBranches.length;
+        const pos = githubBranches.findIndex((branch) => branch.name === repo.default_branch);
+        githubBranchSelect.value = String(Math.max(pos, 0));
+        githubBrowserSay(githubBranches.length ? '' : 'This repository has no branches yet.');
+      }, list);
+      const branch = githubBranches[githubBranchSelect.value];
+      if (githubBrowser.open && branch) await pickGitHubBranch(repo, branch);
+    };
+    await list();
+  });
+  githubBranchSelect.addEventListener('change', () =>
+    pickGitHubBranch(githubRepos[githubRepoSelect.value], githubBranches[githubBranchSelect.value]));
+  githubFolderUp.addEventListener('click', () => openGitHubFolder(githubFolders.slice(0, -1)));
+  githubRetry.addEventListener('click', () => { if (retryGitHub) retryGitHub(); });
+  githubDisconnect.addEventListener('click', () => {
+    githubRequest?.abort();
+    githubSession = null;
+    githubRepos = [];
+    githubBranches = [];
+    githubRepoSelect.replaceChildren();
+    githubBranchSelect.replaceChildren();
+    githubBranchSelect.disabled = true;
+    resetGitHubFolder();
+    showGitHubBrowser(false);
+    githubRetry.hidden = true;
+    retryGitHub = null;
+    githubBrowserSay('Disconnected from GitHub.');
+    if (opened.gh?.private) loadWelcome();
+    githubTokenInput.focus();
+  });
+  $('github-browser-close').addEventListener('click', () => githubBrowser.close());
+  githubBrowser.addEventListener('close', () => {
+    if (githubBrowser.open) return;
+    if (githubRequest) {
+      githubRequest.abort();
+      githubRetry.hidden = !retryGitHub;
+      githubBrowserSay('');
+    }
+    githubTokenInput.value = '';
+    $('open').focus();
+  });
 
   const bookmarkletLink = $('bookmarklet');
   // Inside the browser extension the page is a chrome-extension:// or moz-extension://

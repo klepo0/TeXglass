@@ -177,6 +177,7 @@
       <p id="arxiv-message" class="arxiv-message" role="status"></p>
       <a id="arxiv-original-pdf" class="arxiv-original-pdf" target="_blank" rel="noopener" hidden>Open original PDF</a>
       <ol id="arxiv-results" class="preprints-list arxiv-results" hidden></ol>
+      <p class="local-hint"><button type="button" id="arxiv-my-github" class="link-button" aria-haspopup="dialog" aria-controls="github-browser-dialog">Browse my GitHub repositories</button></p>
       <div id="library-recent" class="library-recent" hidden>
         <div class="library-recent-head"><span>Saved papers</span><button type="button" id="arxiv-library" class="link-button">All saved papers</button></div>
         <ol id="library-recent-list" class="library-recent-list"></ol>
@@ -188,6 +189,34 @@
         <button type="submit" id="arxiv-go" class="primary">Search</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="github-browser-dialog" class="arxiv-dialog" aria-labelledby="github-browser-title">
+    <h2 id="github-browser-title">My GitHub repositories</h2>
+    <form id="github-connect-form" method="dialog">
+      <label for="github-repo-token">Fine-grained GitHub token. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Create a token</a> for the repositories you want to read with <strong>Contents: read</strong>. TeXglass keeps it until you reload or close this tab.</label>
+      <input id="github-repo-token" type="password" autocomplete="off" spellcheck="false" required>
+      <div class="arxiv-actions">
+        <button id="github-connect" type="submit" class="primary">Connect</button>
+      </div>
+    </form>
+    <div id="github-repo-browser" hidden>
+      <label for="github-repo-select">Repository</label>
+      <select id="github-repo-select"></select>
+      <label for="github-branch-select">Branch</label>
+      <select id="github-branch-select" disabled></select>
+      <div id="github-folder-nav" class="github-folder-nav" hidden>
+        <button id="github-folder-up" type="button" class="link-button">Up a folder</button>
+        <span id="github-folder-path"></span>
+      </div>
+      <ul id="github-folder-files" class="preprints-list arxiv-results"></ul>
+    </div>
+    <p id="github-browser-message" class="arxiv-message" role="status"></p>
+    <div class="arxiv-actions">
+      <button id="github-browser-retry" type="button" hidden>Retry</button>
+      <button id="github-browser-disconnect" type="button" hidden>Disconnect</button>
+      <button id="github-browser-close" type="button">Close</button>
+    </div>
   </dialog>
 
   <dialog id="notes-sync-dialog" class="arxiv-dialog" aria-labelledby="notes-sync-title">

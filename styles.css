@@ -234,7 +234,7 @@ body {
 .arxiv-dialog h2 { margin: 0 0 12px; font-size: 17px; }
 .arxiv-dialog label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .arxiv-dialog label code { font-size: 12px; padding: 0 3px; border-radius: 3px; background: var(--accent-soft); color: var(--ink); }
-.arxiv-dialog input {
+.arxiv-dialog input, #github-browser-dialog select {
   width: 100%;
   font: inherit;
   font-size: 14px;
@@ -281,6 +281,16 @@ body {
 }
 .arxiv-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .arxiv-actions button:disabled { opacity: 0.6; cursor: default; }
+#github-browser-dialog select, #github-connect-form input { margin-bottom: 10px; }
+.github-folder-nav:not([hidden]) {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+}
+#github-folder-up { flex: none; }
+#github-folder-path, #github-folder-files button { overflow-wrap: anywhere; }
+#github-folder-files { max-height: 35vh; }
 /* Settings: switching reading aids on or off (src/features.js) */
 .features-dialog {
   width: min(520px, calc(100vw - 32px));
