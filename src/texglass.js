@@ -1306,6 +1306,11 @@
    * corners \ulcorner … \urcorner after \left and \right (KaTeX does not
    * stretch them, so they are drawn at their own size).
    */
+  /** Six-digit hex colours written in text, with or without # (KaTeX takes both), as #rrggbb. */
+  function hexColors(text) {
+    return new Set(Array.from(String(text).matchAll(/(?<![0-9A-Za-z])#?([0-9A-Fa-f]{6})(?![0-9A-Za-z])/g), (m) => '#' + m[1].toLowerCase()));
+  }
+
   /**
    * \raisebox{-0.5\height}{…} centres a box (a picture, a figure) on the line:
    * KaTeX knows no \height, so a box lowered by about half its height is
@@ -3816,9 +3821,9 @@
       const tex = this.mathImageTex || '';
       if (this._markerMacros !== this._katexMacros) {
         this._markerMacros = this._katexMacros;
-        this._macroColors = new Set((JSON.stringify(this.macros) + JSON.stringify(this.paired || {})).toLowerCase().match(/#[0-9a-f]{6}/g) || []);
+        this._macroColors = hexColors(JSON.stringify(this.macros) + JSON.stringify(this.paired || {}));
       }
-      const own = new Set(tex.toLowerCase().match(/#[0-9a-f]{6}/g) || []);
+      const own = hexColors(tex);
       let h = 2166136261;
       for (let k = 0; k < tex.length; k++) h = Math.imul(h ^ tex.charCodeAt(k), 16777619);
       for (let n = used.size; ; n++) {
@@ -4362,9 +4367,19 @@
     for (let i = from; i < src.length; i++) {
       const c = src[i];
       if (c === '\\') {
-        // a table inside the formula has text cells with $…$ of their own: skip it whole
-        const table = /^\\begin\{(tabular\*?|minipage)\}/.exec(src.slice(i, i + 20));
-        if (table) { i = findEnvEnd(src, i + table[0].length, table[1]).end - 1; continue; }
+        // \verb|…| is literal text, whatever it holds
+        const verb = /^\\verb\*?([^A-Za-z\s*])/.exec(src.slice(i, i + 7));
+        if (verb) {
+          const close = src.indexOf(verb[1], i + verb[0].length);
+          if (close > 0) { i = close; continue; }
+        }
+        // a table inside the formula has text cells with $…$ of their own: skip it
+        // whole, when it is closed
+        const table = /^\\begin\s*\{(tabular\*?|minipage)\}/.exec(src.slice(i, i + 30));
+        if (table) {
+          const e = findEnvEnd(src, i + table[0].length, table[1]);
+          if (e.contentEnd < src.length) { i = e.end - 1; continue; }
+        }
         if (src.startsWith('\\begin{', i)) environments++;
         else if (src.startsWith('\\end{', i)) environments--;
         i++;

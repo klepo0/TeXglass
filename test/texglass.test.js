@@ -1355,3 +1355,18 @@ $\justrule$`);
   assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
   assert.match(tinted, /class="mord rule" style="color:#a60000/);
 });
+
+test('the formula scanner skips \\verb and only closed tables; bare hex colours are kept apart from image markers', () => {
+  const draw = (src, options) => strict(`\\begin{document}\n${src}\n\\end{document}`, options).html;
+  const verb = draw(String.raw`$x^{\text{$a$}}\verb|\begin{tabular}|$ after`);
+  assert.equal((verb.match(/class="katex"/g) || []).length, 1);
+  const spaced = draw(String.raw`$\begin {tabular}{l}$x$\end {tabular}$`);
+  assert.equal((spaced.match(/class="katex"/g) || []).length, 1);
+  // a colour the paper writes without #, as KaTeX allows, is never a marker's
+  const src = String.raw`$\includegraphics[width=1em,height=1em]{a.png}+\textcolor{\shadecolor}{\rule{1em}{1em}}$`;
+  const first = draw(`\\def\\shadecolor{000000}\n${src}`, { resolveImage: (p) => p });
+  const marker = /mathcolor="#([0-9a-f]{6})"/.exec(first)[1]; // the image marker's colour for this formula
+  const tinted = draw(`\\def\\shadecolor{${marker}}\n${src}`, { resolveImage: (p) => p });
+  assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
+  assert.match(tinted, new RegExp(`class="mord rule" style="color:#${marker}`));
+});
