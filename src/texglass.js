@@ -802,12 +802,14 @@
     ctx.macros.set(boxKey(n), { tokens: [], numArgs: 0, texglassBox: group(ctx) });
     return '';
   };
+  // \box empties the box it reads, also after the group it is read in ends (the
+  // same box object is emptied, so an outer box another group set stays)
   const useBox = (empty) => (ctx) => {
-    const key = boxKey(boxNumber(ctx));
-    const box = ctx.macros.get(key);
+    const box = ctx.macros.get(boxKey(boxNumber(ctx)));
     if (!box || box.texglassBox === undefined) return '';
-    if (empty) ctx.macros.set(key, undefined);
-    return `\\hbox{${box.texglassBox}}`;
+    const content = box.texglassBox;
+    if (empty) box.texglassBox = undefined;
+    return `\\hbox{${content}}`;
   };
   MATH_MACROS['\\box'] = useBox(true);
   MATH_MACROS['\\copy'] = useBox(false);
@@ -1156,7 +1158,8 @@
    * letter they stand for (\mathbb{C}), or null for another macro.
    */
   function handDrawnLetter(body) {
-    if (!/\\setbox/.test(body) || !/\\vrule/.test(body)) return null;
+    // the letter is measured, overlaid with a rule and put back with \box0
+    if (!/\\setbox/.test(body) || !/\\vrule/.test(body) || !/\\box\s*0(?!\d)/.test(body)) return null;
     const letters = new Set();
     // the measured letter, the zero-width boxes with the rules, and the letter put back
     let rest = body
@@ -1677,13 +1680,16 @@
       // references a macro brings in are looked up while KaTeX expands it (see katexMacros)
       const outerMissing = this.mathRefMissing;
       const outerImages = this.mathImages;
+      const outerTex = this.mathImageTex;
       this.mathRefMissing = missing;
       this.mathImages = null;
+      this.mathImageTex = tex;
       try {
         return this.renderMathBody(tex, display, missing);
       } finally {
         this.mathRefMissing = outerMissing;
         this.mathImages = outerImages;
+        this.mathImageTex = outerTex;
       }
     }
 
@@ -1699,7 +1705,7 @@
         const macros = this.mathProbe ? Object.assign({}, this.mathProbe, this.katexMacros(tex)) : this.katexMacros(tex);
         const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
         let out = this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html;
-        if (this.mathImages && /color:#a6[0-9a-f]{4}/.test(out)) out = this.putImages(out);
+        if (this.mathImages && this.mathImages.size) out = this.putImages(out);
         return out + refs() + live;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs() + live;
@@ -3794,17 +3800,40 @@
       const w = width || h * 1.33;
       let html = this.flow(`\\includegraphics[${opts}]{${file}}`, true);
       if (!width && !height) html = html.replace(/^<img /, `<img style="height:${r(h)}em" `);
-      const list = this.mathImages || (this.mathImages = []);
-      const color = `#a6${list.length.toString(16).padStart(4, '0')}`;
-      list.push({ html, size: `border-right-width:${r(w)}em;border-top-width:${r(h)}em;` });
+      const list = this.mathImages || (this.mathImages = new Map());
+      const color = this.markerColor(list);
+      list.set(color, { html, size: `border-right-width:${r(w)}em;border-top-width:${r(h)}em;` });
       return `\\textcolor{${color}}{\\rule{${r(w)}em}{${r(h)}em}}`;
+    }
+
+    /**
+     * A colour for an image marker that neither this formula nor the paper's
+     * macros write anywhere, so a rule the paper tints itself is never taken
+     * for a marker. It follows from the formula, so the same formula gives the
+     * same HTML each time.
+     */
+    markerColor(used) {
+      const tex = this.mathImageTex || '';
+      if (this._markerMacros !== this._katexMacros) {
+        this._markerMacros = this._katexMacros;
+        this._macroColors = new Set((JSON.stringify(this.macros) + JSON.stringify(this.paired || {})).toLowerCase().match(/#[0-9a-f]{6}/g) || []);
+      }
+      const own = new Set(tex.toLowerCase().match(/#[0-9a-f]{6}/g) || []);
+      let h = 2166136261;
+      for (let k = 0; k < tex.length; k++) h = Math.imul(h ^ tex.charCodeAt(k), 16777619);
+      for (let n = used.size; ; n++) {
+        // a letter first: KaTeX would read # and a digit in a macro's result as a parameter
+        const x = Math.imul(h ^ n, 2654435761) >>> 0;
+        const c = '#' + 'abcdef'[x % 6] + ((x >>> 3) & 0xfffff).toString(16).padStart(5, '0');
+        if (!used.has(c) && !own.has(c) && !this._macroColors.has(c) && !/^#a5/.test(c)) return c;
+      }
     }
 
     /** Put the figures where mathImage left their rules in KaTeX's output. */
     putImages(html) {
-      return html.replace(/<span class="mord rule( mtight)?" style="color:(#a6[0-9a-f]{4});([^"]*)"><\/span>/g, (m, tight, color, style) => {
-        // only this formula's markers, by colour and size, not a rule the paper tinted the same
-        const img = this.mathImages[parseInt(color.slice(3), 16)];
+      return html.replace(/<span class="mord rule( mtight)?" style="color:(#[0-9a-f]{6});([^"]*)"><\/span>/g, (m, tight, color, style) => {
+        // only this formula's markers, by colour and size
+        const img = this.mathImages.get(color);
         return img && style.startsWith(img.size) ? `<span class="mord tg-math-figure${tight || ''}">${img.html}</span>` : m;
       });
     }
@@ -4333,6 +4362,9 @@
     for (let i = from; i < src.length; i++) {
       const c = src[i];
       if (c === '\\') {
+        // a table inside the formula has text cells with $…$ of their own: skip it whole
+        const table = /^\\begin\{(tabular\*?|minipage)\}/.exec(src.slice(i, i + 20));
+        if (table) { i = findEnvEnd(src, i + table[0].length, table[1]).end - 1; continue; }
         if (src.startsWith('\\begin{', i)) environments++;
         else if (src.startsWith('\\end{', i)) environments--;
         i++;

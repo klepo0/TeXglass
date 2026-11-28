@@ -1282,7 +1282,7 @@ test('figures, tables and text environments inside formulas', () => {
   const figures = html.match(/<span class="mord tg-math-figure"><img class="graphic" src="img\/[^"]*"/g) || [];
   assert.deepEqual(figures.map((f) => f.replace(/.*src="|"$/g, '')), ['img/fig/a.png', 'img/b.png', 'img/c.png']);
   assert.match(html, /style="height:5\.691em"/); // height=2cm in em of a 10pt font
-  assert.doesNotMatch(html, /color:#a6/);
+  assert.doesNotMatch(html, /class="mord rule"/); // every marker swapped
   // the tabular's cells: text, with the maths in it
   assert.match(html, /sum/);
   assert.doesNotMatch(html.replace(/data-tex="[^"]*"/g, ''), /tabular|multicolumn/);
@@ -1339,4 +1339,19 @@ $\see{missing}$ and $\includegraphics{a.png}$ and $\textcolor{#a60000}{\rule{1em
   assert.deepEqual(mathErrors(html), []);
   assert.match(html, /data-math-ref-missing="missing"/);
   assert.equal((html.match(/tg-math-figure/g) || []).length, 1);
+});
+
+test('a box read in a group stays empty; a rule sized by a letter stays a rule; tables in inline maths; tinted rules of an image size', () => {
+  const draw = (src, options) => strict(`\\begin{document}\n${src}\n\\end{document}`, options).html;
+  assert.doesNotMatch(text(draw(String.raw`$\setbox6=\hbox{Q}{\box6}\copy6$`)), /QQ/);
+  assert.match(text(draw(String.raw`$\setbox6=\hbox{Q}{\setbox6=\hbox{R}\box6}\copy6$`)), /RQ/);
+  const rule = draw(String.raw`\def\justrule{\setbox0=\hbox{$A$}\hbox to0pt{\vrule height0.8\ht0\hss}}
+$\justrule$`);
+  assert.doesNotMatch(rule, /mathbb/);
+  const inline = draw(String.raw`$\begin{tabular}{l}$x$\end{tabular}$`);
+  assert.deepEqual(mathErrors(inline), []);
+  assert.equal((inline.match(/class="katex"/g) || []).length, 1);
+  const tinted = draw(String.raw`$\includegraphics[width=1em,height=1em]{a.png}+\textcolor{#a60000}{\rule{1em}{1em}}$`, { resolveImage: (p) => p });
+  assert.equal((tinted.match(/tg-math-figure/g) || []).length, 1);
+  assert.match(tinted, /class="mord rule" style="color:#a60000/);
 });
