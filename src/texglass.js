@@ -431,6 +431,21 @@
     '\\shortleftarrow': '\\mathrel{\\scriptstyle\\leftarrow}',
     '\\shortrightarrow': '\\mathrel{\\scriptstyle\\rightarrow}',
     '\\mspace': '\\mskip#1',
+    // more package symbols KaTeX lacks: centernot, mathabx/txfonts, stmaryrd, wasysym, revtex
+    '\\centernot': '\\not',
+    '\\bigtimes': '\\mathop{\\vcenter{\\Large\\times}}',
+    '\\bigsqcap': '\\mathop{\\vcenter{\\Large\\sqcap}}',
+    '\\cdotp': '\\mathpunct{\\cdot}',
+    '\\longhookrightarrow': '\\mathrel{\\xhookrightarrow{\\,}}',
+    '\\longhookleftarrow': '\\mathrel{\\xhookleftarrow{\\,}}',
+    '\\arrowvert': '\\vert',
+    '\\Arrowvert': '\\Vert',
+    '\\varolessthan': '\\mathbin{\\text{⧀}}',
+    '\\varogreaterthan': '\\mathbin{\\text{⧁}}',
+    '\\lightning': '\\mathord{\\text{↯}}',
+    '\\checked': '\\checkmark',
+    '\\mathsection': '\\S',
+    '\\agt': '\\gtrsim',
     // rules that stretch to fill a box: drawn at a fixed width in a formula
     '\\hrulefill': '\\rule[0.25em]{1.5em}{0.4pt}',
     '\\leftarrowfill': '\\xleftarrow{\\quad}',
@@ -695,6 +710,20 @@
       return '\\mathrel{' + (above ? '\\overset{' + above + '}{' + lower + '}' : lower) + '}';
     };
   }
+  // settings that change nothing KaTeX draws: \mathversion{bold}, \setlength{\arraycolsep}{0pt}
+  MATH_MACROS['\\mathversion'] = (ctx) => { group(ctx); return ''; };
+  MATH_MACROS['\\setlength'] = (ctx) => { ctx.consumeArgs(2); return ''; };
+  // scalerel: \scalerel*{\Huge K}{\big(} draws its first argument at about the size of the second
+  // (the unstarred form prints the second argument after it; [width] is ignored)
+  MATH_MACROS['\\scalerel'] = (ctx) => {
+    const starred = peekText(ctx) === '*';
+    if (starred) ctx.popToken();
+    optBracket(ctx);
+    const symbol = group(ctx).replace(/\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)(?![A-Za-z])/g, '');
+    const reference = group(ctx);
+    // the reference as it is, so an operator such as \sum keeps its limits
+    return '{\\large ' + symbol + '}' + (starred ? '' : ' ' + reference);
+  };
   MATH_MACROS['\\textsubscript'] = (ctx) => {
     const content = '_{\\text{' + group(ctx) + '}}';
     return ctx.mode === 'text' ? '$' + '{}' + content + '$' : content;
@@ -861,7 +890,8 @@
         spec = spec.replace(/[@!<>]\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
       }
       spec = spec.replace(/[pmbw]\s*\{[^{}]*\}/g, 'l');
-      out += tex.slice(last, open + 1) + spec + '}';
+      // KaTeX has no [t]/[b] placement for an array: drop it
+      out += tex.slice(last, m.index) + m[0].replace(/\[[^\]]*\]\s*/, '') + spec + '}';
       last = k + 1;
       re.lastIndex = last;
     }
@@ -1401,6 +1431,8 @@
     }
 
     renderMath(tex, display) {
+      // the paper's environments first, so what they bring in (\ref, \footnote) is read like the rest
+      tex = this.mathEnvs(tex);
       if (/\\footnote(?![A-Za-z@])/.test(tex)) tex = this.mathFootnotes(tex);
       const missing = this.options.sourceMap && this.known ? new Set() : null;
       tex = this.sizeDoubles(tripleBars(arraySpecs(this.mathRefs(tex, missing)), this.triple));
@@ -1411,18 +1443,61 @@
       if (this.params.size) tex = this.putValues(tex);
       tex = plainTexMath(tex, display);
       try {
-        const html = closeEmptyMathml(this.renderMathFn(tex, display, this.katexMacros(tex)));
+        // the paper's own definitions (macros, paired delimiters, …) win over the probes
+        const macros = this.mathProbe ? Object.assign({}, this.mathProbe, this.katexMacros(tex)) : this.katexMacros(tex);
+        const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
         return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + refs + live;
       } catch (e) {
         return `<span class="math-error" title="${escapeHtml(e.message || e)}">${escapeHtml(tex)}</span>` + refs + live;
       }
     }
 
+    /**
+     * The paper's own environments inside a formula, written out
+     * (\newenvironment{stack}{\begin{array}[t]{l}}{\end{array}}), since KaTeX
+     * knows only its own.
+     */
+    mathEnvs(tex) {
+      if (!/\\begin/.test(tex)) return tex;
+      const re = /\\begin\s*\{([^{}]+)\}/g;
+      let m;
+      for (let guard = 0; guard < 200 && (m = re.exec(tex)); guard++) {
+        const name = m[1].trim();
+        const e = Object.prototype.hasOwnProperty.call(this.envs, name) ? this.envs[name] : null;
+        if (!e) continue;
+        const at = m.index + m[0].length;
+        const end = findEnvEnd(tex, at, m[1]);
+        const args = [];
+        let j = at;
+        for (let k = 0; k < e.nargs; k++) {
+          if (k === 0 && e.def !== null) {
+            const o = readOpt(tex, j);
+            args.push(o ? o.content : e.def);
+            if (o) j = o.end;
+            continue;
+          }
+          const a = readArg(tex, j);
+          args.push(a.content);
+          j = a.end;
+        }
+        const sub = (t) => t.replace(/#(\d)/g, (_, d) => args[d - 1] || '');
+        // an environment is a group, as in LaTeX, that keeps the spacing of what it holds
+        // (\begingroup, not braces); spaces keep \alpha from running into x
+        tex = tex.slice(0, m.index) + '\\begingroup ' + sub(e.begin) + ' ' + tex.slice(j, end.contentEnd) + ' ' + sub(e.end) + '\\endgroup ' + tex.slice(end.end);
+        // look again from here: the written-out text may hold more of the paper's environments
+        re.lastIndex = m.index;
+      }
+      return tex;
+    }
+
     /** A hidden mark for a formula or picture (tex) that uses parameters, read by src/params.js. */
     liveMark(tex, extra) {
       const u = this.paramUses(tex);
       if (!u.params.length || this.liveOnly) return '';
-      const defs = this.liveDefs(u.macros, u.arrows);
+      let defs = this.liveDefs(u.macros, u.arrows);
+      // diagrams.sty arrows (\rTo) inferred from a diagram, not the preamble: the redraw needs them too
+      const arrowIn = (t) => /\\[lr][A-Z]/.test(t);
+      if (this.taylorDiagrams && (arrowIn(tex) || u.macros.some((n) => arrowIn(String(this.macros[n]?.body || ''))))) defs = '\\diagramstyle' + (defs ? '\n' + defs : '');
       return `<span class="tg-live" hidden data-tg-params="${u.params.join(' ')}" data-tg-tex="${escapeHtml(tex)}"${defs ? ` data-tg-defs="${escapeHtml(defs)}"` : ''}${extra}></span>`;
     }
 
@@ -3487,8 +3562,42 @@
     }
 
     taylorDiagram(body) {
-      const html = tikz()?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
-        (name) => this.macros[name] || this.paired[name] || null);
+      // A diagram means diagrams.sty, even without \usepackage: cells such as
+      // \rTo^f B draw \rTo as an inline arrow.
+      if (!this.taylorDiagrams) { this.taylorDiagrams = true; this._katexMacros = null; }
+      // footnotes in the cells are made while drawing; a diagram that falls back to source takes them back
+      // (and the labels in them)
+      const notes = this.footnotes.length;
+      const symbols = this.fnSymbols ? this.fnSymbols.length : 0;
+      const labels = Object.assign(Object.create(null), this.labels);
+      // An arrow with no inline form, reached while KaTeX expands a cell, is
+      // reported by a probe macro, not read from the drawn markup.
+      const T = tikz();
+      let hit = false;
+      const probe = Object.create(null);
+      for (const name of T?.taylorBlockArrows?.(this.diagramArrows) || []) {
+        if (!this.macros[name]) probe['\\' + name] = () => { hit = true; return '\\square'; };
+      }
+      const outer = this.mathProbe;
+      this.mathProbe = probe;
+      // the first pass skips maths, but whether this grid is kept decides its footnotes' labels
+      const draw = this.renderMathFn;
+      if (!this.known) this.renderMathFn = this.options.renderMath || defaultRenderMath;
+      let html;
+      try {
+        html = T?.taylorDiagram(body, (tex) => this.renderMath(tex, false), this.diagramArrows,
+          (name) => this.macros[name] || this.paired[name] || null, () => hit);
+      } finally {
+        this.mathProbe = outer;
+        this.renderMathFn = draw;
+      }
+      if (!html && this.footnotes.length > notes) {
+        this.footnotes.length = notes;
+        if (this.fnSymbols) this.fnSymbols.length = Math.min(symbols, this.fnSymbols.length);
+        for (const [key, k] of this.mathNotes || []) if (k > notes) this.mathNotes.delete(key);
+        for (const key of Object.keys(this.labels)) if (!(key in labels)) delete this.labels[key];
+        Object.assign(this.labels, labels);
+      }
       return html || withSource('<span class="graphic-placeholder">[commutative diagram]</span>', 'diagram', body);
     }
 

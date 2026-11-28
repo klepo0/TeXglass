@@ -137,6 +137,8 @@ const katexOpts = { throwOnError: true, strict: 'ignore' };
 const dropAnnotation = (html) => html.replace(/<annotation[^]*?<\/annotation>/g, '');
 const renderKaTeX = (tex, displayMode, macros) =>
   dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode, macros }, katexOpts)));
+// the drawn part of KaTeX's output, without its MathML
+const visible = (html) => html.replace(/<span class="katex-mathml">[\s\S]*?<\/math><\/span>/g, '');
 const realMath = (src) => TeXglass.render(src, { renderMath: renderKaTeX });
 const handMath = (tex) => dropAnnotation(katex.renderToString(tex, Object.assign({ displayMode: false }, katexOpts)));
 
@@ -176,6 +178,121 @@ test('diagrams.sty arrows keep both labels outside a diagram', () => {
   for (const arrow of expected) assert.ok(html.includes(arrow));
   assert.doesNotMatch(html, /math-error/);
   assert.deepEqual(TeXglass.renderSnippets(JSON.parse(JSON.stringify(defs)), texs, { renderMath: renderKaTeX }), expected);
+});
+
+test('diagrams.sty arrows defined with braced heads such as {->} work in ordinary math and in diagrams', () => {
+  const pre = String.raw`\usepackage{diagrams}
+\newarrow{To}----{->}
+\newarrow{Inj}>---{->}
+\begin{document}`;
+  const { html } = realMath(pre + String.raw`$A\rTo^{f}B$ and $A\rInj B$
+\begin{diagram} A & \rTo^{f} & B \\ \dInj && \dTo \\ C & \rTo & D \end{diagram}\end{document}`);
+  assert.ok(html.includes(handMath(String.raw`A\xrightarrow{f}B`)));
+  assert.ok(html.includes(handMath(String.raw`A\rightarrowtail B`)));
+  assert.doesNotMatch(html, /math-error|graphic-placeholder/);
+});
+
+test('a diagrams.sty cell with an arrow next to an object is drawn as maths, not as source', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\begin{document}
+\begin{diagram} & X \rTo^{f} & Y & \rTo^{g} Z & \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /math-error|graphic-placeholder/);
+  assert.ok(html.includes(handMath(String.raw`\displaystyle X \xrightarrow{f}`).replace(/^<span class="katex">/, '')));
+});
+
+test('a paper\'s own environments are written out inside a formula', () => {
+  const { html } = realMath(String.raw`\newenvironment{stackAux}[2]{\setlength{\arraycolsep}{0pt}\begin{array}[#1]{#2}}{\end{array}}
+\newenvironment{stackTL}{\begin{stackAux}{t}{l}}{\end{stackAux}}
+\begin{document}$x = \begin{stackTL} a \\ b \end{stackTL}$\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(visible(html).includes(visible(handMath(String.raw`x = \begin{array}{l} a \\ b \end{array}`))));
+});
+
+test('a paper\'s environment in a formula is a group, and its \\ref and token edges are kept', () => {
+  const { html } = realMath(String.raw`\newenvironment{colored}{\color{red}}{}
+\newenvironment{al}{\alpha}{}
+\newenvironment{see}{\text{see \eqref{eq:a}}}{}
+\begin{document}\begin{equation}\label{eq:a}a=b\end{equation}
+$a+\begin{colored}b\end{colored}+c$ and $\begin{al}x\end{al}$ and $\begin{see}\end{see}$\end{document}`);
+  assert.doesNotMatch(html, /math-error|eq:a/);
+  assert.ok(visible(html).includes(visible(handMath(String.raw`a+\begingroup\color{red}b\endgroup+c`))));
+  assert.ok(visible(html).includes(visible(handMath(String.raw`\alpha x`))));
+  // relations keep their spacing across the environment's edges
+  const { html: rel } = realMath(String.raw`\newenvironment{rel}{}{}\begin{document}$A\begin{rel}=\end{rel}B$\end{document}`);
+  assert.ok(visible(rel).includes(visible(handMath('A=B'))));
+});
+
+test('\\scalerel keeps the second object unless starred, and skips a width', () => {
+  const { html } = realMath(String.raw`\begin{document}$\scalerel{X}{Y}$ and $\scalerel*[2ex]{X}{Y}$\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(html.includes(handMath(String.raw`{\large X} Y`)));
+  // an operator reference keeps its limits
+  const { html: sum } = realMath(String.raw`\begin{document}\[\scalerel{X}{\sum}_{i=1}^n\]\end{document}`);
+  assert.match(sum, /<munderover>/);
+  assert.ok(html.includes(handMath(String.raw`{\large X}`)));
+});
+
+test('a diagrams.sty cell reads TeX commands: a row break before letters is no arrow', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\begin{document}
+\begin{diagram} A & \rTo & \begin{matrix}1\\dTo\end{matrix} \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+});
+
+test('a diagrams.sty cell is judged by what its macros expand to', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>
+\newcommand{\object}{\ifmmode B\else\rDotted^f\fi}\begin{document}
+\begin{diagram} A\object & \rTo & C \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+});
+
+test('a diagrams.sty grid falls back only for arrows it knows, named by KaTeX itself', () => {
+  for (const cell of [String.raw`A\rHeading`, String.raw`A\text{Undefined control sequence: \textbackslash rDotted}`,
+    String.raw`A\textcolor{#cc0000}{\text{\textbackslash rDotted}}`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} ` + cell + String.raw` & \rTo & B \end{diagram}\end{document}`);
+    assert.doesNotMatch(html, /graphic-placeholder/, cell);
+  }
+});
+
+test('a diagrams.sty probe never replaces the paper\'s own paired delimiter', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams,mathtools}\DeclarePairedDelimiter{\dTo}{\langle}{\rangle}\begin{document}
+\begin{diagram} A\dTo{x} & \rTo & B \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  assert.match(html, /⟨/);
+});
+
+test('a diagrams.sty grid that falls back to source takes back its footnotes', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} A\footnote{Diagram note} & \rTo & B\rDotted^f \end{diagram}
+Text.\footnote{Visible note}\end{document}`);
+  assert.match(html, /graphic-placeholder/);
+  assert.doesNotMatch(html, /Diagram note<\/|id="fn-2"/);
+  assert.match(html, /id="fnref-1"/);
+  // a label inside the discarded note is gone too
+  const { html: ref } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
+\begin{diagram} A\footnote{Hidden note\label{fn:hidden}} & \rTo & B\rDotted^f \end{diagram}
+See \ref{fn:hidden}.\end{document}`);
+  assert.doesNotMatch(ref, /href="#label-/);
+});
+
+test('a diagrams.sty cell with an arrow that has no inline form keeps the diagram source', () => {
+  for (const cell of [String.raw`\rDotted^f B`, String.raw`B \rDotted^f`, String.raw`B\dotmap{f}`, String.raw`B\optmap`]) {
+    const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\newcommand{\dotmap}[1]{\rDotted^{#1}}
+\newcommand{\optmap}[1][\rDotted^f]{#1}\begin{document}
+\begin{diagram} A & ` + cell + String.raw` \end{diagram}\end{document}`);
+    assert.match(html, /graphic-placeholder/, cell);
+    assert.doesNotMatch(html, /math-error/, cell);
+  }
+});
+
+test('package symbols KaTeX lacks render', () => {
+  const { html } = realMath(String.raw`\begin{document}
+$x \centernot\equiv y$, $\bigtimes_i X_i$, $\bigsqcap_a C$, $a\cdotp b$, $A \longhookrightarrow B$,
+$f\arrowvert_U$, $a \varolessthan b$, $\checked \lightning \mathsection$, $T \agt 1$,
+$\textnormal{\mathversion{bold}$x$}$, $\scalerel*{\Huge K}{\big(}$
+\end{document}`);
+  assert.doesNotMatch(html, /math-error/);
+  assert.ok(html.includes(handMath(String.raw`x \not\equiv y`)));
+  assert.ok(html.includes(handMath(String.raw`T \gtrsim 1`)));
 });
 
 const MACRO_PREAMBLE = String.raw`

@@ -133,7 +133,11 @@ async function renderOne(browser, paper, src, timeoutMs, shots) {
     Object.assign(raw, seen);
     // Text commands the converter skipped are not on the page; render the source again to list them.
     const unknown = await withTimeout(page.evaluate(() => {
-      try { return TeXglass.render(document.getElementById('source').value).unknownCommands || []; } catch (e) { return []; }
+      // the open paper's source, from the viewer's API (the old #source box went with Split mode)
+      try {
+        const src = window.TeXglassViewer ? window.TeXglassViewer.source() : document.getElementById('source').value;
+        return TeXglass.render(src).unknownCommands || [];
+      } catch (e) { return []; }
     }), 30000);
     if (Array.isArray(unknown)) raw.warnings = raw.warnings.concat(unknown.map((c) => `Unknown command ${c}.`));
     if (shots) await withTimeout(page.screenshot({ path: path.join(shots, paper.id.replace(/\//g, '_') + '.png'), fullPage: false }), 15000);

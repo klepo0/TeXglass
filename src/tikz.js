@@ -530,11 +530,15 @@
   const TAYLOR_HEADS = new Map([['>', 'to'], ['>>', '2h'], ['|', 'bar']]);
   const TAYLOR_TAILS = new Map([['>', 'tail'], ['<', 'to'], ['<<', '2h'], ['|', 'bar'], ['C', 'hook']]);
 
+  // Other heads and tails diagrams.sty draws, such as {->} or {>->}, read by their main mark.
+  const taylorEnd = (mark, ends, back) => ends.get(mark)
+    ?? (/>>|<</.test(mark) ? '2h' : /[>]/.test(mark) ? (back ? 'tail' : 'to') : /</.test(mark) ? 'to' : /\|/.test(mark) ? 'bar' : undefined);
+
   function taylorArrowStyle(parts) {
-    const [tail, before, middle, after, head] = parts;
+    const [tail, before, middle, after, head] = parts.map((part) => String(part ?? '').replace(/\s+/g, ''));
     const style = {
-      head: head === after || !head ? 'none' : TAYLOR_HEADS.get(head),
-      tail: tail === before || !tail ? 'none' : TAYLOR_TAILS.get(tail),
+      head: head === after || !head ? 'none' : taylorEnd(head, TAYLOR_HEADS, false),
+      tail: tail === before || !tail ? 'none' : taylorEnd(tail, TAYLOR_TAILS, true),
       dbl: 0,
       dash: '',
     };
@@ -577,6 +581,23 @@
     return arrows;
   }
 
+  /** The diagrams.sty arrows (\\rDotted, \\uDotted, …) that have no form inside a formula. */
+  function taylorBlockArrows(definitions) {
+    const inline = taylorMathArrows(definitions);
+    const out = [];
+    for (const base of Object.keys({ ...TAYLOR_ARROWS, ...definitions })) {
+      for (const dir of ['l', 'r', 'u', 'd', 'ul', 'ur', 'dl', 'dr', 'lu', 'ld', 'ru', 'rd']) {
+        if (!inline['\\' + dir + base]) out.push(dir + base);
+      }
+    }
+    return out;
+  }
+
+  /** Whether an arrow such as \\rTo can be drawn inside a formula (horizontal, with a KaTeX shape). */
+  function taylorInline(name, definitions) {
+    return Object.prototype.hasOwnProperty.call(taylorMathArrows(definitions), '\\' + name);
+  }
+
   function taylorArrow(tex, definitions, macro) {
     const m = /^\\([ud]?[lr]|[lr]?[ud])([A-Z][A-Za-z]*)(?![A-Za-z@])/.exec(tex);
     if (!m) return null;
@@ -599,7 +620,9 @@
     for (let braces = 0; i < tex.length;) {
       const mark = tex[i];
       const side = mark === '{' && braces < 2 ? (braces++ === 0 ? above : below) : sides[mark];
-      if (!side) return fail;
+      // A known arrow followed by an object, as in \rTo^f B: the cell is drawn as
+      // ordinary maths, where \rTo is an inline arrow.
+      if (!side) return parts && taylorInline(m[1] + m[2], definitions) ? null : fail;
       if (mark !== '{') i = skipWs(tex, i + 1);
       if (i >= tex.length) return fail;
       const end = tex[i] === '{' ? matchGroup(tex, i) : i + (/^\\(?:[A-Za-z@]+|.)/.exec(tex.slice(i))?.[0].length || 1);
@@ -648,7 +671,7 @@
   }
 
   /** Taylor arrows sit between their endpoints, with empty cells along the way. */
-  function taylorDiagram(body, math, definitions, macro) {
+  function taylorDiagram(body, math, definitions, macro, broken) {
     // Options come right after \begin{diagram}; after a space, [A] starts the first object.
     const end = body[0] === '[' ? matchGroup(body, 0) : 0;
     const opts = end === 0 ? {} : Object.fromEntries(splitTop(body.slice(1, end - 1), ',').map(keyVal));
@@ -667,7 +690,10 @@
         }
         if (arrow === false) return null;
         if (arrow) arrows.push({ ...arrow, r, c });
-        else if (tex) nodes.set(r * cols + c, tex);
+        else if (tex) {
+          // an object cell drawn as a formula: any arrow in it needs an inline form
+          nodes.set(r * cols + c, tex);
+        }
       }
     }
 
@@ -693,6 +719,10 @@
       c: at % cols + 1,
       html: math('\\displaystyle ' + tex),
     }));
+    // An object cell drawn as a formula may reach an arrow with no inline form,
+    // written there or through the paper's macros: broken() says whether drawing
+    // the cells expanded one, and the diagram then shows its source instead.
+    if (broken?.()) return null;
     const rs = cdSep(opts.height || opts.size, 0.8);
     const cs = cdSep(opts.width || opts.size, 0.8);
     return cdHtml({ rs, cs, rows: rows.length, cols, cells, labels, arrows: finishArrows(arrows, {}) });
@@ -2373,6 +2403,7 @@
     tikzcd: (body, math) => cdHtml(parseTikzcd(body, math)),
     taylorDiagram,
     taylorMathArrows,
+    taylorBlockArrows,
     xymatrix(src, math) {
       const r = parseXymatrix(src, math);
       return r ? { html: cdHtml(r.model), end: r.end } : null;
