@@ -253,6 +253,13 @@ test('a diagrams.sty grid falls back only for arrows it knows, named by KaTeX it
   }
 });
 
+test('a diagrams.sty probe never replaces the paper\'s own paired delimiter', () => {
+  const { html } = realMath(String.raw`\usepackage{diagrams,mathtools}\DeclarePairedDelimiter{\dTo}{\langle}{\rangle}\begin{document}
+\begin{diagram} A\dTo{x} & \rTo & B \end{diagram}\end{document}`);
+  assert.doesNotMatch(html, /graphic-placeholder/);
+  assert.match(html, /⟨/);
+});
+
 test('a diagrams.sty grid that falls back to source takes back its footnotes', () => {
   const { html } = realMath(String.raw`\usepackage{diagrams}\newarrow{Dotted}....>\begin{document}
 \begin{diagram} A\footnote{Diagram note} & \rTo & B\rDotted^f \end{diagram}

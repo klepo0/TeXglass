@@ -1443,7 +1443,8 @@
       if (this.params.size) tex = this.putValues(tex);
       tex = plainTexMath(tex, display);
       try {
-        const macros = this.mathProbe ? Object.assign({}, this.katexMacros(tex), this.mathProbe) : this.katexMacros(tex);
+        // the paper's own definitions (macros, paired delimiters, …) win over the probes
+        const macros = this.mathProbe ? Object.assign({}, this.mathProbe, this.katexMacros(tex)) : this.katexMacros(tex);
         const html = closeEmptyMathml(this.renderMathFn(tex, display, macros));
         return (this.trees && /color:#a5[0-9a-f]{4}/.test(html) ? this.putTrees(html) : html) + refs + live;
       } catch (e) {
